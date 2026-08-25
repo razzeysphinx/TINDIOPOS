@@ -5,6 +5,10 @@ export type RecoveryDrillType =
 
 export type RecoveryDrillOutcome = "PASSED" | "FAILED";
 
+export type OrganizationRecoveryActionResult =
+  | { ok: true; message: string; snapshot: OrganizationRecoverySnapshot | null }
+  | { ok: false; message: string };
+
 export type OrganizationRecoverySnapshot = {
   governance: {
     audit_retention_days: number;

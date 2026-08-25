@@ -39,6 +39,16 @@ export type KitchenOrderPriority = z.infer<typeof kitchenOrderPrioritySchema>;
 export type KitchenStation = z.infer<typeof kitchenStationSchema>;
 export type KitchenStationFilter = z.infer<typeof kitchenStationFilterSchema>;
 
+export type KitchenOrderActionResult =
+  | { ok: true; message: string }
+  | { ok: false; message: string };
+
+export type KitchenStationRoute = {
+  categoryId: string;
+  categoryName: string;
+  station: KitchenStation;
+};
+
 export type KitchenOrderItem = {
   id: string;
   name: string;

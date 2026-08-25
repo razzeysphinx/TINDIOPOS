@@ -4,10 +4,10 @@ import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReportFilterForm } from "@/features/reports/report-filter-form";
+import { loadReportStores } from "@/features/reports/data";
 import { getReportingSnapshot, resolveReportFilter } from "@/features/reports/reporting";
 import { ReportingOverview } from "@/features/reports/reporting-overview";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Reports" };
 
@@ -42,20 +42,10 @@ export default async function ReportsPage({
 
   const parameters = await searchParams;
   const filter = resolveReportFilter(parameters, context.organization.timezone);
-  const supabase = await createClient();
-  const [snapshot, storesResult] = await Promise.all([
+  const [snapshot, stores] = await Promise.all([
     getReportingSnapshot(context, filter, "reports"),
-    supabase
-      .from("stores")
-      .select("id, name")
-      .eq("organization_id", context.organization.id)
-      .eq("is_active", true)
-      .order("name"),
+    loadReportStores(context),
   ]);
-
-  if (storesResult.error) {
-    throw new Error(`Unable to load stores for reporting: ${storesResult.error.message}`);
-  }
 
   return (
     <div className="space-y-8">
@@ -69,7 +59,7 @@ export default async function ReportsPage({
         action="/back-office/reports"
         filter={filter}
         showExports
-        stores={storesResult.data ?? []}
+        stores={stores}
       />
       <ReportingOverview currencyCode={context.organization.currency_code} mode="reports" snapshot={snapshot} />
     </div>

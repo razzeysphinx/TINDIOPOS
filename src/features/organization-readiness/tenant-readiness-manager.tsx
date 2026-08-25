@@ -18,8 +18,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import {
   getOrganizationUsageAction,
   manageOrganizationLifecycleAction,
-  type OrganizationUsageSnapshot,
 } from "@/features/organization-readiness/actions";
+import type { OrganizationUsageSnapshot } from "@/features/organization-readiness/organization-readiness-types";
 
 type OrganizationStatus = "active" | "suspended" | "archived";
 

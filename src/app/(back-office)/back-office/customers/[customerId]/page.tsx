@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
 import { CustomerProfileForm, CustomerStatusButton, LoyaltyAdjustmentForm } from "@/features/customers/customer-forms";
+import { loadCustomerProfile } from "@/features/customers/data";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Customer profile" };
 
@@ -29,52 +29,10 @@ export default async function CustomerDetailPage({
   const context = await requireBusinessContext();
   if (!hasPermission(context, "customers.manage")) notFound();
 
-  const supabase = await createClient();
-  const [customerResult, summaryResult, historyResult, transactionsResult, segmentsResult, membershipsResult] = await Promise.all([
-    supabase
-      .from("customers")
-      .select("id, customer_number, loyalty_card_code, full_name, email, phone, address, birthday, notes, status, created_at")
-      .eq("organization_id", context.organization.id)
-      .eq("id", customerId)
-      .maybeSingle(),
-    supabase.rpc("get_customer_summary", {
-      target_organization_id: context.organization.id,
-      target_customer_id: customerId,
-    }),
-    supabase.rpc("get_customer_purchase_history", {
-      target_organization_id: context.organization.id,
-      target_customer_id: customerId,
-      target_limit: 25,
-    }),
-    supabase
-      .from("loyalty_transactions")
-      .select("id, entry_type, points_delta, note, created_at")
-      .eq("organization_id", context.organization.id)
-      .eq("customer_id", customerId)
-      .order("created_at", { ascending: false })
-      .limit(50),
-    supabase
-      .from("customer_segments")
-      .select("id, name, description")
-      .eq("organization_id", context.organization.id)
-      .order("name", { ascending: true }),
-    supabase
-      .from("customer_segment_memberships")
-      .select("segment_id")
-      .eq("organization_id", context.organization.id)
-      .eq("customer_id", customerId),
-  ]);
+  const workspace = await loadCustomerProfile(context, customerId);
+  if (!workspace) notFound();
 
-  if (!customerResult.data) notFound();
-  const error = [summaryResult, historyResult, transactionsResult, segmentsResult, membershipsResult].find((result) => result.error)?.error;
-  if (error) throw new Error(`Unable to load customer profile: ${error.message}`);
-
-  const customer = customerResult.data;
-  const summary = summaryResult.data?.[0];
-  const history = historyResult.data ?? [];
-  const transactions = transactionsResult.data ?? [];
-  const segments = segmentsResult.data ?? [];
-  const selectedSegmentIds = (membershipsResult.data ?? []).map((membership) => membership.segment_id);
+  const { customer, summary, history, ledger, segments, selectedSegmentIds } = workspace;
 
   return (
     <div className="space-y-8">
@@ -83,48 +41,48 @@ export default async function CustomerDetailPage({
         Customers
       </Link>
       <PageHeader
-        action={<Badge variant={customer.status === "active" ? "secondary" : "outline"}>Customer #{customer.customer_number.toLocaleString()} Â· {customer.status}</Badge>}
+        action={<Badge variant={customer.status === "active" ? "secondary" : "outline"}>Customer #{customer.customerNumber.toLocaleString()} Â· {customer.status}</Badge>}
         description={customer.phone ?? customer.email ?? "No contact details have been recorded."}
         eyebrow="Customer profile"
-        title={customer.full_name}
+        title={customer.fullName}
       />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Metric label="Loyalty balance" value={`${(summary?.loyalty_points ?? 0).toLocaleString()} pts`} icon={<Star />} />
-        <Metric label="Purchases" value={(summary?.sale_count ?? 0).toLocaleString()} icon={<ReceiptText />} />
-        <Metric label="Lifetime spend" value={formatMinorMoney(summary?.lifetime_spend_minor ?? 0, context.organization.currency_code)} icon={<CalendarClock />} />
-        <Metric label="Average sale" value={formatMinorMoney(summary?.average_sale_minor ?? 0, context.organization.currency_code)} icon={<ReceiptText />} />
-        <Metric label="Last visit" value={summary?.last_purchase_at ? formatDate(summary.last_purchase_at, context.organization.timezone) : "No visits yet"} icon={<CalendarClock />} />
+        <Metric label="Loyalty balance" value={`${(summary?.loyaltyPoints ?? 0).toLocaleString()} pts`} icon={<Star />} />
+        <Metric label="Purchases" value={(summary?.saleCount ?? 0).toLocaleString()} icon={<ReceiptText />} />
+        <Metric label="Lifetime spend" value={formatMinorMoney(summary?.lifetimeSpendMinor ?? 0, context.organization.currency_code)} icon={<CalendarClock />} />
+        <Metric label="Average sale" value={formatMinorMoney(summary?.averageSaleMinor ?? 0, context.organization.currency_code)} icon={<ReceiptText />} />
+        <Metric label="Last visit" value={summary?.lastPurchaseAt ? formatDate(summary.lastPurchaseAt, context.organization.timezone) : "No visits yet"} icon={<CalendarClock />} />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
         <Card>
           <CardHeader>
             <CardTitle>Customer profile</CardTitle>
-            <CardDescription>Customer #{customer.customer_number.toLocaleString()} · Created {formatDate(customer.created_at, context.organization.timezone)}</CardDescription>
+            <CardDescription>Customer #{customer.customerNumber.toLocaleString()} · Created {formatDate(customer.createdAt, context.organization.timezone)}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
             <div className="grid gap-3 rounded-lg border bg-muted/20 p-3 sm:grid-cols-2">
-              <Detail label="Customer ID" value={`#${customer.customer_number.toLocaleString()}`} />
-              <Detail label="Current loyalty card" value={customer.loyalty_card_code} />
+              <Detail label="Customer ID" value={`#${customer.customerNumber.toLocaleString()}`} />
+              <Detail label="Current loyalty card" value={customer.loyaltyCardCode} />
             </div>
             <CustomerProfileForm
               customer={{
                 id: customer.id,
-                fullName: customer.full_name,
+                fullName: customer.fullName,
                 email: customer.email,
                 phone: customer.phone,
                 address: customer.address,
                 birthday: customer.birthday,
                 notes: customer.notes,
-                loyaltyCardCode: customer.loyalty_card_code,
+                loyaltyCardCode: customer.loyaltyCardCode,
               }}
               segments={segments}
               selectedSegmentIds={selectedSegmentIds}
             />
             <CustomerStatusButton
               customerId={customer.id}
-              status={customer.status as "active" | "archived"}
+              status={customer.status}
             />
           </CardContent>
         </Card>
@@ -133,26 +91,26 @@ export default async function CustomerDetailPage({
           <CardHeader>
             <CardTitle>Purchase history</CardTitle>
             <CardDescription>
-              {summary?.last_purchase_at ? `Last purchase ${formatDate(summary.last_purchase_at, context.organization.timezone)}` : "No completed sales yet."}
+              {summary?.lastPurchaseAt ? `Last purchase ${formatDate(summary.lastPurchaseAt, context.organization.timezone)}` : "No completed sales yet."}
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             {history.length > 0 ? (
               <ul className="divide-y">
                 {history.map((sale) => (
-                  <li className="grid gap-2 px-5 py-4 sm:grid-cols-[1fr_auto_auto] sm:items-center" key={sale.sale_id}>
+                  <li className="grid gap-2 px-5 py-4 sm:grid-cols-[1fr_auto_auto] sm:items-center" key={sale.saleId}>
                     <div>
-                      <p className="font-medium">{sale.store_name}</p>
+                      <p className="font-medium">{sale.storeName}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {sale.receipt_number ? `Receipt #${sale.receipt_number} · ` : ""}
-                        {formatDate(sale.completed_at, context.organization.timezone)}
+                        {sale.receiptNumber ? `Receipt #${sale.receiptNumber} · ` : ""}
+                        {formatDate(sale.completedAt, context.organization.timezone)}
                       </p>
                     </div>
                     <p className="text-xs text-muted-foreground sm:text-right">
-                      {sale.loyalty_points_earned ? `+${sale.loyalty_points_earned} earned` : ""}
-                      {sale.loyalty_points_redeemed ? `${sale.loyalty_points_earned ? " · " : ""}${sale.loyalty_points_redeemed} redeemed` : ""}
+                      {sale.loyaltyPointsEarned ? `+${sale.loyaltyPointsEarned} earned` : ""}
+                      {sale.loyaltyPointsRedeemed ? `${sale.loyaltyPointsEarned ? " · " : ""}${sale.loyaltyPointsRedeemed} redeemed` : ""}
                     </p>
-                    <p className="font-semibold sm:text-right">{formatMinorMoney(sale.total_minor, sale.currency_code)}</p>
+                    <p className="font-semibold sm:text-right">{formatMinorMoney(sale.totalMinor, sale.currencyCode)}</p>
                   </li>
                 ))}
               </ul>
@@ -169,16 +127,16 @@ export default async function CustomerDetailPage({
         <CardContent className="space-y-5">
           <LoyaltyAdjustmentForm customerId={customer.id} />
           <div className="-mx-6 divide-y border-t">
-            {transactions.length > 0 ? (
+            {ledger.length > 0 ? (
               <ul className="divide-y">
-                {transactions.map((transaction) => (
+                {ledger.map((transaction) => (
                   <li className="flex items-center justify-between gap-4 px-5 py-3 text-sm" key={transaction.id}>
                     <span>
-                      <span className="font-medium">{transaction.entry_type.replaceAll("_", " ")}</span>
+                      <span className="font-medium">{transaction.entryType.replaceAll("_", " ")}</span>
                       {transaction.note ? <span className="mt-1 block text-xs text-muted-foreground">{transaction.note}</span> : null}
                     </span>
-                    <span className={transaction.points_delta > 0 ? "font-semibold text-primary" : "font-semibold text-destructive"}>
-                      {transaction.points_delta > 0 ? "+" : ""}{transaction.points_delta.toLocaleString()} pts
+                    <span className={transaction.pointsDelta > 0 ? "font-semibold text-primary" : "font-semibold text-destructive"}>
+                      {transaction.pointsDelta > 0 ? "+" : ""}{transaction.pointsDelta.toLocaleString()} pts
                     </span>
                   </li>
                 ))}

@@ -1,0 +1,84 @@
+export type CustomerActionResult =
+  | { ok: true; message: string }
+  | { ok: false; message: string };
+
+export type CustomerListItem = {
+  id: string;
+  customerNumber: number;
+  loyaltyCardCode: string;
+  fullName: string;
+  email: string | null;
+  phone: string | null;
+  status: "active" | "archived";
+  points: number;
+};
+
+export type CustomerSegmentOption = {
+  id: string;
+  name: string;
+  description: string | null;
+};
+
+export type LoyaltyProgramConfig = {
+  isEnabled: boolean;
+  earnSpendMinor: number;
+  earnPoints: number;
+  redemptionValueMinor: number;
+  minimumRedemptionPoints: number;
+};
+
+export type CustomersOverview = {
+  customers: CustomerListItem[];
+  segments: CustomerSegmentOption[];
+  program: LoyaltyProgramConfig | null;
+};
+
+export type CustomerProfile = {
+  id: string;
+  customerNumber: number;
+  loyaltyCardCode: string;
+  fullName: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  birthday: string | null;
+  notes: string | null;
+  status: "active" | "archived";
+  createdAt: string;
+};
+
+export type CustomerSummary = {
+  loyaltyPoints: number;
+  saleCount: number;
+  lifetimeSpendMinor: number;
+  averageSaleMinor: number;
+  lastPurchaseAt: string | null;
+};
+
+export type CustomerPurchase = {
+  saleId: string;
+  storeName: string;
+  receiptNumber: number | null;
+  completedAt: string;
+  loyaltyPointsEarned: number | null;
+  loyaltyPointsRedeemed: number | null;
+  totalMinor: number;
+  currencyCode: string;
+};
+
+export type CustomerLedgerEntry = {
+  id: string;
+  entryType: string;
+  pointsDelta: number;
+  note: string | null;
+  createdAt: string;
+};
+
+export type CustomerProfileWorkspace = {
+  customer: CustomerProfile;
+  summary: CustomerSummary | null;
+  history: CustomerPurchase[];
+  ledger: CustomerLedgerEntry[];
+  segments: CustomerSegmentOption[];
+  selectedSegmentIds: string[];
+};

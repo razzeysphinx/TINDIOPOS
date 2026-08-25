@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { loadCatalogExportData } from "@/features/catalog/data";
 import { getBusinessContext, hasPermission } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -22,45 +22,31 @@ export async function GET() {
     return NextResponse.json({ error: "Product management access is required." }, { status: 403 });
   }
 
-  const supabase = await createClient();
-  const [categoriesResult, productsResult] = await Promise.all([
-    supabase
-      .from("categories")
-      .select("id, name")
-      .eq("organization_id", context.organization.id),
-    supabase
-      .from("products")
-      .select(
-        "id, category_id, name, description, sku, barcode, price_minor, track_inventory, unit, image_url, is_variable_price, allow_fractional_quantity",
-      )
-      .eq("organization_id", context.organization.id)
-      .eq("product_type", "simple")
-      .eq("is_composite", false)
-      .eq("status", "active")
-      .order("name", { ascending: true }),
-  ]);
+  const exportData = await loadCatalogExportData(
+    context,
+    hasPermission(context, "products.view_cost"),
+  );
 
-  if (categoriesResult.error || productsResult.error) {
-    return NextResponse.json({ error: "TINDIO could not export the catalogue." }, { status: 500 });
+  if (!exportData.ok) {
+    return NextResponse.json(
+      {
+        error:
+          exportData.stage === "catalog"
+            ? "TINDIO could not export the catalogue."
+            : "TINDIO could not export product costs.",
+      },
+      { status: 500 },
+    );
   }
 
-  const products = productsResult.data ?? [];
+  const products = exportData.products;
   const costByProduct = new Map<string, number>();
-  if (hasPermission(context, "products.view_cost") && products.length > 0) {
-    const costsResult = await supabase.rpc("get_catalog_costs", {
-      target_organization_id: context.organization.id,
-      requested_product_ids: products.map((product) => product.id),
-    });
-    if (costsResult.error) {
-      return NextResponse.json({ error: "TINDIO could not export product costs." }, { status: 500 });
-    }
-    for (const cost of costsResult.data ?? []) {
-      if (cost.variant_id === null) costByProduct.set(cost.product_id, cost.cost_minor);
-    }
+  for (const cost of exportData.costs) {
+    if (cost.variant_id === null) costByProduct.set(cost.product_id, cost.cost_minor);
   }
 
   const categoryById = new Map(
-    (categoriesResult.data ?? []).map((category) => [category.id, category.name]),
+    exportData.categories.map((category) => [category.id, category.name]),
   );
   const rows: Array<Array<string | number>> = [
     [

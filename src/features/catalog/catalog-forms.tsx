@@ -40,8 +40,8 @@ import {
   setCategoryArchivedAction,
   setProductArchivedAction,
   setProductAvailabilityAction,
-  type CatalogActionResult,
 } from "@/features/catalog/actions";
+import type { CatalogActionResult } from "@/features/catalog/catalog-types";
 import {
   adjustInventorySchema,
   createCategorySchema,

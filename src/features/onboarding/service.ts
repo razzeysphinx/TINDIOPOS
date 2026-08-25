@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 
 import { onboardingSchema } from "@/features/onboarding/onboarding-schema";
 import type { OnboardingActionResult } from "@/features/onboarding/onboarding-types";
+import { postgresCodeMessage } from "@/lib/server/db-errors";
 import { createClient } from "@/lib/supabase/server";
 
 export async function createBusiness(input: unknown): Promise<OnboardingActionResult> {
@@ -30,10 +31,11 @@ export async function createBusiness(input: unknown): Promise<OnboardingActionRe
   if (error) {
     return {
       ok: false,
-      message:
-        error.code === "23505"
-          ? "This account or business setup already exists. Refresh and try again."
-          : "TINDIO could not create the business. Please try again.",
+      message: postgresCodeMessage(
+        error.code,
+        "TINDIO could not create the business. Please try again.",
+        { "23505": "This account or business setup already exists. Refresh and try again." },
+      ),
     };
   }
 

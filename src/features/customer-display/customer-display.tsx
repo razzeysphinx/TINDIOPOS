@@ -8,7 +8,7 @@ import {
   customerDisplayStateSchema,
   type CustomerDisplayState,
 } from "@/features/customer-display/customer-display-types";
-import { createClient } from "@/lib/supabase/client";
+import { customerDisplayChannel, getRealtimeClient } from "@/lib/supabase/realtime-client";
 
 function formatDisplayTime(value: string) {
   return new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(
@@ -35,9 +35,8 @@ export function CustomerDisplay({
   const [connectionStatus, setConnectionStatus] = useState<"connecting" | "live" | "offline">("connecting");
 
   useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`tindio-customer-display:${realtimeTopic}`)
+    const supabase = getRealtimeClient();
+    const channel = customerDisplayChannel(realtimeTopic)
       .on("broadcast", { event: "display-state" }, ({ payload }) => {
         const parsed = customerDisplayStateSchema.safeParse(payload);
         if (parsed.success) setState(parsed.data);

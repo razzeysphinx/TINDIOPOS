@@ -4,6 +4,7 @@ import "server-only";
 import { moneyInputToMinor } from "@/features/catalog/catalog-money";
 import type { AdvancedSalesResult } from "@/features/advanced-sales/advanced-sales-types";
 import type { BusinessContext } from "@/lib/auth/dal";
+import { postgresCodeMessage } from "@/lib/server/db-errors";
 import { createClient } from "@/lib/supabase/server";
 
 async function database() {
@@ -28,7 +29,7 @@ export async function createDiscount(
   if (type === "fixed_amount" && (!record.amount_minor || record.amount_minor <= 0)) return { ok: false, message: "Enter a valid fixed amount." };
   const db = await database();
   const { error } = await db.from("discounts").insert(record);
-  if (error) return { ok: false, message: error.code === "23505" ? "That discount name is already in use." : "TINDIO could not create this discount." };
+  if (error) return { ok: false, message: postgresCodeMessage(error.code, "TINDIO could not create this discount.", { "23505": "That discount name is already in use." }) };
   return { ok: true, message: "Discount created." };
 }
 
@@ -42,7 +43,7 @@ export async function createTaxRate(
   const db = await database();
   if (value.isDefault) await db.from("tax_rates").update({ is_default: false }).eq("organization_id", context.organization.id);
   const { error } = await db.from("tax_rates").insert({ organization_id: context.organization.id, name, rate_bps: Math.round(rate * 100), is_inclusive: Boolean(value.inclusive), is_default: Boolean(value.isDefault) });
-  if (error) return { ok: false, message: error.code === "23505" ? "That tax name is already in use." : "TINDIO could not create this tax rate." };
+  if (error) return { ok: false, message: postgresCodeMessage(error.code, "TINDIO could not create this tax rate.", { "23505": "That tax name is already in use." }) };
   return { ok: true, message: "Tax rate created." };
 }
 
@@ -55,7 +56,7 @@ export async function createDiningOption(
   const db = await database();
   if (value.isDefault) await db.from("dining_options").update({ is_default: false }).eq("organization_id", context.organization.id);
   const { error } = await db.from("dining_options").insert({ organization_id: context.organization.id, name, is_default: Boolean(value.isDefault) });
-  if (error) return { ok: false, message: error.code === "23505" ? "That dining option already exists." : "TINDIO could not create this dining option." };
+  if (error) return { ok: false, message: postgresCodeMessage(error.code, "TINDIO could not create this dining option.", { "23505": "That dining option already exists." }) };
   return { ok: true, message: "Dining option created." };
 }
 
@@ -90,7 +91,7 @@ export async function createTicketTemplate(
     note,
     dining_option_id: diningOptionId,
   });
-  if (error) return { ok: false, message: error.code === "23505" ? "That ticket template already exists." : "TINDIO could not create this ticket template." };
+  if (error) return { ok: false, message: postgresCodeMessage(error.code, "TINDIO could not create this ticket template.", { "23505": "That ticket template already exists." }) };
 
   return { ok: true, message: "Ticket template created." };
 }

@@ -77,7 +77,7 @@ import {
   type PosTaxRate,
 } from "@/features/pos/pos-types";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { customerDisplayChannel, getRealtimeClient } from "@/lib/supabase/realtime-client";
 import { cancelOpenTicketAction, saveOpenTicketAction } from "@/features/advanced-sales/ticket-actions";
 import { TicketOperationsDialog, TicketSaveDialog } from "@/features/advanced-sales/ticket-workspace-dialogs";
 
@@ -307,9 +307,8 @@ export function PosTerminal({
       return;
     }
 
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`tindio-customer-display:${activeCustomerDisplaySession.realtimeTopic}`)
+    const supabase = getRealtimeClient();
+    const channel = customerDisplayChannel(activeCustomerDisplaySession.realtimeTopic)
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
           displayChannelRef.current = channel;

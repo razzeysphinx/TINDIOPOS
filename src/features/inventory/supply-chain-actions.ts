@@ -13,6 +13,7 @@ import {
   upsertReplenishmentRuleSchema,
 } from "@/features/inventory/supply-chain-schema";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { postgresCodeMessage } from "@/lib/server/db-errors";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,12 +25,16 @@ function validationError(): SupplyChainActionResult {
   return { ok: false, message: "Check the highlighted replenishment details and try again." };
 }
 
+const SUPPLY_CHAIN_DB_MESSAGES: Record<string, string> = {
+  "23505": "This warehouse, rule, or document already exists.",
+  "23503": "Choose records that belong to this organization.",
+  "23514": "The replenishment details violate a stock or workflow rule.",
+  "22023": "The replenishment details violate a stock or workflow rule.",
+  "42501": "You do not have permission or a store assignment for this replenishment operation.",
+};
+
 function databaseMessage(code: string | undefined, fallback: string) {
-  if (code === "23505") return "This warehouse, rule, or document already exists.";
-  if (code === "23503") return "Choose records that belong to this organization.";
-  if (code === "23514" || code === "22023") return "The replenishment details violate a stock or workflow rule.";
-  if (code === "42501") return "You do not have permission or a store assignment for this replenishment operation.";
-  return fallback;
+  return postgresCodeMessage(code, fallback, SUPPLY_CHAIN_DB_MESSAGES);
 }
 
 async function requireSupplyChainManager() {

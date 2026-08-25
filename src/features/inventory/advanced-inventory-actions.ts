@@ -17,6 +17,7 @@ import {
   updateInventoryPolicySchema,
 } from "@/features/inventory/advanced-inventory-schema";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { postgresCodeMessage, validationFailure } from "@/lib/server/db-errors";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,17 +26,19 @@ export type AdvancedInventoryActionResult<T = undefined> =
   | { ok: false; message: string; fieldErrors?: Record<string, string[]> };
 
 function validationError(): AdvancedInventoryActionResult {
-  return { ok: false, message: "Check the highlighted details and try again." };
+  return validationFailure();
 }
 
+const ADVANCED_INVENTORY_DB_MESSAGES: Record<string, string> = {
+  "23505": "This supplier or inventory document already exists.",
+  "23503": "Choose records that belong to this organization.",
+  "23514": "The inventory details violate a business rule. Check available stock and quantities.",
+  "22023": "The inventory details violate a business rule. Check available stock and quantities.",
+  "42501": "You do not have permission to make this inventory change.",
+};
+
 function databaseMessage(code: string | undefined, fallback: string) {
-  if (code === "23505") return "This supplier or inventory document already exists.";
-  if (code === "23503") return "Choose records that belong to this organization.";
-  if (code === "23514" || code === "22023") {
-    return "The inventory details violate a business rule. Check available stock and quantities.";
-  }
-  if (code === "42501") return "You do not have permission to make this inventory change.";
-  return fallback;
+  return postgresCodeMessage(code, fallback, ADVANCED_INVENTORY_DB_MESSAGES);
 }
 
 async function requireInventoryManager() {

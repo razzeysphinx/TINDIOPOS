@@ -10,26 +10,25 @@ import {
 import type { ManagementActionResult } from "@/features/management/management-types";
 import { createInvitationToken, hashInvitationToken } from "@/features/management/invitation-token";
 import type { BusinessContext } from "@/lib/auth/dal";
+import {
+  PERMISSION_DENIED_MESSAGE,
+  postgresCodeMessage,
+  validationFailure,
+} from "@/lib/server/db-errors";
 import { getPublicEnvironment } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 export function validationError() {
-  return {
-    ok: false as const,
-    message: "Check the highlighted details and try again.",
-  };
+  return validationFailure();
 }
 
+const MANAGEMENT_DB_MESSAGES: Record<string, string> = {
+  "23505": "That code, email, or employee number is already in use.",
+  "42501": PERMISSION_DENIED_MESSAGE,
+};
+
 export function databaseMessage(code: string | undefined, fallback: string) {
-  if (code === "23505") {
-    return "That code, email, or employee number is already in use.";
-  }
-
-  if (code === "42501") {
-    return "You do not have permission to make this change.";
-  }
-
-  return fallback;
+  return postgresCodeMessage(code, fallback, MANAGEMENT_DB_MESSAGES);
 }
 
 export async function createStore(

@@ -14,34 +14,28 @@ import {
 } from "@/features/catalog/catalog-schema";
 import type { CatalogActionResult } from "@/features/catalog/catalog-types";
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
+import {
+  PERMISSION_DENIED_MESSAGE,
+  postgresCodeMessage,
+  validationFailure,
+} from "@/lib/server/db-errors";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
 export function validationError(): CatalogActionResult {
-  return {
-    ok: false,
-    message: "Check the highlighted details and try again.",
-  };
+  return validationFailure();
 }
 
+const CATALOG_DB_MESSAGES: Record<string, string> = {
+  "23505": "That category name, SKU, or barcode is already in use.",
+  "23503": "Select a category and store that belong to this organization.",
+  "23514": "The catalogue or stock details violate a business rule.",
+  "22023": "The catalogue or stock details violate a business rule.",
+  "42501": PERMISSION_DENIED_MESSAGE,
+};
+
 export function databaseMessage(code: string | undefined, fallback: string) {
-  if (code === "23505") {
-    return "That category name, SKU, or barcode is already in use.";
-  }
-
-  if (code === "23503") {
-    return "Select a category and store that belong to this organization.";
-  }
-
-  if (code === "23514" || code === "22023") {
-    return "The catalogue or stock details violate a business rule.";
-  }
-
-  if (code === "42501") {
-    return "You do not have permission to make this change.";
-  }
-
-  return fallback;
+  return postgresCodeMessage(code, fallback, CATALOG_DB_MESSAGES);
 }
 
 export async function createCategory(

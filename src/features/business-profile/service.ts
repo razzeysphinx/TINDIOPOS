@@ -7,6 +7,7 @@ import {
 import { updateBusinessProfileSchema } from "@/features/business-profile/business-profile-schema";
 import type { BusinessProfileActionResult } from "@/features/business-profile/business-profile-types";
 import type { BusinessContext } from "@/lib/auth/dal";
+import { postgresCodeMessage } from "@/lib/server/db-errors";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -39,11 +40,14 @@ export async function updateBusinessProfile({
   if (error) {
     return {
       ok: false,
-      message: error.code === "42501"
-        ? "You do not have permission to configure the business profile."
-        : error.code === "22023"
-          ? "The selected business profile or feature settings are invalid."
-          : "TINDIO could not update the business profile. No settings were changed.",
+      message: postgresCodeMessage(
+        error.code,
+        "TINDIO could not update the business profile. No settings were changed.",
+        {
+          "42501": "You do not have permission to configure the business profile.",
+          "22023": "The selected business profile or feature settings are invalid.",
+        },
+      ),
     };
   }
 

@@ -20,7 +20,7 @@ import type {
   KitchenStation,
   KitchenStationFilter,
 } from "@/features/kitchen/kitchen-types";
-import { createClient } from "@/lib/supabase/client";
+import { getRealtimeClient, kitchenOrderChannel } from "@/lib/supabase/realtime-client";
 import { cn } from "@/lib/utils";
 
 const activeStatuses: KitchenOrderStatus[] = ["NEW", "PREPARING", "READY"];
@@ -289,7 +289,7 @@ export function KitchenDisplay({
   }, []);
 
   useEffect(() => {
-    const supabase = createClient();
+    const supabase = getRealtimeClient();
     const channels: RealtimeChannel[] = [];
     let cancelled = false;
     let refreshTimeout: number | null = null;
@@ -306,8 +306,7 @@ export function KitchenDisplay({
       supabase.realtime.setAuth(data.session.access_token);
 
       for (const store of stores) {
-        const channel = supabase
-          .channel(`tindio:kitchen:${organizationId}:${store.id}`, { config: { private: true } })
+        const channel = kitchenOrderChannel(organizationId, store.id)
           .on("broadcast", { event: "kitchen-order-changed" }, refreshOrders)
           .subscribe();
         channels.push(channel);

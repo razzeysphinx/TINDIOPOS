@@ -4,39 +4,14 @@ import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateRoleForm } from "@/features/management/management-forms";
+import { loadManagementRoles } from "@/features/management/data";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Roles and access" };
 
 export default async function RolesPage() {
   const context = await requireBusinessContext();
-  const supabase = await createClient();
-  const organizationId = context.organization.id;
-  const [rolesResult, rolePermissionsResult, permissionsResult] = await Promise.all([
-    supabase
-      .from("roles")
-      .select("id, name, code, description, is_system, created_at")
-      .eq("organization_id", organizationId)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("role_permissions")
-      .select("role_id, permission_code")
-      .eq("organization_id", organizationId),
-    supabase.from("permissions").select("code, name, category"),
-  ]);
-
-  const error = [rolesResult, rolePermissionsResult, permissionsResult].find(
-    (result) => result.error,
-  )?.error;
-
-  if (error) {
-    throw new Error(`Unable to load roles: ${error.message}`);
-  }
-
-  const roles = rolesResult.data ?? [];
-  const rolePermissions = rolePermissionsResult.data ?? [];
-  const permissions = permissionsResult.data ?? [];
+  const { roles, rolePermissions, permissions } = await loadManagementRoles(context);
   const permissionDetails = new Map(
     permissions.map((permission) => [permission.code, permission]),
   );

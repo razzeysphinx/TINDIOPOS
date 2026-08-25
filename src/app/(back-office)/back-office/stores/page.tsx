@@ -4,23 +4,14 @@ import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateStoreForm } from "@/features/management/management-forms";
+import { loadManagementStores } from "@/features/management/data";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Stores" };
 
 export default async function StoresPage() {
   const context = await requireBusinessContext();
-  const supabase = await createClient();
-  const { data: stores, error } = await supabase
-    .from("stores")
-    .select("id, name, code, address, phone, is_active, created_at")
-    .eq("organization_id", context.organization.id)
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    throw new Error(`Unable to load stores: ${error.message}`);
-  }
+  const stores = await loadManagementStores(context);
 
   const canManage = hasPermission(context, "stores.manage");
 

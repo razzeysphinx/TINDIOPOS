@@ -8,89 +8,25 @@ import {
   RevokeInvitationButton,
 } from "@/features/management/management-forms";
 import { EmployeePinForm } from "@/features/approvals/employee-pin-form";
+import { loadManagementEmployees } from "@/features/management/data";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Employees" };
 
 export default async function EmployeesPage() {
   const context = await requireBusinessContext();
-  const supabase = await createClient();
-  const organizationId = context.organization.id;
   const canManage = hasPermission(context, "employees.manage");
-  const employeeResult = await supabase
-    .from("employees")
-    .select("id, profile_id, employee_number, job_title, status, created_at")
-    .eq("organization_id", organizationId)
-    .order("created_at", { ascending: true });
+  const {
+    employees,
+    profiles: profilesData,
+    roleLinks,
+    storeLinks,
+    roles: rolesData,
+    stores: storesData,
+    rolePermissions,
+    invitations,
+  } = await loadManagementEmployees(context, { includeInvitations: canManage });
 
-  if (employeeResult.error) {
-    throw new Error(`Unable to load employees: ${employeeResult.error.message}`);
-  }
-
-  const employeeIds = employeeResult.data.map((employee) => employee.id);
-  const profileIds = employeeResult.data.map((employee) => employee.profile_id);
-  const [
-    profilesResult,
-    roleLinksResult,
-    storeLinksResult,
-    rolesResult,
-    storesResult,
-    rolePermissionsResult,
-    invitationsResult,
-  ] = await Promise.all([
-    supabase.from("profiles").select("id, full_name, email").in("id", profileIds),
-    supabase
-      .from("employee_roles")
-      .select("employee_id, role_id")
-      .eq("organization_id", organizationId)
-      .in("employee_id", employeeIds),
-    supabase
-      .from("employee_stores")
-      .select("employee_id, store_id")
-      .eq("organization_id", organizationId)
-      .in("employee_id", employeeIds),
-    supabase.from("roles").select("id, name").eq("organization_id", organizationId),
-    supabase
-      .from("stores")
-      .select("id, name, is_active")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("role_permissions")
-      .select("role_id, permission_code")
-      .eq("organization_id", organizationId),
-    canManage
-      ? supabase
-          .from("employee_invitations")
-          .select(
-            "id, email, employee_number, job_title, role_name_snapshot, store_name_snapshot, expires_at, accepted_at, revoked_at, created_at",
-          )
-          .eq("organization_id", organizationId)
-          .order("created_at", { ascending: false })
-      : Promise.resolve({ data: [], error: null }),
-  ]);
-
-  const error = [
-    profilesResult,
-    roleLinksResult,
-    storeLinksResult,
-    rolesResult,
-    storesResult,
-    rolePermissionsResult,
-    invitationsResult,
-  ].find((result) => result.error)?.error;
-
-  if (error) {
-    throw new Error(`Unable to load employee assignments: ${error.message}`);
-  }
-
-  const profilesData = profilesResult.data ?? [];
-  const roleLinks = roleLinksResult.data ?? [];
-  const storeLinks = storeLinksResult.data ?? [];
-  const rolesData = rolesResult.data ?? [];
-  const storesData = storesResult.data ?? [];
-  const rolePermissions = rolePermissionsResult.data ?? [];
-  const invitations = invitationsResult.data ?? [];
   const profiles = new Map(profilesData.map((profile) => [profile.id, profile]));
   const roles = new Map(rolesData.map((role) => [role.id, role.name]));
   const stores = new Map(storesData.map((store) => [store.id, store.name]));
@@ -169,7 +105,7 @@ export default async function EmployeesPage() {
       ) : null}
 
       <section className="grid gap-4 lg:grid-cols-2">
-        {employeeResult.data.map((employee) => {
+        {employees.map((employee) => {
           const profile = profiles.get(employee.profile_id);
           const employeeRoles = roleLinks
             .filter((link) => link.employee_id === employee.id)

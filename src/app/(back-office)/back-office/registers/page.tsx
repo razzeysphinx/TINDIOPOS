@@ -5,47 +5,21 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateRegisterForm } from "@/features/management/management-forms";
 import { CustomerDisplayManager } from "@/features/customer-display/customer-display-manager";
+import { loadManagementRegisters } from "@/features/management/data";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Registers" };
 
 export default async function RegistersPage() {
   const context = await requireBusinessContext();
-  const supabase = await createClient();
-  const [registerResult, storeResult, displaySessionsResult] = await Promise.all([
-    supabase
-      .from("registers")
-      .select("id, store_id, name, code, is_active, created_at")
-      .eq("organization_id", context.organization.id)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("stores")
-      .select("id, name, is_active")
-      .eq("organization_id", context.organization.id),
-    hasPermission(context, "registers.manage") && context.features.customer_display
-      ? supabase.rpc("get_customer_display_management_sessions", {
-          target_organization_id: context.organization.id,
-        })
-      : Promise.resolve({
-          data: [] as Array<{
-            register_id: string;
-            created_at: string;
-            last_published_at: string | null;
-          }>,
-          error: null,
-        }),
-  ]);
+  const { registers, stores: storeRows, displaySessions } = await loadManagementRegisters(context, {
+    includeDisplaySessions:
+      hasPermission(context, "registers.manage") && context.features.customer_display,
+  });
 
-  if (registerResult.error || storeResult.error || displaySessionsResult.error) {
-    throw new Error(
-      `Unable to load registers: ${registerResult.error?.message ?? storeResult.error?.message ?? displaySessionsResult.error?.message}`,
-    );
-  }
-
-  const stores = new Map(storeResult.data.map((store) => [store.id, store.name]));
+  const stores = new Map(storeRows.map((store) => [store.id, store.name]));
   const canManage = hasPermission(context, "registers.manage");
-  const activeStores = storeResult.data
+  const activeStores = storeRows
     .filter((store) => store.is_active)
     .map((store) => ({ id: store.id, name: store.name }));
 
@@ -66,15 +40,15 @@ export default async function RegistersPage() {
         <CreateRegisterForm stores={activeStores} />
       ) : null}
 
-      {canManage && context.features.customer_display && registerResult.data.length > 0 ? (
+      {canManage && context.features.customer_display && registers.length > 0 ? (
         <CustomerDisplayManager
-          registers={registerResult.data.map((register) => ({
+          registers={registers.map((register) => ({
             id: register.id,
             name: register.name,
             code: register.code,
             storeName: stores.get(register.store_id) ?? "Unknown store",
           }))}
-          sessions={(displaySessionsResult.data ?? []).map((session) => ({
+          sessions={displaySessions.map((session) => ({
             registerId: session.register_id,
             createdAt: session.created_at,
             lastPublishedAt: session.last_published_at,
@@ -83,7 +57,7 @@ export default async function RegistersPage() {
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {registerResult.data.map((register) => (
+        {registers.map((register) => (
           <Card key={register.id}>
             <CardHeader className="flex-row items-start justify-between">
               <span className="grid size-10 place-items-center rounded-lg bg-secondary text-primary">

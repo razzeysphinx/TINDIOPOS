@@ -24,8 +24,8 @@ import {
   createRoleAction,
   createStoreAction,
   revokeEmployeeInvitationAction,
-  type ManagementActionResult,
 } from "@/features/management/actions";
+import type { ManagementActionResult } from "@/features/management/management-types";
 import {
   createInvitationSchema,
   createRegisterSchema,

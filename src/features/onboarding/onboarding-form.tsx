@@ -9,10 +9,8 @@ import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  createBusinessAction,
-  type OnboardingActionResult,
-} from "@/features/onboarding/actions";
+import { createBusinessAction } from "@/features/onboarding/actions";
+import type { OnboardingActionResult } from "@/features/onboarding/onboarding-types";
 import {
   onboardingSchema,
   type OnboardingValues,

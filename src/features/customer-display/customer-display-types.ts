@@ -52,6 +52,10 @@ export type CustomerDisplayBootstrap = {
   initialState: CustomerDisplayState;
 };
 
+export type CustomerDisplayActionResult =
+  | { ok: true; message: string; displayUrl: string }
+  | { ok: false; message: string };
+
 export function createIdleCustomerDisplayState(updatedAt = new Date().toISOString()): CustomerDisplayState {
   return {
     status: "idle",

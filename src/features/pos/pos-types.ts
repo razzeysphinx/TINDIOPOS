@@ -14,6 +14,10 @@ export type PosCatalogItem = {
   hasModifiers?: boolean;
 };
 
+export type PosFavoriteTileActionResult =
+  | { ok: true; isFavorite: boolean; message: string }
+  | { ok: false; message: string };
+
 export type PosCategory = {
   id: string;
   name: string;

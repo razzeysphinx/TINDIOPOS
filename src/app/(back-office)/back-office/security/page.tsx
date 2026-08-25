@@ -4,8 +4,8 @@ import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SecurityApprovalManager } from "@/features/approvals/security-approval-manager";
+import { loadSecurityOverview } from "@/features/approvals/data";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
 
 const supportedOperations = ["sales.refund", "cash.pay_out", "inventory.adjust"] as const;
 
@@ -19,41 +19,15 @@ export const metadata = { title: "Security & approvals" };
 
 export default async function SecurityPage() {
   const context = await requireBusinessContext();
-  const supabase = await createClient();
-  const organizationId = context.organization.id;
   const canManageRules = hasPermission(context, "approvals.manage");
   const canViewAudit = hasPermission(context, "audit.view");
 
-  const [rulesResult, requestsResult, auditResult, employeesResult] = await Promise.all([
-    supabase
-      .from("approval_rules")
-      .select("operation_code, decision, amount_threshold_minor, is_enabled")
-      .eq("organization_id", organizationId)
-      .in("operation_code", supportedOperations)
-      .order("operation_code"),
-    supabase
-      .from("approval_requests")
-      .select("id, operation_code, status, requested_amount_minor, reason, requested_by_employee_id, approved_by_employee_id, requested_at, decided_at, expires_at")
-      .eq("organization_id", organizationId)
-      .order("requested_at", { ascending: false })
-      .limit(20),
-    canViewAudit
-      ? supabase
-          .from("audit_logs")
-          .select("id, event_type, operation_code, amount_minor, reason, actor_employee_id, created_at")
-          .eq("organization_id", organizationId)
-          .order("created_at", { ascending: false })
-          .limit(30)
-      : Promise.resolve({ data: [], error: null }),
-    supabase.from("employees").select("id, employee_number").eq("organization_id", organizationId),
-  ]);
+  const { rules: rulesData, requests, auditEntries, employees } = await loadSecurityOverview(
+    context,
+    { includeAudit: canViewAudit },
+  );
 
-  const error = [rulesResult, requestsResult, auditResult, employeesResult].find(
-    (result) => result.error,
-  )?.error;
-  if (error) throw new Error(`Unable to load security controls: ${error.message}`);
-
-  const existingRules = new Map((rulesResult.data ?? []).map((rule) => [rule.operation_code, rule]));
+  const existingRules = new Map(rulesData.map((rule) => [rule.operation_code, rule]));
   const rules = supportedOperations.map((operationCode) => {
     const rule = existingRules.get(operationCode);
     return {
@@ -63,9 +37,7 @@ export default async function SecurityPage() {
       isEnabled: rule?.is_enabled ?? true,
     };
   });
-  const employeeNumbers = new Map((employeesResult.data ?? []).map((employee) => [employee.id, employee.employee_number]));
-  const requests = requestsResult.data ?? [];
-  const auditEntries = auditResult.data ?? [];
+  const employeeNumbers = new Map(employees.map((employee) => [employee.id, employee.employee_number]));
 
   return (
     <div className="space-y-8">

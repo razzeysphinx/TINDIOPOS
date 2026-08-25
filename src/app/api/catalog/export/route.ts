@@ -2,12 +2,9 @@ import { NextResponse } from "next/server";
 
 import { loadCatalogExportData } from "@/features/catalog/data";
 import { getBusinessContext, hasPermission } from "@/lib/auth/dal";
+import { csvRows } from "@/lib/csv";
 
 export const dynamic = "force-dynamic";
-
-function csvCell(value: string | number) {
-  return `"${String(value).replaceAll('"', '""')}"`;
-}
 
 function toMoneyInput(value: number) {
   return (value / 100).toFixed(2);
@@ -82,7 +79,7 @@ export async function GET() {
       "",
     ]),
   ];
-  const body = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+  const body = csvRows(rows);
   const filename = `tindio-catalog-${new Date().toISOString().slice(0, 10)}.csv`;
 
   return new Response(body, {

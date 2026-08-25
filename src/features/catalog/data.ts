@@ -8,6 +8,23 @@ import type {
 import type { BusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
+async function loadCatalogCostEntries(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string,
+  productIds: string[],
+): Promise<{ ok: true; costs: CatalogCostEntry[] } | { ok: false; errorMessage: string }> {
+  const costsResult = await supabase.rpc("get_catalog_costs", {
+    target_organization_id: organizationId,
+    requested_product_ids: productIds,
+  });
+
+  if (costsResult.error) {
+    return { ok: false, errorMessage: costsResult.error.message };
+  }
+
+  return { ok: true, costs: costsResult.data ?? [] };
+}
+
 export async function loadCatalogWorkspace(
   context: BusinessContext,
   options: { includeCosts?: boolean } = {},
@@ -64,16 +81,15 @@ export async function loadCatalogWorkspace(
   let costs: CatalogCostEntry[] = [];
 
   if (options.includeCosts && products.length > 0) {
-    const costsResult = await supabase.rpc("get_catalog_costs", {
-      target_organization_id: organizationId,
-      requested_product_ids: products.map((product) => product.id),
-    });
-
-    if (costsResult.error) {
-      throw new Error(`Unable to load product costs: ${costsResult.error.message}`);
+    const costEntries = await loadCatalogCostEntries(
+      supabase,
+      organizationId,
+      products.map((product) => product.id),
+    );
+    if (!costEntries.ok) {
+      throw new Error(`Unable to load product costs: ${costEntries.errorMessage}`);
     }
-
-    costs = costsResult.data ?? [];
+    costs = costEntries.costs;
   }
 
   return {
@@ -118,16 +134,15 @@ export async function loadCatalogExportData(
   let costs: CatalogCostEntry[] = [];
 
   if (includeCosts && products.length > 0) {
-    const costsResult = await supabase.rpc("get_catalog_costs", {
-      target_organization_id: organizationId,
-      requested_product_ids: products.map((product) => product.id),
-    });
-
-    if (costsResult.error) {
+    const costEntries = await loadCatalogCostEntries(
+      supabase,
+      organizationId,
+      products.map((product) => product.id),
+    );
+    if (!costEntries.ok) {
       return { ok: false, stage: "costs" };
     }
-
-    costs = costsResult.data ?? [];
+    costs = costEntries.costs;
   }
 
   return {

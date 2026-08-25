@@ -1,3 +1,5 @@
+import { csvCell } from "@/lib/csv";
+
 const requiredHeaders = [
   "name",
   "price",
@@ -208,6 +210,6 @@ export function catalogCsvTemplate() {
     "",
     "10",
   ];
-  const encode = (value: string) => `\"${value.replaceAll('\"', '\"\"')}\"`;
+  const encode = (value: string) => csvCell(value);
   return [catalogCsvHeaders, example].map((row) => row.map(encode).join(",")).join("\r\n");
 }

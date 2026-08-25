@@ -5,7 +5,8 @@ import { z } from "zod";
 
 import { hasPermission, getBusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
-import type { PosCatalogItem, PosCatalogResponse } from "@/features/pos/pos-types";
+import type { PosCatalogResponse } from "@/features/pos/pos-types";
+import { mapPosCatalogItems } from "@/features/pos/data";
 
 const catalogRequestSchema = z.object({
   store: z.string().uuid(),
@@ -77,23 +78,9 @@ export async function GET(request: NextRequest) {
   const { data: modifierAssignments } = productIds.length > 0
     ? await database.from("product_modifier_groups").select("product_id").eq("organization_id", context.organization.id).in("product_id", productIds)
     : { data: [] };
-  const modifierProductIds = new Set((modifierAssignments ?? []).map((assignment: any) => assignment.product_id));
+  const modifierProductIds = new Set<string>((modifierAssignments ?? []).map((assignment: any) => assignment.product_id));
 
-  const items: PosCatalogItem[] = (data ?? []).map((item) => ({
-    productId: item.product_id,
-    variantId: item.variant_id,
-    categoryId: item.category_id,
-    productName: item.product_name,
-    variantName: item.variant_name,
-    sku: item.sku,
-    barcode: item.barcode,
-    priceMinor: item.price_minor,
-    unit: item.unit,
-    imageUrl: item.image_url,
-    isVariablePrice: item.is_variable_price,
-    allowFractionalQuantity: item.allow_fractional_quantity,
-    hasModifiers: modifierProductIds.has(item.product_id),
-  }));
+  const items = mapPosCatalogItems(data ?? [], modifierProductIds, true);
   const response: PosCatalogResponse = {
     items,
     hasMore: items.length === parsed.data.limit,

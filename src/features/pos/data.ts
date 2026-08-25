@@ -42,6 +42,47 @@ export type PosPageData = {
   ticketAssignees: PosTicketAssignee[];
 };
 
+// Canonical server-side mapping from `search_pos_catalog` /
+// `get_pos_favorite_items` / `get_pos_recent_items` rows to the shared
+// PosCatalogItem DTO. Used by both the POS workspace loader and the
+// /api/pos/catalog route so the transport shapes cannot drift apart.
+export type PosCatalogRow = {
+  product_id: string;
+  variant_id: string | null;
+  category_id: string | null;
+  product_name: string;
+  variant_name: string | null;
+  sku: string | null;
+  barcode: string | null;
+  price_minor: number;
+  unit: string;
+  image_url: string | null;
+  is_variable_price: boolean;
+  allow_fractional_quantity: boolean;
+};
+
+export function mapPosCatalogItems(
+  rows: Array<PosCatalogRow>,
+  modifierProductIds: Set<string>,
+  modifiersEnabled: boolean,
+): PosCatalogItem[] {
+  return rows.map((item) => ({
+    productId: item.product_id,
+    variantId: item.variant_id,
+    categoryId: item.category_id,
+    productName: item.product_name,
+    variantName: item.variant_name,
+    sku: item.sku,
+    barcode: item.barcode,
+    priceMinor: item.price_minor,
+    unit: item.unit,
+    imageUrl: item.image_url,
+    isVariablePrice: item.is_variable_price,
+    allowFractionalQuantity: item.allow_fractional_quantity,
+    hasModifiers: modifiersEnabled && modifierProductIds.has(item.product_id),
+  }));
+}
+
 export async function loadPosWorkspace(
   context: BusinessContext,
 ): Promise<PosPageData> {
@@ -266,28 +307,13 @@ export async function loadPosWorkspace(
     if (modifierError) {
       throw new Error(`Unable to load POS modifiers: ${modifierError.message}`);
     }
-    const modifierProductIds = new Set(
+    const modifierProductIds = new Set<string>(
       (modifierAssignments ?? []).map((assignment: { product_id: string }) => assignment.product_id),
     );
-    const mapWorkspaceItem = (item: (typeof workspaceRows)[number]): PosCatalogItem => ({
-      productId: item.product_id,
-      variantId: item.variant_id,
-      categoryId: item.category_id,
-      productName: item.product_name,
-      variantName: item.variant_name,
-      sku: item.sku,
-      barcode: item.barcode,
-      priceMinor: item.price_minor,
-      unit: item.unit,
-      imageUrl: item.image_url,
-      isVariablePrice: item.is_variable_price,
-      allowFractionalQuantity: item.allow_fractional_quantity,
-      hasModifiers: features.modifiers && modifierProductIds.has(item.product_id),
-    });
 
-    initialItems = (catalogResult.data ?? []).map(mapWorkspaceItem);
-    initialFavoriteItems = (favoriteResult.data ?? []).map(mapWorkspaceItem);
-    initialRecentItems = (recentResult.data ?? []).map(mapWorkspaceItem);
+    initialItems = mapPosCatalogItems(catalogResult.data ?? [], modifierProductIds, features.modifiers);
+    initialFavoriteItems = mapPosCatalogItems(favoriteResult.data ?? [], modifierProductIds, features.modifiers);
+    initialRecentItems = mapPosCatalogItems(recentResult.data ?? [], modifierProductIds, features.modifiers);
     ticketAssignees = (assigneesResult.data ?? []).map((assignee: any) => ({ id: assignee.employee_id, fullName: assignee.full_name }));
     openTickets = (ticketsResult.data ?? []).flatMap((ticket: any) => {
       if (!Array.isArray(ticket.cart)) return [];

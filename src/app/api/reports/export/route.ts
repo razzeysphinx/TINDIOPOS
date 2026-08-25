@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getReportingSnapshot, resolveReportFilter, type ReportSnapshot } from "@/features/reports/reporting";
 import { getBusinessContext, hasPermission } from "@/lib/auth/dal";
+import { csvRows } from "@/lib/csv";
 
 const exportKindSchema = z.enum([
   "sales",
@@ -13,14 +14,6 @@ const exportKindSchema = z.enum([
   "customers",
   "security",
 ]);
-
-function csvCell(value: string | number) {
-  return `"${String(value).replaceAll('"', '""')}"`;
-}
-
-function toCsv(rows: Array<Array<string | number>>) {
-  return rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
-}
 
 function rowsForExport(kind: z.infer<typeof exportKindSchema>, snapshot: ReportSnapshot) {
   switch (kind) {
@@ -182,7 +175,7 @@ export async function GET(request: NextRequest) {
   const snapshot = await getReportingSnapshot(context, filter, "reports");
   const filename = `tindio-${kind.data}-report-${filter.startDate}-to-${filter.endDate}.csv`;
 
-  return new Response(toCsv(rowsForExport(kind.data, snapshot)), {
+  return new Response(csvRows(rowsForExport(kind.data, snapshot)), {
     headers: {
       "Cache-Control": "private, no-store",
       "Content-Disposition": `attachment; filename="${filename}"`,

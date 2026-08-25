@@ -1,0 +1,13 @@
+-- Phase 9 compatibility: expose descriptive argument names to the PostgREST RPC API.
+begin;
+
+create or replace function public.create_supplier(target_organization_id uuid, target_name text, target_contact_name text, target_email text, target_phone text, target_address text, target_notes text) returns uuid language sql security invoker set search_path='' as $$ select private.create_supplier(target_organization_id,target_name,target_contact_name,target_email,target_phone,target_address,target_notes); $$;
+create or replace function public.create_purchase_order(target_organization_id uuid, target_store_id uuid, target_supplier_id uuid, target_notes text, target_expected_at date, target_lines jsonb) returns uuid language sql security invoker set search_path='' as $$ select private.create_purchase_order(target_organization_id,target_store_id,target_supplier_id,target_notes,target_expected_at,target_lines); $$;
+create or replace function public.receive_purchase_order(target_organization_id uuid, target_purchase_order_id uuid, target_lines jsonb, target_note text) returns uuid language sql security invoker set search_path='' as $$ select private.receive_purchase_order(target_organization_id,target_purchase_order_id,target_lines,target_note); $$;
+create or replace function public.complete_inventory_count(target_organization_id uuid, target_store_id uuid, target_note text, target_lines jsonb) returns uuid language sql security invoker set search_path='' as $$ select private.complete_inventory_count(target_organization_id,target_store_id,target_note,target_lines); $$;
+create or replace function public.transfer_stock(target_organization_id uuid, target_source_store_id uuid, target_destination_store_id uuid, target_lines jsonb, target_note text) returns uuid language sql security invoker set search_path='' as $$ select private.transfer_stock(target_organization_id,target_source_store_id,target_destination_store_id,target_lines,target_note); $$;
+
+revoke execute on function public.create_supplier(uuid,text,text,text,text,text,text), public.create_purchase_order(uuid,uuid,uuid,text,date,jsonb), public.receive_purchase_order(uuid,uuid,jsonb,text), public.complete_inventory_count(uuid,uuid,text,jsonb), public.transfer_stock(uuid,uuid,uuid,jsonb,text) from public, anon, service_role;
+grant execute on function public.create_supplier(uuid,text,text,text,text,text,text), public.create_purchase_order(uuid,uuid,uuid,text,date,jsonb), public.receive_purchase_order(uuid,uuid,jsonb,text), public.complete_inventory_count(uuid,uuid,text,jsonb), public.transfer_stock(uuid,uuid,uuid,jsonb,text) to authenticated;
+
+commit;

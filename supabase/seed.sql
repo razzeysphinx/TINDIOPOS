@@ -1,0 +1,2 @@
+-- Phase 1 creates no shared demo data. Organization records are created by the
+-- authenticated bootstrap flow so every row has a real owner and valid RLS scope.

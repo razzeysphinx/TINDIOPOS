@@ -1,0 +1,652 @@
+"use client";
+
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Calculator,
+  CheckCircle2,
+  CircleDollarSign,
+  Eye,
+  EyeOff,
+  LoaderCircle,
+  LogIn,
+  LockKeyhole,
+  ReceiptText,
+} from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { formatMinorMoney, moneyInputToMinor } from "@/features/catalog/catalog-money";
+import { ManagerApprovalDialog } from "@/features/approvals/manager-approval-dialog";
+import { requestManagerApprovalAction } from "@/features/approvals/actions";
+import {
+  closeShiftAction,
+  openShiftAction,
+  recordCashMovementAction,
+  updateShiftCashCloseSettingAction,
+} from "@/features/shifts/actions";
+
+type StoreOption = { id: string; name: string };
+type RegisterOption = { id: string; storeId: string; name: string; code: string };
+
+type ShiftRecord = {
+  id: string;
+  storeId: string;
+  registerId: string;
+  openedByEmployeeId: string;
+  status: "open" | "closed";
+  openingCashMinor: number;
+  expectedCashMinor: number | null;
+  countedCashMinor: number | null;
+  differenceMinor: number | null;
+  openingNote: string | null;
+  closingNote: string | null;
+  openedAt: string;
+  closedAt: string | null;
+};
+
+type CashSummary = {
+  shiftId: string;
+  openingCashMinor: number | null;
+  cashSalesMinor: number | null;
+  cashRefundsMinor: number | null;
+  payInsMinor: number | null;
+  payOutsMinor: number | null;
+  expectedCashMinor: number | null;
+};
+
+type CashMovement = {
+  id: string;
+  shiftId: string;
+  movementType: "PAY_IN" | "PAY_OUT";
+  amountMinor: number;
+  reason: string;
+  createdAt: string;
+};
+
+const selectClassName =
+  "h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+
+function formatShiftTime(value: string, timezone: string) {
+  return new Intl.DateTimeFormat("en-PH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: timezone,
+  }).format(new Date(value));
+}
+
+export function ShiftManager({
+  canClose,
+  canManageSettings,
+  canOpen,
+  canPayIn,
+  canPayOut,
+  cashMovements,
+  currencyCode,
+  openShifts,
+  recentClosedShifts,
+  registers,
+  stores,
+  summaries,
+  showExpectedCashBeforeClose,
+  timezone,
+}: {
+  canClose: boolean;
+  canManageSettings: boolean;
+  canOpen: boolean;
+  canPayIn: boolean;
+  canPayOut: boolean;
+  cashMovements: CashMovement[];
+  currencyCode: string;
+  openShifts: ShiftRecord[];
+  recentClosedShifts: ShiftRecord[];
+  registers: RegisterOption[];
+  stores: StoreOption[];
+  summaries: CashSummary[];
+  showExpectedCashBeforeClose: boolean;
+  timezone: string;
+}) {
+  const [lastCloseSummary, setLastCloseSummary] = useState<{
+    expectedCashMinor: number;
+    countedCashMinor: number;
+    differenceMinor: number;
+  } | null>(null);
+  const summaryByShiftId = new Map(summaries.map((summary) => [summary.shiftId, summary]));
+  const movementsByShiftId = new Map<string, CashMovement[]>();
+  for (const movement of cashMovements) {
+    movementsByShiftId.set(movement.shiftId, [
+      ...(movementsByShiftId.get(movement.shiftId) ?? []),
+      movement,
+    ]);
+  }
+
+  return (
+    <div className="space-y-5">
+      {canManageSettings ? (
+        <CashCloseVisibilitySetting initialValue={showExpectedCashBeforeClose} />
+      ) : null}
+      {lastCloseSummary ? (
+        <CashCloseRecordedNotice currencyCode={currencyCode} summary={lastCloseSummary} />
+      ) : null}
+      {canOpen ? <OpenShiftForm registers={registers} stores={stores} /> : null}
+
+      {openShifts.length > 0 ? (
+        <section className="grid gap-4 xl:grid-cols-2">
+          {openShifts.map((shift) => (
+            <OpenShiftCard
+              canClose={canClose}
+              canPayIn={canPayIn}
+              canPayOut={canPayOut}
+              currencyCode={currencyCode}
+              key={shift.id}
+              movements={movementsByShiftId.get(shift.id) ?? []}
+              onClosed={setLastCloseSummary}
+              register={registers.find((item) => item.id === shift.registerId)}
+              shift={shift}
+              store={stores.find((item) => item.id === shift.storeId)}
+              summary={summaryByShiftId.get(shift.id)}
+              timezone={timezone}
+            />
+          ))}
+        </section>
+      ) : (
+        <Card>
+          <CardHeader className="items-center py-10 text-center">
+            <CircleDollarSign className="size-9 text-muted-foreground" aria-hidden="true" />
+            <CardTitle>No register shift is open</CardTitle>
+            <p className="max-w-md text-sm leading-6 text-muted-foreground">
+              Open a drawer before processing sales or cash movements. TINDIO will then calculate the expected cash from its recorded transactions.
+            </p>
+          </CardHeader>
+        </Card>
+      )}
+
+      <ClosedShiftHistory
+        currencyCode={currencyCode}
+        registers={registers}
+        shifts={recentClosedShifts}
+        stores={stores}
+        timezone={timezone}
+      />
+    </div>
+  );
+}
+
+function OpenShiftForm({
+  registers,
+  stores,
+}: {
+  registers: RegisterOption[];
+  stores: StoreOption[];
+}) {
+  const router = useRouter();
+  const [storeId, setStoreId] = useState(stores[0]?.id ?? "");
+  const availableRegisters = useMemo(
+    () => registers.filter((register) => register.storeId === storeId),
+    [registers, storeId],
+  );
+  const [registerId, setRegisterId] = useState(
+    () => registers.find((register) => register.storeId === stores[0]?.id)?.id ?? "",
+  );
+  const [openingCash, setOpeningCash] = useState("0.00");
+  const [openingNote, setOpeningNote] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const changeStore = (nextStoreId: string) => {
+    setStoreId(nextStoreId);
+    setRegisterId(registers.find((register) => register.storeId === nextStoreId)?.id ?? "");
+  };
+
+  const submit = () => {
+    startTransition(async () => {
+      const result = await openShiftAction({ storeId, registerId, openingCash, openingNote });
+      setMessage(result.message);
+      if (result.ok) router.refresh();
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-secondary text-primary">
+          <LogIn className="size-5" aria-hidden="true" />
+        </span>
+        <div>
+          <CardTitle>Open register shift</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Record the opening float before this register accepts sales.
+          </p>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <label className="grid gap-1.5 text-sm font-medium">
+            Store
+            <select className={selectClassName} disabled={isPending || stores.length === 0} onChange={(event) => changeStore(event.target.value)} value={storeId}>
+              {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
+            </select>
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium">
+            Register
+            <select className={selectClassName} disabled={isPending || availableRegisters.length === 0} onChange={(event) => setRegisterId(event.target.value)} value={registerId}>
+              {availableRegisters.map((register) => <option key={register.id} value={register.id}>{register.name} ({register.code})</option>)}
+            </select>
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium">
+            Opening cash
+            <Input disabled={isPending} inputMode="decimal" min="0" onChange={(event) => setOpeningCash(event.target.value)} step="0.01" type="number" value={openingCash} />
+          </label>
+        </div>
+        <label className="grid gap-1.5 text-sm font-medium">
+          Opening note <span className="font-normal text-muted-foreground">(optional)</span>
+          <Input disabled={isPending} maxLength={500} onChange={(event) => setOpeningNote(event.target.value)} placeholder="e.g. Daily opening float" value={openingNote} />
+        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button disabled={isPending || !storeId || !registerId} onClick={submit} type="button">
+            {isPending ? <LoaderCircle className="animate-spin" /> : <LogIn />}
+            Open shift
+          </Button>
+          {message ? <p aria-live="polite" className="text-sm text-muted-foreground">{message}</p> : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function OpenShiftCard({
+  canClose,
+  canPayIn,
+  canPayOut,
+  currencyCode,
+  movements,
+  onClosed,
+  register,
+  shift,
+  store,
+  summary,
+  timezone,
+}: {
+  canClose: boolean;
+  canPayIn: boolean;
+  canPayOut: boolean;
+  currencyCode: string;
+  movements: CashMovement[];
+  onClosed: (summary: { expectedCashMinor: number; countedCashMinor: number; differenceMinor: number }) => void;
+  register: RegisterOption | undefined;
+  shift: ShiftRecord;
+  store: StoreOption | undefined;
+  summary: CashSummary | undefined;
+  timezone: string;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start justify-between gap-3">
+        <div className="min-w-0">
+          <CardTitle className="truncate">{register?.name ?? "Register"}</CardTitle>
+          <p className="mt-1 truncate text-sm text-muted-foreground">
+            {store?.name ?? "Assigned store"} · opened {formatShiftTime(shift.openedAt, timezone)}
+          </p>
+        </div>
+        <Badge variant="secondary"><CheckCircle2 aria-hidden="true" />Open</Badge>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {summary?.expectedCashMinor !== null && summary ? (
+          <CashExpectation currencyCode={currencyCode} summary={summary} />
+        ) : (
+          <BlindCashNotice />
+        )}
+        {shift.openingNote ? <p className="rounded-lg bg-muted/45 px-3 py-2 text-sm text-muted-foreground">Opening note: {shift.openingNote}</p> : null}
+
+        {canPayIn || canPayOut ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {canPayIn ? <CashMovementForm currencyCode={currencyCode} movementType="PAY_IN" shiftId={shift.id} /> : null}
+            {canPayOut ? <CashMovementForm currencyCode={currencyCode} movementType="PAY_OUT" shiftId={shift.id} /> : null}
+          </div>
+        ) : null}
+
+        {movements.length > 0 ? (
+          <div>
+            <p className="text-sm font-medium">Recent cash movements</p>
+            <div className="mt-2 divide-y overflow-hidden rounded-lg border">
+              {movements.slice(0, 6).map((movement) => (
+                <div className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm" key={movement.id}>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{movement.reason}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{formatShiftTime(movement.createdAt, timezone)}</p>
+                  </div>
+                  <span className={movement.movementType === "PAY_IN" ? "font-semibold text-emerald-700 dark:text-emerald-400" : "font-semibold text-destructive"}>
+                    {movement.movementType === "PAY_IN" ? "+" : "−"}{formatMinorMoney(movement.amountMinor, currencyCode)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {canClose ? (
+          <CloseShiftForm
+            currencyCode={currencyCode}
+            expectedCashMinor={summary?.expectedCashMinor ?? null}
+            onClosed={onClosed}
+            shiftId={shift.id}
+          />
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CashExpectation({ currencyCode, summary }: { currencyCode: string; summary: CashSummary }) {
+  if (
+    summary.openingCashMinor === null ||
+    summary.cashSalesMinor === null ||
+    summary.cashRefundsMinor === null ||
+    summary.payInsMinor === null ||
+    summary.payOutsMinor === null ||
+    summary.expectedCashMinor === null
+  ) {
+    return null;
+  }
+
+  const rows = [
+    ["Opening cash", summary.openingCashMinor],
+    ["Cash sales", summary.cashSalesMinor],
+    ["Cash refunds", -summary.cashRefundsMinor],
+    ["Pay-ins", summary.payInsMinor],
+    ["Pay-outs", -summary.payOutsMinor],
+  ] as const;
+
+  return (
+    <div className="rounded-lg border bg-muted/25 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="flex items-center gap-2 text-sm font-medium"><Calculator className="size-4 text-primary" />Expected cash</p>
+        <p className="text-lg font-semibold">{formatMinorMoney(summary.expectedCashMinor, currencyCode)}</p>
+      </div>
+      <div className="mt-3 grid gap-1 text-xs text-muted-foreground">
+        {rows.map(([label, amount]) => (
+          <div className="flex justify-between" key={label}><span>{label}</span><span>{amount < 0 ? "−" : ""}{formatMinorMoney(Math.abs(amount), currencyCode)}</span></div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BlindCashNotice() {
+  return (
+    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+      <p className="flex items-center gap-2 text-sm font-medium"><EyeOff className="size-4 text-primary" />Blind cash count enabled</p>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+        Count the drawer and submit the actual cash first. TINDIO will reveal the expected amount and over/short result after closing.
+      </p>
+    </div>
+  );
+}
+
+function CashMovementForm({
+  currencyCode,
+  movementType,
+  shiftId,
+}: {
+  currencyCode: string;
+  movementType: "PAY_IN" | "PAY_OUT";
+  shiftId: string;
+}) {
+  const router = useRouter();
+  const isPayIn = movementType === "PAY_IN";
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [message, setMessage] = useState<string | null>(null);
+  const [approvalRequestId, setApprovalRequestId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const completeMovement = async (pendingApprovalRequestId: string | null) => {
+    const result = await recordCashMovementAction({
+      shiftId,
+      movementType,
+      amount,
+      reason,
+      idempotencyKey,
+      approvalRequestId: pendingApprovalRequestId,
+    });
+    setMessage(result.message);
+    if (result.ok) {
+      setAmount("");
+      setReason("");
+      setIdempotencyKey(crypto.randomUUID());
+      router.refresh();
+    }
+  };
+
+  const submit = () => {
+    startTransition(async () => {
+      if (movementType === "PAY_OUT") {
+        const approval = await requestManagerApprovalAction({
+          operationCode: "cash.pay_out",
+          reason,
+          payload: {
+            shift_id: shiftId,
+            movement_type: movementType,
+            amount_minor: moneyInputToMinor(amount),
+            reason: reason.trim(),
+          },
+        });
+
+        if (!approval.ok) {
+          setMessage(approval.message);
+          return;
+        }
+
+        if (approval.decision === "APPROVAL_REQUIRED") {
+          setApprovalRequestId(approval.data.approvalRequestId);
+          setMessage(approval.message);
+          return;
+        }
+      }
+
+      await completeMovement(null);
+    });
+  };
+
+  return (
+    <div className="rounded-lg border p-3">
+      <p className="flex items-center gap-2 text-sm font-medium">
+        {isPayIn ? <ArrowDownToLine className="size-4 text-emerald-700 dark:text-emerald-400" /> : <ArrowUpFromLine className="size-4 text-destructive" />}
+        {isPayIn ? "Pay in" : "Pay out"}
+      </p>
+      <div className="mt-3 grid gap-2">
+        <Input aria-label={`${isPayIn ? "Pay in" : "Pay out"} amount in ${currencyCode}`} disabled={isPending} inputMode="decimal" min="0.01" onChange={(event) => setAmount(event.target.value)} placeholder="Amount" step="0.01" type="number" value={amount} />
+        <Input disabled={isPending} maxLength={500} minLength={2} onChange={(event) => setReason(event.target.value)} placeholder="Reason" value={reason} />
+        <Button disabled={isPending || !amount || reason.trim().length < 2} onClick={submit} size="sm" type="button" variant={isPayIn ? "secondary" : "outline"}>
+          {isPending ? <LoaderCircle className="animate-spin" /> : isPayIn ? <ArrowDownToLine /> : <ArrowUpFromLine />}
+          Record {isPayIn ? "pay-in" : "pay-out"}
+        </Button>
+        {message ? <p aria-live="polite" className="text-xs text-muted-foreground">{message}</p> : null}
+      </div>
+      {approvalRequestId ? (
+        <ManagerApprovalDialog
+          approvalRequestId={approvalRequestId}
+          onApproved={() => {
+            const requestId = approvalRequestId;
+            setApprovalRequestId(null);
+            startTransition(async () => {
+              await completeMovement(requestId);
+            });
+          }}
+          onCancel={() => setApprovalRequestId(null)}
+          operationLabel="Cash pay-out"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function CloseShiftForm({
+  currencyCode,
+  expectedCashMinor,
+  onClosed,
+  shiftId,
+}: {
+  currencyCode: string;
+  expectedCashMinor: number | null;
+  onClosed: (summary: { expectedCashMinor: number; countedCashMinor: number; differenceMinor: number }) => void;
+  shiftId: string;
+}) {
+  const router = useRouter();
+  const [countedCash, setCountedCash] = useState("");
+  const [closingNote, setClosingNote] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const submit = () => {
+    if (!window.confirm("Close this shift? The expected cash and any drawer difference will be permanently recorded.")) return;
+    startTransition(async () => {
+      const result = await closeShiftAction({ shiftId, countedCash, closingNote });
+      setMessage(result.message);
+      if (result.ok) {
+        if (result.closeSummary) onClosed(result.closeSummary);
+        router.refresh();
+      }
+    });
+  };
+
+  return (
+    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-medium"><LockKeyhole className="size-4 text-primary" />Close shift</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {expectedCashMinor === null
+              ? "Counted cash is compared after you submit this blind close."
+              : `Expected: ${formatMinorMoney(expectedCashMinor, currencyCode)}`}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto]">
+        <Input aria-label="Counted cash" disabled={isPending} inputMode="decimal" min="0" onChange={(event) => setCountedCash(event.target.value)} placeholder="Counted cash" step="0.01" type="number" value={countedCash} />
+        <Input disabled={isPending} maxLength={500} onChange={(event) => setClosingNote(event.target.value)} placeholder="Closing note (optional)" value={closingNote} />
+        <Button disabled={isPending || !countedCash} onClick={submit} type="button">
+          {isPending ? <LoaderCircle className="animate-spin" /> : <LockKeyhole />}
+          Close shift
+        </Button>
+      </div>
+      {message ? <p aria-live="polite" className="mt-2 text-xs text-muted-foreground">{message}</p> : null}
+    </div>
+  );
+}
+
+function CashCloseRecordedNotice({
+  currencyCode,
+  summary,
+}: {
+  currencyCode: string;
+  summary: { expectedCashMinor: number; countedCashMinor: number; differenceMinor: number };
+}) {
+  const differenceLabel = summary.differenceMinor === 0
+    ? "Balanced"
+    : summary.differenceMinor > 0
+      ? "Over"
+      : "Short";
+
+  return (
+    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+      <p className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4 text-primary" />Cash close recorded</p>
+      <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+        <p className="rounded-lg bg-background/70 px-3 py-2"><span className="block text-xs text-muted-foreground">Expected</span>{formatMinorMoney(summary.expectedCashMinor, currencyCode)}</p>
+        <p className="rounded-lg bg-background/70 px-3 py-2"><span className="block text-xs text-muted-foreground">Counted</span>{formatMinorMoney(summary.countedCashMinor, currencyCode)}</p>
+        <p className="rounded-lg bg-background/70 px-3 py-2"><span className="block text-xs text-muted-foreground">{differenceLabel}</span>{summary.differenceMinor > 0 ? "+" : ""}{formatMinorMoney(summary.differenceMinor, currencyCode)}</p>
+      </div>
+    </div>
+  );
+}
+
+function CashCloseVisibilitySetting({ initialValue }: { initialValue: boolean }) {
+  const router = useRouter();
+  const [showExpectedCashBeforeClose, setShowExpectedCashBeforeClose] = useState(initialValue);
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const toggle = () => {
+    const nextValue = !showExpectedCashBeforeClose;
+    startTransition(async () => {
+      const result = await updateShiftCashCloseSettingAction(nextValue);
+      setMessage(result.message);
+      if (result.ok) {
+        setShowExpectedCashBeforeClose(nextValue);
+        router.refresh();
+      }
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start justify-between gap-4">
+        <div>
+          <CardTitle className="flex items-center gap-2"><Eye className="size-4 text-primary" />Cash-close visibility</CardTitle>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+            {showExpectedCashBeforeClose
+              ? "Cashiers can see expected drawer cash before entering their counted amount."
+              : "Blind count is on: expected cash and transaction breakdowns stay hidden until the close is submitted."}
+          </p>
+        </div>
+        <Button disabled={isPending} onClick={toggle} type="button" variant={showExpectedCashBeforeClose ? "outline" : "default"}>
+          {isPending ? <LoaderCircle className="animate-spin" /> : showExpectedCashBeforeClose ? <EyeOff /> : <Eye />}
+          {showExpectedCashBeforeClose ? "Enable blind count" : "Show expected cash"}
+        </Button>
+      </CardHeader>
+      {message ? <CardContent className="pt-0"><p aria-live="polite" className="text-sm text-muted-foreground">{message}</p></CardContent> : null}
+    </Card>
+  );
+}
+
+function ClosedShiftHistory({
+  currencyCode,
+  registers,
+  shifts,
+  stores,
+  timezone,
+}: {
+  currencyCode: string;
+  registers: RegisterOption[];
+  shifts: ShiftRecord[];
+  stores: StoreOption[];
+  timezone: string;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><ReceiptText className="size-5" /></span>
+        <div>
+          <CardTitle>Recent closed shifts</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">Stored expected cash, drawer count, and difference for the latest 25 closures.</p>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {shifts.length > 0 ? (
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full min-w-170 text-left text-sm">
+              <thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th className="px-3 py-2 font-medium">Register</th><th className="px-3 py-2 font-medium">Closed</th><th className="px-3 py-2 text-right font-medium">Expected</th><th className="px-3 py-2 text-right font-medium">Counted</th><th className="px-3 py-2 text-right font-medium">Difference</th></tr></thead>
+              <tbody className="divide-y">
+                {shifts.map((shift) => {
+                  const difference = shift.differenceMinor ?? 0;
+                  return <tr key={shift.id}>
+                    <td className="px-3 py-3"><p className="font-medium">{registers.find((item) => item.id === shift.registerId)?.name ?? "Register"}</p><p className="mt-0.5 text-xs text-muted-foreground">{stores.find((item) => item.id === shift.storeId)?.name ?? "Store"}</p></td>
+                    <td className="px-3 py-3 text-muted-foreground">{shift.closedAt ? formatShiftTime(shift.closedAt, timezone) : "—"}</td>
+                    <td className="px-3 py-3 text-right">{formatMinorMoney(shift.expectedCashMinor ?? 0, currencyCode)}</td>
+                    <td className="px-3 py-3 text-right">{formatMinorMoney(shift.countedCashMinor ?? 0, currencyCode)}</td>
+                    <td className={difference === 0 ? "px-3 py-3 text-right font-medium" : difference > 0 ? "px-3 py-3 text-right font-medium text-emerald-700 dark:text-emerald-400" : "px-3 py-3 text-right font-medium text-destructive"}>{difference > 0 ? "+" : ""}{formatMinorMoney(difference, currencyCode)}</td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No shifts have been closed yet.</p>}
+      </CardContent>
+    </Card>
+  );
+}

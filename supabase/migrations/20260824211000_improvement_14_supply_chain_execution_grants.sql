@@ -1,0 +1,3 @@
+-- Repair the local Phase 14 database that was migrated before the final
+-- wrapper-to-private execution grants were added.
+grant execute on function private.create_supply_chain_warehouse(uuid,uuid,text,text,text), private.update_supplier_lead_time(uuid,uuid,integer), private.upsert_inventory_replenishment_rule(uuid,uuid,uuid,uuid,uuid,numeric,numeric), private.create_stock_request(uuid,uuid,uuid,text,jsonb), private.approve_stock_request(uuid,uuid,jsonb), private.start_stock_request_picking(uuid,uuid), private.dispatch_stock_request(uuid,uuid,text), private.receive_stock_request(uuid,uuid,jsonb,text) to authenticated;

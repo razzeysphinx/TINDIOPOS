@@ -1,9 +1,10 @@
-import { KeyRound, ShieldCheck } from "lucide-react";
+import { ChevronDown, KeyRound, ShieldCheck } from "lucide-react";
 
 import { PageHeader } from "@/components/back-office/page-header";
+import { GuardedDeleteDialog } from "@/components/back-office/guarded-delete-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CreateRoleForm } from "@/features/management/management-forms";
+import { CreateRoleForm, EditRoleButton } from "@/features/management/management-forms";
 import { loadManagementRoles } from "@/features/management/data";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 
@@ -27,13 +28,14 @@ export default async function RolesPage() {
         title="Roles & permissions"
         description="Effective access comes from database-backed role assignments. Interface visibility never replaces RLS enforcement."
         action={
-          <Badge variant={canManage ? "secondary" : "outline"}>
-            {canManage ? "Management access" : "View access"}
-          </Badge>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Badge variant={canManage ? "secondary" : "outline"}>
+              {canManage ? "Management access" : "View access"}
+            </Badge>
+            {canManage ? <CreateRoleForm permissions={grantablePermissions} /> : null}
+          </div>
         }
       />
-
-      {canManage ? <CreateRoleForm permissions={grantablePermissions} /> : null}
 
       <section className="grid gap-4 lg:grid-cols-2">
         {roles.map((role) => {
@@ -46,6 +48,9 @@ export default async function RolesPage() {
               ): permission is { code: string; name: string; category: string } =>
                 Boolean(permission),
             );
+          const rolePermissionCodes = rolePermissions
+            .filter((permission) => permission.role_id === role.id)
+            .map((permission) => permission.permission_code);
 
           return (
             <Card key={role.id}>
@@ -79,11 +84,54 @@ export default async function RolesPage() {
                     </Badge>
                   ))}
                   {rolePermissionDetails.length > 6 ? (
-                    <Badge variant="outline">
-                      +{rolePermissionDetails.length - 6} more
-                    </Badge>
+                    <details className="group">
+                      <summary className="cursor-pointer list-none rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted">
+                          Show {rolePermissionDetails.length - 6} more permissions
+                          <ChevronDown
+                            aria-hidden="true"
+                            className="size-3.5 transition-transform group-open:rotate-180"
+                          />
+                        </span>
+                      </summary>
+                      <div
+                        aria-label={`Remaining permissions for ${role.name}`}
+                        className="mt-3 rounded-lg border bg-muted/30 p-3"
+                        role="region"
+                      >
+                        <p className="mb-2 text-xs font-medium text-muted-foreground">
+                          Remaining permissions for {role.name}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {rolePermissionDetails.slice(6).map((permission) => (
+                            <Badge key={permission.code} title={`${permission.category}: ${permission.code}`} variant="secondary">
+                              {permission.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </details>
                   ) : null}
                 </div>
+                {canManage && !role.is_system ? (
+                  <div className="mt-4 flex justify-end border-t pt-3">
+                    <EditRoleButton
+                      permissions={grantablePermissions}
+                      role={{
+                        id: role.id,
+                        name: role.name,
+                        code: role.code,
+                        description: role.description,
+                        permissionCodes: rolePermissionCodes,
+                      }}
+                    />
+                    <GuardedDeleteDialog
+                      recordId={role.id}
+                      recordName={role.name}
+                      recordType="custom_role"
+                    />
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           );

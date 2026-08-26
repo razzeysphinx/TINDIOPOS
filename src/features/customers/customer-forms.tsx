@@ -1,13 +1,23 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Archive, BadgePlus, LoaderCircle, Plus, RotateCcw, Save, SlidersHorizontal } from "lucide-react";
+import { Archive, BadgePlus, LoaderCircle, Pencil, Plus, RotateCcw, Save, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -16,6 +26,7 @@ import {
   createCustomerAction,
   updateCustomerProfileAction,
   updateCustomerStatusAction,
+  updateCustomerSegmentAction,
   updateLoyaltyProgramAction,
 } from "@/features/customers/actions";
 import {
@@ -28,13 +39,16 @@ import {
   type CreateCustomerValues,
   type LoyaltyAdjustmentValues,
   type UpdateCustomerProfileValues,
+  type UpdateCustomerSegmentValues,
   type UpdateLoyaltyProgramValues,
+  updateCustomerSegmentSchema,
 } from "@/features/customers/customer-schema";
 
 type ActionResult = { ok: true; message: string } | { ok: false; message: string };
 
 export function CreateCustomerForm() {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
   const [isPending, startTransition] = useTransition();
   const form = useForm<CreateCustomerValues>({
@@ -57,19 +71,25 @@ export function CreateCustomerForm() {
       setResult(nextResult);
       if (nextResult.ok) {
         form.reset();
+        setOpen(false);
         router.refresh();
       }
     });
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Add customer</CardTitle>
-        <CardDescription>Create a CRM profile that cashiers can select during a sale.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" noValidate onSubmit={submit}>
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <DialogTrigger className={buttonVariants()}>
+        <Plus aria-hidden="true" />
+        Add customer
+      </DialogTrigger>
+      <DialogContent size="wide">
+        <DialogHeader>
+          <DialogTitle>Add customer</DialogTitle>
+          <DialogDescription>Create a CRM profile that cashiers can select during a sale.</DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" noValidate onSubmit={submit}>
           <FormField error={form.formState.errors.fullName?.message} label="Full name">
             <Input placeholder="Maria Santos" {...form.register("fullName")} />
           </FormField>
@@ -91,12 +111,15 @@ export function CreateCustomerForm() {
           <FormField error={form.formState.errors.loyaltyCardCode?.message} label="Loyalty card / barcode">
             <Input placeholder="Optional â€” TINDIO assigns one if blank" {...form.register("loyaltyCardCode")} />
           </FormField>
-          <div className="sm:col-span-2 xl:col-span-3">
-            <SubmitResult isPending={isPending} label="Create customer" result={result} />
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+            <div className="sm:col-span-2 xl:col-span-3">
+              <DialogFooter>
+                <SubmitResult isPending={isPending} label="Create customer" result={result} />
+              </DialogFooter>
+            </div>
+          </form>
+        </DialogBody>
+      </DialogContent>
+    </Dialog.Root>
   );
 }
 
@@ -106,6 +129,7 @@ export function CustomerSegmentForm({
   segments: { id: string; name: string; description: string | null }[];
 }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
   const [isPending, startTransition] = useTransition();
   const form = useForm<CreateCustomerSegmentValues>({
@@ -120,6 +144,7 @@ export function CustomerSegmentForm({
       setResult(nextResult);
       if (nextResult.ok) {
         form.reset();
+        setOpen(false);
         router.refresh();
       }
     });
@@ -127,31 +152,101 @@ export function CustomerSegmentForm({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Customer segments</CardTitle>
-        <CardDescription>Group customers with reusable tags such as VIP, Wholesale, or Regular.</CardDescription>
+      <CardHeader className="flex-row items-start justify-between gap-4">
+        <div>
+          <CardTitle>Customer segments</CardTitle>
+          <CardDescription>Group customers with reusable tags such as VIP, Wholesale, or Regular.</CardDescription>
+        </div>
+        <Dialog.Root open={open} onOpenChange={setOpen}>
+          <DialogTrigger className={buttonVariants({ size: "sm" })}>
+            <BadgePlus aria-hidden="true" />
+            Add segment
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add customer segment</DialogTitle>
+              <DialogDescription>Use segments to keep customer lists and loyalty campaigns organized.</DialogDescription>
+            </DialogHeader>
+            <DialogBody>
+              <form className="grid gap-4" noValidate onSubmit={submit}>
+                <FormField error={form.formState.errors.name?.message} label="Segment name">
+                  <Input autoFocus placeholder="VIP" {...form.register("name")} />
+                </FormField>
+                <FormField error={form.formState.errors.description?.message} label="Description">
+                  <Input placeholder="Optional" {...form.register("description")} />
+                </FormField>
+                <DialogFooter>
+                  <SubmitResult icon={<BadgePlus />} isPending={isPending} label="Add segment" result={result} />
+                </DialogFooter>
+              </form>
+            </DialogBody>
+          </DialogContent>
+        </Dialog.Root>
       </CardHeader>
       <CardContent className="space-y-4">
-        <form className="grid gap-4 sm:grid-cols-[1fr_1.5fr_auto] sm:items-end" noValidate onSubmit={submit}>
-          <FormField error={form.formState.errors.name?.message} label="Segment name">
-            <Input placeholder="VIP" {...form.register("name")} />
-          </FormField>
-          <FormField error={form.formState.errors.description?.message} label="Description">
-            <Input placeholder="Optional" {...form.register("description")} />
-          </FormField>
-          <SubmitResult icon={<BadgePlus />} isPending={isPending} label="Add segment" result={result} />
-        </form>
         {segments.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {segments.map((segment) => (
-              <span className="rounded-full border bg-muted/30 px-3 py-1 text-xs font-medium" key={segment.id} title={segment.description ?? undefined}>
-                {segment.name}
-              </span>
+              <EditCustomerSegmentButton key={segment.id} segment={segment} />
             ))}
           </div>
         ) : <p className="text-sm text-muted-foreground">No segments yet. Add one, then assign it from a customer profile.</p>}
       </CardContent>
     </Card>
+  );
+}
+
+function EditCustomerSegmentButton({
+  segment,
+}: {
+  segment: { id: string; name: string; description: string | null };
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [result, setResult] = useState<ActionResult | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const form = useForm<UpdateCustomerSegmentValues>({
+    resolver: zodResolver(updateCustomerSegmentSchema),
+    defaultValues: { segmentId: segment.id, name: segment.name, description: segment.description ?? "" },
+  });
+  const submit = form.handleSubmit((values) => {
+    setResult(null);
+    startTransition(async () => {
+      const nextResult = await updateCustomerSegmentAction(values);
+      setResult(nextResult);
+      if (nextResult.ok) {
+        setOpen(false);
+        router.refresh();
+      }
+    });
+  });
+
+  return (
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <DialogTrigger className={buttonVariants({ size: "sm", variant: "outline" })} title={segment.description ?? undefined}>
+        {segment.name}
+        <Pencil aria-hidden="true" />
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit customer segment</DialogTitle>
+          <DialogDescription>Update this reusable customer grouping without changing customer history.</DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <form className="grid gap-4" noValidate onSubmit={submit}>
+            <FormField error={form.formState.errors.name?.message} label="Segment name">
+              <Input autoFocus {...form.register("name")} />
+            </FormField>
+            <FormField error={form.formState.errors.description?.message} label="Description">
+              <Input {...form.register("description")} />
+            </FormField>
+            <DialogFooter>
+              <SubmitResult icon={<Pencil />} isPending={isPending} label="Save segment" result={result} />
+            </DialogFooter>
+          </form>
+        </DialogBody>
+      </DialogContent>
+    </Dialog.Root>
   );
 }
 

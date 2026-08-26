@@ -6,6 +6,10 @@ import {
   createRoleSchema,
   createStoreSchema,
   revokeInvitationSchema,
+  updateEmployeeAssignmentsSchema,
+  updateRegisterSchema,
+  updateRoleSchema,
+  updateStoreSchema,
 } from "@/features/management/management-schema";
 import type { ManagementActionResult } from "@/features/management/management-types";
 import { createInvitationToken, hashInvitationToken } from "@/features/management/invitation-token";
@@ -77,6 +81,37 @@ export async function createStore(
   return { ok: true, message: "Store created." };
 }
 
+export async function updateStore(
+  context: BusinessContext,
+  input: unknown,
+): Promise<ManagementActionResult> {
+  const parsed = updateStoreSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("stores")
+    .update({
+      name: parsed.data.name,
+      address: parsed.data.address || null,
+      phone: parsed.data.phone || null,
+      is_active: parsed.data.isActive,
+    })
+    .eq("id", parsed.data.storeId)
+    .eq("organization_id", context.organization.id)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !data) {
+    return {
+      ok: false,
+      message: databaseMessage(error?.code, "TINDIO could not update the store."),
+    };
+  }
+
+  return { ok: true, message: "Store updated." };
+}
+
 export async function createRegister(
   context: BusinessContext,
   input: unknown,
@@ -100,6 +135,35 @@ export async function createRegister(
   }
 
   return { ok: true, message: "Register created." };
+}
+
+export async function updateRegister(
+  context: BusinessContext,
+  input: unknown,
+): Promise<ManagementActionResult> {
+  const parsed = updateRegisterSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("registers")
+    .update({
+      name: parsed.data.name,
+      is_active: parsed.data.isActive,
+    })
+    .eq("id", parsed.data.registerId)
+    .eq("organization_id", context.organization.id)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !data) {
+    return {
+      ok: false,
+      message: databaseMessage(error?.code, "TINDIO could not update the register."),
+    };
+  }
+
+  return { ok: true, message: "Register updated." };
 }
 
 export async function createRole(
@@ -126,6 +190,63 @@ export async function createRole(
   }
 
   return { ok: true, message: "Custom role created." };
+}
+
+export async function updateRole(
+  context: BusinessContext,
+  input: unknown,
+): Promise<ManagementActionResult> {
+  const parsed = updateRoleSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  if (parsed.data.permissionCodes.some((permission) => !context.permissions.includes(permission))) {
+    return { ok: false, message: "You cannot grant a permission you do not hold." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("update_custom_role", {
+    target_organization_id: context.organization.id,
+    target_role_id: parsed.data.roleId,
+    role_name: parsed.data.name,
+    role_description: parsed.data.description,
+    permission_codes: parsed.data.permissionCodes,
+  });
+
+  if (error || !data) {
+    return {
+      ok: false,
+      message: databaseMessage(error?.code, "TINDIO could not update the role."),
+    };
+  }
+
+  return { ok: true, message: "Custom role updated." };
+}
+
+export async function updateEmployeeAssignments(
+  context: BusinessContext,
+  input: unknown,
+): Promise<ManagementActionResult> {
+  const parsed = updateEmployeeAssignmentsSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("update_employee_assignments", {
+    target_organization_id: context.organization.id,
+    target_employee_id: parsed.data.employeeId,
+    target_job_title: parsed.data.jobTitle,
+    target_status: parsed.data.status,
+    target_role_ids: parsed.data.roleIds,
+    target_store_ids: parsed.data.storeIds,
+  });
+
+  if (error || !data) {
+    return {
+      ok: false,
+      message: databaseMessage(error?.code, "TINDIO could not update employee assignments."),
+    };
+  }
+
+  return { ok: true, message: "Employee assignments updated." };
 }
 
 export async function createEmployeeInvitation(

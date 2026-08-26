@@ -3,7 +3,7 @@ import { MapPin, Phone, Store } from "lucide-react";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CreateStoreForm } from "@/features/management/management-forms";
+import { CreateStoreForm, EditStoreButton } from "@/features/management/management-forms";
 import { loadManagementStores } from "@/features/management/data";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 
@@ -22,13 +22,15 @@ export default async function StoresPage() {
         title="Stores"
         description="Locations are organization-scoped and form the boundary for registers, employees, and future inventory."
         action={
-          <Badge variant={canManage ? "secondary" : "outline"}>
-            {canManage ? "Management access" : "View access"}
-          </Badge>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Badge variant={canManage ? "secondary" : "outline"}>
+              {canManage ? "Management access" : "View access"}
+            </Badge>
+            {canManage && context.features.multi_store ? <CreateStoreForm /> : null}
+          </div>
         }
       />
 
-      {canManage && context.features.multi_store ? <CreateStoreForm /> : null}
       {canManage && !context.features.multi_store ? (
         <Card>
           <CardHeader>
@@ -68,6 +70,20 @@ export default async function StoresPage() {
                 <Phone className="size-4 shrink-0" aria-hidden="true" />
                 {store.phone || "No phone added"}
               </p>
+              {canManage ? (
+                <div className="flex justify-end border-t pt-3">
+                  <EditStoreButton
+                    store={{
+                      id: store.id,
+                      name: store.name,
+                      code: store.code,
+                      address: store.address,
+                      phone: store.phone,
+                      isActive: store.is_active,
+                    }}
+                  />
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         ))}

@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
-import { PaymentMethodsManager } from "@/features/payments/payment-methods-manager";
+import { CreatePaymentMethodDialog, PaymentMethodsManager } from "@/features/payments/payment-methods-manager";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
@@ -68,9 +68,14 @@ export default async function PaymentMethodsPage() {
         title="Payment methods"
         description="Configure the payment methods shown in the POS and choose the stores that accept each one. Payment categories and codes remain stable for reporting and cash control."
         action={
-          <Badge variant={canManage ? "secondary" : "outline"}>
-            {canManage ? "Settings access" : "View access"}
-          </Badge>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Badge variant={canManage ? "secondary" : "outline"}>
+              {canManage ? "Settings access" : "View access"}
+            </Badge>
+            {canManage ? (
+              <CreatePaymentMethodDialog stores={stores.filter((store) => store.isActive)} />
+            ) : null}
+          </div>
         }
       />
       <PaymentMethodsManager canManage={canManage} methods={methods} stores={stores} />

@@ -6,6 +6,7 @@ import {
   createCustomerSchema,
   loyaltyAdjustmentSchema,
   updateCustomerProfileSchema,
+  updateCustomerSegmentSchema,
   updateCustomerStatusSchema,
   updateLoyaltyProgramSchema,
 } from "@/features/customers/customer-schema";
@@ -65,6 +66,32 @@ export async function createCustomerSegment({
   if (error) return { ok: false, message: "TINDIO could not create this customer segment." };
 
   return { ok: true, message: "Customer segment created." };
+}
+
+export async function updateCustomerSegment({
+  context,
+  input,
+}: {
+  context: BusinessContext;
+  input: unknown;
+}): Promise<CustomerActionResult> {
+  const parsed = updateCustomerSegmentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check the segment details and try again." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("customer_segments")
+    .update({
+      name: parsed.data.name,
+      description: parsed.data.description || null,
+    })
+    .eq("id", parsed.data.segmentId)
+    .eq("organization_id", context.organization.id)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !data) return { ok: false, message: "TINDIO could not update this customer segment." };
+  return { ok: true, message: "Customer segment updated." };
 }
 
 export async function updateCustomerProfile({

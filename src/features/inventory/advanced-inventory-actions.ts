@@ -15,6 +15,7 @@ import {
   returnToSupplierSchema,
   transferStockSchema,
   updateInventoryPolicySchema,
+  updateSupplierSchema,
 } from "@/features/inventory/advanced-inventory-schema";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { postgresCodeMessage, validationFailure } from "@/lib/server/db-errors";
@@ -82,6 +83,37 @@ export async function createSupplierAction(
 
   revalidatePath("/back-office/inventory");
   return { ok: true, message: "Supplier created.", data: { supplierId: data } };
+}
+
+export async function updateSupplierAction(
+  input: unknown,
+): Promise<AdvancedInventoryActionResult<{ supplierId: string }>> {
+  const { context, error: permissionError } = await requireInventoryManager();
+  if (permissionError) return { ok: false, message: permissionError };
+  if (!context.features.purchase_orders) return { ok: false, message: "Purchase orders are disabled for this business." };
+
+  const parsed = updateSupplierSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("update_supplier", {
+    target_organization_id: context.organization.id,
+    target_supplier_id: parsed.data.supplierId,
+    target_name: parsed.data.name,
+    target_contact_name: parsed.data.contactName,
+    target_email: parsed.data.email,
+    target_phone: parsed.data.phone,
+    target_address: parsed.data.address,
+    target_notes: parsed.data.notes,
+    target_is_active: parsed.data.isActive,
+  });
+
+  if (error || !data) {
+    return { ok: false, message: databaseMessage(error?.code, "TINDIO could not update the supplier.") };
+  }
+
+  revalidatePath("/back-office/inventory");
+  return { ok: true, message: "Supplier updated.", data: { supplierId: data } };
 }
 
 export async function createPurchaseOrderAction(

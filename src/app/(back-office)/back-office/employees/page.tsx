@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   CreateInvitationForm,
+  EditEmployeeButton,
   RevokeInvitationButton,
 } from "@/features/management/management-forms";
 import { EmployeePinForm } from "@/features/approvals/employee-pin-form";
@@ -47,15 +48,16 @@ export default async function EmployeesPage() {
         title="Employees"
         description="Employee records connect verified identities to organization roles and explicit store assignments."
         action={
-          <Badge variant={canManage ? "secondary" : "outline"}>
-            {canManage ? "Management access" : "Your record only"}
-          </Badge>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Badge variant={canManage ? "secondary" : "outline"}>
+              {canManage ? "Management access" : "Your record only"}
+            </Badge>
+            {canManage && grantableRoles.length > 0 && activeStores.length > 0 ? (
+              <CreateInvitationForm roles={grantableRoles} stores={activeStores} />
+            ) : null}
+          </div>
         }
       />
-
-      {canManage && grantableRoles.length > 0 && activeStores.length > 0 ? (
-        <CreateInvitationForm roles={grantableRoles} stores={activeStores} />
-      ) : null}
 
       {canManage && pendingInvitations.length > 0 ? (
         <section className="space-y-3" aria-labelledby="pending-invitations-title">
@@ -111,10 +113,16 @@ export default async function EmployeesPage() {
             .filter((link) => link.employee_id === employee.id)
             .map((link) => roles.get(link.role_id))
             .filter((role): role is string => Boolean(role));
+          const employeeRoleIds = roleLinks
+            .filter((link) => link.employee_id === employee.id)
+            .map((link) => link.role_id);
           const employeeStores = storeLinks
             .filter((link) => link.employee_id === employee.id)
             .map((link) => stores.get(link.store_id))
             .filter((store): store is string => Boolean(store));
+          const employeeStoreIds = storeLinks
+            .filter((link) => link.employee_id === employee.id)
+            .map((link) => link.store_id);
 
           return (
             <Card key={employee.id}>
@@ -159,6 +167,21 @@ export default async function EmployeesPage() {
                     employeeId={employee.id}
                     employeeName={profile?.full_name || employee.employee_number}
                   />
+                ) : null}
+                {canManage && employee.id !== context.employee.id ? (
+                  <div className="flex justify-end border-t pt-3">
+                    <EditEmployeeButton
+                      employee={{
+                        id: employee.id,
+                        jobTitle: employee.job_title,
+                        status: employee.status as "active" | "inactive" | "suspended",
+                        roleIds: employeeRoleIds,
+                        storeIds: employeeStoreIds,
+                      }}
+                      roles={grantableRoles.map((role) => ({ id: role.id, name: role.name }))}
+                      stores={activeStores.map((store) => ({ id: store.id, name: store.name }))}
+                    />
+                  </div>
                 ) : null}
               </CardContent>
             </Card>

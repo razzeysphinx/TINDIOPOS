@@ -19,6 +19,7 @@ import {
   CreateProductForm,
   CatalogCsvTools,
   CatalogExtensionForms,
+  EditProductButton,
   ProductArchiveButton,
   ProductAvailabilityButton,
 } from "@/features/catalog/catalog-forms";
@@ -55,21 +56,23 @@ export default async function CatalogPage() {
               {canManage ? "Management access" : "View access"}
             </Badge>
             {canViewCost ? <Badge variant="outline">Cost visible</Badge> : null}
+            {canManage && activeStores.length > 0 ? (
+              <CreateProductForm
+                canViewCost={canViewCost}
+                canTrackInventory={context.features.inventory}
+                canUseWeightedProducts={context.features.weighted_products}
+                categories={categories
+                  .filter((category) => !category.is_archived)
+                  .map(({ id, name }) => ({ id, name }))}
+                stores={activeStores.map(({ id, name }) => ({ id, name }))}
+              />
+            ) : null}
           </div>
         }
       />
 
       {canManage && activeStores.length > 0 ? (
         <>
-          <CreateProductForm
-            canViewCost={canViewCost}
-            canTrackInventory={context.features.inventory}
-            canUseWeightedProducts={context.features.weighted_products}
-            categories={categories
-              .filter((category) => !category.is_archived)
-              .map(({ id, name }) => ({ id, name }))}
-            stores={activeStores.map(({ id, name }) => ({ id, name }))}
-          />
           <CatalogExtensionForms
             products={products.map((product) => ({
               id: product.id,
@@ -226,7 +229,31 @@ export default async function CatalogPage() {
                   </div>
 
                   {canManage ? (
-                    <div className="flex justify-end border-t pt-3">
+                    <div className="flex flex-wrap justify-end gap-1 border-t pt-3">
+                      <EditProductButton
+                        canTrackInventory={context.features.inventory}
+                        canUseWeightedProducts={context.features.weighted_products}
+                        canViewCost={canViewCost}
+                        categories={categories
+                          .filter((category) => !category.is_archived)
+                          .map(({ id, name }) => ({ id, name }))}
+                        product={{
+                          id: product.id,
+                          name: product.name,
+                          description: product.description,
+                          categoryId: product.category_id,
+                          productType: product.product_type as "simple" | "variable" | "composite",
+                          sku: product.sku,
+                          barcode: product.barcode,
+                          priceMinor: product.price_minor,
+                          costMinor: productCost ?? 0,
+                          trackInventory: product.track_inventory,
+                          unit: product.unit,
+                          imageUrl: product.image_url,
+                          isVariablePrice: product.is_variable_price,
+                          allowFractionalQuantity: product.allow_fractional_quantity,
+                        }}
+                      />
                       <ProductArchiveButton
                         isArchived={archived}
                         productId={product.id}

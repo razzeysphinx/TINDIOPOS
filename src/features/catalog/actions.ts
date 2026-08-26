@@ -15,6 +15,8 @@ import {
   setProductArchived,
   setProductAvailability,
   setProductStoreConfiguration,
+  updateCategory,
+  updateProduct,
   validationError,
 } from "@/features/catalog/service";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
@@ -58,6 +60,25 @@ export async function setCategoryArchivedAction(
   return result;
 }
 
+export async function updateCategoryAction(
+  input: unknown,
+): Promise<CatalogActionResult> {
+  const context = await requireBusinessContext();
+
+  if (!hasPermission(context, "products.manage")) {
+    return { ok: false, message: "You do not have permission to update categories." };
+  }
+
+  const result = await updateCategory(context, input);
+
+  if (result.ok) {
+    revalidatePath("/back-office/categories");
+    revalidatePath("/back-office/catalog");
+  }
+
+  return result;
+}
+
 export async function createProductAction(
   input: unknown,
 ): Promise<CatalogActionResult<{ productId: string }>> {
@@ -87,6 +108,25 @@ export async function setProductArchivedAction(
   }
 
   const result = await setProductArchived(context, input);
+
+  if (result.ok) {
+    revalidatePath("/back-office/catalog");
+    revalidatePath("/back-office/inventory");
+  }
+
+  return result;
+}
+
+export async function updateProductAction(
+  input: unknown,
+): Promise<CatalogActionResult> {
+  const context = await requireBusinessContext();
+
+  if (!hasPermission(context, "products.manage")) {
+    return { ok: false, message: "You do not have permission to update products." };
+  }
+
+  const result = await updateProduct(context, input);
 
   if (result.ok) {
     revalidatePath("/back-office/catalog");

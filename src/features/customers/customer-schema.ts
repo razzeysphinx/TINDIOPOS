@@ -45,6 +45,10 @@ export const createCustomerSegmentSchema = z.object({
   ),
 });
 
+export const updateCustomerSegmentSchema = createCustomerSegmentSchema.extend({
+  segmentId: z.uuid(),
+});
+
 export const updateCustomerProfileSchema = createCustomerSchema.extend({
   customerId: z.uuid(),
   segmentIds: z.array(z.uuid()).max(20),
@@ -61,6 +65,7 @@ export const loyaltyAdjustmentSchema = z.object({
 
 export type CreateCustomerValues = z.infer<typeof createCustomerSchema>;
 export type CreateCustomerSegmentValues = z.infer<typeof createCustomerSegmentSchema>;
+export type UpdateCustomerSegmentValues = z.infer<typeof updateCustomerSegmentSchema>;
 export type UpdateCustomerProfileValues = z.infer<typeof updateCustomerProfileSchema>;
 export type LoyaltyAdjustmentValues = z.infer<typeof loyaltyAdjustmentSchema>;
 export type UpdateLoyaltyProgramValues = z.infer<typeof updateLoyaltyProgramSchema>;

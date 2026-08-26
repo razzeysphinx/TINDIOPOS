@@ -8,6 +8,7 @@ import {
   createCustomerSegment,
   updateCustomerProfile,
   updateCustomerStatus,
+  updateCustomerSegment,
   updateLoyaltyProgram,
 } from "@/features/customers/service";
 import type { CustomerActionResult } from "@/features/customers/customer-types";
@@ -38,6 +39,17 @@ export async function createCustomerSegmentAction(input: unknown): Promise<Custo
     revalidatePath("/back-office/customers");
   }
 
+  return result;
+}
+
+export async function updateCustomerSegmentAction(input: unknown): Promise<CustomerActionResult> {
+  const context = await requireBusinessContext();
+  if (!hasPermission(context, "customers.manage")) {
+    return { ok: false, message: "You do not have permission to manage customer segments." };
+  }
+
+  const result = await updateCustomerSegment({ context, input });
+  if (result.ok) revalidatePath("/back-office/customers");
   return result;
 }
 

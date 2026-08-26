@@ -127,7 +127,7 @@ export default async function InventoryPage() {
     canManage
       ? supabase
           .from("suppliers")
-          .select("id, name, contact_name, phone, is_active")
+          .select("id, name, contact_name, email, phone, address, notes, is_active")
           .eq("organization_id", organizationId)
           .order("name", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
@@ -363,7 +363,10 @@ export default async function InventoryPage() {
             id: supplier.id,
             name: supplier.name,
             contactName: supplier.contact_name,
+            email: supplier.email,
             phone: supplier.phone,
+            address: supplier.address,
+            notes: supplier.notes,
             isActive: supplier.is_active,
           }))}
           purchaseOrders={receivableOrders}

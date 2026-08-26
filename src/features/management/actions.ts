@@ -5,8 +5,10 @@ import { redirect } from "next/navigation";
 
 import {
   acceptPendingInvitationSchema,
+  deleteUnusedSetupRecordSchema,
   invitationTokenSchema,
 } from "@/features/management/management-schema";
+import type { GuardedSetupRecordKind } from "@/features/management/guarded-delete-types";
 import type { ManagementActionResult } from "@/features/management/management-types";
 import { hashInvitationToken } from "@/features/management/invitation-token";
 import {
@@ -16,6 +18,10 @@ import {
   createStore,
   databaseMessage,
   revokeEmployeeInvitation,
+  updateRegister,
+  updateEmployeeAssignments,
+  updateRole,
+  updateStore,
   validationError,
 } from "@/features/management/service";
 import {
@@ -45,6 +51,27 @@ export async function createStoreAction(
   return result;
 }
 
+export async function updateStoreAction(
+  input: unknown,
+): Promise<ManagementActionResult> {
+  const context = await requireBusinessContext();
+
+  if (!hasPermission(context, "stores.manage")) {
+    return { ok: false, message: "You do not have permission to update stores." };
+  }
+
+  const result = await updateStore(context, input);
+
+  if (result.ok) {
+    revalidatePath("/back-office/stores");
+    revalidatePath("/back-office/registers");
+    revalidatePath("/back-office/employees");
+    revalidatePath("/back-office");
+  }
+
+  return result;
+}
+
 export async function createRegisterAction(
   input: unknown,
 ): Promise<ManagementActionResult> {
@@ -58,6 +85,25 @@ export async function createRegisterAction(
   }
 
   const result = await createRegister(context, input);
+
+  if (result.ok) {
+    revalidatePath("/back-office/registers");
+    revalidatePath("/back-office");
+  }
+
+  return result;
+}
+
+export async function updateRegisterAction(
+  input: unknown,
+): Promise<ManagementActionResult> {
+  const context = await requireBusinessContext();
+
+  if (!hasPermission(context, "registers.manage")) {
+    return { ok: false, message: "You do not have permission to update registers." };
+  }
+
+  const result = await updateRegister(context, input);
 
   if (result.ok) {
     revalidatePath("/back-office/registers");
@@ -82,6 +128,46 @@ export async function createRoleAction(
     revalidatePath("/back-office/roles");
     revalidatePath("/back-office/employees");
     revalidatePath("/back-office");
+  }
+
+  return result;
+}
+
+export async function updateRoleAction(
+  input: unknown,
+): Promise<ManagementActionResult> {
+  const context = await requireBusinessContext();
+
+  if (!hasPermission(context, "roles.manage")) {
+    return { ok: false, message: "You do not have permission to update roles." };
+  }
+
+  const result = await updateRole(context, input);
+
+  if (result.ok) {
+    revalidatePath("/back-office/roles");
+    revalidatePath("/back-office/employees");
+    revalidatePath("/back-office");
+  }
+
+  return result;
+}
+
+export async function updateEmployeeAssignmentsAction(
+  input: unknown,
+): Promise<ManagementActionResult> {
+  const context = await requireBusinessContext();
+
+  if (!hasPermission(context, "employees.manage")) {
+    return { ok: false, message: "You do not have permission to update employees." };
+  }
+
+  const result = await updateEmployeeAssignments(context, input);
+
+  if (result.ok) {
+    revalidatePath("/back-office/employees");
+    revalidatePath("/back-office/roles");
+    revalidatePath("/back-office", "layout");
   }
 
   return result;
@@ -124,6 +210,74 @@ export async function revokeEmployeeInvitationAction(
   }
 
   return result;
+}
+
+const deletePermissionByRecordType: Record<GuardedSetupRecordKind, string> = {
+  category: "products.manage",
+  custom_role: "roles.manage",
+  payment_method: "settings.manage",
+  discount: "products.manage",
+  tax_rate: "products.manage",
+  dining_option: "products.manage",
+  ticket_template: "products.manage",
+  modifier_group: "products.manage",
+  supplier: "inventory.manage",
+};
+
+function revalidateDeletedSetupRecord(recordType: GuardedSetupRecordKind) {
+  const pathsByRecordType: Record<GuardedSetupRecordKind, string[]> = {
+    category: ["/back-office/categories", "/back-office/catalog", "/pos", "/kitchen"],
+    custom_role: ["/back-office/roles", "/back-office/employees"],
+    payment_method: ["/back-office/payment-methods", "/pos"],
+    discount: ["/back-office/advanced-sales", "/pos"],
+    tax_rate: ["/back-office/advanced-sales", "/pos"],
+    dining_option: ["/back-office/advanced-sales", "/pos"],
+    ticket_template: ["/back-office/advanced-sales"],
+    modifier_group: ["/back-office/advanced-sales", "/pos"],
+    supplier: ["/back-office/inventory"],
+  };
+
+  for (const path of pathsByRecordType[recordType]) revalidatePath(path);
+  revalidatePath("/back-office");
+}
+
+export async function deleteUnusedSetupRecordAction(
+  input: unknown,
+): Promise<ManagementActionResult> {
+  const context = await requireBusinessContext();
+  const parsed = deleteUnusedSetupRecordSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Enter the exact record name to confirm deletion." };
+
+  if (!hasPermission(context, deletePermissionByRecordType[parsed.data.recordType] as never)) {
+    return { ok: false, message: "You do not have permission to permanently delete this record." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("delete_unused_setup_record", {
+    target_organization_id: context.organization.id,
+    target_record_type: parsed.data.recordType,
+    target_record_id: parsed.data.recordId,
+    target_confirmation_name: parsed.data.confirmationName,
+  });
+
+  if (error || !data) {
+    if (error?.code === "42501") {
+      return { ok: false, message: "You do not have permission to permanently delete this record." };
+    }
+
+    if (error?.code === "23503") {
+      return { ok: false, message: "That record is no longer available in this organization." };
+    }
+
+    if (error?.code === "22023" || error?.code === "23514") {
+      return { ok: false, message: error?.message ?? "This record cannot be permanently deleted." };
+    }
+
+    return { ok: false, message: "TINDIO could not permanently delete this record." };
+  }
+
+  revalidateDeletedSetupRecord(parsed.data.recordType);
+  return { ok: true, message: `${data} was permanently deleted.` };
 }
 
 // Deferred from the management layer split: these four entry points are the

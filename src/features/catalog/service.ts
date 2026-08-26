@@ -11,6 +11,8 @@ import {
   setProductArchivedSchema,
   setProductAvailabilitySchema,
   setProductStoreConfigurationSchema,
+  updateCategorySchema,
+  updateProductSchema,
 } from "@/features/catalog/catalog-schema";
 import type { CatalogActionResult } from "@/features/catalog/catalog-types";
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
@@ -89,6 +91,38 @@ export async function setCategoryArchived(
     ok: true,
     message: parsed.data.isArchived ? "Category archived." : "Category restored.",
   };
+}
+
+export async function updateCategory(
+  context: BusinessContext,
+  input: unknown,
+): Promise<CatalogActionResult> {
+  const parsed = updateCategorySchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("categories")
+    .update({
+      name: parsed.data.name,
+      description: parsed.data.description || null,
+      icon: parsed.data.icon,
+      color: parsed.data.color,
+      sort_order: parsed.data.sortOrder,
+    })
+    .eq("id", parsed.data.categoryId)
+    .eq("organization_id", context.organization.id)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !data) {
+    return {
+      ok: false,
+      message: databaseMessage(error?.code, "TINDIO could not update the category."),
+    };
+  }
+
+  return { ok: true, message: "Category updated." };
 }
 
 export async function createProduct(
@@ -183,6 +217,100 @@ export async function setProductArchived(
   return {
     ok: true,
     message: parsed.data.isArchived ? "Product archived." : "Product restored.",
+  };
+}
+
+export async function updateProduct(
+  context: BusinessContext,
+  input: unknown,
+): Promise<CatalogActionResult> {
+  const parsed = updateProductSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  if (!context.features.inventory && parsed.data.trackInventory) {
+    return { ok: false, message: "Inventory is disabled for this business." };
+  }
+
+  if (!context.features.weighted_products && parsed.data.allowFractionalQuantity) {
+    return { ok: false, message: "Weighted products are disabled for this business." };
+  }
+
+  const supabase = await createClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("products")
+    .select("id, product_type")
+    .eq("id", parsed.data.productId)
+    .eq("organization_id", context.organization.id)
+    .maybeSingle();
+
+  if (existingError || !existing) {
+    return { ok: false, message: "The product could not be found." };
+  }
+
+  if (parsed.data.categoryId) {
+    const { data: category, error: categoryError } = await supabase
+      .from("categories")
+      .select("id")
+      .eq("id", parsed.data.categoryId)
+      .eq("organization_id", context.organization.id)
+      .eq("is_archived", false)
+      .maybeSingle();
+
+    if (categoryError || !category) {
+      return { ok: false, message: "Select an active category in this organization." };
+    }
+  }
+
+  const isVariable = existing.product_type === "variable";
+  const productCost = moneyInputToMinor(parsed.data.cost);
+  if (!isVariable && !hasPermission(context, "products.view_cost") && productCost !== 0) {
+    return { ok: false, message: "You do not have permission to enter product cost." };
+  }
+
+  const update = isVariable
+    ? {
+        name: parsed.data.name,
+        description: parsed.data.description || null,
+        category_id: (parsed.data.categoryId || null) as never,
+        track_inventory: parsed.data.trackInventory,
+        unit: parsed.data.unit.toLowerCase(),
+        image_url: parsed.data.imageUrl || null,
+        is_variable_price: false,
+        allow_fractional_quantity: parsed.data.allowFractionalQuantity,
+      }
+    : {
+        name: parsed.data.name,
+        description: parsed.data.description || null,
+        category_id: (parsed.data.categoryId || null) as never,
+        sku: parsed.data.sku || null,
+        barcode: parsed.data.barcode || null,
+        price_minor: moneyInputToMinor(parsed.data.price),
+        cost_minor: productCost,
+        track_inventory: parsed.data.trackInventory,
+        unit: parsed.data.unit.toLowerCase(),
+        image_url: parsed.data.imageUrl || null,
+        is_variable_price: parsed.data.isVariablePrice,
+        allow_fractional_quantity: parsed.data.allowFractionalQuantity,
+      };
+
+  const { data, error } = await supabase
+    .from("products")
+    .update(update)
+    .eq("id", parsed.data.productId)
+    .eq("organization_id", context.organization.id)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !data) {
+    return {
+      ok: false,
+      message: databaseMessage(error?.code, "TINDIO could not update the product."),
+    };
+  }
+
+  return {
+    ok: true,
+    message: isVariable ? "Product details updated." : "Product updated.",
   };
 }
 

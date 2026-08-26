@@ -5704,6 +5704,15 @@ export type Database = {
         }
         Returns: string
       }
+      delete_unused_setup_record: {
+        Args: {
+          target_confirmation_name: string
+          target_organization_id: string
+          target_record_id: string
+          target_record_type: string
+        }
+        Returns: string
+      }
       dispatch_stock_request: {
         Args: {
           target_note: string
@@ -6411,6 +6420,16 @@ export type Database = {
         }
         Returns: Json
       }
+      update_custom_role: {
+        Args: {
+          permission_codes: string[]
+          role_description: string
+          role_name: string
+          target_organization_id: string
+          target_role_id: string
+        }
+        Returns: string
+      }
       update_customer_profile: {
         Args: {
           target_address: string
@@ -6425,6 +6444,17 @@ export type Database = {
           target_segment_ids?: string[]
         }
         Returns: undefined
+      }
+      update_employee_assignments: {
+        Args: {
+          target_employee_id: string
+          target_job_title: string
+          target_organization_id: string
+          target_role_ids: string[]
+          target_status: string
+          target_store_ids: string[]
+        }
+        Returns: string
       }
       update_inventory_policy: {
         Args: {
@@ -6501,6 +6531,20 @@ export type Database = {
           target_show_expected_cash_before_close: boolean
         }
         Returns: boolean
+      }
+      update_supplier: {
+        Args: {
+          target_address: string
+          target_contact_name: string
+          target_email: string
+          target_is_active: boolean
+          target_name: string
+          target_notes: string
+          target_organization_id: string
+          target_phone: string
+          target_supplier_id: string
+        }
+        Returns: string
       }
       update_supplier_lead_time: {
         Args: {

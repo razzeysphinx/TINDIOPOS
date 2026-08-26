@@ -3,7 +3,7 @@ import { MonitorSmartphone, Store } from "lucide-react";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CreateRegisterForm } from "@/features/management/management-forms";
+import { CreateRegisterForm, EditRegisterButton } from "@/features/management/management-forms";
 import { CustomerDisplayManager } from "@/features/customer-display/customer-display-manager";
 import { loadManagementRegisters } from "@/features/management/data";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
@@ -30,15 +30,14 @@ export default async function RegistersPage() {
         title="Registers"
         description="Every physical or virtual checkout station belongs to one store and carries its own stable code."
         action={
-          <Badge variant={canManage ? "secondary" : "outline"}>
-            {canManage ? "Management access" : "View access"}
-          </Badge>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Badge variant={canManage ? "secondary" : "outline"}>
+              {canManage ? "Management access" : "View access"}
+            </Badge>
+            {canManage && activeStores.length > 0 ? <CreateRegisterForm stores={activeStores} /> : null}
+          </div>
         }
       />
-
-      {canManage && activeStores.length > 0 ? (
-        <CreateRegisterForm stores={activeStores} />
-      ) : null}
 
       {canManage && context.features.customer_display && registers.length > 0 ? (
         <CustomerDisplayManager
@@ -76,6 +75,19 @@ export default async function RegistersPage() {
                 <Store className="size-4" aria-hidden="true" />
                 {stores.get(register.store_id) ?? "Unknown store"}
               </p>
+              {canManage ? (
+                <div className="mt-4 flex justify-end border-t pt-3">
+                  <EditRegisterButton
+                    register={{
+                      id: register.id,
+                      name: register.name,
+                      code: register.code,
+                      storeName: stores.get(register.store_id) ?? "Unknown store",
+                      isActive: register.is_active,
+                    }}
+                  />
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         ))}

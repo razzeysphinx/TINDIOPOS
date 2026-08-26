@@ -1,6 +1,7 @@
 import { Archive, Shapes } from "lucide-react";
 
 import { PageHeader } from "@/components/back-office/page-header";
+import { GuardedDeleteDialog } from "@/components/back-office/guarded-delete-dialog";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -12,6 +13,7 @@ import {
 import {
   CategoryArchiveButton,
   CreateCategoryForm,
+  EditCategoryButton,
 } from "@/features/catalog/catalog-forms";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
@@ -41,13 +43,14 @@ export default async function CategoriesPage() {
         title="Categories"
         description="Keep the product grid quick to scan with ordered, color-coded categories."
         action={
-          <Badge variant={canManage ? "secondary" : "outline"}>
-            {canManage ? "Management access" : "View access"}
-          </Badge>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Badge variant={canManage ? "secondary" : "outline"}>
+              {canManage ? "Management access" : "View access"}
+            </Badge>
+            {canManage ? <CreateCategoryForm /> : null}
+          </div>
         }
       />
-
-      {canManage ? <CreateCategoryForm /> : null}
 
       {categories.length > 0 ? (
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -77,11 +80,28 @@ export default async function CategoriesPage() {
                   {category.description || "No description added."}
                 </p>
                 {canManage ? (
-                  <div className="flex justify-end border-t pt-3">
+                  <div className="flex flex-wrap justify-end gap-1 border-t pt-3">
+                    <EditCategoryButton
+                      category={{
+                        id: category.id,
+                        name: category.name,
+                        description: category.description,
+                        icon: category.icon as "shapes" | "cup-soda" | "utensils" | "shirt" | "smartphone" | "package",
+                        color: category.color,
+                        sortOrder: category.sort_order,
+                      }}
+                    />
                     <CategoryArchiveButton
                       categoryId={category.id}
                       isArchived={category.is_archived}
                     />
+                    {category.is_archived ? (
+                      <GuardedDeleteDialog
+                        recordId={category.id}
+                        recordName={category.name}
+                        recordType="category"
+                      />
+                    ) : null}
                   </div>
                 ) : null}
               </CardContent>

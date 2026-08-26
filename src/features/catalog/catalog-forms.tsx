@@ -8,6 +8,7 @@ import {
   Download,
   LoaderCircle,
   PackagePlus,
+  Pencil,
   Plus,
   RotateCcw,
   Trash2,
@@ -18,6 +19,7 @@ import { useRouter } from "next/navigation";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -27,6 +29,16 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { ManagerApprovalDialog } from "@/features/approvals/manager-approval-dialog";
 import { requestManagerApprovalAction } from "@/features/approvals/actions";
 import {
@@ -40,15 +52,21 @@ import {
   setCategoryArchivedAction,
   setProductArchivedAction,
   setProductAvailabilityAction,
+  updateCategoryAction,
+  updateProductAction,
 } from "@/features/catalog/actions";
 import type { CatalogActionResult } from "@/features/catalog/catalog-types";
 import {
   adjustInventorySchema,
   createCategorySchema,
   createProductSchema,
+  updateCategorySchema,
+  updateProductSchema,
   type AdjustInventoryValues,
   type CreateCategoryValues,
   type CreateProductValues,
+  type UpdateCategoryValues,
+  type UpdateProductValues,
 } from "@/features/catalog/catalog-schema";
 import {
   catalogCsvTemplate,
@@ -61,6 +79,7 @@ const selectClassName =
 
 export function CreateCategoryForm() {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [result, setResult] = useState<CatalogActionResult<unknown> | null>(null);
   const [isPending, startTransition] = useTransition();
   const form = useForm<CreateCategoryValues>({
@@ -81,18 +100,25 @@ export function CreateCategoryForm() {
       setResult(nextResult);
       if (nextResult.ok) {
         form.reset();
+        setOpen(false);
         router.refresh();
       }
     });
   });
 
   return (
-    <ManagementCard
-      title="Add category"
-      description="Create an ordered, POS-ready catalogue group."
-      icon={<Plus aria-hidden="true" />}
-    >
-      <form className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5" onSubmit={submit} noValidate>
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <DialogTrigger className={buttonVariants()}>
+        <Plus aria-hidden="true" />
+        Add category
+      </DialogTrigger>
+      <DialogContent size="wide">
+        <DialogHeader>
+          <DialogTitle>Add category</DialogTitle>
+          <DialogDescription>Create an ordered, POS-ready catalogue group.</DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <form className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5" onSubmit={submit} noValidate>
         <FormField label="Category name" error={form.formState.errors.name?.message}>
           <Input placeholder="Beverages" {...form.register("name")} />
         </FormField>
@@ -116,23 +142,277 @@ export function CreateCategoryForm() {
             {...form.register("sortOrder", { valueAsNumber: true })}
           />
         </FormField>
-        <div className="sm:col-span-2 lg:col-span-1 lg:self-end">
-          <Button className="w-full" disabled={isPending} type="submit">
-            {isPending ? <LoaderCircle className="animate-spin" /> : <Plus />}
-            Create
-          </Button>
-        </div>
-        <div className="sm:col-span-2 lg:col-span-5">
-          <FormField
-            label="Description"
-            error={form.formState.errors.description?.message}
-          >
-            <Input placeholder="Optional category description" {...form.register("description")} />
-          </FormField>
-          <ResultMessage result={result} />
-        </div>
-      </form>
-    </ManagementCard>
+            <div className="sm:col-span-2 lg:col-span-5">
+              <FormField
+                label="Description"
+                error={form.formState.errors.description?.message}
+              >
+                <Input placeholder="Optional category description" {...form.register("description")} />
+              </FormField>
+            </div>
+            <div className="sm:col-span-2 lg:col-span-5">
+              <DialogFooter>
+                <Button disabled={isPending} type="submit">
+                  {isPending ? <LoaderCircle className="animate-spin" /> : <Plus />}
+                  Create category
+                </Button>
+                <ResultMessage result={result} />
+              </DialogFooter>
+            </div>
+          </form>
+        </DialogBody>
+      </DialogContent>
+    </Dialog.Root>
+  );
+}
+
+export function EditCategoryButton({
+  category,
+}: {
+  category: {
+    id: string;
+    name: string;
+    description: string | null;
+    icon: "shapes" | "cup-soda" | "utensils" | "shirt" | "smartphone" | "package";
+    color: string | null;
+    sortOrder: number;
+  };
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [result, setResult] = useState<CatalogActionResult<unknown> | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const form = useForm<UpdateCategoryValues>({
+    resolver: zodResolver(updateCategorySchema),
+    defaultValues: {
+      categoryId: category.id,
+      name: category.name,
+      description: category.description ?? "",
+      icon: category.icon,
+      color: category.color ?? "#0F766E",
+      sortOrder: category.sortOrder,
+    },
+  });
+
+  const submit = form.handleSubmit((values) => {
+    setResult(null);
+    startTransition(async () => {
+      const nextResult = await updateCategoryAction(values);
+      setResult(nextResult);
+      if (nextResult.ok) {
+        setOpen(false);
+        router.refresh();
+      }
+    });
+  });
+
+  return (
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <DialogTrigger className={buttonVariants({ variant: "ghost", size: "sm" })}>
+        <Pencil aria-hidden="true" />
+        Edit
+      </DialogTrigger>
+      <DialogContent size="wide">
+        <DialogHeader>
+          <DialogTitle>Edit category</DialogTitle>
+          <DialogDescription>Update how this category appears in the catalogue and POS.</DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <form className="grid gap-4 sm:grid-cols-2" onSubmit={submit} noValidate>
+            <FormField label="Category name" error={form.formState.errors.name?.message}>
+              <Input autoFocus {...form.register("name")} />
+            </FormField>
+            <FormField label="Icon" error={form.formState.errors.icon?.message}>
+              <select className={selectClassName} {...form.register("icon")}>
+                <option value="shapes">General</option>
+                <option value="cup-soda">Drinks</option>
+                <option value="utensils">Food</option>
+                <option value="shirt">Clothing</option>
+                <option value="smartphone">Electronics</option>
+                <option value="package">Goods</option>
+              </select>
+            </FormField>
+            <FormField label="Color" error={form.formState.errors.color?.message}>
+              <Input className="h-9 p-1" type="color" {...form.register("color")} />
+            </FormField>
+            <FormField label="Order" error={form.formState.errors.sortOrder?.message}>
+              <Input min={0} type="number" {...form.register("sortOrder", { valueAsNumber: true })} />
+            </FormField>
+            <div className="sm:col-span-2">
+              <FormField label="Description" error={form.formState.errors.description?.message}>
+                <Input {...form.register("description")} />
+              </FormField>
+            </div>
+            <div className="sm:col-span-2">
+              <DialogFooter>
+                <Button disabled={isPending} type="submit">
+                  {isPending ? <LoaderCircle className="animate-spin" /> : <Pencil />}
+                  Save category
+                </Button>
+                <ResultMessage result={result} />
+              </DialogFooter>
+            </div>
+          </form>
+        </DialogBody>
+      </DialogContent>
+    </Dialog.Root>
+  );
+}
+
+export function EditProductButton({
+  categories,
+  canTrackInventory,
+  canUseWeightedProducts,
+  canViewCost,
+  product,
+}: {
+  categories: Array<{ id: string; name: string }>;
+  canTrackInventory: boolean;
+  canUseWeightedProducts: boolean;
+  canViewCost: boolean;
+  product: {
+    id: string;
+    name: string;
+    description: string | null;
+    categoryId: string | null;
+    productType: "simple" | "variable" | "composite";
+    sku: string | null;
+    barcode: string | null;
+    priceMinor: number;
+    costMinor: number;
+    trackInventory: boolean;
+    unit: string;
+    imageUrl: string | null;
+    isVariablePrice: boolean;
+    allowFractionalQuantity: boolean;
+  };
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [result, setResult] = useState<CatalogActionResult<unknown> | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const isVariable = product.productType === "variable";
+  const form = useForm<UpdateProductValues>({
+    resolver: zodResolver(updateProductSchema),
+    defaultValues: {
+      productId: product.id,
+      name: product.name,
+      description: product.description ?? "",
+      categoryId: product.categoryId ?? "",
+      sku: product.sku ?? "",
+      barcode: product.barcode ?? "",
+      price: minorToMoneyInput(product.priceMinor),
+      cost: minorToMoneyInput(product.costMinor),
+      trackInventory: product.trackInventory,
+      imageUrl: product.imageUrl ?? "",
+      isVariablePrice: product.isVariablePrice,
+      allowFractionalQuantity: product.allowFractionalQuantity,
+      unit: product.unit,
+    },
+  });
+
+  const submit = form.handleSubmit((values) => {
+    setResult(null);
+    startTransition(async () => {
+      const nextResult = await updateProductAction(values);
+      setResult(nextResult);
+      if (nextResult.ok) {
+        setOpen(false);
+        router.refresh();
+      }
+    });
+  });
+
+  return (
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <DialogTrigger className={buttonVariants({ variant: "ghost", size: "sm" })}>
+        <Pencil aria-hidden="true" />
+        Edit
+      </DialogTrigger>
+      <DialogContent size="wide">
+        <DialogHeader>
+          <DialogTitle>Edit product</DialogTitle>
+          <DialogDescription>
+            {isVariable
+              ? "Edit the shared product details. Variant-specific prices and identifiers remain attached to their individual variants."
+              : "Update the product details, price, identifiers, and POS behavior."}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <form className="space-y-5" noValidate onSubmit={submit}>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <FormField label="Product name" error={form.formState.errors.name?.message}>
+                <Input autoFocus {...form.register("name")} />
+              </FormField>
+              <FormField label="Category" error={form.formState.errors.categoryId?.message}>
+                <select className={selectClassName} {...form.register("categoryId")}>
+                  <option value="">Uncategorized</option>
+                  {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                </select>
+              </FormField>
+              <FormField label="Unit" error={form.formState.errors.unit?.message}>
+                <Input {...form.register("unit")} />
+              </FormField>
+            </div>
+            <FormField label="Description" error={form.formState.errors.description?.message}>
+              <Input {...form.register("description")} />
+            </FormField>
+            <FormField label="Image URL" error={form.formState.errors.imageUrl?.message}>
+              <Input placeholder="https://…/product.jpg" {...form.register("imageUrl")} />
+            </FormField>
+            {!isVariable ? (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <FormField label="SKU" error={form.formState.errors.sku?.message}>
+                  <Input {...form.register("sku")} />
+                </FormField>
+                <FormField label="Barcode" error={form.formState.errors.barcode?.message}>
+                  <Input {...form.register("barcode")} />
+                </FormField>
+                <FormField label="Selling price" error={form.formState.errors.price?.message}>
+                  <Input inputMode="decimal" {...form.register("price")} />
+                </FormField>
+                {canViewCost ? (
+                  <FormField label="Cost" error={form.formState.errors.cost?.message}>
+                    <Input inputMode="decimal" {...form.register("cost")} />
+                  </FormField>
+                ) : null}
+              </div>
+            ) : null}
+            <div className="flex flex-wrap gap-3">
+              <Label className="flex h-9 items-center gap-2 rounded-lg border px-3">
+                <input
+                  disabled={!canTrackInventory || product.productType === "composite"}
+                  type="checkbox"
+                  {...form.register("trackInventory")}
+                />
+                Track inventory{!canTrackInventory ? " (disabled)" : ""}
+              </Label>
+              {!isVariable ? (
+                <Label className="flex h-9 items-center gap-2 rounded-lg border px-3">
+                  <input type="checkbox" {...form.register("isVariablePrice")} />
+                  Enter price at sale
+                </Label>
+              ) : null}
+              <Label className="flex h-9 items-center gap-2 rounded-lg border px-3">
+                <input
+                  disabled={!canUseWeightedProducts}
+                  type="checkbox"
+                  {...form.register("allowFractionalQuantity")}
+                />
+                Allow fractional quantity{!canUseWeightedProducts ? " (disabled)" : ""}
+              </Label>
+            </div>
+            <DialogFooter>
+              <Button disabled={isPending} type="submit">
+                {isPending ? <LoaderCircle className="animate-spin" /> : <Pencil />}
+                Save product
+              </Button>
+              <ResultMessage result={result} />
+            </DialogFooter>
+          </form>
+        </DialogBody>
+      </DialogContent>
+    </Dialog.Root>
   );
 }
 
@@ -184,6 +464,7 @@ export function CreateProductForm({
   canUseWeightedProducts: boolean;
 }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [result, setResult] = useState<CatalogActionResult<unknown> | null>(null);
   const [isPending, startTransition] = useTransition();
   const form = useForm<CreateProductValues>({
@@ -221,18 +502,25 @@ export function CreateProductForm({
       if (nextResult.ok) {
         form.reset();
         replace([]);
+        setOpen(false);
         router.refresh();
       }
     });
   });
 
   return (
-    <ManagementCard
-      title="Add product"
-      description="Create a simple item or an item with saleable variants."
-      icon={<PackagePlus aria-hidden="true" />}
-    >
-      <form className="space-y-6" onSubmit={submit} noValidate>
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <DialogTrigger className={buttonVariants()}>
+        <PackagePlus aria-hidden="true" />
+        Add product
+      </DialogTrigger>
+      <DialogContent size="large">
+        <DialogHeader>
+          <DialogTitle>Add product</DialogTitle>
+          <DialogDescription>Create a simple item or an item with saleable variants.</DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <form className="space-y-6" onSubmit={submit} noValidate>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <FormField label="Product name" error={form.formState.errors.name?.message}>
             <Input placeholder="House Coffee" {...form.register("name")} />
@@ -412,9 +700,11 @@ export function CreateProductForm({
             Create product
           </Button>
         </div>
-        <ResultMessage result={result} />
-      </form>
-    </ManagementCard>
+            <ResultMessage result={result} />
+          </form>
+        </DialogBody>
+      </DialogContent>
+    </Dialog.Root>
   );
 }
 
@@ -957,6 +1247,10 @@ function FormField({
 
 function FieldError({ message }: { message?: string }) {
   return message ? <p className="text-xs text-destructive">{message}</p> : null;
+}
+
+function minorToMoneyInput(value: number) {
+  return (value / 100).toFixed(2);
 }
 
 function ResultMessage({

@@ -54,6 +54,10 @@ export const setCategoryArchivedSchema = z.object({
   isArchived: z.boolean(),
 });
 
+export const updateCategorySchema = createCategorySchema.extend({
+  categoryId: z.uuid(),
+});
+
 export const productVariantSchema = z.object({
   name: z.string().trim().min(1, "Enter a variant name.").max(160),
   sku,
@@ -161,6 +165,31 @@ export const setProductArchivedSchema = z.object({
   isArchived: z.boolean(),
 });
 
+export const updateProductSchema = z.object({
+  productId: z.uuid(),
+  name: z.string().trim().min(1, "Enter a product name.").max(160),
+  description: z.string().trim().max(2000),
+  categoryId: optionalUuid,
+  sku,
+  barcode,
+  price: moneyInput,
+  cost: moneyInput,
+  trackInventory: z.boolean(),
+  imageUrl: z
+    .string()
+    .trim()
+    .max(2048, "Use an image URL with at most 2,048 characters.")
+    .refine((value) => value === "" || /^https?:\/\//i.test(value), "Enter a full http(s) image URL."),
+  isVariablePrice: z.boolean(),
+  allowFractionalQuantity: z.boolean(),
+  unit: z
+    .string()
+    .trim()
+    .min(1, "Enter a unit.")
+    .max(24)
+    .regex(/^[A-Za-z][A-Za-z0-9 _-]*$/, "Use letters, numbers, spaces, _ or -."),
+});
+
 export const setProductAvailabilitySchema = z.object({
   productId: z.uuid(),
   storeId: z.uuid(),
@@ -260,8 +289,10 @@ export const adjustInventorySchema = z.object({
 });
 
 export type CreateCategoryValues = z.infer<typeof createCategorySchema>;
+export type UpdateCategoryValues = z.infer<typeof updateCategorySchema>;
 export type ProductVariantValues = z.infer<typeof productVariantSchema>;
 export type CreateProductValues = z.infer<typeof createProductSchema>;
+export type UpdateProductValues = z.infer<typeof updateProductSchema>;
 export type AdjustInventoryValues = z.infer<typeof adjustInventorySchema>;
 export type SetProductStoreConfigurationValues = z.infer<typeof setProductStoreConfigurationSchema>;
 export type CreateProductUnitValues = z.infer<typeof createProductUnitSchema>;

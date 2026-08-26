@@ -1,11 +1,23 @@
 "use client";
 
 import { Check, CreditCard, LoaderCircle, Plus, SlidersHorizontal, Store } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { type FormEvent, useState, useTransition } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { GuardedDeleteDialog } from "@/components/back-office/guarded-delete-dialog";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   createPaymentMethodAction,
@@ -50,11 +62,8 @@ export function PaymentMethodsManager({
   methods: PaymentMethodRecord[];
   stores: StoreOption[];
 }) {
-  const activeStores = stores.filter((store) => store.isActive);
-
   return (
     <div className="space-y-5">
-      {canManage ? <CreatePaymentMethodForm stores={activeStores} /> : null}
       <section className="grid gap-4 xl:grid-cols-2">
         {methods.map((method) => (
           <PaymentMethodCard
@@ -69,7 +78,9 @@ export function PaymentMethodsManager({
   );
 }
 
-function CreatePaymentMethodForm({ stores }: { stores: StoreOption[] }) {
+export function CreatePaymentMethodDialog({ stores }: { stores: StoreOption[] }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [paymentType, setPaymentType] = useState<PaymentMethodRecord["paymentType"]>("OTHER");
@@ -96,6 +107,8 @@ function CreatePaymentMethodForm({ stores }: { stores: StoreOption[] }) {
       setPaymentType("OTHER");
       setRequiresReference(false);
       setSelectedStoreIds(stores.map((store) => store.id));
+      setOpen(false);
+      router.refresh();
     });
   };
 
@@ -108,22 +121,18 @@ function CreatePaymentMethodForm({ stores }: { stores: StoreOption[] }) {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-3">
-          <span className="grid size-9 place-items-center rounded-lg bg-secondary text-primary">
-            <Plus className="size-4" aria-hidden="true" />
-          </span>
-          <div>
-            <CardTitle>Add payment method</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Custom methods are available only where you enable them below.
-            </p>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <form className="grid gap-4" onSubmit={submit}>
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <DialogTrigger className={buttonVariants()}>
+        <Plus aria-hidden="true" />
+        Add payment method
+      </DialogTrigger>
+      <DialogContent size="wide">
+        <DialogHeader>
+          <DialogTitle>Add payment method</DialogTitle>
+          <DialogDescription>Custom methods are available only where you enable them below.</DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <form className="grid gap-4" onSubmit={submit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="grid gap-1.5 text-sm font-medium" htmlFor="payment-method-name">
               Name
@@ -189,16 +198,17 @@ function CreatePaymentMethodForm({ stores }: { stores: StoreOption[] }) {
             </div>
           </fieldset>
 
-          <div className="flex flex-wrap items-center gap-3">
+            <DialogFooter>
             <Button disabled={isPending || stores.length === 0} type="submit">
               {isPending ? <LoaderCircle className="animate-spin" /> : <Plus />}
               Add payment method
             </Button>
             {message ? <p aria-live="polite" className="text-sm text-muted-foreground">{message}</p> : null}
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+            </DialogFooter>
+          </form>
+        </DialogBody>
+      </DialogContent>
+    </Dialog.Root>
   );
 }
 
@@ -208,6 +218,77 @@ function PaymentMethodCard({
   stores,
 }: {
   canManage: boolean;
+  method: PaymentMethodRecord;
+  stores: StoreOption[];
+}) {
+  const enabledStores = method.availability.filter((item) => item.isEnabled).length;
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-secondary text-primary">
+            <CreditCard className="size-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <CardTitle className="truncate">{method.name}</CardTitle>
+            <p className="mt-1 font-mono text-xs text-muted-foreground">{method.code}</p>
+          </div>
+        </div>
+        <Badge variant={method.isEnabled ? "secondary" : "outline"}>
+          {method.isEnabled ? "Enabled" : "Disabled"}
+        </Badge>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">{paymentTypeLabels[method.paymentType]}</Badge>
+          <Badge variant="outline">{method.requiresReference ? "Reference required" : "Reference optional"}</Badge>
+          <Badge variant="outline">{enabledStores} store{enabledStores === 1 ? "" : "s"} enabled</Badge>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {method.offlinePolicy === "cash"
+            ? "One cash payment can be queued while offline."
+            : method.offlinePolicy === "manual_external"
+              ? "Offline payments are recorded as manual external payments."
+              : "This method requires an internet connection."}
+        </p>
+        {canManage ? (
+          <div className="flex flex-wrap gap-2">
+            <Dialog.Root>
+            <DialogTrigger className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <SlidersHorizontal aria-hidden="true" />
+              Edit payment method
+            </DialogTrigger>
+            <DialogContent size="wide">
+              <DialogHeader>
+                <DialogTitle>Edit {method.name}</DialogTitle>
+                <DialogDescription>
+                  Change availability and checkout behavior without altering the method&apos;s reporting code.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogBody>
+                <PaymentMethodEditor method={method} stores={stores} />
+              </DialogBody>
+            </DialogContent>
+            </Dialog.Root>
+            {!method.isEnabled ? (
+              <GuardedDeleteDialog
+                recordId={method.id}
+                recordName={method.name}
+                recordType="payment_method"
+              />
+            ) : null}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PaymentMethodEditor({
+  method,
+  stores,
+}: {
   method: PaymentMethodRecord;
   stores: StoreOption[];
 }) {
@@ -260,24 +341,7 @@ function PaymentMethodCard({
   };
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-secondary text-primary">
-            <CreditCard className="size-5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <CardTitle className="truncate">{method.name}</CardTitle>
-            <p className="mt-1 font-mono text-xs text-muted-foreground">{method.code}</p>
-          </div>
-        </div>
-        <Badge variant={method.isEnabled ? "secondary" : "outline"}>
-          {method.isEnabled ? "Enabled" : "Disabled"}
-        </Badge>
-      </CardHeader>
-      <CardContent>
-        {canManage ? (
-          <div className="grid gap-4">
+    <div className="grid gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="grid gap-1.5 text-sm font-medium">
                 Display name
@@ -346,27 +410,13 @@ function PaymentMethodCard({
                 ))}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            <DialogFooter>
               <Button disabled={isPending} onClick={save} size="sm" type="button">
                 {isPending ? <LoaderCircle className="animate-spin" /> : <Check />}
                 Save changes
               </Button>
-              <Badge variant="outline">
-                <SlidersHorizontal aria-hidden="true" />
-                {paymentTypeLabels[method.paymentType]}
-              </Badge>
               {message ? <p aria-live="polite" className="text-sm text-muted-foreground">{message}</p> : null}
-            </div>
-          </div>
-        ) : (
-          <div>
-            <Badge variant="outline">{paymentTypeLabels[method.paymentType]}</Badge>
-            <p className="mt-4 text-sm text-muted-foreground">
-              {method.requiresReference ? "A reference number is required." : "Reference number is optional."}
-            </p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+            </DialogFooter>
+    </div>
   );
 }

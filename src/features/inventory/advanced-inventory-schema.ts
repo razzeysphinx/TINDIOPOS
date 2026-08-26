@@ -47,6 +47,11 @@ export const createSupplierSchema = z.object({
   notes: z.string().trim().max(2000),
 });
 
+export const updateSupplierSchema = createSupplierSchema.extend({
+  supplierId: z.uuid("Select a supplier."),
+  isActive: z.boolean(),
+});
+
 export const createPurchaseOrderSchema = z
   .object({
     storeId: z.uuid("Select a store."),

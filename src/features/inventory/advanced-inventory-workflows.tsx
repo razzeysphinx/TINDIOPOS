@@ -5,6 +5,7 @@ import {
   ClipboardCheck,
   LoaderCircle,
   PackageCheck,
+  Pencil,
   Plus,
   SendHorizontal,
   Trash2,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+import { GuardedDeleteDialog } from "@/components/back-office/guarded-delete-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,6 +23,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -29,6 +41,7 @@ import {
   createSupplierAction,
   receivePurchaseOrderAction,
   transferStockAction,
+  updateSupplierAction,
 } from "@/features/inventory/advanced-inventory-actions";
 
 const selectClassName =
@@ -47,7 +60,10 @@ export type AdvancedInventorySupplier = {
   id: string;
   name: string;
   contactName: string | null;
+  email: string | null;
   phone: string | null;
+  address: string | null;
+  notes: string | null;
   isActive: boolean;
 };
 
@@ -273,10 +289,23 @@ export function AdvancedInventoryWorkflows({
 
       <div className="grid gap-4 xl:grid-cols-2">
         <WorkflowCard
-          title="Add supplier"
+          title="Supplier management"
           description="Keep procurement contacts available for every purchase order."
           icon={<UserPlus aria-hidden="true" />}
         >
+          <Dialog.Root>
+            <DialogTrigger render={<Button type="button" />}>
+              <UserPlus />
+              Add supplier
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add supplier</DialogTitle>
+                <DialogDescription>
+                  Save a supplier contact for use in future purchase orders.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogBody>
           <form className="grid gap-3 sm:grid-cols-2" onSubmit={submitSupplier} noValidate>
             <Field label="Supplier name">
               <Input
@@ -321,14 +350,45 @@ export function AdvancedInventoryWorkflows({
                 placeholder="Optional ordering notes"
               />
             </Field>
-            <div className="sm:col-span-2 flex items-center justify-between gap-3">
+            <DialogFooter className="sm:col-span-2">
               <ResultMessage result={supplierResult} />
               <Button disabled={isPending} type="submit">
                 {isPending ? <LoaderCircle className="animate-spin" /> : <UserPlus />}
                 Save supplier
               </Button>
-            </div>
+            </DialogFooter>
           </form>
+              </DialogBody>
+            </DialogContent>
+          </Dialog.Root>
+          {suppliers.length > 0 ? (
+            <div className="mt-5 space-y-2 border-t pt-4">
+              <p className="text-sm font-medium">Suppliers</p>
+              {suppliers.map((supplierOption) => (
+                <div className="flex items-center justify-between gap-3 rounded-lg border p-3" key={supplierOption.id}>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{supplierOption.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {supplierOption.contactName || supplierOption.email || supplierOption.phone || "No contact details"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className={supplierOption.isActive ? "text-xs text-primary" : "text-xs text-muted-foreground"}>
+                      {supplierOption.isActive ? "Active" : "Inactive"}
+                    </span>
+                    <EditSupplierDialog supplier={supplierOption} />
+                    {!supplierOption.isActive ? (
+                      <GuardedDeleteDialog
+                        recordId={supplierOption.id}
+                        recordName={supplierOption.name}
+                        recordType="supplier"
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </WorkflowCard>
 
         <WorkflowCard
@@ -667,6 +727,94 @@ function WorkflowCard({ title, description, icon, children }: { title: string; d
       </CardHeader>
       <CardContent>{children}</CardContent>
     </Card>
+  );
+}
+
+function EditSupplierDialog({ supplier }: { supplier: AdvancedInventorySupplier }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [draft, setDraft] = useState<SupplierDraft>({
+    name: supplier.name,
+    contactName: supplier.contactName ?? "",
+    email: supplier.email ?? "",
+    phone: supplier.phone ?? "",
+    address: supplier.address ?? "",
+    notes: supplier.notes ?? "",
+  });
+  const [isActive, setIsActive] = useState(supplier.isActive);
+  const [result, setResult] = useState<WorkflowResult | null>(null);
+
+  function resetDraft() {
+    setDraft({
+      name: supplier.name,
+      contactName: supplier.contactName ?? "",
+      email: supplier.email ?? "",
+      phone: supplier.phone ?? "",
+      address: supplier.address ?? "",
+      notes: supplier.notes ?? "",
+    });
+    setIsActive(supplier.isActive);
+    setResult(null);
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setResult(null);
+    startTransition(async () => {
+      const nextResult = await updateSupplierAction({ supplierId: supplier.id, ...draft, isActive });
+      setResult(nextResult);
+      if (nextResult.ok) router.refresh();
+    });
+  }
+
+  return (
+    <Dialog.Root>
+      <DialogTrigger render={<Button size="sm" type="button" variant="outline" onClick={resetDraft} />}>
+        <Pencil />
+        Edit
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit supplier</DialogTitle>
+          <DialogDescription>
+            Update supplier contact details or safely deactivate it. Existing purchase history is retained.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <form className="grid gap-3 sm:grid-cols-2" onSubmit={submit} noValidate>
+            <Field label="Supplier name">
+              <Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+            </Field>
+            <Field label="Contact name">
+              <Input value={draft.contactName} onChange={(event) => setDraft({ ...draft, contactName: event.target.value })} />
+            </Field>
+            <Field label="Email">
+              <Input inputMode="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} />
+            </Field>
+            <Field label="Phone">
+              <Input value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} />
+            </Field>
+            <Field className="sm:col-span-2" label="Address">
+              <Input value={draft.address} onChange={(event) => setDraft({ ...draft, address: event.target.value })} />
+            </Field>
+            <Field className="sm:col-span-2" label="Notes">
+              <Input value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
+            </Field>
+            <label className="flex items-center gap-2 text-sm font-medium sm:col-span-2">
+              <input checked={isActive} type="checkbox" onChange={(event) => setIsActive(event.target.checked)} />
+              Active for new purchase orders
+            </label>
+            <DialogFooter className="sm:col-span-2">
+              <ResultMessage result={result} />
+              <Button disabled={isPending} type="submit">
+                {isPending ? <LoaderCircle className="animate-spin" /> : <Pencil />}
+                Save supplier
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogBody>
+      </DialogContent>
+    </Dialog.Root>
   );
 }
 

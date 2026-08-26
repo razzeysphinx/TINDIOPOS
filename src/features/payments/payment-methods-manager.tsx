@@ -2,7 +2,7 @@
 
 import { Check, CreditCard, LoaderCircle, Plus, SlidersHorizontal, Store } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useState, useTransition } from "react";
+import { type FormEvent, type ReactNode, useState, useTransition } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { GuardedDeleteDialog } from "@/components/back-office/guarded-delete-dialog";
@@ -53,6 +53,14 @@ const paymentTypeLabels: Record<PaymentMethodRecord["paymentType"], string> = {
   OTHER: "Other",
 };
 
+const tindioPresetPaymentCodes = new Set([
+  "CASH",
+  "CARD",
+  "GCASH",
+  "MAYA",
+  "BANK_TRANSFER",
+]);
+
 export function PaymentMethodsManager({
   canManage,
   methods,
@@ -62,19 +70,77 @@ export function PaymentMethodsManager({
   methods: PaymentMethodRecord[];
   stores: StoreOption[];
 }) {
+  const presetMethods = methods.filter((method) => tindioPresetPaymentCodes.has(method.code));
+  const customMethods = methods.filter((method) => !tindioPresetPaymentCodes.has(method.code));
+
   return (
     <div className="space-y-5">
-      <section className="grid gap-4 xl:grid-cols-2">
-        {methods.map((method) => (
+      <PaymentMethodSection
+        description="These core methods are installed with every TINDIO organization. You can configure where they are accepted or disable them without changing their stable reporting codes."
+        methods={presetMethods}
+        title="TINDIO PRESETS"
+      >
+        {(method) => (
           <PaymentMethodCard
             canManage={canManage}
             key={method.id}
             method={method}
             stores={stores}
           />
-        ))}
-      </section>
+        )}
+      </PaymentMethodSection>
+      <PaymentMethodSection
+        description="Create only the additional methods your business needs with the + button above."
+        emptyMessage="No custom payment methods yet."
+        methods={customMethods}
+        title="CUSTOM METHODS"
+      >
+        {(method) => (
+          <PaymentMethodCard
+            canManage={canManage}
+            key={method.id}
+            method={method}
+            stores={stores}
+          />
+        )}
+      </PaymentMethodSection>
     </div>
+  );
+}
+
+function PaymentMethodSection({
+  title,
+  description,
+  methods,
+  emptyMessage,
+  children,
+}: {
+  title: string;
+  description: string;
+  methods: PaymentMethodRecord[];
+  emptyMessage?: string;
+  children: (method: PaymentMethodRecord) => ReactNode;
+}) {
+  const titleId = `${title.toLowerCase().replaceAll(" ", "-")}-title`;
+
+  return (
+    <section aria-labelledby={titleId}>
+      <div className="mb-3">
+        <h2 className="text-xs font-bold tracking-[0.14em] text-primary uppercase" id={titleId}>
+          {title}
+        </h2>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
+      </div>
+      {methods.length ? (
+        <div className="grid gap-4 xl:grid-cols-2">{methods.map(children)}</div>
+      ) : (
+        <Card>
+          <CardContent className="py-5 text-sm text-muted-foreground">
+            {emptyMessage ?? "No TINDIO preset payment methods are available for this organization."}
+          </CardContent>
+        </Card>
+      )}
+    </section>
   );
 }
 
@@ -122,9 +188,13 @@ export function CreatePaymentMethodDialog({ stores }: { stores: StoreOption[] })
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
-      <DialogTrigger className={buttonVariants()}>
+      <DialogTrigger
+        aria-label="Add a custom payment method"
+        className={buttonVariants({ size: "icon" })}
+        title="Add custom payment method"
+      >
         <Plus aria-hidden="true" />
-        Add payment method
+        <span className="sr-only">Add custom payment method</span>
       </DialogTrigger>
       <DialogContent size="wide">
         <DialogHeader>
@@ -241,6 +311,9 @@ function PaymentMethodCard({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">
+            {tindioPresetPaymentCodes.has(method.code) ? "TINDIO preset" : "Custom"}
+          </Badge>
           <Badge variant="outline">{paymentTypeLabels[method.paymentType]}</Badge>
           <Badge variant="outline">{method.requiresReference ? "Reference required" : "Reference optional"}</Badge>
           <Badge variant="outline">{enabledStores} store{enabledStores === 1 ? "" : "s"} enabled</Badge>

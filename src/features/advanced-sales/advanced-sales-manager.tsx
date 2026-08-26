@@ -160,8 +160,37 @@ function TaxFields({ name, rate, inclusive, isDefault, onNameChange, onRateChang
   return <><div className="grid gap-4 sm:grid-cols-2"><Field label="Name"><Input autoFocus maxLength={100} onChange={(event) => onNameChange(event.target.value)} value={name} /></Field><Field label="Rate percent"><Input inputMode="decimal" onChange={(event) => onRateChange(event.target.value)} value={rate} /></Field></div><div className="flex flex-wrap gap-4"><CheckField checked={inclusive} label="Included in product prices" onChange={onInclusiveChange} /><CheckField checked={isDefault} label="Use as default" onChange={onDefaultChange} /></div></>;
 }
 
+const diningPresetNames = ["Dine In", "Takeout", "Delivery"] as const;
+
 function DiningSettings({ diningOptions }: { diningOptions: DiningOption[] }) {
-  return <SettingsCard description="Choose the service context that appears on open tickets." title="Dining options" triggerLabel="Add dining option"><DiningCreateDialog /><ConfigList emptyMessage="No dining options yet." items={diningOptions} renderItem={(option) => <div className="flex min-w-0 items-center justify-between gap-3"><p className="truncate font-medium">{option.name}</p><div className="flex shrink-0 items-center gap-1">{option.isDefault ? <Badge variant="secondary">Default</Badge> : null}<StatusBadge active={option.isActive} /><DiningEditDialog option={option} />{!option.isActive ? <GuardedDeleteDialog recordId={option.id} recordName={option.name} recordType="dining_option" /> : null}</div></div>} /></SettingsCard>;
+  const presetOptionNames = new Set(diningPresetNames.map((name) => name.toLocaleLowerCase()));
+  const presetOptions = diningOptions.filter((option) => presetOptionNames.has(option.name.toLocaleLowerCase()));
+  const customOptions = diningOptions.filter((option) => !presetOptionNames.has(option.name.toLocaleLowerCase()));
+  const hasActiveDefault = diningOptions.some((option) => option.isActive && option.isDefault);
+
+  return <SettingsCard description="Choose the service context that appears on open tickets." title="Dining options" triggerLabel="Add dining option"><DiningCreateDialog /><div className="space-y-5"><ConfigSection description="Start with the most common service options. A preset is added only when that exact option is not already configured." title="TINDIO PRESETS"><div className="grid gap-2 sm:grid-cols-3">{diningPresetNames.map((name) => {
+    const option = presetOptions.find((candidate) => candidate.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+    return option ? <div className="rounded-lg border p-3" key={name}><DiningOptionRow option={option} /></div> : <DiningPresetButton defaultWhenAdded={!hasActiveDefault && name === "Dine In"} key={name} name={name} />;
+  })}</div></ConfigSection><ConfigSection description="Use the + button above to add a service option unique to your business." title="CUSTOM OPTIONS"><ConfigList emptyMessage="No custom dining options yet." items={customOptions} renderItem={(option) => <DiningOptionRow option={option} />} /></ConfigSection></div></SettingsCard>;
+}
+
+function DiningOptionRow({ option }: { option: DiningOption }) {
+  return <div className="flex min-w-0 items-center justify-between gap-3"><p className="truncate font-medium">{option.name}</p><div className="flex shrink-0 items-center gap-1">{option.isDefault ? <Badge variant="secondary">Default</Badge> : null}<StatusBadge active={option.isActive} /><DiningEditDialog option={option} />{!option.isActive ? <GuardedDeleteDialog recordId={option.id} recordName={option.name} recordType="dining_option" /> : null}</div></div>;
+}
+
+function DiningPresetButton({ name, defaultWhenAdded }: { name: string; defaultWhenAdded: boolean }) {
+  const router = useRouter();
+  const [result, setResult] = useState<ActionResult | null>(null);
+  const [pending, startTransition] = useTransition();
+  const addPreset = () => {
+    startTransition(async () => {
+      const next = await createDiningOptionAction({ name, isDefault: defaultWhenAdded });
+      setResult(next);
+      if (next.ok) router.refresh();
+    });
+  };
+
+  return <div className="flex min-h-24 flex-col justify-between rounded-lg border border-dashed p-3"><div><p className="font-medium">{name}</p><p className="mt-1 text-xs text-muted-foreground">{defaultWhenAdded ? "Recommended default" : "TINDIO preset"}</p></div><div className="mt-3"><Button disabled={pending} onClick={addPreset} size="sm" type="button" variant="outline">{pending ? <LoaderCircle className="animate-spin" /> : <Plus />}Add</Button>{result && !result.ok ? <p aria-live="polite" className="mt-2 text-xs text-destructive">{result.message}</p> : null}</div></div>;
 }
 
 function DiningCreateDialog() {
@@ -223,12 +252,18 @@ function SettingsCard({ title, description, triggerLabel, children }: { title: s
   return <Card><CardHeader className="flex-row items-start justify-between gap-4"><div><CardTitle>{title}</CardTitle><CardDescription className="mt-1">{description}</CardDescription></div><span className="shrink-0" data-create-action={triggerLabel}>{childrenArray[0]}</span></CardHeader><CardContent>{childrenArray.slice(1)}</CardContent></Card>;
 }
 
+function ConfigSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+  const titleId = `${title.toLowerCase().replaceAll(" ", "-")}-title`;
+  return <section aria-labelledby={titleId}><h3 className="text-xs font-bold tracking-[0.14em] text-primary uppercase" id={titleId}>{title}</h3><p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p><div className="mt-3">{children}</div></section>;
+}
+
 function ConfigList<T>({ items, emptyMessage, renderItem }: { items: T[]; emptyMessage: string; renderItem: (item: T) => React.ReactNode }) {
   return items.length ? <ul className="divide-y rounded-lg border">{items.map((item, index) => <li className="p-3" key={index}>{renderItem(item)}</li>)}</ul> : <p className="text-sm text-muted-foreground">{emptyMessage}</p>;
 }
 
 function ConfigDialog({ title, description, triggerLabel, triggerVariant = "outline", size = "default", children }: { title: string; description: string; triggerLabel: string; triggerVariant?: "ghost" | "outline"; size?: "default" | "wide" | "large"; children: React.ReactNode }) {
-  return <Dialog.Root><DialogTrigger className={buttonVariants({ variant: triggerVariant, size: triggerVariant === "ghost" ? "sm" : "sm" })}>{triggerVariant === "ghost" ? <Pencil aria-hidden="true" /> : <Plus aria-hidden="true" />}{triggerLabel}</DialogTrigger><DialogContent size={size}><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader><DialogBody>{children}</DialogBody></DialogContent></Dialog.Root>;
+  const isEditTrigger = triggerVariant === "ghost";
+  return <Dialog.Root><DialogTrigger aria-label={triggerLabel} className={buttonVariants({ variant: triggerVariant, size: isEditTrigger ? "sm" : "icon" })} title={triggerLabel}>{isEditTrigger ? <Pencil aria-hidden="true" /> : <Plus aria-hidden="true" />}<span className={isEditTrigger ? undefined : "sr-only"}>{triggerLabel}</span></DialogTrigger><DialogContent size={size}><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader><DialogBody>{children}</DialogBody></DialogContent></Dialog.Root>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="grid gap-1.5 text-sm font-medium">{label}{children}</label>; }

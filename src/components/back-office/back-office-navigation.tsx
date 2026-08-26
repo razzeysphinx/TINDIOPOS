@@ -1,19 +1,21 @@
 "use client";
 
+import { useState } from "react";
 import {
   BarChart3,
   ChefHat,
-  LayoutDashboard,
+  ChevronDown,
   CircleDollarSign,
   Clock3,
   CloudUpload,
+  LayoutDashboard,
   MonitorSmartphone,
   PackageSearch,
   ReceiptText,
+  Settings2,
+  ShieldCheck,
   ShoppingCart,
   Shapes,
-  ShieldCheck,
-  SlidersHorizontal,
   Store,
   Truck,
   Users,
@@ -25,146 +27,7 @@ import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 
-const navigation: Array<{
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  requiresSalesAccess?: boolean;
-  requiresReceiptAccess?: boolean;
-  requiresShiftAccess?: boolean;
-  requiresCustomerAccess?: boolean;
-  requiresReportsAccess?: boolean;
-  requiresSettingsAccess?: boolean;
-  requiresKitchenAccess?: boolean;
-  requiresApprovalAccess?: boolean;
-  requiresInventoryAccess?: boolean;
-  requiresTimeClockAccess?: boolean;
-  requiresDeviceAccess?: boolean;
-}> = [
-  { href: "/back-office", label: "Dashboard", icon: LayoutDashboard },
-  {
-    href: "/back-office/reports",
-    label: "Reports",
-    icon: BarChart3,
-    requiresReportsAccess: true,
-  },
-  {
-    href: "/pos",
-    label: "Open POS",
-    icon: ShoppingCart,
-    requiresSalesAccess: true,
-  },
-  {
-    href: "/back-office/customers",
-    label: "Customers",
-    icon: Users,
-    requiresCustomerAccess: true,
-  },
-  {
-    href: "/back-office/receipts",
-    label: "Receipts",
-    icon: ReceiptText,
-    requiresReceiptAccess: true,
-  },
-  {
-    href: "/back-office/receipt-settings",
-    label: "Receipt settings",
-    icon: ReceiptText,
-    requiresSettingsAccess: true,
-  },
-  {
-    href: "/back-office/shifts",
-    label: "Register shifts",
-    icon: CircleDollarSign,
-    requiresShiftAccess: true,
-  },
-  {
-    href: "/back-office/time-clock",
-    label: "Time clock",
-    icon: Clock3,
-    requiresTimeClockAccess: true,
-  },
-  {
-    href: "/kitchen",
-    label: "Kitchen display",
-    icon: ChefHat,
-    requiresKitchenAccess: true,
-  },
-  { href: "/back-office/stores", label: "Stores", icon: Store },
-  {
-    href: "/back-office/registers",
-    label: "Registers",
-    icon: MonitorSmartphone,
-  },
-  {
-    href: "/back-office/devices",
-    label: "POS devices",
-    icon: MonitorSmartphone,
-    requiresDeviceAccess: true,
-  },
-  {
-    href: "/back-office/offline-sync",
-    label: "Offline sync",
-    icon: CloudUpload,
-    requiresDeviceAccess: true,
-  },
-  { href: "/back-office/employees", label: "Employees", icon: Users },
-  { href: "/back-office/roles", label: "Roles & access", icon: ShieldCheck },
-  {
-    href: "/back-office/security",
-    label: "Security & approvals",
-    icon: ShieldCheck,
-    requiresApprovalAccess: true,
-  },
-  { href: "/back-office/categories", label: "Categories", icon: Shapes },
-  { href: "/back-office/catalog", label: "Catalog", icon: PackageSearch },
-  {
-    href: "/back-office/inventory",
-    label: "Inventory",
-    icon: Warehouse,
-    requiresInventoryAccess: true,
-  },
-  {
-    href: "/back-office/replenishment",
-    label: "Replenishment",
-    icon: Truck,
-    requiresInventoryAccess: true,
-  },
-  {
-    href: "/back-office/payment-methods",
-    label: "Payment methods",
-    icon: SlidersHorizontal,
-    requiresSettingsAccess: true,
-  },
-  {
-    href: "/back-office/business-profile",
-    label: "Business profile",
-    icon: SlidersHorizontal,
-    requiresSettingsAccess: true,
-  },
-  {
-    href: "/back-office/advanced-sales",
-    label: "Advanced sales",
-    icon: SlidersHorizontal,
-    requiresSettingsAccess: true,
-  },
-];
-
-export function BackOfficeNavigation({
-  mobile = false,
-  canUsePos = false,
-  canViewReceipts = false,
-  canManageShifts = false,
-  canManageCustomers = false,
-  canViewReports = false,
-  canManageSettings = false,
-  canViewKitchen = false,
-  canUseApprovals = false,
-  canUseInventory = false,
-  canUseTimeClock = false,
-  canManageDevices = false,
-}: {
-  mobile?: boolean;
+export type BackOfficeNavigationAccess = {
   canUsePos?: boolean;
   canViewReceipts?: boolean;
   canManageShifts?: boolean;
@@ -176,56 +39,267 @@ export function BackOfficeNavigation({
   canUseInventory?: boolean;
   canUseTimeClock?: boolean;
   canManageDevices?: boolean;
+};
+
+type NavigationItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  isVisible?: (access: BackOfficeNavigationAccess) => boolean;
+};
+
+type NavigationGroup = {
+  label: string;
+  items: NavigationItem[];
+};
+
+const primaryNavigation: NavigationItem[] = [
+  { href: "/back-office", label: "Dashboard", icon: LayoutDashboard },
+  {
+    href: "/back-office/reports",
+    label: "Reports",
+    icon: BarChart3,
+    isVisible: (access) => access.canViewReports === true,
+  },
+];
+
+const navigationGroups: NavigationGroup[] = [
+  {
+    label: "Sales",
+    items: [
+      {
+        href: "/pos",
+        label: "Open POS",
+        icon: ShoppingCart,
+        isVisible: (access) => access.canUsePos === true,
+      },
+      {
+        href: "/back-office/receipts",
+        label: "Receipts",
+        icon: ReceiptText,
+        isVisible: (access) => access.canViewReceipts === true,
+      },
+      {
+        href: "/back-office/shifts",
+        label: "Register shifts",
+        icon: CircleDollarSign,
+        isVisible: (access) => access.canManageShifts === true,
+      },
+      {
+        href: "/kitchen",
+        label: "Kitchen display",
+        icon: ChefHat,
+        isVisible: (access) => access.canViewKitchen === true,
+      },
+    ],
+  },
+  {
+    label: "Catalog",
+    items: [
+      { href: "/back-office/catalog", label: "Products", icon: PackageSearch },
+      { href: "/back-office/categories", label: "Categories", icon: Shapes },
+    ],
+  },
+  {
+    label: "Inventory",
+    items: [
+      {
+        href: "/back-office/inventory",
+        label: "Stock & inventory",
+        icon: Warehouse,
+        isVisible: (access) => access.canUseInventory === true,
+      },
+      {
+        href: "/back-office/replenishment",
+        label: "Replenishment",
+        icon: Truck,
+        isVisible: (access) => access.canUseInventory === true,
+      },
+    ],
+  },
+  {
+    label: "Customers",
+    items: [
+      {
+        href: "/back-office/customers",
+        label: "Customer list & loyalty",
+        icon: Users,
+        isVisible: (access) => access.canManageCustomers === true,
+      },
+    ],
+  },
+  {
+    label: "Team",
+    items: [
+      { href: "/back-office/employees", label: "Employees", icon: Users },
+      { href: "/back-office/roles", label: "Roles & access", icon: ShieldCheck },
+      {
+        href: "/back-office/time-clock",
+        label: "Time clock",
+        icon: Clock3,
+        isVisible: (access) => access.canUseTimeClock === true,
+      },
+      {
+        href: "/back-office/security",
+        label: "Security & approvals",
+        icon: ShieldCheck,
+        isVisible: (access) => access.canUseApprovals === true,
+      },
+    ],
+  },
+  {
+    label: "Management",
+    items: [
+      { href: "/back-office/stores", label: "Stores", icon: Store },
+      { href: "/back-office/registers", label: "Registers", icon: MonitorSmartphone },
+      {
+        href: "/back-office/devices",
+        label: "POS devices",
+        icon: MonitorSmartphone,
+        isVisible: (access) => access.canManageDevices === true,
+      },
+      {
+        href: "/back-office/offline-sync",
+        label: "Offline sync",
+        icon: CloudUpload,
+        isVisible: (access) => access.canManageDevices === true,
+      },
+    ],
+  },
+  {
+    label: "Settings",
+    items: [
+      {
+        href: "/back-office/business-profile",
+        label: "Business profile",
+        icon: Settings2,
+        isVisible: (access) => access.canManageSettings === true,
+      },
+      {
+        href: "/back-office/payment-methods",
+        label: "Payment methods",
+        icon: Settings2,
+        isVisible: (access) => access.canManageSettings === true,
+      },
+      {
+        href: "/back-office/receipt-settings",
+        label: "Receipt settings",
+        icon: ReceiptText,
+        isVisible: (access) => access.canManageSettings === true,
+      },
+      {
+        href: "/back-office/advanced-sales",
+        label: "Advanced sales",
+        icon: Settings2,
+        isVisible: (access) => access.canManageSettings === true,
+      },
+    ],
+  },
+];
+
+function isCurrentRoute(pathname: string, href: string) {
+  return href === "/back-office"
+    ? pathname === href
+    : pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function NavigationLink({ href, icon: Icon, label, active }: NavigationItem & { active: boolean }) {
+  return (
+    <Link
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+        active
+          ? "bg-secondary text-secondary-foreground"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+      href={href}
+    >
+      <Icon className="size-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0 truncate">{label}</span>
+    </Link>
+  );
+}
+
+function NavigationGroupSection({
+  group,
+  pathname,
+}: {
+  group: NavigationGroup;
+  pathname: string;
 }) {
+  const hasActiveItem = group.items.some((item) => isCurrentRoute(pathname, item.href));
+  const [isOpen, setIsOpen] = useState(hasActiveItem);
+
+  return (
+    <details
+      className="group rounded-lg"
+      onToggle={(event) => setIsOpen(event.currentTarget.open)}
+      open={isOpen}
+    >
+      <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground [&::-webkit-details-marker]:hidden">
+        {group.label}
+        <ChevronDown
+          className="size-4 transition-transform group-open:rotate-180"
+          aria-hidden="true"
+        />
+      </summary>
+      <div className="mt-1 grid gap-1 border-l border-border pl-2">
+        {group.items.map((item) => (
+          <NavigationLink
+            {...item}
+            active={isCurrentRoute(pathname, item.href)}
+            key={item.href}
+          />
+        ))}
+      </div>
+    </details>
+  );
+}
+
+export function BackOfficeNavigation({
+  mobile = false,
+  ...access
+}: BackOfficeNavigationAccess & { mobile?: boolean }) {
   const pathname = usePathname();
+  const visiblePrimaryNavigation = primaryNavigation.filter(
+    (item) => !item.isVisible || item.isVisible(access),
+  );
+  const visibleNavigationGroups = navigationGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !item.isVisible || item.isVisible(access)),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <nav
       aria-label="Back Office"
       className={cn(
         mobile
-          ? "flex gap-1 overflow-x-auto px-4 pb-3"
-          : "grid gap-1 px-3 py-5",
+          ? "max-h-[min(28rem,calc(100svh-4rem))] overflow-y-auto border-t border-border bg-background px-4 py-3"
+          : "min-h-0 flex-1 overflow-y-auto px-3 py-5",
       )}
     >
-      {navigation
-        .filter(
-          (item) =>
-            (!item.requiresSalesAccess || canUsePos) &&
-            (!item.requiresReceiptAccess || canViewReceipts) &&
-            (!item.requiresShiftAccess || canManageShifts) &&
-            (!item.requiresCustomerAccess || canManageCustomers) &&
-            (!item.requiresReportsAccess || canViewReports) &&
-            (!item.requiresSettingsAccess || canManageSettings) &&
-            (!item.requiresKitchenAccess || canViewKitchen) &&
-            (!item.requiresApprovalAccess || canUseApprovals) &&
-            (!item.requiresInventoryAccess || canUseInventory) &&
-            (!item.requiresTimeClockAccess || canUseTimeClock) &&
-            (!item.requiresDeviceAccess || canManageDevices),
-        )
-        .map(({ href, icon: Icon, label }) => {
-          const active =
-            href === "/back-office"
-              ? pathname === href
-              : pathname === href || pathname.startsWith(`${href}/`);
+      <div className="grid gap-1">
+        {visiblePrimaryNavigation.map((item) => (
+          <NavigationLink
+            {...item}
+            active={isCurrentRoute(pathname, item.href)}
+            key={item.href}
+          />
+        ))}
+      </div>
 
-          return (
-            <Link
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "flex shrink-0 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                active
-                  ? "bg-secondary text-secondary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-              href={href}
-              key={href}
-            >
-              <Icon className="size-4" aria-hidden="true" />
-              {label}
-            </Link>
-          );
-        })}
+      <div className="mt-4 grid gap-2">
+        {visibleNavigationGroups.map((group) => (
+          <NavigationGroupSection
+            group={group}
+            key={`${pathname}:${group.label}`}
+            pathname={pathname}
+          />
+        ))}
+      </div>
     </nav>
   );
 }

@@ -15,28 +15,29 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
   await connection();
   const context = await requireBusinessContext();
   const displayName = context.profile.full_name || context.profile.email;
+  const navigationAccess = {
+    canManageSettings: context.permissions.includes("settings.manage"),
+    canManageShifts: context.permissions.some((permission) =>
+      ["settings.manage", "shifts.open", "shifts.close", "cash.pay_in", "cash.pay_out"].includes(permission),
+    ) && context.features.shifts,
+    canManageCustomers: context.permissions.includes("customers.manage"),
+    canUsePos: context.permissions.includes("sales.create"),
+    canViewReceipts: context.permissions.includes("receipts.view"),
+    canViewReports: context.permissions.includes("reports.view"),
+    canViewKitchen: context.features.kitchen_display && context.permissions.some((permission) => ["kitchen.view", "kitchen.manage"].includes(permission)),
+    canUseApprovals: context.permissions.includes("approvals.request"),
+    canUseInventory: context.features.inventory,
+    canUseTimeClock: context.features.time_clock,
+    canManageDevices: context.permissions.includes("devices.manage"),
+  };
 
   return (
     <div className="min-h-svh bg-muted/35 lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
-      <aside className="hidden border-r border-border bg-card print:hidden lg:flex lg:flex-col">
+      <aside className="hidden border-r border-border bg-card print:hidden lg:sticky lg:top-0 lg:flex lg:h-svh lg:self-start lg:flex-col">
         <Link className="border-b border-border px-5 py-5" href="/back-office">
           <TindioMark />
         </Link>
-        <BackOfficeNavigation
-          canManageSettings={context.permissions.includes("settings.manage")}
-          canManageShifts={context.permissions.some((permission) =>
-            ["settings.manage", "shifts.open", "shifts.close", "cash.pay_in", "cash.pay_out"].includes(permission),
-          ) && context.features.shifts}
-          canManageCustomers={context.permissions.includes("customers.manage")}
-          canUsePos={context.permissions.includes("sales.create")}
-          canViewReceipts={context.permissions.includes("receipts.view")}
-          canViewReports={context.permissions.includes("reports.view")}
-          canViewKitchen={context.features.kitchen_display && context.permissions.some((permission) => ["kitchen.view", "kitchen.manage"].includes(permission))}
-          canUseApprovals={context.permissions.includes("approvals.request")}
-          canUseInventory={context.features.inventory}
-          canUseTimeClock={context.features.time_clock}
-          canManageDevices={context.permissions.includes("devices.manage")}
-        />
+        <BackOfficeNavigation {...navigationAccess} />
         <div className="mt-auto border-t border-border p-4">
           <p className="truncate text-sm font-semibold">{displayName}</p>
           <p className="mt-1 truncate text-xs text-muted-foreground">
@@ -74,22 +75,7 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
             </div>
           </div>
           <div className="lg:hidden">
-            <BackOfficeNavigation
-              canManageSettings={context.permissions.includes("settings.manage")}
-              canManageShifts={context.permissions.some((permission) =>
-                ["settings.manage", "shifts.open", "shifts.close", "cash.pay_in", "cash.pay_out"].includes(permission),
-              ) && context.features.shifts}
-              canManageCustomers={context.permissions.includes("customers.manage")}
-              canUsePos={context.permissions.includes("sales.create")}
-              canViewReceipts={context.permissions.includes("receipts.view")}
-              canViewReports={context.permissions.includes("reports.view")}
-              canViewKitchen={context.features.kitchen_display && context.permissions.some((permission) => ["kitchen.view", "kitchen.manage"].includes(permission))}
-              canUseApprovals={context.permissions.includes("approvals.request")}
-              canUseInventory={context.features.inventory}
-              canUseTimeClock={context.features.time_clock}
-              canManageDevices={context.permissions.includes("devices.manage")}
-              mobile
-            />
+            <BackOfficeNavigation {...navigationAccess} mobile />
           </div>
         </header>
 

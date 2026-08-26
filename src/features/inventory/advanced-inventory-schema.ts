@@ -52,6 +52,12 @@ export const updateSupplierSchema = createSupplierSchema.extend({
   isActive: z.boolean(),
 });
 
+export const importSuppliersCsvSchema = z.object({
+  rows: z.array(z.object({
+    rowNumber: z.number().int().min(2), name: z.string().trim().min(1).max(160), contactName: z.string().trim().max(160), email: z.string().trim().max(320), phone: z.string().trim().max(40), address: z.string().trim().max(1000), notes: z.string().trim().max(2000),
+  })).min(1).max(500),
+});
+
 export const createPurchaseOrderSchema = z
   .object({
     storeId: z.uuid("Select a store."),
@@ -182,6 +188,14 @@ export const recordInventoryAdjustmentSchema = z.object({
   variantId: optionalUuid,
   quantityDelta,
   note: z.string().trim().max(500),
+});
+
+export const importInventoryAdjustmentsCsvSchema = z.object({
+  storeId: z.uuid("Select a store."),
+  reasonCode: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,39}$/, "Select an adjustment reason."),
+  rows: z.array(z.object({ rowNumber: z.number().int().min(2), productId: z.uuid(), variantId: optionalUuid, quantityDelta, note: z.string().trim().max(500) })).min(1).max(500),
+}).superRefine((value, context) => {
+  if (!uniqueSaleableLines(value.rows)) context.addIssue({ code: "custom", path: ["rows"], message: "Each item can appear only once in an adjustment import." });
 });
 
 export const receiveStockTransferSchema = z

@@ -4,6 +4,7 @@ import { moneyInputToMinor } from "@/features/catalog/catalog-money";
 import {
   createCustomerSegmentSchema,
   createCustomerSchema,
+  importCustomersCsvSchema,
   loyaltyAdjustmentSchema,
   updateCustomerProfileSchema,
   updateCustomerSegmentSchema,
@@ -12,6 +13,7 @@ import {
 } from "@/features/customers/customer-schema";
 import type { CustomerActionResult } from "@/features/customers/customer-types";
 import type { BusinessContext } from "@/lib/auth/dal";
+import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
 function customerDatabaseMessage(message: string | undefined) {
@@ -44,6 +46,33 @@ export async function createCustomer({
   if (error) return { ok: false, message: customerDatabaseMessage(error.message) };
 
   return { ok: true, message: "Customer created." };
+}
+
+export async function importCustomersCsv({
+  context,
+  input,
+}: {
+  context: BusinessContext;
+  input: unknown;
+}): Promise<CustomerActionResult<{ importedCount: number }>> {
+  const parsed = importCustomersCsvSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check the customer CSV rows and try again." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("import_customers_csv", {
+    target_organization_id: context.organization.id,
+    target_rows: parsed.data.rows.map((row) => ({
+      row_number: row.rowNumber,
+      full_name: row.fullName,
+      email: row.email,
+      phone: row.phone,
+      address: row.address,
+      birthday: row.birthday,
+      notes: row.notes,
+      loyalty_card_code: row.loyaltyCardCode,
+    })) as Json,
+  });
+  if (error || data === null) return { ok: false, message: error?.message?.startsWith("CSV row") ? error.message : "TINDIO could not import this customer CSV file." };
+  return { ok: true, message: `${data} customer${data === 1 ? "" : "s"} imported.`, data: { importedCount: data } };
 }
 
 export async function createCustomerSegment({

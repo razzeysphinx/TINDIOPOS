@@ -1,4 +1,4 @@
-import { csvCell } from "@/lib/csv";
+import { csvCell, parseCsvRecords } from "@/lib/csv";
 
 const requiredHeaders = [
   "name",
@@ -47,53 +47,6 @@ export type CatalogCsvParseResult =
   | { ok: false; errors: string[] };
 
 type BooleanParseResult = { value: boolean; error?: never } | { value?: never; error: string };
-
-function parseCsvRecords(text: string): string[][] | string {
-  const records: string[][] = [];
-  let record: string[] = [];
-  let value = "";
-  let quoted = false;
-
-  const input = text.replace(/^\uFEFF/, "");
-  for (let index = 0; index < input.length; index += 1) {
-    const character = input[index];
-
-    if (quoted) {
-      if (character === '"' && input[index + 1] === '"') {
-        value += '"';
-        index += 1;
-      } else if (character === '"') {
-        quoted = false;
-      } else {
-        value += character;
-      }
-      continue;
-    }
-
-    if (character === '"') {
-      if (value.length !== 0) return "A quote must start at the beginning of a CSV cell.";
-      quoted = true;
-    } else if (character === ",") {
-      record.push(value);
-      value = "";
-    } else if (character === "\n") {
-      record.push(value.replace(/\r$/, ""));
-      records.push(record);
-      record = [];
-      value = "";
-    } else {
-      value += character;
-    }
-  }
-
-  if (quoted) return "The CSV file has an unfinished quoted cell.";
-  if (value.length > 0 || record.length > 0) {
-    record.push(value.replace(/\r$/, ""));
-    records.push(record);
-  }
-
-  return records;
-}
 
 function normalizeBoolean(value: string, field: string, rowNumber: number): BooleanParseResult {
   const normalized = value.trim().toLocaleLowerCase();

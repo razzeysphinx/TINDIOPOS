@@ -74,14 +74,14 @@ export default async function InventoryPage() {
       .order("created_at", { ascending: true }),
     supabase
       .from("products")
-      .select("id, name, product_type, is_composite, unit, status, track_inventory")
+      .select("id, name, sku, barcode, product_type, is_composite, unit, status, track_inventory")
       .eq("organization_id", organizationId)
       .eq("status", "active")
       .eq("track_inventory", true)
       .order("name", { ascending: true }),
     supabase
       .from("product_variants")
-      .select("id, product_id, name, sort_order, is_active")
+      .select("id, product_id, name, sku, barcode, sort_order, is_active")
       .eq("organization_id", organizationId)
       .eq("is_active", true)
       .order("sort_order", { ascending: true }),
@@ -230,7 +230,7 @@ export default async function InventoryPage() {
       .map((setting) => setting.store_id);
 
     if (product.product_type === "simple") {
-      return [{ productId: product.id, variantId: null, label: product.name, storeIds }];
+      return [{ productId: product.id, variantId: null, label: product.name, storeIds, identifiers: [product.sku, product.barcode].filter((value): value is string => Boolean(value)) }];
     }
 
     return variants
@@ -240,6 +240,7 @@ export default async function InventoryPage() {
         variantId: variant.id,
         label: `${product.name} / ${variant.name}`,
         storeIds,
+        identifiers: [variant.sku, variant.barcode].filter((value): value is string => Boolean(value)),
       }));
   });
   const quantitiesBySaleable = new Map<string, Record<string, number>>();
@@ -253,6 +254,7 @@ export default async function InventoryPage() {
 
   const advancedItems = items.map((item) => ({
     ...item,
+    identifiers: item.identifiers ?? [],
     unit: productById.get(item.productId)?.unit ?? "units",
     quantitiesByStore:
       quantitiesBySaleable.get(`${item.productId}|${item.variantId ?? ""}`) ?? {},
@@ -371,6 +373,7 @@ export default async function InventoryPage() {
           }))}
           purchaseOrders={receivableOrders}
           currencyCode={context.organization.currency_code}
+          adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name }))}
         />
       ) : null}
 

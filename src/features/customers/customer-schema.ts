@@ -63,6 +63,19 @@ export const loyaltyAdjustmentSchema = z.object({
   reason: z.string().trim().min(2, "Enter a reason of at least 2 characters.").max(500),
 });
 
+export const importCustomersCsvSchema = z.object({
+  rows: z.array(z.object({
+    rowNumber: z.number().int().min(2),
+    fullName: z.string().trim().min(1).max(160),
+    email: optionalText(320),
+    phone: optionalText(40),
+    address: optionalText(500),
+    birthday: z.string().trim().date().or(z.literal("")),
+    notes: optionalText(1000),
+    loyaltyCardCode: optionalText(80),
+  })).min(1).max(500),
+});
+
 export type CreateCustomerValues = z.infer<typeof createCustomerSchema>;
 export type CreateCustomerSegmentValues = z.infer<typeof createCustomerSegmentSchema>;
 export type UpdateCustomerSegmentValues = z.infer<typeof updateCustomerSegmentSchema>;

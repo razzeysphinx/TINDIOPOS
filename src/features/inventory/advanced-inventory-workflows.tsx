@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import {
   ClipboardCheck,
+  Download,
   LoaderCircle,
   PackageCheck,
   Pencil,
@@ -10,6 +11,7 @@ import {
   SendHorizontal,
   Trash2,
   Truck,
+  Upload,
   UserPlus,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -42,7 +44,10 @@ import {
   receivePurchaseOrderAction,
   transferStockAction,
   updateSupplierAction,
+  importInventoryAdjustmentsCsvAction,
 } from "@/features/inventory/advanced-inventory-actions";
+import { SupplierCsvTools } from "@/features/inventory/supplier-csv-tools";
+import { parseCsvRecords, csvRows } from "@/lib/csv";
 
 const selectClassName =
   "h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -54,6 +59,7 @@ export type AdvancedInventoryItem = {
   unit: string;
   storeIds: string[];
   quantitiesByStore: Record<string, number>;
+  identifiers: string[];
 };
 
 export type AdvancedInventorySupplier = {
@@ -105,12 +111,14 @@ export function AdvancedInventoryWorkflows({
   suppliers,
   purchaseOrders,
   currencyCode,
+  adjustmentReasons,
 }: {
   stores: StoreOption[];
   items: AdvancedInventoryItem[];
   suppliers: AdvancedInventorySupplier[];
   purchaseOrders: AdvancedPurchaseOrder[];
   currencyCode: string;
+  adjustmentReasons: Array<{ code: string; name: string }>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -288,6 +296,8 @@ export function AdvancedInventoryWorkflows({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
+        <SupplierCsvTools />
+        <InventoryCsvTools stores={stores} items={items} suppliers={activeSuppliers} adjustmentReasons={adjustmentReasons} />
         <WorkflowCard
           title="Supplier management"
           description="Keep procurement contacts available for every purchase order."
@@ -581,6 +591,67 @@ export function AdvancedInventoryWorkflows({
       </div>
     </section>
   );
+}
+
+type InventoryCsvKind = "count" | "purchase" | "adjustment";
+type InventoryCsvRow = { rowNumber: number; itemCode: string; productId: string; variantId: string; quantity: string; unitCost: string; note: string };
+
+function InventoryCsvTools({
+  stores, items, suppliers, adjustmentReasons,
+}: {
+  stores: StoreOption[];
+  items: AdvancedInventoryItem[];
+  suppliers: AdvancedInventorySupplier[];
+  adjustmentReasons: Array<{ code: string; name: string }>;
+}) {
+  const router = useRouter();
+  const [kind, setKind] = useState<InventoryCsvKind>("count");
+  const [storeId, setStoreId] = useState(stores[0]?.id ?? "");
+  const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? "");
+  const [reasonCode, setReasonCode] = useState(adjustmentReasons[0]?.code ?? "");
+  const [note, setNote] = useState(""); const [expectedAt, setExpectedAt] = useState("");
+  const [rows, setRows] = useState<InventoryCsvRow[]>([]); const [filename, setFilename] = useState(""); const [errors, setErrors] = useState<string[]>([]); const [result, setResult] = useState<string | null>(null); const [isPending, startTransition] = useTransition();
+  const headers = kind === "count" ? ["item_code", "counted_quantity"] : kind === "purchase" ? ["item_code", "quantity", "unit_cost"] : ["item_code", "quantity_delta", "note"];
+
+  function downloadTemplate() {
+    const sample = kind === "count" ? ["YOUR-SKU-OR-BARCODE", "12"] : kind === "purchase" ? ["YOUR-SKU-OR-BARCODE", "12", "45.00"] : ["YOUR-SKU-OR-BARCODE", "-2", "Damaged during delivery"];
+    const blob = new Blob([csvRows([headers, sample])], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `tindio-${kind}-import-template.csv`; anchor.click(); URL.revokeObjectURL(url);
+  }
+
+  async function chooseFile(file: File | undefined) {
+    setRows([]); setErrors([]); setResult(null); setFilename(file?.name ?? "");
+    if (!file) return;
+    if (file.size > 1024 * 1024) { setErrors(["Choose a CSV file smaller than 1 MB."]); return; }
+    const records = parseCsvRecords(await file.text()); if (typeof records === "string") { setErrors([records]); return; }
+    if (records.length < 2) { setErrors(["Add a header row and at least one data row."]); return; }
+    const actualHeaders = records[0].map((value) => value.trim().toLowerCase());
+    const missing = headers.filter((header) => !actualHeaders.includes(header));
+    if (missing.length || new Set(actualHeaders).size !== actualHeaders.length) { setErrors([missing.length ? `Missing required CSV columns: ${missing.join(", ")}.` : "CSV headers must not repeat."]); return; }
+    const positions = new Map(actualHeaders.map((header, index) => [header, index])); const cell = (record: string[], header: string) => record[positions.get(header) ?? -1]?.trim() ?? "";
+    const errors: string[] = []; const parsedRows: InventoryCsvRow[] = [];
+    records.slice(1).forEach((record, index) => {
+      const rowNumber = index + 2; if (record.every((value) => !value.trim())) return;
+      const itemCode = cell(record, "item_code"); const matches = items.filter((item) => item.identifiers.some((identifier) => identifier.toLowerCase() === itemCode.toLowerCase()));
+      const quantity = kind === "count" ? cell(record, "counted_quantity") : kind === "adjustment" ? cell(record, "quantity_delta") : cell(record, "quantity"); const unitCost = cell(record, "unit_cost"); const rowNote = cell(record, "note");
+      if (!itemCode || matches.length !== 1) errors.push(`Row ${rowNumber}: item_code must match exactly one active SKU or barcode.`);
+      if (kind === "count" && !/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity)) errors.push(`Row ${rowNumber}: counted_quantity must be non-negative with up to 3 decimals.`);
+      if (kind === "purchase" && (!/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0 || !/^\d{1,8}(?:\.\d{1,2})?$/.test(unitCost))) errors.push(`Row ${rowNumber}: quantity and unit_cost must be valid positive values.`);
+      if (kind === "adjustment" && (!/^-?\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) === 0)) errors.push(`Row ${rowNumber}: quantity_delta must be non-zero with up to 3 decimals.`);
+      if (!itemCode || matches.length !== 1 || (kind === "count" && !/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity)) || (kind === "purchase" && (!/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0 || !/^\d{1,8}(?:\.\d{1,2})?$/.test(unitCost))) || (kind === "adjustment" && (!/^-?\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) === 0))) return;
+      parsedRows.push({ rowNumber, itemCode, productId: matches[0].productId, variantId: matches[0].variantId ?? "", quantity, unitCost, note: rowNote });
+    });
+    if (parsedRows.length > 500) errors.push("Import at most 500 rows at a time."); if (!parsedRows.length && !errors.length) errors.push("Add at least one data row.");
+    if (errors.length) { setErrors(errors); return; } setRows(parsedRows);
+  }
+
+  function confirmImport() {
+    setResult(null); startTransition(async () => {
+      const response = kind === "count" ? await completeInventoryCountAction({ storeId, note, lines: rows.map((row) => ({ productId: row.productId, variantId: row.variantId, countedQuantity: row.quantity })) }) : kind === "purchase" ? await createPurchaseOrderAction({ storeId, supplierId, expectedAt, notes: note, lines: rows.map((row) => ({ productId: row.productId, variantId: row.variantId, quantity: row.quantity, unitCost: row.unitCost })) }) : await importInventoryAdjustmentsCsvAction({ storeId, reasonCode, rows: rows.map((row) => ({ rowNumber: row.rowNumber, productId: row.productId, variantId: row.variantId, quantityDelta: row.quantity, note: row.note || note })) });
+      setResult(response.message); if (response.ok) { setRows([]); setFilename(""); router.refresh(); }
+    });
+  }
+
+  return <Card><CardHeader><CardTitle>Inventory CSV</CardTitle><CardDescription>Preview and confirm one controlled inventory operation. This never writes stock projections directly.</CardDescription></CardHeader><CardContent className="space-y-3"><div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-sm font-medium">Operation<select className={selectClassName} onChange={(event) => { setKind(event.target.value as InventoryCsvKind); setRows([]); setErrors([]); setFilename(""); }} value={kind}><option value="count">Complete inventory count</option><option value="purchase">Create purchase order</option><option value="adjustment">Post stock adjustments</option></select></label><label className="grid gap-1 text-sm font-medium">Store<select className={selectClassName} onChange={(event) => setStoreId(event.target.value)} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label></div>{kind === "purchase" ? <div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-sm font-medium">Supplier<select className={selectClassName} onChange={(event) => setSupplierId(event.target.value)} value={supplierId}>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label><label className="grid gap-1 text-sm font-medium">Expected date<Input onChange={(event) => setExpectedAt(event.target.value)} type="date" value={expectedAt} /></label></div> : null}{kind === "adjustment" ? <label className="grid gap-1 text-sm font-medium">Adjustment reason<select className={selectClassName} onChange={(event) => setReasonCode(event.target.value)} value={reasonCode}>{adjustmentReasons.map((reason) => <option key={reason.code} value={reason.code}>{reason.name}</option>)}</select></label> : null}{kind !== "adjustment" ? <Input onChange={(event) => setNote(event.target.value)} placeholder={kind === "count" ? "Optional count note" : "Optional purchase order note"} value={note} /> : null}<div className="flex flex-wrap items-end gap-3"><div className="grid min-w-56 flex-1 gap-1"><Label htmlFor="inventory-csv-file">Import file</Label><Input accept=".csv,text/csv" id="inventory-csv-file" onChange={(event) => void chooseFile(event.target.files?.[0])} type="file" /></div><Button onClick={downloadTemplate} type="button" variant="outline"><Download /> Template</Button></div>{errors.length ? <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><p className="font-medium">Fix the CSV before importing.</p><ul className="mt-1 list-disc pl-5">{errors.slice(0, 4).map((error) => <li key={error}>{error}</li>)}</ul></div> : null}{rows.length ? <div className="overflow-hidden rounded-lg border"><div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 text-sm"><span>{filename}: {rows.length} valid row{rows.length === 1 ? "" : "s"}</span><Button disabled={isPending || (kind === "purchase" && !supplierId) || (kind === "adjustment" && !reasonCode)} onClick={confirmImport} size="sm" type="button">{isPending ? <LoaderCircle className="animate-spin" /> : <Upload />} Confirm import</Button></div><div className="max-h-48 overflow-auto"><table className="w-full text-left text-sm"><thead className="sticky top-0 bg-background text-muted-foreground"><tr><th className="px-3 py-2">Row</th><th className="px-3 py-2">Item code</th><th className="px-3 py-2">Quantity</th></tr></thead><tbody>{rows.slice(0, 20).map((row) => <tr className="border-t" key={row.rowNumber}><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2">{row.itemCode}</td><td className="px-3 py-2">{row.quantity}</td></tr>)}</tbody></table></div></div> : null}{result ? <p aria-live="polite" className="text-sm text-muted-foreground">{result}</p> : null}</CardContent></Card>;
 }
 
 function DraftPurchaseLines({

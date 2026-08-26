@@ -6,6 +6,7 @@ import {
   adjustCustomerLoyaltyPoints,
   createCustomer,
   createCustomerSegment,
+  importCustomersCsv,
   updateCustomerProfile,
   updateCustomerStatus,
   updateCustomerSegment,
@@ -25,6 +26,17 @@ export async function createCustomerAction(input: unknown): Promise<CustomerActi
     revalidatePath("/back-office/customers");
   }
 
+  return result;
+}
+
+export async function importCustomersCsvAction(input: unknown): Promise<CustomerActionResult<{ importedCount: number }>> {
+  const context = await requireBusinessContext();
+  if (!hasPermission(context, "customers.manage")) return { ok: false, message: "You do not have permission to import customers." };
+  const result = await importCustomersCsv({ context, input });
+  if (result.ok) {
+    revalidatePath("/back-office/customers");
+    revalidatePath("/pos");
+  }
   return result;
 }
 

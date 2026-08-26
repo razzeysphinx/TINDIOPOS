@@ -8,6 +8,8 @@ import {
   createAdjustmentReasonSchema,
   createPurchaseOrderSchema,
   createSupplierSchema,
+  importSuppliersCsvSchema,
+  importInventoryAdjustmentsCsvSchema,
   produceCompositeSchema,
   receiveStockTransferSchema,
   receivePurchaseOrderSchema,
@@ -114,6 +116,20 @@ export async function updateSupplierAction(
 
   revalidatePath("/back-office/inventory");
   return { ok: true, message: "Supplier updated.", data: { supplierId: data } };
+}
+
+export async function importSuppliersCsvAction(input: unknown): Promise<AdvancedInventoryActionResult<{ importedCount: number }>> {
+  const { context, error: permissionError } = await requireInventoryManager();
+  if (permissionError) return { ok: false, message: permissionError };
+  if (!context.features.purchase_orders) return { ok: false, message: "Purchase orders are disabled for this business." };
+  const parsed = importSuppliersCsvSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("import_suppliers_csv", { target_organization_id: context.organization.id, target_rows: parsed.data.rows.map((row) => ({ row_number: row.rowNumber, name: row.name, contact_name: row.contactName, email: row.email, phone: row.phone, address: row.address, notes: row.notes })) as Json });
+  if (error || data === null) return { ok: false, message: error?.message?.startsWith("CSV row") ? error.message : databaseMessage(error?.code, "TINDIO could not import this supplier CSV file.") };
+  revalidatePath("/back-office/inventory");
+  revalidatePath("/back-office/replenishment");
+  return { ok: true, message: `${data} supplier${data === 1 ? "" : "s"} imported.`, data: { importedCount: data } };
 }
 
 export async function createPurchaseOrderAction(
@@ -305,6 +321,23 @@ export async function recordInventoryAdjustmentV2Action(
   if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not post the stock adjustment.") };
   revalidatePath("/back-office/inventory");
   return { ok: true, message: "Stock adjustment posted to the ledger.", data: { movementId: data } };
+}
+
+export async function importInventoryAdjustmentsCsvAction(input: unknown): Promise<AdvancedInventoryActionResult<{ importedCount: number }>> {
+  const { context, error: permissionError } = await requireInventoryManager();
+  if (permissionError) return { ok: false, message: permissionError };
+  const parsed = importInventoryAdjustmentsCsvSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("import_inventory_adjustments_csv", {
+    target_organization_id: context.organization.id,
+    target_store_id: parsed.data.storeId,
+    target_reason_code: parsed.data.reasonCode,
+    target_rows: parsed.data.rows.map((row) => ({ row_number: row.rowNumber, product_id: row.productId, variant_id: row.variantId || "", quantity_delta: row.quantityDelta, note: row.note })) as Json,
+  });
+  if (error || data === null) return { ok: false, message: error?.message?.startsWith("CSV row") ? error.message : databaseMessage(error?.code, "TINDIO could not import these inventory adjustments.") };
+  revalidatePath("/back-office/inventory");
+  return { ok: true, message: `${data} inventory adjustment${data === 1 ? "" : "s"} posted to the ledger.`, data: { importedCount: data } };
 }
 
 export async function receiveStockTransferAction(

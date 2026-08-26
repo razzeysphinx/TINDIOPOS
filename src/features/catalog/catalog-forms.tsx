@@ -1027,6 +1027,7 @@ export type InventorySaleableItem = {
   variantId: string | null;
   label: string;
   storeIds: string[];
+  identifiers?: string[];
 };
 
 export function InventoryAdjustmentForm({

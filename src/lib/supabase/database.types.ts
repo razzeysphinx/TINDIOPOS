@@ -5995,6 +5995,23 @@ export type Database = {
         }
         Returns: number
       }
+      import_customers_csv: {
+        Args: { target_organization_id: string; target_rows: Json }
+        Returns: number
+      }
+      import_inventory_adjustments_csv: {
+        Args: {
+          target_organization_id: string
+          target_reason_code: string
+          target_rows: Json
+          target_store_id: string
+        }
+        Returns: number
+      }
+      import_suppliers_csv: {
+        Args: { target_organization_id: string; target_rows: Json }
+        Returns: number
+      }
       link_sale_exchange: {
         Args: {
           target_idempotency_key: string
@@ -6592,12 +6609,12 @@ export type Database = {
   }
 }
 
+export type TableRow<TableName extends keyof Database["public"]["Tables"]> =
+  Database["public"]["Tables"][TableName]["Row"]
+
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
 type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
-
-export type TableRow<TableName extends keyof Database["public"]["Tables"]> =
-  Database["public"]["Tables"][TableName]["Row"]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends

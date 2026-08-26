@@ -1,5 +1,5 @@
-export type CustomerActionResult =
-  | { ok: true; message: string }
+export type CustomerActionResult<T = undefined> =
+  | { ok: true; message: string; data?: T }
   | { ok: false; message: string };
 
 export type CustomerListItem = {

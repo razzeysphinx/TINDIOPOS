@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CustomerDirectory } from "@/features/customers/customer-directory";
+import { CustomerCsvTools } from "@/features/customers/customer-csv-tools";
 import { CreateCustomerForm, CustomerSegmentForm, LoyaltyProgramForm } from "@/features/customers/customer-forms";
 import { loadCustomersOverview } from "@/features/customers/data";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
@@ -52,6 +53,8 @@ export default async function CustomersPage() {
       />
 
       <CustomerSegmentForm segments={overview.segments} />
+
+      <CustomerCsvTools />
 
       {canManageSettings && overview.program ? <LoyaltyProgramForm program={overview.program} /> : null}
 

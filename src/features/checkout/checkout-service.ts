@@ -228,14 +228,18 @@ export async function completeCheckout(
     target_tax_rate_id: (data.taxRateId ?? null) as never,
     target_dining_option_id: (data.diningOptionId ?? null) as never,
     target_open_ticket_id: (data.openTicketId ?? null) as never,
-    target_items: data.items.map((item) => ({
-      product_id: item.productId,
-      variant_id: item.variantId,
-      quantity: item.quantity,
-      unit_price_minor: item.unitPriceMinor ?? null,
-      modifier_option_ids: item.modifierOptionIds,
-      item_note: item.itemNote ?? null,
-    })) as Json,
+    target_items: data.items.map((item) => {
+      const itemNote = item.itemNote?.trim();
+
+      return {
+        product_id: item.productId,
+        variant_id: item.variantId,
+        quantity: item.quantity,
+        unit_price_minor: item.unitPriceMinor ?? null,
+        modifier_option_ids: item.modifierOptionIds,
+        ...(itemNote ? { item_note: itemNote } : {}),
+      };
+    }) as Json,
     target_payments: data.payments.map((payment) => ({
       payment_method_id: payment.paymentMethodId,
       ...(payment.amount ? { amount_minor: moneyInputToMinor(payment.amount) } : {}),

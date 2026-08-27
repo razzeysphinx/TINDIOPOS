@@ -4,15 +4,20 @@ import { revalidatePath } from "next/cache";
 
 import {
   adjustCustomerLoyaltyPoints,
+  addLoyaltyCardStamp,
+  claimLoyaltyCardReward,
   createCustomer,
   createCustomerSegment,
   importCustomersCsv,
+  issueLoyaltyCard,
+  revokeLoyaltyCard,
+  rotateLoyaltyCardQr,
   updateCustomerProfile,
   updateCustomerStatus,
   updateCustomerSegment,
   updateLoyaltyProgram,
 } from "@/features/customers/service";
-import type { CustomerActionResult } from "@/features/customers/customer-types";
+import type { CustomerActionResult, LoyaltyCardCredential } from "@/features/customers/customer-types";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 
 export async function createCustomerAction(input: unknown): Promise<CustomerActionResult> {
@@ -96,6 +101,66 @@ export async function adjustCustomerLoyaltyPointsAction(input: unknown): Promise
     revalidatePath("/pos");
   }
 
+  return result;
+}
+
+function revalidateCustomerLoyaltyCardPaths(customerId?: string) {
+  revalidatePath("/back-office/customers");
+  if (customerId) revalidatePath(`/back-office/customers/${customerId}`);
+}
+
+export async function issueLoyaltyCardAction(input: unknown): Promise<CustomerActionResult<LoyaltyCardCredential>> {
+  const context = await requireBusinessContext();
+  if (!hasPermission(context, "customers.manage")) {
+    return { ok: false, message: "You do not have permission to issue QR loyalty cards." };
+  }
+
+  const result = await issueLoyaltyCard({ context, input });
+  if (result.ok) revalidateCustomerLoyaltyCardPaths((input as { customerId: string }).customerId);
+  return result;
+}
+
+export async function rotateLoyaltyCardQrAction(input: unknown): Promise<CustomerActionResult<LoyaltyCardCredential>> {
+  const context = await requireBusinessContext();
+  if (!hasPermission(context, "customers.manage")) {
+    return { ok: false, message: "You do not have permission to rotate QR loyalty cards." };
+  }
+
+  const result = await rotateLoyaltyCardQr({ context, input });
+  if (result.ok) revalidateCustomerLoyaltyCardPaths((input as { customerId: string }).customerId);
+  return result;
+}
+
+export async function revokeLoyaltyCardAction(input: unknown): Promise<CustomerActionResult> {
+  const context = await requireBusinessContext();
+  if (!hasPermission(context, "customers.manage")) {
+    return { ok: false, message: "You do not have permission to revoke QR loyalty cards." };
+  }
+
+  const result = await revokeLoyaltyCard({ context, input });
+  if (result.ok) revalidateCustomerLoyaltyCardPaths((input as { customerId: string }).customerId);
+  return result;
+}
+
+export async function addLoyaltyCardStampAction(input: unknown): Promise<CustomerActionResult<{ stampCount: number; stampTarget: number; wasReplayed: boolean }>> {
+  const context = await requireBusinessContext();
+  if (!hasPermission(context, "customers.manage") && !hasPermission(context, "sales.create")) {
+    return { ok: false, message: "You do not have permission to add QR loyalty stamps." };
+  }
+
+  const result = await addLoyaltyCardStamp({ context, input });
+  if (result.ok) revalidateCustomerLoyaltyCardPaths((input as { customerId?: string }).customerId);
+  return result;
+}
+
+export async function claimLoyaltyCardRewardAction(input: unknown): Promise<CustomerActionResult> {
+  const context = await requireBusinessContext();
+  if (!hasPermission(context, "customers.manage") && !hasPermission(context, "sales.create")) {
+    return { ok: false, message: "You do not have permission to claim QR loyalty rewards." };
+  }
+
+  const result = await claimLoyaltyCardReward({ context, input });
+  if (result.ok) revalidateCustomerLoyaltyCardPaths((input as { customerId?: string }).customerId);
   return result;
 }
 

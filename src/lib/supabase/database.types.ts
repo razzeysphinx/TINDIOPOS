@@ -1777,6 +1777,196 @@ export type Database = {
           },
         ]
       }
+      loyalty_card_events: {
+        Row: {
+          actor_employee_id: string
+          created_at: string
+          customer_id: string
+          event_type: string
+          id: string
+          idempotency_key: string | null
+          loyalty_card_id: string
+          organization_id: string
+          reason: string | null
+          register_id: string | null
+          sale_id: string | null
+          stamp_count_after: number
+          stamp_count_before: number
+          stamp_delta: number
+          store_id: string | null
+        }
+        Insert: {
+          actor_employee_id: string
+          created_at?: string
+          customer_id: string
+          event_type: string
+          id?: string
+          idempotency_key?: string | null
+          loyalty_card_id: string
+          organization_id: string
+          reason?: string | null
+          register_id?: string | null
+          sale_id?: string | null
+          stamp_count_after: number
+          stamp_count_before: number
+          stamp_delta?: number
+          store_id?: string | null
+        }
+        Update: {
+          actor_employee_id?: string
+          created_at?: string
+          customer_id?: string
+          event_type?: string
+          id?: string
+          idempotency_key?: string | null
+          loyalty_card_id?: string
+          organization_id?: string
+          reason?: string | null
+          register_id?: string | null
+          sale_id?: string | null
+          stamp_count_after?: number
+          stamp_count_before?: number
+          stamp_delta?: number
+          store_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_card_events_actor_organization_fkey"
+            columns: ["actor_employee_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "loyalty_card_events_card_organization_fkey"
+            columns: ["loyalty_card_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "loyalty_cards"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "loyalty_card_events_customer_organization_fkey"
+            columns: ["customer_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "loyalty_card_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_card_events_register_organization_fkey"
+            columns: ["register_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "registers"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "loyalty_card_events_sale_organization_fkey"
+            columns: ["sale_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "loyalty_card_events_store_organization_fkey"
+            columns: ["store_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      loyalty_cards: {
+        Row: {
+          card_code: string
+          created_at: string
+          customer_id: string
+          deactivated_at: string | null
+          deactivation_reason: string | null
+          expires_at: string | null
+          id: string
+          issued_at: string
+          issued_by_employee_id: string
+          organization_id: string
+          replaces_card_id: string | null
+          stamp_count: number
+          stamp_target: number
+          status: string
+          updated_at: string
+          verification_token_hash: string
+        }
+        Insert: {
+          card_code: string
+          created_at?: string
+          customer_id: string
+          deactivated_at?: string | null
+          deactivation_reason?: string | null
+          expires_at?: string | null
+          id?: string
+          issued_at?: string
+          issued_by_employee_id: string
+          organization_id: string
+          replaces_card_id?: string | null
+          stamp_count?: number
+          stamp_target?: number
+          status?: string
+          updated_at?: string
+          verification_token_hash: string
+        }
+        Update: {
+          card_code?: string
+          created_at?: string
+          customer_id?: string
+          deactivated_at?: string | null
+          deactivation_reason?: string | null
+          expires_at?: string | null
+          id?: string
+          issued_at?: string
+          issued_by_employee_id?: string
+          organization_id?: string
+          replaces_card_id?: string | null
+          stamp_count?: number
+          stamp_target?: number
+          status?: string
+          updated_at?: string
+          verification_token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_cards_customer_organization_fkey"
+            columns: ["customer_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "loyalty_cards_issued_by_organization_fkey"
+            columns: ["issued_by_employee_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "loyalty_cards_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_cards_replaces_card_fkey"
+            columns: ["replaces_card_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "loyalty_cards"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
       loyalty_programs: {
         Row: {
           created_at: string
@@ -5359,6 +5549,22 @@ export type Database = {
         Args: { invitation_token_hash: string }
         Returns: string
       }
+      add_loyalty_card_stamp: {
+        Args: {
+          target_idempotency_key?: string
+          target_loyalty_card_id: string
+          target_organization_id: string
+          target_reason: string
+          target_sale_id?: string
+        }
+        Returns: {
+          card_id: string
+          stamp_count: number
+          stamp_target: number
+          status: string
+          was_replayed: boolean
+        }[]
+      }
       adjust_customer_loyalty_points: {
         Args: {
           target_customer_id: string
@@ -5529,6 +5735,20 @@ export type Database = {
               was_replayed: boolean
             }[]
           }
+      claim_loyalty_card_reward: {
+        Args: {
+          target_idempotency_key?: string
+          target_loyalty_card_id: string
+          target_organization_id: string
+          target_reason: string
+          target_sale_id?: string
+        }
+        Returns: {
+          card_id: string
+          status: string
+          was_replayed: boolean
+        }[]
+      }
       clock_in_employee: {
         Args: {
           target_clock_in_note?: string
@@ -5766,6 +5986,35 @@ export type Database = {
       get_customer_display_receipt: {
         Args: { target_access_token_hash: string; target_sale_id: string }
         Returns: Json
+      }
+      get_customer_loyalty_card_events: {
+        Args: { target_customer_id: string; target_organization_id: string }
+        Returns: {
+          card_code: string
+          created_at: string
+          event_id: string
+          event_type: string
+          loyalty_card_id: string
+          reason: string
+          sale_id: string
+          stamp_count_after: number
+          stamp_count_before: number
+          stamp_delta: number
+        }[]
+      }
+      get_customer_loyalty_cards: {
+        Args: { target_customer_id: string; target_organization_id: string }
+        Returns: {
+          card_code: string
+          card_id: string
+          deactivated_at: string
+          deactivation_reason: string
+          expires_at: string
+          issued_at: string
+          stamp_count: number
+          stamp_target: number
+          status: string
+        }[]
       }
       get_customer_purchase_history: {
         Args: {
@@ -6019,6 +6268,23 @@ export type Database = {
         Args: { target_organization_id: string; target_rows: Json }
         Returns: number
       }
+      issue_loyalty_card: {
+        Args: {
+          target_card_code: string
+          target_customer_id: string
+          target_organization_id: string
+          target_reason?: string
+          target_replaces_card_id?: string
+          target_verification_token: string
+        }
+        Returns: {
+          card_code: string
+          card_id: string
+          stamp_count: number
+          stamp_target: number
+          status: string
+        }[]
+      }
       link_sale_exchange: {
         Args: {
           target_idempotency_key: string
@@ -6254,6 +6520,14 @@ export type Database = {
         }
         Returns: string
       }
+      revoke_loyalty_card: {
+        Args: {
+          target_loyalty_card_id: string
+          target_organization_id: string
+          target_reason: string
+        }
+        Returns: undefined
+      }
       revoke_pos_device: {
         Args: {
           target_device_id: string
@@ -6264,6 +6538,18 @@ export type Database = {
           device_id: string
           revoked_at: string
           status: string
+        }[]
+      }
+      rotate_loyalty_card_qr: {
+        Args: {
+          target_loyalty_card_id: string
+          target_organization_id: string
+          target_reason: string
+          target_verification_token: string
+        }
+        Returns: {
+          card_code: string
+          card_id: string
         }[]
       }
       save_open_ticket_v2: {
@@ -6606,6 +6892,19 @@ export type Database = {
           store_id: string
         }[]
       }
+      verify_loyalty_card_qr: {
+        Args: {
+          target_loyalty_card_id: string
+          target_verification_token: string
+        }
+        Returns: {
+          card_code: string
+          expires_at: string
+          stamp_count: number
+          stamp_target: number
+          verification_status: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
@@ -6615,9 +6914,6 @@ export type Database = {
     }
   }
 }
-
-export type TableRow<TableName extends keyof Database["public"]["Tables"]> =
-  Database["public"]["Tables"][TableName]["Row"]
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
@@ -6735,6 +7031,9 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+
+// Application convenience alias retained across Supabase CLI type regeneration.
+export type TableRow<TableName extends keyof DefaultSchema["Tables"]> = Tables<TableName>;
 
 export const Constants = {
   graphql_public: {

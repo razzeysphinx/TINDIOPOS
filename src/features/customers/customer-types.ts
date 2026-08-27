@@ -74,11 +74,46 @@ export type CustomerLedgerEntry = {
   createdAt: string;
 };
 
+export type LoyaltyCardStatus = "active" | "reward_claimed" | "revoked" | "replaced" | "expired";
+
+export type LoyaltyCard = {
+  id: string;
+  cardCode: string;
+  status: LoyaltyCardStatus;
+  stampCount: number;
+  stampTarget: number;
+  issuedAt: string;
+  expiresAt: string | null;
+  deactivatedAt: string | null;
+  deactivationReason: string | null;
+};
+
+export type LoyaltyCardEvent = {
+  id: string;
+  loyaltyCardId: string;
+  cardCode: string;
+  eventType: "ISSUED" | "STAMP_ADDED" | "REWARD_CLAIMED" | "REVOKED" | "REPLACED" | "QR_ROTATED";
+  stampCountBefore: number;
+  stampDelta: number;
+  stampCountAfter: number;
+  saleId: string | null;
+  reason: string | null;
+  createdAt: string;
+};
+
+export type LoyaltyCardCredential = {
+  cardId: string;
+  cardCode: string;
+  verificationToken: string;
+};
+
 export type CustomerProfileWorkspace = {
   customer: CustomerProfile;
   summary: CustomerSummary | null;
   history: CustomerPurchase[];
   ledger: CustomerLedgerEntry[];
+  loyaltyCards: LoyaltyCard[];
+  loyaltyCardEvents: LoyaltyCardEvent[];
   segments: CustomerSegmentOption[];
   selectedSegmentIds: string[];
 };

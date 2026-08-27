@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
 import { CustomerProfileForm, CustomerStatusButton, LoyaltyAdjustmentForm } from "@/features/customers/customer-forms";
 import { loadCustomerProfile } from "@/features/customers/data";
+import { LoyaltyCardManager } from "@/features/customers/loyalty-card-manager";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 
 export const metadata = { title: "Customer profile" };
@@ -32,7 +33,7 @@ export default async function CustomerDetailPage({
   const workspace = await loadCustomerProfile(context, customerId);
   if (!workspace) notFound();
 
-  const { customer, summary, history, ledger, segments, selectedSegmentIds } = workspace;
+  const { customer, summary, history, ledger, loyaltyCards, loyaltyCardEvents, segments, selectedSegmentIds } = workspace;
 
   return (
     <div className="space-y-8">
@@ -118,6 +119,19 @@ export default async function CustomerDetailPage({
           </CardContent>
         </Card>
       </section>
+
+      <LoyaltyCardManager
+        cards={loyaltyCards}
+        customerId={customer.id}
+        customerName={customer.fullName}
+        events={loyaltyCardEvents}
+        sales={history.map((sale) => ({
+          saleId: sale.saleId,
+          receiptNumber: sale.receiptNumber,
+          completedAt: sale.completedAt,
+          storeName: sale.storeName,
+        }))}
+      />
 
       <Card>
         <CardHeader>

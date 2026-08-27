@@ -2,6 +2,8 @@ import "server-only";
 
 import type {
   CustomerLedgerEntry,
+  LoyaltyCard,
+  LoyaltyCardEvent,
   CustomerProfile,
   CustomerProfileWorkspace,
   CustomerPurchase,
@@ -79,7 +81,7 @@ export async function loadCustomerProfile(
   customerId: string,
 ): Promise<CustomerProfileWorkspace | null> {
   const supabase = await createClient();
-  const [customerResult, summaryResult, historyResult, transactionsResult, segmentsResult, membershipsResult] = await Promise.all([
+  const [customerResult, summaryResult, historyResult, transactionsResult, cardsResult, cardEventsResult, segmentsResult, membershipsResult] = await Promise.all([
     supabase
       .from("customers")
       .select("id, customer_number, loyalty_card_code, full_name, email, phone, address, birthday, notes, status, created_at")
@@ -102,6 +104,14 @@ export async function loadCustomerProfile(
       .eq("customer_id", customerId)
       .order("created_at", { ascending: false })
       .limit(50),
+    supabase.rpc("get_customer_loyalty_cards", {
+      target_organization_id: context.organization.id,
+      target_customer_id: customerId,
+    }),
+    supabase.rpc("get_customer_loyalty_card_events", {
+      target_organization_id: context.organization.id,
+      target_customer_id: customerId,
+    }),
     supabase
       .from("customer_segments")
       .select("id, name, description")
@@ -116,7 +126,7 @@ export async function loadCustomerProfile(
 
   if (!customerResult.data) return null;
 
-  const error = [summaryResult, historyResult, transactionsResult, segmentsResult, membershipsResult].find((result) => result.error)?.error;
+  const error = [summaryResult, historyResult, transactionsResult, cardsResult, cardEventsResult, segmentsResult, membershipsResult].find((result) => result.error)?.error;
   if (error) throw new Error(`Unable to load customer profile: ${error.message}`);
 
   const row = customerResult.data;
@@ -164,11 +174,38 @@ export async function loadCustomerProfile(
     createdAt: transaction.created_at,
   }));
 
+  const loyaltyCards: LoyaltyCard[] = (cardsResult.data ?? []).map((card) => ({
+    id: card.card_id,
+    cardCode: card.card_code,
+    status: card.status as LoyaltyCard["status"],
+    stampCount: card.stamp_count,
+    stampTarget: card.stamp_target,
+    issuedAt: card.issued_at,
+    expiresAt: card.expires_at ?? null,
+    deactivatedAt: card.deactivated_at ?? null,
+    deactivationReason: card.deactivation_reason ?? null,
+  }));
+
+  const loyaltyCardEvents: LoyaltyCardEvent[] = (cardEventsResult.data ?? []).map((event) => ({
+    id: event.event_id,
+    loyaltyCardId: event.loyalty_card_id,
+    cardCode: event.card_code,
+    eventType: event.event_type as LoyaltyCardEvent["eventType"],
+    stampCountBefore: event.stamp_count_before,
+    stampDelta: event.stamp_delta,
+    stampCountAfter: event.stamp_count_after,
+    saleId: event.sale_id ?? null,
+    reason: event.reason ?? null,
+    createdAt: event.created_at,
+  }));
+
   return {
     customer,
     summary,
     history,
     ledger,
+    loyaltyCards,
+    loyaltyCardEvents,
     segments: (segmentsResult.data ?? []) as CustomerSegmentOption[],
     selectedSegmentIds: (membershipsResult.data ?? []).map((membership) => membership.segment_id),
   };

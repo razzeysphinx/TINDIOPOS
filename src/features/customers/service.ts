@@ -4,14 +4,20 @@ import { moneyInputToMinor } from "@/features/catalog/catalog-money";
 import {
   createCustomerSegmentSchema,
   createCustomerSchema,
+  claimLoyaltyCardRewardSchema,
   importCustomersCsvSchema,
+  issueLoyaltyCardSchema,
+  loyaltyCardStampSchema,
   loyaltyAdjustmentSchema,
+  revokeLoyaltyCardSchema,
+  rotateLoyaltyCardQrSchema,
   updateCustomerProfileSchema,
   updateCustomerSegmentSchema,
   updateCustomerStatusSchema,
   updateLoyaltyProgramSchema,
 } from "@/features/customers/customer-schema";
-import type { CustomerActionResult } from "@/features/customers/customer-types";
+import { createLoyaltyCardCode, createLoyaltyCardVerificationToken } from "@/features/customers/loyalty-card-token";
+import type { CustomerActionResult, LoyaltyCardCredential } from "@/features/customers/customer-types";
 import type { BusinessContext } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
@@ -173,6 +179,135 @@ export async function adjustCustomerLoyaltyPoints({
   if (error) return { ok: false, message: "TINDIO could not record this loyalty adjustment." };
 
   return { ok: true, message: "Loyalty adjustment recorded in the ledger." };
+}
+
+export async function issueLoyaltyCard({
+  context,
+  input,
+}: {
+  context: BusinessContext;
+  input: unknown;
+}): Promise<CustomerActionResult<LoyaltyCardCredential>> {
+  const parsed = issueLoyaltyCardSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check the QR loyalty-card details and try again." };
+
+  const verificationToken = createLoyaltyCardVerificationToken();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("issue_loyalty_card", {
+    target_organization_id: context.organization.id,
+    target_customer_id: parsed.data.customerId,
+    target_card_code: createLoyaltyCardCode(),
+    target_verification_token: verificationToken,
+    target_replaces_card_id: parsed.data.replacesCardId ?? undefined,
+    target_reason: parsed.data.reason || undefined,
+  });
+  const card = data?.[0];
+  if (error || !card) {
+    return { ok: false, message: error?.code === "23505" ? "This customer already has an active QR loyalty card." : "TINDIO could not issue this QR loyalty card." };
+  }
+
+  return {
+    ok: true,
+    message: parsed.data.replacesCardId ? "Replacement QR loyalty card issued." : "QR loyalty card issued.",
+    data: { cardId: card.card_id, cardCode: card.card_code, verificationToken },
+  };
+}
+
+export async function rotateLoyaltyCardQr({
+  context,
+  input,
+}: {
+  context: BusinessContext;
+  input: unknown;
+}): Promise<CustomerActionResult<LoyaltyCardCredential>> {
+  const parsed = rotateLoyaltyCardQrSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check the QR rotation reason and try again." };
+
+  const verificationToken = createLoyaltyCardVerificationToken();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("rotate_loyalty_card_qr", {
+    target_organization_id: context.organization.id,
+    target_loyalty_card_id: parsed.data.cardId,
+    target_verification_token: verificationToken,
+    target_reason: parsed.data.reason,
+  });
+  const card = data?.[0];
+  if (error || !card) return { ok: false, message: "TINDIO could not rotate this QR code." };
+
+  return {
+    ok: true,
+    message: "A new QR code is ready. Old printed QR codes no longer verify.",
+    data: { cardId: card.card_id, cardCode: card.card_code, verificationToken },
+  };
+}
+
+export async function revokeLoyaltyCard({
+  context,
+  input,
+}: {
+  context: BusinessContext;
+  input: unknown;
+}): Promise<CustomerActionResult> {
+  const parsed = revokeLoyaltyCardSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Enter a valid revocation reason." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("revoke_loyalty_card", {
+    target_organization_id: context.organization.id,
+    target_loyalty_card_id: parsed.data.cardId,
+    target_reason: parsed.data.reason,
+  });
+  if (error) return { ok: false, message: "TINDIO could not revoke this QR loyalty card." };
+  return { ok: true, message: "QR loyalty card revoked. Its QR code will no longer verify." };
+}
+
+export async function addLoyaltyCardStamp({
+  context,
+  input,
+}: {
+  context: BusinessContext;
+  input: unknown;
+}): Promise<CustomerActionResult<{ stampCount: number; stampTarget: number; wasReplayed: boolean }>> {
+  const parsed = loyaltyCardStampSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Link a valid completed sale or enter a manual-stamp reason." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("add_loyalty_card_stamp", {
+    target_organization_id: context.organization.id,
+    target_loyalty_card_id: parsed.data.cardId,
+    target_reason: parsed.data.reason || "Completed sale stamp.",
+    target_sale_id: parsed.data.saleId ?? undefined,
+    target_idempotency_key: crypto.randomUUID(),
+  });
+  const result = data?.[0];
+  if (error || !result) return { ok: false, message: "TINDIO could not record this loyalty stamp." };
+  return {
+    ok: true,
+    message: result.stamp_count >= result.stamp_target ? "Stamp recorded. This card is now ready for its reward." : "Loyalty stamp recorded.",
+    data: { stampCount: result.stamp_count, stampTarget: result.stamp_target, wasReplayed: result.was_replayed },
+  };
+}
+
+export async function claimLoyaltyCardReward({
+  context,
+  input,
+}: {
+  context: BusinessContext;
+  input: unknown;
+}): Promise<CustomerActionResult> {
+  const parsed = claimLoyaltyCardRewardSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Enter a claim reason and try again." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("claim_loyalty_card_reward", {
+    target_organization_id: context.organization.id,
+    target_loyalty_card_id: parsed.data.cardId,
+    target_reason: parsed.data.reason,
+    target_sale_id: parsed.data.saleId ?? undefined,
+    target_idempotency_key: crypto.randomUUID(),
+  });
+  if (error || !data?.[0]) return { ok: false, message: "TINDIO could not record this reward claim." };
+  return { ok: true, message: "Reward claim recorded. This QR card cannot be claimed a second time." };
 }
 
 export async function updateCustomerStatus({

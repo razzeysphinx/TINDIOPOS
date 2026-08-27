@@ -63,6 +63,56 @@ export const loyaltyAdjustmentSchema = z.object({
   reason: z.string().trim().min(2, "Enter a reason of at least 2 characters.").max(500),
 });
 
+const optionalUuid = z.union([z.uuid(), z.literal("")]).transform((value) => value || null);
+
+export const issueLoyaltyCardSchema = z.object({
+  customerId: z.uuid(),
+  replacesCardId: z.uuid().nullable().optional(),
+  reason: optionalText(500),
+}).superRefine((value, context) => {
+  if (value.replacesCardId && value.reason.length < 2) {
+    context.addIssue({
+      code: "custom",
+      message: "Enter a replacement reason of at least 2 characters.",
+      path: ["reason"],
+    });
+  }
+});
+
+export const rotateLoyaltyCardQrSchema = z.object({
+  customerId: z.uuid(),
+  cardId: z.uuid(),
+  reason: z.string().trim().min(2, "Enter a reason of at least 2 characters.").max(500),
+});
+
+export const revokeLoyaltyCardSchema = z.object({
+  customerId: z.uuid(),
+  cardId: z.uuid(),
+  reason: z.string().trim().min(2, "Enter a reason of at least 2 characters.").max(500),
+});
+
+export const loyaltyCardStampSchema = z.object({
+  customerId: z.uuid().optional(),
+  cardId: z.uuid(),
+  saleId: optionalUuid,
+  reason: optionalText(500),
+}).superRefine((value, context) => {
+  if (!value.saleId && value.reason.length < 2) {
+    context.addIssue({
+      code: "custom",
+      message: "A manual stamp needs a reason of at least 2 characters.",
+      path: ["reason"],
+    });
+  }
+});
+
+export const claimLoyaltyCardRewardSchema = z.object({
+  customerId: z.uuid().optional(),
+  cardId: z.uuid(),
+  saleId: optionalUuid,
+  reason: z.string().trim().min(2, "Enter a claim reason of at least 2 characters.").max(500),
+});
+
 export const importCustomersCsvSchema = z.object({
   rows: z.array(z.object({
     rowNumber: z.number().int().min(2),
@@ -81,4 +131,9 @@ export type CreateCustomerSegmentValues = z.infer<typeof createCustomerSegmentSc
 export type UpdateCustomerSegmentValues = z.infer<typeof updateCustomerSegmentSchema>;
 export type UpdateCustomerProfileValues = z.infer<typeof updateCustomerProfileSchema>;
 export type LoyaltyAdjustmentValues = z.infer<typeof loyaltyAdjustmentSchema>;
+export type IssueLoyaltyCardValues = z.infer<typeof issueLoyaltyCardSchema>;
+export type RotateLoyaltyCardQrValues = z.infer<typeof rotateLoyaltyCardQrSchema>;
+export type RevokeLoyaltyCardValues = z.infer<typeof revokeLoyaltyCardSchema>;
+export type LoyaltyCardStampValues = z.infer<typeof loyaltyCardStampSchema>;
+export type ClaimLoyaltyCardRewardValues = z.infer<typeof claimLoyaltyCardRewardSchema>;
 export type UpdateLoyaltyProgramValues = z.infer<typeof updateLoyaltyProgramSchema>;

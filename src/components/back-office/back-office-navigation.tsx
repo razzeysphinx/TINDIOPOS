@@ -74,7 +74,11 @@ const navigationGroups: NavigationGroup[] = [
     items: [
       {
         href: "/back-office/reports",
-        label: "Reports overview",
+        // The existing reports workspace contains the sales, product,
+        // category, employee, payment, discount, tax, and inventory views.
+        // Keep one permission-gated destination instead of duplicating the
+        // same reporting surface in the sidebar.
+        label: "Business reports",
         icon: BarChart3,
         isVisible: (access) => access.canViewReports === true,
       },
@@ -91,10 +95,19 @@ const navigationGroups: NavigationGroup[] = [
     items: [
       {
         href: "/back-office/receipts",
-        label: "Receipts",
+        // Returns are reviewed and actioned from the immutable receipt
+        // record, so a separate link would only duplicate this destination.
+        label: "Receipts & returns",
         icon: ReceiptText,
         isVisible: (access) => access.canViewReceipts === true,
       },
+    ],
+  },
+  {
+    // Kitchen is an authorized operational display, not a Back Office sales
+    // management page. Its distinct group preserves that workspace boundary.
+    label: "Operations",
+    items: [
       {
         href: "/kitchen",
         label: "Kitchen display",
@@ -181,7 +194,7 @@ const navigationGroups: NavigationGroup[] = [
     items: [
       {
         href: "/back-office/business-profile",
-        label: "Business & features",
+        label: "Business profile & features",
         icon: Settings2,
         isVisible: (access) => access.canManageSettings === true,
       },
@@ -199,7 +212,7 @@ const navigationGroups: NavigationGroup[] = [
       },
       {
         href: "/back-office/advanced-sales",
-        label: "Sales configuration",
+        label: "Advanced sales",
         icon: Settings2,
         isVisible: (access) => access.canManageAdvancedSales === true,
       },

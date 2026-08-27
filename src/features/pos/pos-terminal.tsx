@@ -19,6 +19,7 @@ import {
   ShoppingBag,
   Star,
   Trash2,
+  UserRound,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -43,7 +44,7 @@ import type { CheckoutPaymentSummary } from "@/features/checkout/checkout-types"
 import { usePosDevice, type PosDeviceState } from "@/features/devices/pos-device";
 import type { PosDeviceCredential } from "@/features/devices/device-schema";
 import { OfflineQueueStatus } from "@/features/offline/offline-queue-status";
-import { PosOperationalDrawer } from "@/features/pos/pos-operational-drawer";
+import { focusCustomerPicker, PosOperationalDrawer } from "@/features/pos/pos-operational-drawer";
 import {
   cachePosCatalog,
   cachePosRuntimeSnapshot,
@@ -821,7 +822,6 @@ export function PosTerminal({
   if (!isOperational) {
     return (
       <PosShiftGate
-        canAccessBackOffice={canAccessBackOffice}
         canOpenShift={canOpenShift}
         canUseShiftControls={canUseShiftControls}
         canUseTimeClock={canUseTimeClock}
@@ -858,6 +858,17 @@ export function PosTerminal({
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">{currencyCode}</Badge>
             <OfflineQueueStatus scope={offlineScope} />
+            <Button
+              aria-label="Select customer"
+              disabled={isPaymentScreenOpen}
+              onClick={focusCustomerPicker}
+              size="icon"
+              title="Select customer"
+              type="button"
+              variant="outline"
+            >
+              <UserRound aria-hidden="true" />
+            </Button>
             {canCloseShift ? (
               <Button
                 disabled={cart.length > 0 || isPaymentScreenOpen}
@@ -872,7 +883,6 @@ export function PosTerminal({
               </Button>
             ) : null}
             <PosOperationalDrawer
-              canAccessBackOffice={canAccessBackOffice}
               canSelectCustomer={!isPaymentScreenOpen}
               canUseShiftControls={canUseShiftControls}
               canUseTimeClock={canUseTimeClock}
@@ -1362,7 +1372,6 @@ function PosCloseShiftDialog({
 }
 
 function PosShiftGate({
-  canAccessBackOffice,
   canOpenShift,
   canUseShiftControls,
   canUseTimeClock,
@@ -1376,7 +1385,6 @@ function PosShiftGate({
   timeClockEntry,
   timezone,
 }: {
-  canAccessBackOffice: boolean;
   canOpenShift: boolean;
   canUseShiftControls: boolean;
   canUseTimeClock: boolean;
@@ -1437,7 +1445,6 @@ function PosShiftGate({
           </div>
           <div className="flex items-center gap-2">
             <PosOperationalDrawer
-              canAccessBackOffice={canAccessBackOffice}
               canUseShiftControls={canUseShiftControls}
               canUseTimeClock={canUseTimeClock}
               employeeName={employeeName}

@@ -15,6 +15,7 @@ import {
   InventoryAdjustmentForm,
   type InventorySaleableItem,
 } from "@/features/catalog/catalog-forms";
+import { DashboardActionGrid } from "@/features/dashboard/dashboard-action-grid";
 import {
   AdvancedInventoryWorkflows,
   type AdvancedPurchaseOrder,
@@ -399,6 +400,12 @@ export default async function InventoryPage({
             {canManage ? "Stock management" : "Level view"}
           </Badge>
         }
+      />
+
+      <DashboardActionGrid
+        inventoryEnabled={context.features.inventory}
+        permissions={context.permissions}
+        surface="inventory"
       />
 
       <InventoryTabs activeTab={activeTab} />

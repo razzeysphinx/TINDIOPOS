@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowLeft, Clock3, LogOut, Menu, UserRound } from "lucide-react";
+import { Clock3, LogOut, Menu, MonitorSmartphone, UserRound } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Dialog,
@@ -21,7 +21,7 @@ import type { TimeClockEntry } from "@/features/time-clock/time-clock-types";
 import type { PosStore } from "@/features/pos/pos-types";
 import { cn } from "@/lib/utils";
 
-function focusCustomerPicker() {
+export function focusCustomerPicker() {
   document.getElementById("pos-customer-picker")?.scrollIntoView({ behavior: "smooth", block: "center" });
   const trigger = document.getElementById("pos-customer-picker-trigger");
 
@@ -33,7 +33,6 @@ function focusCustomerPicker() {
 }
 
 export function PosOperationalDrawer({
-  canAccessBackOffice,
   canSelectCustomer = false,
   canUseShiftControls,
   canUseTimeClock,
@@ -43,7 +42,6 @@ export function PosOperationalDrawer({
   timeClockEntry,
   timezone,
 }: {
-  canAccessBackOffice: boolean;
   canSelectCustomer?: boolean;
   canUseShiftControls: boolean;
   canUseTimeClock: boolean;
@@ -54,6 +52,29 @@ export function PosOperationalDrawer({
   timezone: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenMessage, setFullscreenMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const updateFullscreenState = () => setIsFullscreen(document.fullscreenElement !== null);
+
+    updateFullscreenState();
+    document.addEventListener("fullscreenchange", updateFullscreenState);
+    return () => document.removeEventListener("fullscreenchange", updateFullscreenState);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await document.documentElement.requestFullscreen();
+      }
+      setFullscreenMessage(null);
+    } catch {
+      setFullscreenMessage("This browser does not allow full-screen mode right now.");
+    }
+  };
 
   return (
     <Dialog.Root onOpenChange={setOpen} open={open}>
@@ -66,7 +87,7 @@ export function PosOperationalDrawer({
       </DialogTrigger>
       <DialogContent className="flex flex-col" side="right">
         <DialogHeader>
-          <DialogTitle>POS tools</DialogTitle>
+          <DialogTitle>Cashier navigation</DialogTitle>
           <DialogDescription>
             {organizationName} · {employeeName}
           </DialogDescription>
@@ -74,7 +95,7 @@ export function PosOperationalDrawer({
         <DialogBody className="max-h-none flex-1 space-y-6 overflow-y-auto p-5">
           <section aria-labelledby="pos-tools-workspace">
             <h2 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase" id="pos-tools-workspace">
-              Workspace
+              Register tools
             </h2>
             <div className="mt-3 grid gap-2">
               {canSelectCustomer ? (
@@ -101,16 +122,19 @@ export function PosOperationalDrawer({
                   Shift controls
                 </Link>
               ) : null}
-              {canAccessBackOffice ? (
-                <Link
-                  className={cn(buttonVariants({ variant: "ghost" }), "justify-start")}
-                  href="/back-office"
-                  onClick={() => setOpen(false)}
-                >
-                  <ArrowLeft aria-hidden="true" />
-                  Back Office
-                </Link>
-              ) : null}
+            </div>
+          </section>
+
+          <section aria-labelledby="pos-tools-settings">
+            <h2 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase" id="pos-tools-settings">
+              POS settings
+            </h2>
+            <div className="mt-3 grid gap-2">
+              <Button className="justify-start" onClick={() => void toggleFullscreen()} type="button" variant="outline">
+                <MonitorSmartphone aria-hidden="true" />
+                {isFullscreen ? "Exit full-screen mode" : "Enter full-screen mode"}
+              </Button>
+              {fullscreenMessage ? <p aria-live="polite" className="text-xs text-muted-foreground">{fullscreenMessage}</p> : null}
             </div>
           </section>
 

@@ -3,6 +3,7 @@ import { ChartColumnBig } from "lucide-react";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DashboardActionGrid } from "@/features/dashboard/dashboard-action-grid";
 import { ReportFilterForm } from "@/features/reports/report-filter-form";
 import { loadReportStores } from "@/features/reports/data";
 import {
@@ -63,6 +64,11 @@ export default async function BackOfficePage({
           ? `Track the sales performance of ${context.organization.name} and act on the latest completed transactions.`
           : "Track completed sales and stock activity only for your assigned store."}
         action={<Badge variant="secondary">{hasOrganizationScope ? "Organization dashboard" : "Assigned-store dashboard"}</Badge>}
+      />
+      <DashboardActionGrid
+        inventoryEnabled={context.features.inventory}
+        permissions={context.permissions}
+        surface="business"
       />
       <ReportFilterForm
         action="/back-office"

@@ -6,6 +6,7 @@ import {
   createProductComponentSchema,
   createProductSchema,
   createProductUnitSchema,
+  generateCatalogIdentifiersSchema,
   importCatalogCsvSchema,
   setCategoryArchivedSchema,
   setProductArchivedSchema,
@@ -38,6 +39,34 @@ const CATALOG_DB_MESSAGES: Record<string, string> = {
 
 export function databaseMessage(code: string | undefined, fallback: string) {
   return postgresCodeMessage(code, fallback, CATALOG_DB_MESSAGES);
+}
+
+export async function generateCatalogIdentifiers(
+  context: BusinessContext,
+  input: unknown,
+): Promise<CatalogActionResult<{ sku: string; barcode: string }>> {
+  const parsed = generateCatalogIdentifiersSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("generate_catalog_identifiers", {
+    target_organization_id: context.organization.id,
+    target_product_name: parsed.data.productName,
+  });
+  const identifiers = data?.[0];
+
+  if (error || !identifiers) {
+    return {
+      ok: false,
+      message: databaseMessage(error?.code, "TINDIO could not generate product identifiers."),
+    };
+  }
+
+  return {
+    ok: true,
+    message: "TINDIO SKU and barcode generated.",
+    data: identifiers,
+  };
 }
 
 export async function createCategory(

@@ -23,6 +23,7 @@ import {
   ProductArchiveButton,
   ProductAvailabilityButton,
 } from "@/features/catalog/catalog-forms";
+import { ProductLabelPrintButton } from "@/features/catalog/catalog-label-print";
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
 import { loadCatalogWorkspace } from "@/features/catalog/data";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
@@ -192,6 +193,16 @@ export default async function CatalogPage() {
                                 Cost {formatMinorMoney(costByItem.get(`${product.id}|${variant.id}`) ?? 0, currency)}
                               </p>
                             ) : null}
+                            {canManage ? (
+                              <div className="mt-2">
+                                <ProductLabelPrintButton
+                                  barcode={variant.barcode}
+                                  price={formatMinorMoney(variant.price_minor, currency)}
+                                  productName={`${product.name} — ${variant.name}`}
+                                  sku={variant.sku}
+                                />
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       ))}
@@ -230,6 +241,14 @@ export default async function CatalogPage() {
 
                   {canManage ? (
                     <div className="flex flex-wrap justify-end gap-1 border-t pt-3">
+                      {product.product_type !== "variable" ? (
+                        <ProductLabelPrintButton
+                          barcode={product.barcode}
+                          price={formatMinorMoney(product.price_minor, currency)}
+                          productName={product.name}
+                          sku={product.sku}
+                        />
+                      ) : null}
                       <EditProductButton
                         canTrackInventory={context.features.inventory}
                         canUseWeightedProducts={context.features.weighted_products}

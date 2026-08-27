@@ -53,7 +53,7 @@ import {
   type PosCustomerDisplaySession,
 } from "@/features/customer-display/customer-display-types";
 import { PosCustomerPicker } from "@/features/customers/pos-customer-picker";
-import { openShiftAction } from "@/features/shifts/actions";
+import { closeShiftAction, openShiftAction } from "@/features/shifts/actions";
 import { TimeClockControl } from "@/features/time-clock/time-clock-control";
 import type { TimeClockEntry } from "@/features/time-clock/time-clock-types";
 import { setPosFavoriteTileAction } from "@/features/pos/actions";
@@ -111,6 +111,7 @@ export function PosTerminal({
   canUseDining,
   canUseOpenTickets,
   canUseTimeClock,
+  canCloseShift,
   canOpenShift,
   canManageTiles,
   categories,
@@ -142,6 +143,7 @@ export function PosTerminal({
   canUseDining: boolean;
   canUseOpenTickets: boolean;
   canUseTimeClock: boolean;
+  canCloseShift: boolean;
   canOpenShift: boolean;
   canManageTiles: boolean;
   categories: PosCategory[];
@@ -193,6 +195,7 @@ export function PosTerminal({
   const [notice, setNotice] = useState<string | null>(null);
   const [checkoutKey, setCheckoutKey] = useState(createCheckoutKey);
   const [isPaymentScreenOpen, setIsPaymentScreenOpen] = useState(false);
+  const [isShiftCloseOpen, setIsShiftCloseOpen] = useState(false);
   const [completedDisplaySale, setCompletedDisplaySale] = useState<CompletedCustomerDisplaySale | null>(null);
   const [modifierPicker, setModifierPicker] = useState<{ item: PosCatalogItem; groups: ModifierGroup[]; manualPriceMinor: number | null } | null>(null);
   const [manualPricePicker, setManualPricePicker] = useState<PosCatalogItem | null>(null);
@@ -776,6 +779,17 @@ export function PosTerminal({
     router.refresh();
   };
 
+  const handleShiftClosed = () => {
+    setIsShiftCloseOpen(false);
+    setActiveShift(null);
+    setCart([]);
+    setSelectedCustomer(null);
+    setActiveTicketId(null);
+    setIsPaymentScreenOpen(false);
+    setCheckoutKey(createCheckoutKey());
+    router.refresh();
+  };
+
   if (deviceManagementEnabled && posDevice.state !== "ready") {
     return <PosDeviceConfigurationState employeeName={employeeName} organizationName={organizationName} state={posDevice} />;
   }
@@ -808,28 +822,37 @@ export function PosTerminal({
 
   return (
     <>
-      <main className="min-h-svh bg-muted/35 p-3 sm:p-5 lg:p-6">
-      <div className="mx-auto grid min-h-[calc(100svh-1.5rem)] max-w-[110rem] grid-rows-[auto_1fr] overflow-hidden rounded-2xl border bg-background shadow-sm sm:min-h-[calc(100svh-2.5rem)] lg:grid-rows-[auto_1fr]">
+      <main className="min-h-svh bg-background lg:h-svh lg:overflow-hidden">
+       <div className="grid min-h-svh grid-rows-[auto_1fr] lg:h-svh">
         <header className="flex flex-col gap-3 border-b bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
               <ShoppingBag className="size-4" aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{organizationName}</p>
+              <p className="truncate text-sm font-semibold">TINDIO POS <span className="font-normal text-muted-foreground">· {organizationName}</span></p>
               <p className="truncate text-xs text-muted-foreground">
-                {employeeName} · Shift opened {activeShift ? formatShiftOpenedAt(activeShift.openedAt) : "just now"}
+                {selectedStore?.name} · {selectedRegister?.name} · {employeeName} · Shift opened {activeShift ? formatShiftOpenedAt(activeShift.openedAt) : "just now"}
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="hidden text-right sm:block">
-              <p className="text-sm font-medium">{selectedStore?.name}</p>
-              <p className="text-xs text-muted-foreground">{selectedRegister?.name}</p>
-            </div>
             <Badge variant="outline">{currencyCode}</Badge>
             <OfflineQueueStatus scope={offlineScope} />
+            {canCloseShift ? (
+              <Button
+                disabled={cart.length > 0 || isPaymentScreenOpen}
+                onClick={() => setIsShiftCloseOpen(true)}
+                size="sm"
+                title={cart.length > 0 ? "Clear or hold the current cart before closing the shift." : undefined}
+                type="button"
+                variant="outline"
+              >
+                <LockKeyhole aria-hidden="true" />
+                Close shift
+              </Button>
+            ) : null}
             <Link href="/back-office/shifts">
               <Badge className="h-9 cursor-pointer px-3" variant="secondary">
                 <Clock3 aria-hidden="true" />
@@ -854,8 +877,8 @@ export function PosTerminal({
 
         {stores.length > 0 ? (
           <div className="grid min-h-0 lg:grid-cols-[minmax(0,1fr)_23rem] xl:grid-cols-[minmax(0,1fr)_26rem]">
-            <section className="min-h-0 border-b lg:border-r lg:border-b-0" aria-labelledby="pos-catalog-title">
-              <div className="border-b bg-card px-4 py-4 sm:px-5">
+            <section className="min-h-0 border-b lg:overflow-y-auto lg:border-r lg:border-b-0" aria-labelledby="pos-catalog-title">
+              <div className="border-b bg-card px-4 py-4 sm:px-5 lg:sticky lg:top-0 lg:z-10">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h1 className="text-xl font-semibold tracking-[-0.025em]" id="pos-catalog-title">
@@ -1206,6 +1229,14 @@ export function PosTerminal({
           selectedTaxRate={selectedTaxRate}
         />
       ) : null}
+      {isShiftCloseOpen && activeShift ? (
+        <PosCloseShiftDialog
+          currencyCode={currencyCode}
+          onCancel={() => setIsShiftCloseOpen(false)}
+          onClosed={handleShiftClosed}
+          shiftId={activeShift.id}
+        />
+      ) : null}
       {manualPricePicker ? (
         <ManualPriceDialog
           currencyCode={currencyCode}
@@ -1232,6 +1263,91 @@ export function PosTerminal({
       {isTicketEditorOpen ? <TicketSaveDialog assignees={ticketAssignees} canAssign={canAssignTickets} diningOptions={diningOptions} onClose={() => setIsTicketEditorOpen(false)} onSave={submitTicket} templates={ticketTemplates} ticket={openTickets.find((ticket) => ticket.id === activeTicketId) ?? null} /> : null}
       {isTicketWorkspaceOpen ? <TicketOperationsDialog device={deviceCredential} onClose={() => setIsTicketWorkspaceOpen(false)} onComplete={(message) => { setNotice(message); setIsTicketWorkspaceOpen(false); router.refresh(); }} tickets={openTickets} /> : null}
     </>
+  );
+}
+
+function PosCloseShiftDialog({
+  currencyCode,
+  onCancel,
+  onClosed,
+  shiftId,
+}: {
+  currencyCode: string;
+  onCancel: () => void;
+  onClosed: () => void;
+  shiftId: string;
+}) {
+  const [countedCash, setCountedCash] = useState("");
+  const [closingNote, setClosingNote] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const submit = () => {
+    startTransition(async () => {
+      const result = await closeShiftAction({ shiftId, countedCash, closingNote });
+      setMessage(result.message);
+      if (result.ok) onClosed();
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/35 p-4">
+      <section
+        aria-labelledby="close-pos-shift-title"
+        aria-modal="true"
+        className="w-full max-w-lg rounded-xl border bg-background p-5 shadow-xl"
+        role="dialog"
+      >
+        <div className="flex items-start gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-destructive/10 text-destructive">
+            <LockKeyhole className="size-5" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-xs font-bold tracking-[0.14em] text-destructive uppercase">End register shift</p>
+            <h2 className="mt-1 text-lg font-semibold" id="close-pos-shift-title">Count the drawer before closing</h2>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              TINDIO records the count, then calculates the cash difference according to your business&apos;s cash-close visibility setting.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4">
+          <label className="grid gap-1.5 text-sm font-medium">
+            Counted cash ({currencyCode})
+            <Input
+              autoFocus
+              disabled={isPending}
+              inputMode="decimal"
+              min="0"
+              onChange={(event) => setCountedCash(event.target.value)}
+              placeholder="0.00"
+              step="0.01"
+              type="number"
+              value={countedCash}
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium">
+            Closing note <span className="font-normal text-muted-foreground">(optional)</span>
+            <Input
+              disabled={isPending}
+              maxLength={500}
+              onChange={(event) => setClosingNote(event.target.value)}
+              placeholder="e.g. Drawer counted with supervisor"
+              value={closingNote}
+            />
+          </label>
+        </div>
+
+        {message ? <p aria-live="polite" className="mt-3 text-sm text-muted-foreground">{message}</p> : null}
+        <div className="mt-6 flex justify-end gap-2">
+          <Button disabled={isPending} onClick={onCancel} type="button" variant="outline">Cancel</Button>
+          <Button disabled={isPending || !countedCash} onClick={submit} type="button">
+            {isPending ? <LoaderCircle className="animate-spin" /> : <LockKeyhole />}
+            Close and record
+          </Button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -1293,16 +1409,16 @@ function PosShiftGate({
   };
 
   return (
-    <main className="grid min-h-svh place-items-center bg-muted/35 p-3 sm:p-5 lg:p-6">
-      <section className="w-full max-w-3xl overflow-hidden rounded-2xl border bg-background shadow-sm">
+    <main className="min-h-svh bg-background">
+      <section className="grid min-h-svh grid-rows-[auto_1fr] overflow-hidden bg-background">
         <header className="flex flex-col gap-3 border-b bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
               <ShoppingBag className="size-5" aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{organizationName}</p>
-              <p className="truncate text-xs text-muted-foreground">{employeeName} · Point of sale</p>
+              <p className="truncate text-sm font-semibold">TINDIO POS <span className="font-normal text-muted-foreground">· {organizationName}</span></p>
+              <p className="truncate text-xs text-muted-foreground">Cashier: {employeeName} · Register entry</p>
             </div>
           </div>
           <Button
@@ -1316,7 +1432,7 @@ function PosShiftGate({
           </Button>
         </header>
 
-        <div className="grid min-h-105 place-items-center px-5 py-12 text-center sm:px-10">
+        <div className="grid place-items-center px-5 py-12 text-center sm:px-10">
           <div className="max-w-lg">
             <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-destructive/10 text-destructive">
               <LockKeyhole className="size-7" aria-hidden="true" />

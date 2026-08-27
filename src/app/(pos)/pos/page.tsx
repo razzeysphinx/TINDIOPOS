@@ -23,6 +23,7 @@ export default async function PosPage() {
   return (
     <PosTerminal
       activeShift={activeShift}
+      canCloseShift={hasPermission(context, "shifts.close")}
       canOpenShift={hasPermission(context, "shifts.open")}
       canManageTiles={hasPermission(context, "products.manage")}
       canAssignTickets={canAssignTickets}

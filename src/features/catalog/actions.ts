@@ -10,6 +10,7 @@ import {
   createProductComponent,
   createProductUnit,
   databaseMessage,
+  generateCatalogIdentifiers,
   importCatalogCsv,
   setCategoryArchived,
   setProductArchived,
@@ -96,6 +97,18 @@ export async function createProductAction(
   }
 
   return result;
+}
+
+export async function generateCatalogIdentifiersAction(
+  input: unknown,
+): Promise<CatalogActionResult<{ sku: string; barcode: string }>> {
+  const context = await requireBusinessContext();
+
+  if (!hasPermission(context, "products.manage")) {
+    return { ok: false, message: "You do not have permission to generate product identifiers." };
+  }
+
+  return generateCatalogIdentifiers(context, input);
 }
 
 export async function setProductArchivedAction(

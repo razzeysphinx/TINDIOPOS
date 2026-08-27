@@ -14,6 +14,7 @@ import {
   Trash2,
   Upload,
   Warehouse,
+  WandSparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
@@ -47,6 +48,7 @@ import {
   createProductAction,
   createProductComponentAction,
   createProductUnitAction,
+  generateCatalogIdentifiersAction,
   importCatalogCsvAction,
   setProductStoreConfigurationAction,
   setCategoryArchivedAction,
@@ -310,6 +312,7 @@ export function EditProductButton({
       unit: product.unit,
     },
   });
+  const productName = useWatch({ control: form.control, name: "name" });
 
   const submit = form.handleSubmit((values) => {
     setResult(null);
@@ -376,6 +379,15 @@ export function EditProductButton({
                     <Input inputMode="decimal" {...form.register("cost")} />
                   </FormField>
                 ) : null}
+                <div className="sm:col-span-2 lg:col-span-4">
+                  <IdentifierGenerationButton
+                    onGenerated={({ barcode, sku }) => {
+                      form.setValue("sku", sku, { shouldDirty: true, shouldValidate: true });
+                      form.setValue("barcode", barcode, { shouldDirty: true, shouldValidate: true });
+                    }}
+                    productName={productName}
+                  />
+                </div>
               </div>
             ) : null}
             <div className="flex flex-wrap gap-3">
@@ -492,7 +504,10 @@ export function CreateProductForm({
     name: "variants",
   });
   const productType = useWatch({ control: form.control, name: "productType" });
+  const productName = useWatch({ control: form.control, name: "name" });
+  const variantValues = useWatch({ control: form.control, name: "variants" });
   const typeRegistration = form.register("productType");
+  const [barcodeSource, setBarcodeSource] = useState<"existing" | "tindio">("tindio");
 
   const submit = form.handleSubmit((values) => {
     setResult(null);
@@ -593,7 +608,10 @@ export function CreateProductForm({
               <Input placeholder="COFFEE-001" {...form.register("sku")} />
             </FormField>
             <FormField label="Barcode" error={form.formState.errors.barcode?.message}>
-              <Input placeholder="480000000001" {...form.register("barcode")} />
+              <Input
+                placeholder={barcodeSource === "tindio" ? "Generated TINDIO barcode" : "480000000001"}
+                {...form.register("barcode")}
+              />
             </FormField>
             <FormField label="Selling price" error={form.formState.errors.price?.message}>
               <Input inputMode="decimal" placeholder="0.00" {...form.register("price")} />
@@ -603,6 +621,41 @@ export function CreateProductForm({
                 <Input inputMode="decimal" placeholder="0.00" {...form.register("cost")} />
               </FormField>
             ) : null}
+            <fieldset className="grid gap-1.5 sm:col-span-2">
+              <legend className="text-sm font-medium">Barcode source</legend>
+              <div className="flex flex-wrap gap-3">
+                <Label className="flex items-center gap-2 text-sm">
+                  <input
+                    checked={barcodeSource === "existing"}
+                    name="barcode-source"
+                    onChange={() => setBarcodeSource("existing")}
+                    type="radio"
+                  />
+                  Enter existing UPC/EAN
+                </Label>
+                <Label className="flex items-center gap-2 text-sm">
+                  <input
+                    checked={barcodeSource === "tindio"}
+                    name="barcode-source"
+                    onChange={() => setBarcodeSource("tindio")}
+                    type="radio"
+                  />
+                  Generate TINDIO barcode
+                </Label>
+              </div>
+            </fieldset>
+            <div className="self-end">
+              <IdentifierGenerationButton
+                label={barcodeSource === "tindio" ? undefined : "Auto-generate SKU"}
+                onGenerated={({ barcode, sku }) => {
+                  form.setValue("sku", sku, { shouldDirty: true, shouldValidate: true });
+                  if (barcodeSource === "tindio") {
+                    form.setValue("barcode", barcode, { shouldDirty: true, shouldValidate: true });
+                  }
+                }}
+                productName={productName}
+              />
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
@@ -634,6 +687,14 @@ export function CreateProductForm({
                 </FormField>
                 <FormField label="SKU" error={form.formState.errors.variants?.[index]?.sku?.message}>
                   <Input placeholder="TS-S-BLK" {...form.register(`variants.${index}.sku`)} />
+                  <IdentifierGenerationButton
+                    compact
+                    onGenerated={({ barcode, sku }) => {
+                      form.setValue(`variants.${index}.sku`, sku, { shouldDirty: true, shouldValidate: true });
+                      form.setValue(`variants.${index}.barcode`, barcode, { shouldDirty: true, shouldValidate: true });
+                    }}
+                    productName={`${productName} ${variantValues?.[index]?.name ?? ""}`}
+                  />
                 </FormField>
                 <FormField
                   label="Barcode"
@@ -1225,6 +1286,53 @@ function ManagementCard({
       </CardHeader>
       <CardContent>{children}</CardContent>
     </Card>
+  );
+}
+
+function IdentifierGenerationButton({
+  compact = false,
+  label,
+  onGenerated,
+  productName,
+}: {
+  compact?: boolean;
+  label?: string;
+  onGenerated: (identifiers: { sku: string; barcode: string }) => void;
+  productName: string;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [result, setResult] = useState<CatalogActionResult<{ sku: string; barcode: string }> | null>(null);
+
+  return (
+    <div className={compact ? "mt-1.5" : "flex flex-wrap items-center gap-2"}>
+      <Button
+        disabled={isPending}
+        onClick={() => {
+          setResult(null);
+          startTransition(async () => {
+            const nextResult = await generateCatalogIdentifiersAction({ productName });
+            if (nextResult.ok && nextResult.data) {
+              onGenerated(nextResult.data);
+            }
+            setResult(nextResult);
+          });
+        }}
+        size={compact ? "xs" : "sm"}
+        type="button"
+        variant="outline"
+      >
+        {isPending ? <LoaderCircle className="animate-spin" /> : <WandSparkles />}
+        {compact ? "Auto-generate" : label ?? "Auto-generate SKU + barcode"}
+      </Button>
+      {result ? (
+        <p
+          aria-live="polite"
+          className={`${compact ? "mt-1 " : ""}text-xs ${result.ok ? "text-primary" : "text-destructive"}`}
+        >
+          {result.message}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

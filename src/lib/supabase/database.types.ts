@@ -5721,6 +5721,13 @@ export type Database = {
         }
         Returns: string
       }
+      generate_catalog_identifiers: {
+        Args: { target_organization_id: string; target_product_name: string }
+        Returns: {
+          barcode: string
+          sku: string
+        }[]
+      }
       get_catalog_costs: {
         Args: {
           requested_product_ids?: string[]

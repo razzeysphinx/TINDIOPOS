@@ -288,6 +288,14 @@ export const adjustInventorySchema = z.object({
   approvalRequestId: z.uuid().nullable().optional(),
 });
 
+export const generateCatalogIdentifiersSchema = z.object({
+  productName: z
+    .string()
+    .trim()
+    .min(1, "Enter a product name before generating identifiers.")
+    .max(160, "Use at most 160 characters."),
+});
+
 export type CreateCategoryValues = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryValues = z.infer<typeof updateCategorySchema>;
 export type ProductVariantValues = z.infer<typeof productVariantSchema>;
@@ -298,3 +306,4 @@ export type SetProductStoreConfigurationValues = z.infer<typeof setProductStoreC
 export type CreateProductUnitValues = z.infer<typeof createProductUnitSchema>;
 export type CreateProductComponentValues = z.infer<typeof createProductComponentSchema>;
 export type ImportCatalogCsvValues = z.infer<typeof importCatalogCsvSchema>;
+export type GenerateCatalogIdentifiersValues = z.infer<typeof generateCatalogIdentifiersSchema>;

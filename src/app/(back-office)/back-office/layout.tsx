@@ -15,6 +15,7 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
   await connection();
   const context = await requireBackOfficeContext();
   const displayName = context.profile.full_name || context.profile.email;
+  const canUsePos = context.permissions.includes("sales.create");
   const navigationAccess = {
     canManageSettings: context.permissions.includes("settings.manage"),
     canManageCustomers: context.permissions.includes("customers.manage"),
@@ -62,6 +63,11 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {canUsePos ? (
+                <Button nativeButton={false} render={<Link href="/pos" />} size="sm" variant="outline">
+                  Open POS
+                </Button>
+              ) : null}
               <OrganizationSwitcher
                 organizations={context.availableOrganizations}
                 selectedOrganizationId={context.organization.id}

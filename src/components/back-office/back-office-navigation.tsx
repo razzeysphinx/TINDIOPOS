@@ -50,7 +50,8 @@ type NavigationItem = {
   href: string;
   label: string;
   icon: LucideIcon;
-  isVisible?: (access: BackOfficeNavigationAccess) => boolean;
+  /** Every Back Office destination must declare its permission-aware visibility rule. */
+  isVisible: (access: BackOfficeNavigationAccess) => boolean;
 };
 
 type NavigationGroup = {

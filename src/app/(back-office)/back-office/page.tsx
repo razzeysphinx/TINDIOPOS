@@ -12,7 +12,7 @@ import {
   resolveScopedReportFilter,
 } from "@/features/reports/reporting";
 import { ReportingOverview } from "@/features/reports/reporting-overview";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Back Office" };
 
@@ -21,29 +21,7 @@ export default async function BackOfficePage({
 }: {
   searchParams: Promise<{ start?: string | string[]; end?: string | string[]; store?: string | string[] }>;
 }) {
-  const context = await requireBusinessContext();
-
-  if (!hasPermission(context, "dashboard.view")) {
-    return (
-      <div className="space-y-8">
-        <PageHeader
-          eyebrow="Back Office"
-          title="Business dashboard"
-          description="Your role does not include access to the organization performance dashboard."
-          action={<Badge variant="outline">No dashboard access</Badge>}
-        />
-        <Card>
-          <CardHeader>
-            <ChartColumnBig aria-hidden="true" className="size-8 text-muted-foreground" />
-            <CardTitle className="mt-3">Dashboard access is required</CardTitle>
-            <CardDescription>
-              Ask an owner to add the <span className="font-mono text-xs">dashboard.view</span> permission to one of your roles.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
+  const context = await requireBackOfficePermission("dashboard.view");
 
   const parameters = await searchParams;
   const hasOrganizationScope = hasOrganizationReportingScope(context);

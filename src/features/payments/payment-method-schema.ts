@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { TINDIO_PAYMENT_PRESET_CODES } from "@/features/payments/payment-presets";
+
 const paymentMethodCode = z
   .string()
   .trim()
@@ -44,4 +46,8 @@ export const setStorePaymentMethodAvailabilitySchema = z.object({
 export const setPaymentMethodOfflinePolicySchema = z.object({
   paymentMethodId: z.uuid(),
   offlinePolicy,
+});
+
+export const restoreTindioPaymentPresetSchema = z.object({
+  presetCode: z.enum(TINDIO_PAYMENT_PRESET_CODES),
 });

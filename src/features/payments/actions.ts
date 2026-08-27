@@ -4,10 +4,15 @@ import { revalidatePath } from "next/cache";
 
 import {
   createPaymentMethodSchema,
+  restoreTindioPaymentPresetSchema,
   setPaymentMethodOfflinePolicySchema,
   setStorePaymentMethodAvailabilitySchema,
   updatePaymentMethodSchema,
 } from "@/features/payments/payment-method-schema";
+import {
+  getTindioPaymentPreset,
+  isTindioPaymentPresetCode,
+} from "@/features/payments/payment-presets";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
@@ -44,6 +49,13 @@ export async function createPaymentMethodAction(
     return { ok: false, message: "Check the payment method details and selected stores." };
   }
 
+  if (isTindioPaymentPresetCode(parsed.data.code)) {
+    return {
+      ok: false,
+      message: "TINDIO default payment methods are managed from the preset list.",
+    };
+  }
+
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("create_store_scoped_payment_method", {
     target_organization_id: context.organization.id,
@@ -67,6 +79,58 @@ export async function createPaymentMethodAction(
 
   revalidatePaymentMethodViews();
   return { ok: true, message: "Payment method created." };
+}
+
+export async function restoreTindioPaymentPresetAction(
+  input: unknown,
+): Promise<PaymentMethodActionResult> {
+  const context = await requireBusinessContext();
+  if (!hasPermission(context, "settings.manage")) {
+    return { ok: false, message: "You do not have permission to restore payment presets." };
+  }
+
+  const parsed = restoreTindioPaymentPresetSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: "Choose a valid TINDIO payment preset." };
+  }
+
+  const supabase = await createClient();
+  const { data: activeStores, error: storesError } = await supabase
+    .from("stores")
+    .select("id")
+    .eq("organization_id", context.organization.id)
+    .eq("is_active", true);
+
+  if (storesError || !activeStores?.length) {
+    return {
+      ok: false,
+      message: "TINDIO needs at least one active store before restoring a payment preset.",
+    };
+  }
+
+  const { data, error } = await supabase.rpc("restore_tindio_payment_preset", {
+    target_organization_id: context.organization.id,
+    target_preset_code: parsed.data.presetCode,
+    target_store_ids: activeStores.map((store) => store.id),
+  });
+
+  if (error || !data) {
+    return {
+      ok: false,
+      message: databaseMessage(
+        error?.code,
+        error?.message,
+        "TINDIO could not restore this payment preset.",
+      ),
+    };
+  }
+
+  const preset = getTindioPaymentPreset(parsed.data.presetCode);
+  revalidatePaymentMethodViews();
+  return {
+    ok: true,
+    message: `${preset?.name ?? "Payment"} is restored and enabled for every active store.`,
+  };
 }
 
 export async function updatePaymentMethodAction(

@@ -6666,6 +6666,14 @@ export type Database = {
           message: string
         }[]
       }
+      restore_tindio_payment_preset: {
+        Args: {
+          target_organization_id: string
+          target_preset_code: string
+          target_store_ids: string[]
+        }
+        Returns: string
+      }
       return_to_supplier: {
         Args: {
           target_lines: Json
@@ -7202,9 +7210,6 @@ export type CompositeTypes<
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
-// Application convenience alias retained across Supabase CLI type regeneration.
-export type TableRow<TableName extends keyof DefaultSchema["Tables"]> = Tables<TableName>;
-
 export const Constants = {
   graphql_public: {
     Enums: {},
@@ -7213,4 +7218,7 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
+// Application convenience alias retained across Supabase CLI type regeneration.
+export type TableRow<TableName extends keyof DefaultSchema["Tables"]> = Tables<TableName>;
 

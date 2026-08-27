@@ -21,10 +21,16 @@ import {
 import { Input } from "@/components/ui/input";
 import {
   createPaymentMethodAction,
+  restoreTindioPaymentPresetAction,
   setPaymentMethodOfflinePolicyAction,
   setStorePaymentMethodAvailabilityAction,
   updatePaymentMethodAction,
 } from "@/features/payments/actions";
+import {
+  isTindioPaymentPresetCode,
+  TINDIO_PAYMENT_PRESETS,
+  type TindioPaymentPresetCode,
+} from "@/features/payments/payment-presets";
 
 type StoreOption = {
   id: string;
@@ -53,14 +59,6 @@ const paymentTypeLabels: Record<PaymentMethodRecord["paymentType"], string> = {
   OTHER: "Other",
 };
 
-const tindioPresetPaymentCodes = new Set([
-  "CASH",
-  "CARD",
-  "GCASH",
-  "MAYA",
-  "BANK_TRANSFER",
-]);
-
 export function PaymentMethodsManager({
   canManage,
   methods,
@@ -70,25 +68,24 @@ export function PaymentMethodsManager({
   methods: PaymentMethodRecord[];
   stores: StoreOption[];
 }) {
-  const presetMethods = methods.filter((method) => tindioPresetPaymentCodes.has(method.code));
-  const customMethods = methods.filter((method) => !tindioPresetPaymentCodes.has(method.code));
+  const methodsByCode = new Map(methods.map((method) => [method.code, method]));
+  const presetMethods = TINDIO_PAYMENT_PRESETS.flatMap((preset) => {
+    const method = methodsByCode.get(preset.code);
+    return method ? [method] : [];
+  });
+  const missingPresets = TINDIO_PAYMENT_PRESETS.filter(
+    (preset) => !methodsByCode.has(preset.code),
+  );
+  const customMethods = methods.filter((method) => !isTindioPaymentPresetCode(method.code));
 
   return (
     <div className="space-y-5">
-      <PaymentMethodSection
-        description="These core methods are installed with every TINDIO organization. You can configure where they are accepted or disable them without changing their stable reporting codes."
+      <TindioPresetSection
+        canManage={canManage}
         methods={presetMethods}
-        title="TINDIO PRESETS"
-      >
-        {(method) => (
-          <PaymentMethodCard
-            canManage={canManage}
-            key={method.id}
-            method={method}
-            stores={stores}
-          />
-        )}
-      </PaymentMethodSection>
+        missingPresets={missingPresets}
+        stores={stores}
+      />
       <PaymentMethodSection
         description="Create only the additional methods your business needs with the + button above."
         emptyMessage="No custom payment methods yet."
@@ -104,6 +101,112 @@ export function PaymentMethodsManager({
           />
         )}
       </PaymentMethodSection>
+    </div>
+  );
+}
+
+function TindioPresetSection({
+  canManage,
+  methods,
+  missingPresets,
+  stores,
+}: {
+  canManage: boolean;
+  methods: PaymentMethodRecord[];
+  missingPresets: ReadonlyArray<(typeof TINDIO_PAYMENT_PRESETS)[number]>;
+  stores: StoreOption[];
+}) {
+  return (
+    <section aria-labelledby="tindio-payment-presets-title">
+      <div className="mb-3">
+        <h2
+          className="text-xs font-bold tracking-[0.14em] text-primary uppercase"
+          id="tindio-payment-presets-title"
+        >
+          TINDIO PRESETS
+        </h2>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          Core methods installed with every TINDIO organization. Configure availability or
+          disable them without changing their stable reporting codes.
+        </p>
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {methods.map((method) => (
+          <PaymentMethodCard
+            canManage={canManage}
+            key={method.id}
+            method={method}
+            stores={stores}
+          />
+        ))}
+        {missingPresets.map((preset) => (
+          <MissingPaymentPresetCard canManage={canManage} key={preset.code} preset={preset} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MissingPaymentPresetCard({
+  canManage,
+  preset,
+}: {
+  canManage: boolean;
+  preset: (typeof TINDIO_PAYMENT_PRESETS)[number];
+}) {
+  return (
+    <Card className="border-dashed">
+      <CardHeader className="flex-row items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-secondary text-primary">
+            <CreditCard className="size-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <CardTitle>{preset.name}</CardTitle>
+            <p className="mt-1 font-mono text-xs text-muted-foreground">{preset.code}</p>
+          </div>
+        </div>
+        <Badge variant="outline">Not installed</Badge>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">TINDIO preset</Badge>
+          <Badge variant="outline">{paymentTypeLabels[preset.paymentType]}</Badge>
+        </div>
+        <p className="text-sm text-muted-foreground">{preset.description}</p>
+        {canManage ? (
+          <RestorePaymentPresetButton presetCode={preset.code} />
+        ) : (
+          <p className="text-sm text-muted-foreground">Settings management access is required to restore it.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RestorePaymentPresetButton({ presetCode }: { presetCode: TindioPaymentPresetCode }) {
+  const router = useRouter();
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <Button
+        disabled={isPending}
+        onClick={() => {
+          startTransition(async () => {
+            const result = await restoreTindioPaymentPresetAction({ presetCode });
+            setMessage(result.message);
+            if (result.ok) router.refresh();
+          });
+        }}
+        size="sm"
+        type="button"
+      >
+        {isPending ? <LoaderCircle className="animate-spin" /> : <Plus />}
+        Restore to active stores
+      </Button>
+      {message ? <p aria-live="polite" className="text-sm text-muted-foreground">{message}</p> : null}
     </div>
   );
 }
@@ -224,6 +327,9 @@ export function CreatePaymentMethodDialog({ stores }: { stores: StoreOption[] })
                 required
                 value={code}
               />
+              <span className="text-xs font-normal leading-5 text-muted-foreground">
+                Reserved for TINDIO presets: Cash, Card, GCash, Maya, and Bank Transfer.
+              </span>
             </label>
             <label className="grid gap-1.5 text-sm font-medium" htmlFor="payment-method-type">
               Category
@@ -312,7 +418,7 @@ function PaymentMethodCard({
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">
-            {tindioPresetPaymentCodes.has(method.code) ? "TINDIO preset" : "Custom"}
+            {isTindioPaymentPresetCode(method.code) ? "TINDIO preset" : "Custom"}
           </Badge>
           <Badge variant="outline">{paymentTypeLabels[method.paymentType]}</Badge>
           <Badge variant="outline">{method.requiresReference ? "Reference required" : "Reference optional"}</Badge>

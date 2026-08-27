@@ -6,6 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateRoleForm, EditRoleButton } from "@/features/management/management-forms";
 import { loadManagementRoles } from "@/features/management/data";
+import type {
+  ManagementPermissionRow,
+  ManagementRolePermissionRow,
+  ManagementRoleRow,
+} from "@/features/management/management-types";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 
 export const metadata = { title: "Roles and access" };
@@ -20,6 +25,8 @@ export default async function RolesPage() {
   const grantablePermissions = permissions.filter((permission) =>
     context.permissions.includes(permission.code),
   );
+  const systemRoles = roles.filter((role) => role.is_system);
+  const customRoles = roles.filter((role) => !role.is_system);
 
   return (
     <div className="space-y-8">
@@ -37,8 +44,61 @@ export default async function RolesPage() {
         }
       />
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        {roles.map((role) => {
+      <RoleGroup
+        canManage={canManage}
+        description="TINDIO built-in roles have stable permissions and cannot be changed or deleted. Use them as clear starting points for your team."
+        grantablePermissions={grantablePermissions}
+        permissionDetails={permissionDetails}
+        rolePermissions={rolePermissions}
+        roles={systemRoles}
+        title="TINDIO SYSTEM ROLES"
+      />
+      <RoleGroup
+        canManage={canManage}
+        description="Create a custom role only when the built-in roles do not match your operating model."
+        emptyMessage="No custom roles yet. Use the + button above to create one."
+        grantablePermissions={grantablePermissions}
+        permissionDetails={permissionDetails}
+        rolePermissions={rolePermissions}
+        roles={customRoles}
+        title="CUSTOM ROLES"
+      />
+    </div>
+  );
+}
+
+function RoleGroup({
+  canManage,
+  description,
+  emptyMessage,
+  grantablePermissions,
+  permissionDetails,
+  rolePermissions,
+  roles,
+  title,
+}: {
+  canManage: boolean;
+  description: string;
+  emptyMessage?: string;
+  grantablePermissions: ManagementPermissionRow[];
+  permissionDetails: Map<string, ManagementPermissionRow>;
+  rolePermissions: ManagementRolePermissionRow[];
+  roles: ManagementRoleRow[];
+  title: string;
+}) {
+  const titleId = `${title.toLowerCase().replaceAll(" ", "-")}-title`;
+
+  return (
+    <section aria-labelledby={titleId}>
+      <div className="mb-3">
+        <h2 className="text-xs font-bold tracking-[0.14em] text-primary uppercase" id={titleId}>
+          {title}
+        </h2>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
+      </div>
+      {roles.length ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {roles.map((role) => {
           const rolePermissionDetails = rolePermissions
             .filter((permission) => permission.role_id === role.id)
             .map((permission) => permissionDetails.get(permission.permission_code))
@@ -52,8 +112,8 @@ export default async function RolesPage() {
             .filter((permission) => permission.role_id === role.id)
             .map((permission) => permission.permission_code);
 
-          return (
-            <Card key={role.id}>
+            return (
+              <Card key={role.id}>
               <CardHeader className="flex-row items-start justify-between">
                 <div className="flex items-start gap-3">
                   <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-secondary text-primary">
@@ -133,10 +193,17 @@ export default async function RolesPage() {
                   </div>
                 ) : null}
               </CardContent>
-            </Card>
-          );
-        })}
-      </section>
-    </div>
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="py-5 text-sm text-muted-foreground">
+            {emptyMessage ?? "No roles are available in this organization."}
+          </CardContent>
+        </Card>
+      )}
+    </section>
   );
 }

@@ -10,6 +10,63 @@ import { Label } from "@/components/ui/label";
 import { updateReceiptSettingsAction } from "@/features/receipts/improvement-6-actions";
 import type { ReceiptSettingsValues } from "@/features/receipts/improvement-6-schema";
 
+type ReceiptLayoutValues = Pick<
+  ReceiptSettingsValues,
+  | "paperWidthMm"
+  | "showStoreAddress"
+  | "showStorePhone"
+  | "showCashier"
+  | "showRegister"
+  | "showPaymentDetails"
+>;
+
+const receiptLayoutPresets = [
+  {
+    id: "essential",
+    title: "Essential",
+    description: "Compact 58 mm receipt with the key sale details.",
+    values: {
+      paperWidthMm: 58,
+      showStoreAddress: false,
+      showStorePhone: false,
+      showCashier: false,
+      showRegister: true,
+      showPaymentDetails: true,
+    },
+  },
+  {
+    id: "standard",
+    title: "Standard",
+    description: "Balanced 80 mm receipt for most counter sales.",
+    values: {
+      paperWidthMm: 80,
+      showStoreAddress: true,
+      showStorePhone: false,
+      showCashier: true,
+      showRegister: true,
+      showPaymentDetails: true,
+    },
+  },
+  {
+    id: "detailed",
+    title: "Detailed",
+    description: "80 mm receipt with complete store and sale context.",
+    values: {
+      paperWidthMm: 80,
+      showStoreAddress: true,
+      showStorePhone: true,
+      showCashier: true,
+      showRegister: true,
+      showPaymentDetails: true,
+    },
+  },
+] as const satisfies ReadonlyArray<{
+  id: string;
+  title: string;
+  description: string;
+  values: ReceiptLayoutValues;
+}>;
+
 export function ReceiptSettingsManager({
   canManage,
   initialSettings,
@@ -77,6 +134,36 @@ export function ReceiptSettingsManager({
             <Field label="Footer message" required>
               <Input disabled={!canManage || isPending} maxLength={240} onChange={(event) => updateText("footerMessage", event.target.value)} value={values.footerMessage} />
             </Field>
+          </section>
+
+          <section className="rounded-lg border p-4" aria-labelledby="receipt-layout-presets-title">
+            <p className="text-sm font-semibold" id="receipt-layout-presets-title">Layout presets</p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Choose a starting layout, then refine it below. A preset changes only this form;
+              save to apply it to future receipts.
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {receiptLayoutPresets.map((preset) => (
+                <Button
+                  className="h-auto items-start justify-start whitespace-normal px-4 py-3 text-left"
+                  disabled={!canManage || isPending}
+                  key={preset.id}
+                  onClick={() => {
+                    setValues((current) => ({ ...current, ...preset.values }));
+                    setMessage(`${preset.title} layout selected. Save receipt settings to apply it.`);
+                  }}
+                  type="button"
+                  variant="outline"
+                >
+                  <span>
+                    <span className="block font-semibold">{preset.title}</span>
+                    <span className="mt-1 block text-xs font-normal leading-5 text-muted-foreground">
+                      {preset.description}
+                    </span>
+                  </span>
+                </Button>
+              ))}
+            </div>
           </section>
 
           <section className="space-y-3 rounded-lg border p-4">

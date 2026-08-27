@@ -1,5 +1,6 @@
 import { ClipboardList, ShieldCheck } from "lucide-react";
 
+import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -96,7 +97,13 @@ export default async function SecurityPage() {
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <Card><CardHeader className="items-center py-8 text-center"><ClipboardList className="size-7 text-muted-foreground" /><CardTitle>{text}</CardTitle></CardHeader></Card>;
+  return (
+    <BackOfficeStateCard
+      description="Records appear here when an approval or security event is created."
+      icon={<ClipboardList className="size-5" aria-hidden="true" />}
+      title={text}
+    />
+  );
 }
 
 function formatDate(value: string) {

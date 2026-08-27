@@ -6,6 +6,7 @@ import {
   Tag,
 } from "lucide-react";
 
+import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -91,14 +92,11 @@ export default async function CatalogPage() {
           />
         </>
       ) : canManage ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>An active store is required</CardTitle>
-            <CardDescription>
-              Add or reactivate a store before creating the first product.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <BackOfficeStateCard
+          description="Add or reactivate a store before creating the first product."
+          icon={<PackageOpen className="size-5" aria-hidden="true" />}
+          title="An active store is required"
+        />
       ) : null}
 
       {products.length > 0 ? (
@@ -285,15 +283,11 @@ export default async function CatalogPage() {
           })}
         </section>
       ) : (
-        <Card>
-          <CardHeader className="items-center py-12 text-center">
-            <PackageOpen className="size-9 text-muted-foreground" aria-hidden="true" />
-            <CardTitle>No products yet</CardTitle>
-            <CardDescription>
-              Create the first product after account and organization setup.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <BackOfficeStateCard
+          description="Create the first product after account and organization setup."
+          icon={<PackageOpen className="size-5" aria-hidden="true" />}
+          title="No products yet"
+        />
       )}
     </div>
   );

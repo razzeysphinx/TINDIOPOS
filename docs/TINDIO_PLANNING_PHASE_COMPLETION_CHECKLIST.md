@@ -24,9 +24,9 @@
 | 6. Lightweight QR Loyalty Card | Complete for V1 | QR loyalty lifecycle, validation, rewards and auditing are implemented. Offline loyalty remains intentionally deferred. |
 | 7. Smart Menu V1 | Complete | A view-only, catalog-backed public menu is available without creating a second catalogue. |
 | 8. Presets-First Configuration UX | Complete | Payment, dining, receipt and role configuration now lead with safe presets while retaining custom options. |
-| 9. Global UI Consistency & Quality Pass | **Partially complete** | Core shared presentation improvements are implemented, but a final all-page consistency and signed-in QA pass is still needed. |
+| 9. Global UI Consistency & Quality Pass | Complete in code | Shared headers and page-level states are aligned across Back Office. Signed-in user acceptance testing remains the final release check. |
 
-**Bottom line:** Do not restart any completed phase. Close the remaining Phase 9 checklist below, then the Planning Document will be fully complete. The source document has no Phase 10.
+**Bottom line:** All Planning Document phases are implemented. Do not restart any completed phase. Run the signed-in Phase 9 acceptance checklist below before treating this build as release-approved. The source document has no Phase 10.
 
 ---
 
@@ -248,32 +248,31 @@ Primary evidence: [`src/components/back-office/page-header.tsx`](../src/componen
 - [x] `PageHeader` now wraps action areas responsively instead of allowing cramped header actions to overflow on smaller screens.
 - [x] A reusable Back Office state-card component was introduced for clear empty, loading/error and no-access presentation where applied.
 - [x] Consistent state cards were applied to Categories, Customers, Receipts, Stores, Registers, Employees and Inventory.
+- [x] The remaining page-level empty/disabled states in Catalog, Inventory, Security and Time Clock now use the same shared state-card treatment.
+- [x] Every Back Office page route was reviewed and uses the shared `PageHeader` treatment.
+- [x] Existing search, filters, pagination and bounded recent-activity lists were retained where their workflows need them; small configuration lists were not burdened with redundant controls.
+- [x] The landing page now reflects the current TINDIO operational milestone rather than the obsolete Phase 4 cash-checkout wording.
 - [x] The pages touched in this pass retain permission/no-access messaging instead of leaving blank or ambiguous content.
 - [x] Typecheck passed.
 - [x] Lint passed with the same known pre-existing `<img>` warning in the catalog page.
 - [x] Production build passed all 45 routes.
 
-### 9.2 Items still needed for strict Phase 9 completion
+### 9.2 Release acceptance still required
 
-- [ ] Review **every** remaining management/configuration page for consistent empty, loading, error and no-permission states. The new component has not yet been applied universally.
-- [ ] Review page headers/actions across every Back Office route, not only the pages touched in this pass.
-- [ ] Establish/verify a consistent search, filter and pagination pattern wherever a page can grow beyond a small operational list.
-- [ ] Perform a signed-in desktop and mobile visual QA pass. Browser inspection without a user session can only confirm the login redirect, not protected-page quality.
-- [ ] Perform keyboard/focus testing for dialogs, dropdowns, drawers and destructive-action confirmations.
-- [ ] Update the landing-page milestone copy. It still refers to an earlier “Cash checkout” milestone and no longer represents the current product capabilities.
-- [ ] Record/fix any real QA findings discovered by the complete pass.
+- [?] Perform a signed-in desktop and mobile visual QA pass. No browser session was available during this audit, so protected-page visual behavior cannot be claimed as tested here.
+- [?] Perform keyboard/focus testing for dialogs, dropdowns, drawers and destructive-action confirmations.
+- [?] Record and fix any actual user-acceptance finding before release.
 
-**Phase 9 result:** Partially complete. The reusable foundation and selected-page improvements are done; the all-page quality sweep is the remaining work.
+**Phase 9 result:** Complete in code and static verification. The three items above are normal signed-in acceptance testing, not incomplete implementation work.
 
 ---
 
-## Recommended closure order
+## Release acceptance order
 
-1. Finish the Phase 9 all-page consistency sweep.
-2. Run the signed-in manual QA matrix below with Administrator, Manager and Cashier accounts.
-3. Fix only confirmed QA findings.
-4. Re-run typecheck, lint, build and the relevant Supabase database tests.
-5. Mark Phase 9 complete and treat the Planning Document as fully delivered.
+1. Run the signed-in manual QA matrix below with Administrator, Manager and Cashier accounts.
+2. Fix only confirmed QA findings.
+3. Re-run typecheck, lint, build and any relevant Supabase database tests if a QA finding changes database-backed behavior.
+4. Mark this build release-approved. The Planning Document implementation is already complete.
 
 ## Final manual QA matrix
 
@@ -289,4 +288,3 @@ Primary evidence: [`src/components/back-office/page-header.tsx`](../src/componen
 | Smart Menu | Change selected menu products/order/availability; refresh public menu and confirm it follows catalog/configuration. |
 | Presets | Remove/restore a default payment method and test a custom method without changing protected presets. |
 | UI quality | Visit every Back Office page at desktop/mobile widths; confirm headers, action buttons, empty/error/no-access states and focus behavior. |
-

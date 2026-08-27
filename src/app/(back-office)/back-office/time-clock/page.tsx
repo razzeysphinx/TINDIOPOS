@@ -1,8 +1,8 @@
 import { Clock3 } from "lucide-react";
 
+import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadTimeClockWorkspace } from "@/features/time-clock/data";
 import { TimeClockControl } from "@/features/time-clock/time-clock-control";
 import { requireBusinessContext } from "@/lib/auth/dal";
@@ -21,12 +21,11 @@ export default async function TimeClockPage() {
           eyebrow="Attendance"
           title="Time clock"
         />
-        <Card>
-          <CardHeader>
-            <CardTitle>Time clock is disabled</CardTitle>
-            <CardDescription>An owner or administrator can enable it in Business profile &amp; features.</CardDescription>
-          </CardHeader>
-        </Card>
+        <BackOfficeStateCard
+          description="An owner or administrator can enable it in Business profile & features."
+          icon={<Clock3 className="size-5" aria-hidden="true" />}
+          title="Time clock is disabled"
+        />
       </div>
     );
   }

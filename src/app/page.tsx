@@ -44,7 +44,7 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <span className="hidden items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground sm:inline-flex">
               <span className="size-1.5 rounded-full bg-primary" />
-              Phase 4
+              Ready for operations
             </span>
             <Link className={buttonVariants({ variant: "outline" })} href="/login">
               Sign in
@@ -107,7 +107,7 @@ export default function Home() {
                 <StatusRow label="Application" value="Next.js Back Office" />
                 <StatusRow label="Design system" value="TINDIO tokens" />
                 <StatusRow label="Data layer" value="Supabase + RLS" />
-                <StatusRow label="Current milestone" value="Cash checkout" />
+                <StatusRow label="Operational milestone" value="POS, Back Office & loyalty" />
               </dl>
             </div>
 
@@ -120,7 +120,7 @@ export default function Home() {
             </div>
 
             <p className="mt-10 flex items-center gap-1.5 text-sm font-medium text-primary">
-              Phase 4: cash checkout <ArrowUpRight className="size-4" />
+              Built for the whole retail day <ArrowUpRight className="size-4" />
             </p>
           </aside>
         </section>

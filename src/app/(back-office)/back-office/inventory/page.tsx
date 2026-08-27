@@ -37,12 +37,11 @@ export default async function InventoryPage() {
           eyebrow="Inventory"
           title="Inventory"
         />
-        <Card>
-          <CardHeader>
-            <CardTitle>Inventory is disabled</CardTitle>
-            <CardDescription>An owner or administrator can enable it in Business profile &amp; features.</CardDescription>
-          </CardHeader>
-        </Card>
+        <BackOfficeStateCard
+          description="An owner or administrator can enable it in Business profile & features."
+          icon={<Boxes className="size-5" aria-hidden="true" />}
+          title="Inventory is disabled"
+        />
       </div>
     );
   }

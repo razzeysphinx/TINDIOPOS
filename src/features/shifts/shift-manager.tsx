@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   LogIn,
   LockKeyhole,
+  Printer,
   ReceiptText,
 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
@@ -622,15 +623,15 @@ function ClosedShiftHistory({
       <CardHeader className="flex-row items-start gap-3">
         <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><ReceiptText className="size-5" /></span>
         <div>
-          <CardTitle>Recent closed shifts</CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">Stored expected cash, drawer count, and difference for the latest 25 closures.</p>
+          <CardTitle>Shift-close audit trail</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">Stored expected cash, drawer count, and difference for the latest 25 closed shifts.</p>
         </div>
       </CardHeader>
       <CardContent>
         {shifts.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full min-w-170 text-left text-sm">
-              <thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th className="px-3 py-2 font-medium">Register</th><th className="px-3 py-2 font-medium">Closed</th><th className="px-3 py-2 text-right font-medium">Expected</th><th className="px-3 py-2 text-right font-medium">Counted</th><th className="px-3 py-2 text-right font-medium">Difference</th></tr></thead>
+              <thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th className="px-3 py-2 font-medium">Register</th><th className="px-3 py-2 font-medium">Closed</th><th className="px-3 py-2 text-right font-medium">Expected</th><th className="px-3 py-2 text-right font-medium">Counted</th><th className="px-3 py-2 text-right font-medium">Difference</th><th className="px-3 py-2 text-right font-medium">Print</th></tr></thead>
               <tbody className="divide-y">
                 {shifts.map((shift) => {
                   const difference = shift.differenceMinor ?? 0;
@@ -640,6 +641,20 @@ function ClosedShiftHistory({
                     <td className="px-3 py-3 text-right">{formatMinorMoney(shift.expectedCashMinor ?? 0, currencyCode)}</td>
                     <td className="px-3 py-3 text-right">{formatMinorMoney(shift.countedCashMinor ?? 0, currencyCode)}</td>
                     <td className={difference === 0 ? "px-3 py-3 text-right font-medium" : difference > 0 ? "px-3 py-3 text-right font-medium text-emerald-700 dark:text-emerald-400" : "px-3 py-3 text-right font-medium text-destructive"}>{difference > 0 ? "+" : ""}{formatMinorMoney(difference, currencyCode)}</td>
+                    <td className="px-3 py-3 text-right">
+                      <ShiftClosePrintButton
+                        closedAt={shift.closedAt}
+                        countedCashMinor={shift.countedCashMinor ?? 0}
+                        currencyCode={currencyCode}
+                        expectedCashMinor={shift.expectedCashMinor ?? 0}
+                        differenceMinor={difference}
+                        openedAt={shift.openedAt}
+                        registerName={registers.find((item) => item.id === shift.registerId)?.name ?? "Register"}
+                        shiftId={shift.id}
+                        storeName={stores.find((item) => item.id === shift.storeId)?.name ?? "Store"}
+                        timezone={timezone}
+                      />
+                    </td>
                   </tr>;
                 })}
               </tbody>
@@ -648,5 +663,72 @@ function ClosedShiftHistory({
         ) : <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No shifts have been closed yet.</p>}
       </CardContent>
     </Card>
+  );
+}
+
+function escapePrintHtml(value: string) {
+  return value.replace(/[&<>'"]/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    "\"": "&quot;",
+  })[character] ?? character);
+}
+
+function ShiftClosePrintButton({
+  closedAt,
+  countedCashMinor,
+  currencyCode,
+  differenceMinor,
+  expectedCashMinor,
+  openedAt,
+  registerName,
+  shiftId,
+  storeName,
+  timezone,
+}: {
+  closedAt: string | null;
+  countedCashMinor: number;
+  currencyCode: string;
+  differenceMinor: number;
+  expectedCashMinor: number;
+  openedAt: string;
+  registerName: string;
+  shiftId: string;
+  storeName: string;
+  timezone: string;
+}) {
+  const print = () => {
+    const printWindow = window.open("", "tindio-shift-close", "width=480,height=700");
+    if (!printWindow) return;
+
+    const differenceLabel = differenceMinor === 0
+      ? "Balanced"
+      : differenceMinor > 0
+        ? "Over"
+        : "Short";
+    const rows = [
+      ["Expected cash", formatMinorMoney(expectedCashMinor, currencyCode)],
+      ["Counted cash", formatMinorMoney(countedCashMinor, currencyCode)],
+      [differenceLabel, `${differenceMinor > 0 ? "+" : ""}${formatMinorMoney(differenceMinor, currencyCode)}`],
+    ];
+    const details = [
+      ["Store", storeName],
+      ["Register", registerName],
+      ["Shift reference", shiftId],
+      ["Opened", formatShiftTime(openedAt, timezone)],
+      ["Closed", closedAt ? formatShiftTime(closedAt, timezone) : "Recorded close"],
+    ];
+
+    printWindow.document.write(`<!doctype html><html><head><title>TINDIO shift close</title><style>body{margin:0;padding:28px;color:#10251e;font-family:Arial,sans-serif}.brand{font-size:11px;font-weight:700;letter-spacing:2px;color:#008060}.title{margin:5px 0 0;font-size:24px}.muted{margin:5px 0 20px;color:#52645d;font-size:12px}.details{border-top:1px solid #d1d5db;margin:0;padding:12px 0;list-style:none}.details li{display:flex;justify-content:space-between;gap:16px;padding:5px 0;font-size:13px}.details span:first-child{color:#52645d}.summary{margin-top:14px;border:1px solid #d1d5db;border-radius:10px;padding:14px}.summary p{display:flex;justify-content:space-between;margin:0;padding:6px 0;font-size:14px}.summary p:last-child{border-top:1px solid #d1d5db;margin-top:6px;padding-top:12px;font-weight:700}.foot{margin-top:20px;color:#52645d;font-size:11px;line-height:1.5}</style></head><body><p class="brand">TINDIO POS</p><h1 class="title">Shift close printout</h1><p class="muted">Immutable close snapshot</p><ul class="details">${details.map(([label, value]) => `<li><span>${escapePrintHtml(label)}</span><strong>${escapePrintHtml(value)}</strong></li>`).join("")}</ul><section class="summary">${rows.map(([label, value]) => `<p><span>${escapePrintHtml(label)}</span><strong>${escapePrintHtml(value)}</strong></p>`).join("")}</section><p class="foot">This printout reflects the server-recorded shift-close values. Cash movements and transaction records remain available in TINDIO&apos;s audit trail.</p><script>window.onload=()=>window.print()</script></body></html>`);
+    printWindow.document.close();
+  };
+
+  return (
+    <Button aria-label={`Print shift close for ${registerName}`} onClick={print} size="sm" title="Print shift close" type="button" variant="ghost">
+      <Printer aria-hidden="true" />
+      <span className="sr-only">Print shift close</span>
+    </Button>
   );
 }

@@ -11,6 +11,7 @@
     "test:back-office-navigation": "node --test scripts/phase-2-back-office-navigation-check.mjs",
     "test:dashboard-access": "node --test scripts/phase-3-dashboard-access-check.mjs",
     "test:cashier-pos": "node --test scripts/phase-4-cashier-pos-check.mjs",
+    "test:shift-accountability": "node --test scripts/phase-5-shift-accountability-check.mjs",
     "test:tenant-load": "node scripts/phase-16-tenant-load-check.mjs",
     "typecheck": "tsc --noEmit --incremental false"
   },

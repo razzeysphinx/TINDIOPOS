@@ -46,6 +46,7 @@ export function OfflineQueueStatus({ scope }: { scope: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const hasLocalHistory = entries.length > 0;
   const unresolved = summary.pending + summary.syncing + summary.conflict + summary.failed;
+  const pending = summary.pending + summary.syncing;
 
   const retry = async (idempotencyKey: string) => {
     await retryOfflineCheckout(idempotencyKey);
@@ -53,12 +54,14 @@ export function OfflineQueueStatus({ scope }: { scope: string }) {
     await sync();
   };
 
-  const label = summary.conflict > 0
-    ? `${summary.conflict} sale${summary.conflict === 1 ? "" : "s"} need review`
-    : summary.failed > 0
-      ? `${summary.failed} sale${summary.failed === 1 ? "" : "s"} need attention`
-      : summary.pending + summary.syncing > 0
-        ? `${summary.pending + summary.syncing} queued sale${summary.pending + summary.syncing === 1 ? "" : "s"}`
+  const label = summary.conflict + summary.failed > 0
+    ? `⚠ Sync Problem${summary.conflict + summary.failed === 1 ? "" : "s"}`
+    : isSyncing
+      ? "Syncing"
+      : !isOnline
+        ? `Offline • ${pending} pending`
+      : pending > 0
+        ? `${pending} queued sale${pending === 1 ? "" : "s"}`
         : summary.synced > 0
           ? `${summary.synced} offline receipt${summary.synced === 1 ? "" : "s"}`
           : "Offline";

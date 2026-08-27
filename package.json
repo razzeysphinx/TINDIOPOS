@@ -14,6 +14,7 @@
     "test:shift-accountability": "node --test scripts/phase-5-shift-accountability-check.mjs",
     "test:feature-inventory-safeguards": "node --test scripts/phase-6-feature-inventory-safeguards-check.mjs",
     "test:security-boundaries": "node --test scripts/phase-7-security-boundary-check.mjs",
+    "test:offline-integrity": "node --test scripts/phase-8-offline-integrity-check.mjs",
     "test:tenant-load": "node scripts/phase-16-tenant-load-check.mjs",
     "typecheck": "tsc --noEmit --incremental false"
   },

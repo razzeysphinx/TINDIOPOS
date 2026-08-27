@@ -5,7 +5,6 @@ import {
   Barcode,
   CircleMinus,
   CirclePlus,
-  Clock3,
   Eraser,
   History,
   ImageIcon,
@@ -44,6 +43,7 @@ import type { CheckoutPaymentSummary } from "@/features/checkout/checkout-types"
 import { usePosDevice, type PosDeviceState } from "@/features/devices/pos-device";
 import type { PosDeviceCredential } from "@/features/devices/device-schema";
 import { OfflineQueueStatus } from "@/features/offline/offline-queue-status";
+import { PosOperationalDrawer } from "@/features/pos/pos-operational-drawer";
 import {
   cachePosCatalog,
   cachePosRuntimeSnapshot,
@@ -56,7 +56,6 @@ import {
 import { PosCustomerPicker } from "@/features/customers/pos-customer-picker";
 import { signOutAction } from "@/features/auth/actions";
 import { closeShiftAction, openShiftAction } from "@/features/shifts/actions";
-import { TimeClockControl } from "@/features/time-clock/time-clock-control";
 import type { TimeClockEntry } from "@/features/time-clock/time-clock-types";
 import { setPosFavoriteTileAction } from "@/features/pos/actions";
 import {
@@ -124,6 +123,7 @@ export function PosTerminal({
   canAssignTickets,
   canUseDining,
   canUseOpenTickets,
+  canUseShiftControls,
   canUseTimeClock,
   canCloseShift,
   canOpenShift,
@@ -157,6 +157,7 @@ export function PosTerminal({
   canAssignTickets: boolean;
   canUseDining: boolean;
   canUseOpenTickets: boolean;
+  canUseShiftControls: boolean;
   canUseTimeClock: boolean;
   canCloseShift: boolean;
   canOpenShift: boolean;
@@ -822,6 +823,7 @@ export function PosTerminal({
       <PosShiftGate
         canAccessBackOffice={canAccessBackOffice}
         canOpenShift={canOpenShift}
+        canUseShiftControls={canUseShiftControls}
         canUseTimeClock={canUseTimeClock}
         currencyCode={currencyCode}
         employeeName={employeeName}
@@ -869,28 +871,17 @@ export function PosTerminal({
                 Close shift
               </Button>
             ) : null}
-            <Link href="/pos/shifts">
-              <Badge className="h-9 cursor-pointer px-3" variant="secondary">
-                <Clock3 aria-hidden="true" />
-                Shift open
-              </Badge>
-            </Link>
-            <Link href="/back-office/time-clock">
-              <Badge className="h-9 cursor-pointer px-3" variant={timeClockEntry ? "secondary" : "outline"}>
-                <Clock3 aria-hidden="true" />
-                {timeClockEntry ? "Clocked in" : "Clocked out"}
-              </Badge>
-            </Link>
-            {canAccessBackOffice ? (
-              <Link
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-                href="/back-office"
-              >
-                <ArrowLeft className="size-4" aria-hidden="true" />
-                Back Office
-              </Link>
-            ) : null}
-            <PosSignOutButton />
+            <PosOperationalDrawer
+              canAccessBackOffice={canAccessBackOffice}
+              canSelectCustomer={!isPaymentScreenOpen}
+              canUseShiftControls={canUseShiftControls}
+              canUseTimeClock={canUseTimeClock}
+              employeeName={employeeName}
+              organizationName={organizationName}
+              stores={stores}
+              timeClockEntry={timeClockEntry}
+              timezone={timezone}
+            />
           </div>
         </header>
 
@@ -1373,6 +1364,7 @@ function PosCloseShiftDialog({
 function PosShiftGate({
   canAccessBackOffice,
   canOpenShift,
+  canUseShiftControls,
   canUseTimeClock,
   currencyCode,
   device,
@@ -1386,6 +1378,7 @@ function PosShiftGate({
 }: {
   canAccessBackOffice: boolean;
   canOpenShift: boolean;
+  canUseShiftControls: boolean;
   canUseTimeClock: boolean;
   currencyCode: string;
   device: PosDeviceCredential | null;
@@ -1443,18 +1436,16 @@ function PosShiftGate({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {canAccessBackOffice ? (
-              <Button
-                nativeButton={false}
-                render={<Link href="/back-office" />}
-                size="sm"
-                variant="ghost"
-              >
-                <ArrowLeft aria-hidden="true" />
-                Back Office
-              </Button>
-            ) : null}
-            <PosSignOutButton />
+            <PosOperationalDrawer
+              canAccessBackOffice={canAccessBackOffice}
+              canUseShiftControls={canUseShiftControls}
+              canUseTimeClock={canUseTimeClock}
+              employeeName={employeeName}
+              organizationName={organizationName}
+              stores={stores}
+              timeClockEntry={timeClockEntry}
+              timezone={timezone}
+            />
           </div>
         </header>
 
@@ -1471,13 +1462,6 @@ function PosShiftGate({
             <p className="mt-5 text-sm font-medium">
               {selectedStore?.name ?? "Choose a store"} <span className="text-muted-foreground">·</span> {selectedRegister?.name ?? "Choose a register"}
             </p>
-            {canUseTimeClock ? <div className="mt-6 text-left">
-              <TimeClockControl
-                initialEntry={timeClockEntry}
-                stores={stores}
-                timezone={timezone}
-              />
-            </div> : null}
             {canOpenShift ? (
               <Button className="mt-6 h-11 px-5" onClick={() => setIsDialogOpen(true)} type="button">
                 <LogIn aria-hidden="true" />

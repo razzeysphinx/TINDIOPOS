@@ -3,7 +3,13 @@ import { redirect } from "next/navigation";
 
 import { loadPosWorkspace } from "@/features/pos/data";
 import { PosTerminal } from "@/features/pos/pos-terminal";
-import { canAccessBackOffice, getWorkspaceHome, hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import {
+  canAccessBackOffice,
+  getWorkspaceHome,
+  hasAnyPermission,
+  hasPermission,
+  requireBusinessContext,
+} from "@/lib/auth/dal";
 
 export const metadata = { title: "Point of sale" };
 
@@ -26,6 +32,13 @@ export default async function PosPage() {
       canAccessBackOffice={canAccessBackOffice(context)}
       canCloseShift={hasPermission(context, "shifts.close")}
       canOpenShift={hasPermission(context, "shifts.open")}
+      canUseShiftControls={hasAnyPermission(context, [
+        "shifts.open",
+        "shifts.close",
+        "cash.pay_in",
+        "cash.pay_out",
+        "settings.manage",
+      ])}
       canManageTiles={hasPermission(context, "products.manage")}
       canAssignTickets={canAssignTickets}
       canUseDining={features.dining}

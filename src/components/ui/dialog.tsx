@@ -22,20 +22,28 @@ function DialogContent({
   children,
   className,
   size = "default",
+  side = "center",
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Popup> & {
   size?: "default" | "wide" | "large";
+  side?: "center" | "right";
 }) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-[1px] transition-opacity data-ending-style:opacity-0" />
-      <DialogPrimitive.Viewport className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto p-3 sm:items-center sm:p-6">
+      <DialogPrimitive.Viewport
+        className={cn(
+          "fixed inset-0 z-50 flex overflow-y-auto",
+          side === "right" ? "items-stretch justify-end" : "items-end justify-center p-3 sm:items-center sm:p-6",
+        )}
+      >
         <DialogPrimitive.Popup
           className={cn(
             "relative my-auto w-full rounded-xl border bg-background shadow-2xl outline-none transition-all data-ending-style:scale-95 data-ending-style:opacity-0",
             size === "default" && "max-w-lg",
             size === "wide" && "max-w-3xl",
             size === "large" && "max-w-6xl",
+            side === "right" && "my-0 h-svh max-w-md rounded-none border-y-0 border-r-0 data-ending-style:translate-x-full",
             className,
           )}
           {...props}

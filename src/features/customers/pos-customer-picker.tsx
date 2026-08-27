@@ -68,7 +68,7 @@ export function PosCustomerPicker({
 
   if (value) {
     return (
-      <div className="border-b bg-primary/5 px-4 py-3 sm:px-5">
+      <div className="border-b bg-primary/5 px-4 py-3 sm:px-5" id="pos-customer-picker">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-[0.12em] text-primary">Customer</p>
@@ -95,10 +95,11 @@ export function PosCustomerPicker({
   }
 
   return (
-    <div className="border-b px-4 py-3 sm:px-5">
+    <div className="border-b px-4 py-3 sm:px-5" id="pos-customer-picker">
       <Button
         className="w-full justify-start"
         disabled={disabled}
+        id="pos-customer-picker-trigger"
         onClick={() => {
           setIsOpen((current) => !current);
           setMessage(null);

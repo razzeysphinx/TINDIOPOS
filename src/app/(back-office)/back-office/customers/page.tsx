@@ -1,8 +1,8 @@
 import { UsersRound } from "lucide-react";
 
+import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CustomerDirectory } from "@/features/customers/customer-directory";
 import { CustomerCsvTools } from "@/features/customers/customer-csv-tools";
 import { CreateCustomerForm, CustomerSegmentForm, LoyaltyProgramForm } from "@/features/customers/customer-forms";
@@ -25,12 +25,11 @@ export default async function CustomersPage() {
           eyebrow="CRM"
           title="Customers"
         />
-        <Card>
-          <CardHeader>
-            <CardTitle>Customer management permission required</CardTitle>
-            <CardDescription>Ask an owner to assign the customers.manage permission to your role.</CardDescription>
-          </CardHeader>
-        </Card>
+        <BackOfficeStateCard
+          description="Ask an owner to assign the customers.manage permission to your role."
+          icon={<UsersRound className="size-5" aria-hidden="true" />}
+          title="Customer management permission required"
+        />
       </div>
     );
   }
@@ -61,13 +60,11 @@ export default async function CustomersPage() {
       {customers.length > 0 ? (
         <CustomerDirectory customers={customers} />
       ) : (
-        <Card>
-          <CardHeader className="items-center py-12 text-center">
-            <UsersRound className="size-9 text-muted-foreground" aria-hidden="true" />
-            <CardTitle>No customers yet</CardTitle>
-            <CardDescription>Add a customer here, then select them from the POS cart before checkout.</CardDescription>
-          </CardHeader>
-        </Card>
+        <BackOfficeStateCard
+          description="Add a customer here, then select them from the POS cart before checkout."
+          icon={<UsersRound className="size-5" aria-hidden="true" />}
+          title="No customers yet"
+        />
       )}
     </div>
   );

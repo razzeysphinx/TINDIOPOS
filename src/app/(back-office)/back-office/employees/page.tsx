@@ -1,5 +1,6 @@
 import { Building2, Clock3, IdCard, ShieldCheck, UserRound } from "lucide-react";
 
+import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -106,8 +107,9 @@ export default async function EmployeesPage() {
         </section>
       ) : null}
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        {employees.map((employee) => {
+      {employees.length > 0 ? (
+        <section className="grid gap-4 lg:grid-cols-2">
+          {employees.map((employee) => {
           const profile = profiles.get(employee.profile_id);
           const employeeRoles = roleLinks
             .filter((link) => link.employee_id === employee.id)
@@ -124,7 +126,7 @@ export default async function EmployeesPage() {
             .filter((link) => link.employee_id === employee.id)
             .map((link) => link.store_id);
 
-          return (
+            return (
             <Card key={employee.id}>
               <CardHeader className="flex-row items-start justify-between">
                 <div className="flex min-w-0 items-center gap-3">
@@ -185,9 +187,16 @@ export default async function EmployeesPage() {
                 ) : null}
               </CardContent>
             </Card>
-          );
-        })}
-      </section>
+            );
+          })}
+        </section>
+      ) : (
+        <BackOfficeStateCard
+          description="Invite a team member once the appropriate role and active store are available."
+          icon={<UserRound className="size-5" aria-hidden="true" />}
+          title="No employees yet"
+        />
+      )}
     </div>
   );
 }

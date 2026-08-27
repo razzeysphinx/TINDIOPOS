@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, Boxes, PackageOpen, Warehouse } from "lucide-react";
 
+import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -463,15 +464,11 @@ export default async function InventoryPage() {
             })}
           </div>
         ) : (
-          <Card>
-            <CardHeader className="items-center py-10 text-center">
-              <PackageOpen className="size-8 text-muted-foreground" aria-hidden="true" />
-              <CardTitle>No stock levels yet</CardTitle>
-              <CardDescription>
-                Inventory levels appear when a tracked product is assigned to a store.
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          <BackOfficeStateCard
+            description="Inventory levels appear when a tracked product is assigned to a store."
+            icon={<PackageOpen className="size-5" aria-hidden="true" />}
+            title="No stock levels yet"
+          />
         )}
       </section>
 
@@ -539,15 +536,11 @@ export default async function InventoryPage() {
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardHeader className="items-center py-10 text-center">
-                <Warehouse className="size-8 text-muted-foreground" aria-hidden="true" />
-                <CardTitle>No movements recorded</CardTitle>
-                <CardDescription>
-                  Opening stock and adjustments will be listed here.
-                </CardDescription>
-              </CardHeader>
-            </Card>
+            <BackOfficeStateCard
+              description="Opening stock and adjustments will be listed here."
+              icon={<Warehouse className="size-5" aria-hidden="true" />}
+              title="No movements recorded"
+            />
           )}
         </section>
       ) : null}

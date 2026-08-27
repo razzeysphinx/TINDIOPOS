@@ -1,5 +1,6 @@
 import { MonitorSmartphone, Store } from "lucide-react";
 
+import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,8 +56,9 @@ export default async function RegistersPage() {
         />
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {registers.map((register) => (
+      {registers.length > 0 ? (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {registers.map((register) => (
           <Card key={register.id}>
             <CardHeader className="flex-row items-start justify-between">
               <span className="grid size-10 place-items-center rounded-lg bg-secondary text-primary">
@@ -90,8 +92,15 @@ export default async function RegistersPage() {
               ) : null}
             </CardContent>
           </Card>
-        ))}
-      </section>
+          ))}
+        </section>
+      ) : (
+        <BackOfficeStateCard
+          description="Create a register in an active store before employees can open a shift and use the POS."
+          icon={<MonitorSmartphone className="size-5" aria-hidden="true" />}
+          title="No registers yet"
+        />
+      )}
     </div>
   );
 }

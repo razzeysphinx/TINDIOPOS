@@ -1,9 +1,10 @@
 import { ChevronRight, ReceiptText, RotateCcw } from "lucide-react";
 import Link from "next/link";
 
+import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
@@ -37,14 +38,11 @@ export default async function ReceiptsPage({
           description="Your role does not include access to completed transaction history."
           action={<Badge variant="outline">No receipt access</Badge>}
         />
-        <Card>
-          <CardHeader>
-            <CardTitle>Receipt access is required</CardTitle>
-            <CardDescription>
-              Ask an owner to add the receipts.view permission to one of your roles.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <BackOfficeStateCard
+          description="Ask an owner to add the receipts.view permission to one of your roles."
+          icon={<ReceiptText className="size-5" aria-hidden="true" />}
+          title="Receipt access is required"
+        />
       </div>
     );
   }
@@ -165,15 +163,11 @@ export default async function ReceiptsPage({
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader className="items-center py-12 text-center">
-            <ReceiptText className="size-9 text-muted-foreground" aria-hidden="true" />
-            <CardTitle>No receipts yet</CardTitle>
-            <CardDescription>
-              Completed POS sales will appear here with their stored transaction details.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <BackOfficeStateCard
+          description="Completed POS sales will appear here with their stored transaction details."
+          icon={<ReceiptText className="size-5" aria-hidden="true" />}
+          title="No receipts yet"
+        />
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">

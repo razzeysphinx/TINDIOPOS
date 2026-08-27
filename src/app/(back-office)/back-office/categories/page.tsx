@@ -1,5 +1,6 @@
 import { Archive, Shapes } from "lucide-react";
 
+import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { PageHeader } from "@/components/back-office/page-header";
 import { GuardedDeleteDialog } from "@/components/back-office/guarded-delete-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -109,15 +110,13 @@ export default async function CategoriesPage() {
           ))}
         </section>
       ) : (
-        <Card>
-          <CardHeader className="items-center py-10 text-center">
+        <BackOfficeStateCard
+          description="Add the first category when the organization is ready."
+          icon={
             <Archive className="size-8 text-muted-foreground" aria-hidden="true" />
-            <CardTitle>No categories yet</CardTitle>
-            <CardDescription>
-              Add the first category when the organization is ready.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+          }
+          title="No categories yet"
+        />
       )}
     </div>
   );

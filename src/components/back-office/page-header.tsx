@@ -13,18 +13,18 @@ export function PageHeader({
 }) {
   return (
     <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-      <div>
+      <div className="min-w-0">
         {eyebrow ? (
           <p className="text-xs font-bold tracking-[0.14em] text-primary uppercase">
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="mt-1 text-3xl font-semibold tracking-[-0.035em]">{title}</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+        <h1 className="mt-1 text-balance text-3xl font-semibold tracking-[-0.035em]">{title}</h1>
+        <p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-muted-foreground">
           {description}
         </p>
       </div>
-      {action}
+      {action ? <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">{action}</div> : null}
     </header>
   );
 }

@@ -1,5 +1,6 @@
 import { MapPin, Phone, Store } from "lucide-react";
 
+import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,8 +43,9 @@ export default async function StoresPage() {
         </Card>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {stores.map((store) => (
+      {stores.length > 0 ? (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {stores.map((store) => (
           <Card key={store.id}>
             <CardHeader className="flex-row items-start justify-between">
               <div className="flex items-center gap-3">
@@ -86,8 +88,15 @@ export default async function StoresPage() {
               ) : null}
             </CardContent>
           </Card>
-        ))}
-      </section>
+          ))}
+        </section>
+      ) : (
+        <BackOfficeStateCard
+          description="Create the first active location before adding registers, assigning employees, or selling from the POS."
+          icon={<Store className="size-5" aria-hidden="true" />}
+          title="No stores yet"
+        />
+      )}
     </div>
   );
 }

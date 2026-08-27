@@ -4538,6 +4538,161 @@ export type Database = {
           },
         ]
       }
+      smart_menu_categories: {
+        Row: {
+          category_id: string
+          created_at: string
+          organization_id: string
+          smart_menu_id: string
+          sort_order: number
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          organization_id: string
+          smart_menu_id: string
+          sort_order?: number
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          organization_id?: string
+          smart_menu_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "smart_menu_categories_category_organization_fkey"
+            columns: ["category_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "smart_menu_categories_menu_organization_fkey"
+            columns: ["smart_menu_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "smart_menus"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      smart_menu_products: {
+        Row: {
+          created_at: string
+          organization_id: string
+          product_id: string
+          smart_menu_id: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          organization_id: string
+          product_id: string
+          smart_menu_id: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          organization_id?: string
+          product_id?: string
+          smart_menu_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "smart_menu_products_menu_organization_fkey"
+            columns: ["smart_menu_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "smart_menus"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "smart_menu_products_product_organization_fkey"
+            columns: ["product_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      smart_menus: {
+        Row: {
+          created_at: string
+          created_by_employee_id: string | null
+          id: string
+          is_enabled: boolean
+          organization_id: string
+          show_images: boolean
+          show_modifiers: boolean
+          show_prices: boolean
+          show_unavailable: boolean
+          show_variants: boolean
+          store_id: string
+          updated_at: string
+          updated_by_employee_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by_employee_id?: string | null
+          id?: string
+          is_enabled?: boolean
+          organization_id: string
+          show_images?: boolean
+          show_modifiers?: boolean
+          show_prices?: boolean
+          show_unavailable?: boolean
+          show_variants?: boolean
+          store_id: string
+          updated_at?: string
+          updated_by_employee_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by_employee_id?: string | null
+          id?: string
+          is_enabled?: boolean
+          organization_id?: string
+          show_images?: boolean
+          show_modifiers?: boolean
+          show_prices?: boolean
+          show_unavailable?: boolean
+          show_variants?: boolean
+          store_id?: string
+          updated_at?: string
+          updated_by_employee_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "smart_menus_created_by_organization_fkey"
+            columns: ["created_by_employee_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "smart_menus_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "smart_menus_store_organization_fkey"
+            columns: ["store_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "smart_menus_updated_by_organization_fkey"
+            columns: ["updated_by_employee_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
       stock_request_discrepancies: {
         Row: {
           id: string
@@ -6221,6 +6376,7 @@ export type Database = {
           full_name: string
         }[]
       }
+      get_public_smart_menu: { Args: { target_menu_id: string }; Returns: Json }
       get_reports_snapshot: {
         Args: {
           target_end_date: string
@@ -6570,6 +6726,20 @@ export type Database = {
           ticket_id: string
           updated_at: string
         }[]
+      }
+      save_smart_menu_configuration: {
+        Args: {
+          target_category_ids: string[]
+          target_is_enabled: boolean
+          target_product_ids: string[]
+          target_show_images: boolean
+          target_show_modifiers: boolean
+          target_show_prices: boolean
+          target_show_unavailable: boolean
+          target_show_variants: boolean
+          target_store_id: string
+        }
+        Returns: string
       }
       search_pos_catalog: {
         Args: {

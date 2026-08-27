@@ -105,10 +105,12 @@ function SectionTitle({ title, description }: { title: string; description: stri
 export function ReportingOverview({
   snapshot,
   currencyCode,
+  inventoryEnabled = true,
   mode,
 }: {
   snapshot: ReportSnapshot;
   currencyCode: string;
+  inventoryEnabled?: boolean;
   mode: "dashboard" | "reports";
 }) {
   const { summary } = snapshot;
@@ -127,6 +129,26 @@ export function ReportingOverview({
     net: product.net_sales_minor / 100,
   }));
   const unitName = currencyCode.toUpperCase();
+  const inventoryAlerts = [
+    {
+      detail: "At or below their configured threshold",
+      icon: TrendingDown,
+      label: "Low stock",
+      value: snapshot.inventory.low_stock_count,
+    },
+    {
+      detail: "Tracked positions with no units",
+      icon: Warehouse,
+      label: "Out of stock",
+      value: snapshot.inventory.out_of_stock_count,
+    },
+    {
+      detail: "Positions below zero need attention",
+      icon: TrendingDown,
+      label: "Negative stock",
+      value: snapshot.inventory.negative_stock_count,
+    },
+  ].filter((alert) => alert.value > 0);
 
   return (
     <div className="space-y-8">
@@ -180,6 +202,29 @@ export function ReportingOverview({
             label="Gross margin"
             value={summary.gross_margin_bps === null ? "—" : formatPercentage(summary.gross_margin_bps)}
           />
+        </section>
+      ) : null}
+
+      {mode === "dashboard" && inventoryEnabled && inventoryAlerts.length > 0 ? (
+        <section aria-labelledby="dashboard-inventory-alerts" className="space-y-3">
+          <div>
+            <h2 className="font-heading text-lg font-medium" id="dashboard-inventory-alerts">Inventory alerts</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Current stock positions requiring operational attention within your authorized reporting scope.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {inventoryAlerts.map((alert) => (
+              <MetricCard
+                detail={alert.detail}
+                icon={alert.icon}
+                key={alert.label}
+                label={alert.label}
+                tone="negative"
+                value={formatQuantity(alert.value)}
+              />
+            ))}
+          </div>
         </section>
       ) : null}
 

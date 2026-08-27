@@ -76,7 +76,12 @@ export default async function BackOfficePage({
         filter={filter}
         stores={stores}
       />
-      <ReportingOverview currencyCode={context.organization.currency_code} mode="dashboard" snapshot={snapshot} />
+      <ReportingOverview
+        currencyCode={context.organization.currency_code}
+        inventoryEnabled={context.features.inventory}
+        mode="dashboard"
+        snapshot={snapshot}
+      />
     </div>
   );
 }

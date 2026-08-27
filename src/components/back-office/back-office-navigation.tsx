@@ -15,7 +15,6 @@ import {
   ReceiptText,
   Settings2,
   ShieldCheck,
-  ShoppingCart,
   Shapes,
   Store,
   Truck,
@@ -29,9 +28,8 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 export type BackOfficeNavigationAccess = {
-  canUsePos?: boolean;
   canViewReceipts?: boolean;
-  canManageShifts?: boolean;
+  canViewDashboard?: boolean;
   canManageCustomers?: boolean;
   canViewReports?: boolean;
   canManageSettings?: boolean;
@@ -40,6 +38,11 @@ export type BackOfficeNavigationAccess = {
   canUseInventory?: boolean;
   canUseTimeClock?: boolean;
   canManageDevices?: boolean;
+  canManageCatalog?: boolean;
+  canManageEmployees?: boolean;
+  canManageRoles?: boolean;
+  canManageStores?: boolean;
+  canManageRegisters?: boolean;
 };
 
 type NavigationItem = {
@@ -55,7 +58,12 @@ type NavigationGroup = {
 };
 
 const primaryNavigation: NavigationItem[] = [
-  { href: "/back-office", label: "Dashboard", icon: LayoutDashboard },
+  {
+    href: "/back-office",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    isVisible: (access) => access.canViewDashboard === true,
+  },
   {
     href: "/back-office/reports",
     label: "Reports",
@@ -69,12 +77,6 @@ const navigationGroups: NavigationGroup[] = [
     label: "Sales",
     items: [
       {
-        href: "/pos",
-        label: "Open POS",
-        icon: ShoppingCart,
-        isVisible: (access) => access.canUsePos === true,
-      },
-      {
         href: "/back-office/receipts",
         label: "Receipts",
         icon: ReceiptText,
@@ -82,9 +84,9 @@ const navigationGroups: NavigationGroup[] = [
       },
       {
         href: "/back-office/shifts",
-        label: "Register shifts",
+        label: "Shift reports",
         icon: CircleDollarSign,
-        isVisible: (access) => access.canManageShifts === true,
+        isVisible: (access) => access.canViewReports === true || access.canViewDashboard === true,
       },
       {
         href: "/kitchen",
@@ -97,8 +99,8 @@ const navigationGroups: NavigationGroup[] = [
   {
     label: "Catalog",
     items: [
-      { href: "/back-office/catalog", label: "Products", icon: PackageSearch },
-      { href: "/back-office/categories", label: "Categories", icon: Shapes },
+      { href: "/back-office/catalog", label: "Products", icon: PackageSearch, isVisible: (access) => access.canManageCatalog === true },
+      { href: "/back-office/categories", label: "Categories", icon: Shapes, isVisible: (access) => access.canManageCatalog === true },
     ],
   },
   {
@@ -132,8 +134,8 @@ const navigationGroups: NavigationGroup[] = [
   {
     label: "Team",
     items: [
-      { href: "/back-office/employees", label: "Employees", icon: Users },
-      { href: "/back-office/roles", label: "Roles & access", icon: ShieldCheck },
+      { href: "/back-office/employees", label: "Employees", icon: Users, isVisible: (access) => access.canManageEmployees === true },
+      { href: "/back-office/roles", label: "Roles & access", icon: ShieldCheck, isVisible: (access) => access.canManageRoles === true },
       {
         href: "/back-office/time-clock",
         label: "Time clock",
@@ -151,8 +153,8 @@ const navigationGroups: NavigationGroup[] = [
   {
     label: "Management",
     items: [
-      { href: "/back-office/stores", label: "Stores", icon: Store },
-      { href: "/back-office/registers", label: "Registers", icon: MonitorSmartphone },
+      { href: "/back-office/stores", label: "Stores", icon: Store, isVisible: (access) => access.canManageStores === true },
+      { href: "/back-office/registers", label: "Registers", icon: MonitorSmartphone, isVisible: (access) => access.canManageRegisters === true },
       {
         href: "/back-office/devices",
         label: "POS devices",

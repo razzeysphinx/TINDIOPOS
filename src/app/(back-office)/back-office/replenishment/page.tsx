@@ -10,13 +10,13 @@ import {
   type SupplyChainItem,
   type SupplyChainRequest,
 } from "@/features/inventory/supply-chain-workflows";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Replenishment" };
 
 export default async function ReplenishmentPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("inventory.manage");
 
   if (!context.features.inventory) {
     return <FeatureState title="Replenishment is disabled" description="An owner or administrator can enable Inventory in Business profile & features." />;

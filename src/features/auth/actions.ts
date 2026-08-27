@@ -37,7 +37,7 @@ export async function signInAction(
     return { ok: false, message: "Email or password is incorrect." };
   }
 
-  const next = getSafeRedirectPath(requestedNext, "/back-office");
+  const next = getSafeRedirectPath(requestedNext, "/workspace");
 
   // Invitation links retain an explicit review step and their possession token.
   if (next.startsWith("/join?")) {
@@ -95,7 +95,7 @@ export async function signInAction(
         };
       }
 
-      return { ok: true, redirectTo: "/back-office" };
+      return { ok: true, redirectTo: "/workspace" };
     }
 
     if (invitations.length > 1) {

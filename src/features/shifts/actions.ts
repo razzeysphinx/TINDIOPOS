@@ -50,6 +50,9 @@ function databaseMessage(
 ) {
   if (code === "42501" && message?.toLowerCase().includes("device")) return message;
   if (code === "42501") return "You do not have permission for this cash operation.";
+  if (code === "23505" && message === "This register already has an open shift.") {
+    return "This register has an open shift. Ask a staff member with Shift closing permission to review and close it before opening another.";
+  }
   if (code === "23505" && message) return message;
   if ((code === "23514" || code === "P0002") && message) return message;
   return fallback;

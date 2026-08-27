@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SecurityApprovalManager } from "@/features/approvals/security-approval-manager";
 import { loadSecurityOverview } from "@/features/approvals/data";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 const supportedOperations = ["sales.refund", "cash.pay_out", "inventory.adjust"] as const;
 
@@ -19,7 +19,7 @@ const operationLabels: Record<(typeof supportedOperations)[number], string> = {
 export const metadata = { title: "Security & approvals" };
 
 export default async function SecurityPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission(["approvals.manage", "audit.view"]);
   const canManageRules = hasPermission(context, "approvals.manage");
   const canViewAudit = hasPermission(context, "audit.view");
 

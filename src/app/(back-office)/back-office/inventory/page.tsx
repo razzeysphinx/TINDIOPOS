@@ -19,14 +19,14 @@ import {
   type AdvancedPurchaseOrder,
 } from "@/features/inventory/advanced-inventory-workflows";
 import { InventoryIntegrityWorkflows } from "@/features/inventory/inventory-integrity-workflows";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import type { TableRow } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Inventory" };
 
 export default async function InventoryPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("inventory.manage");
 
   if (!context.features.inventory) {
     return (

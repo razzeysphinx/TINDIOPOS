@@ -7,12 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateRegisterForm, EditRegisterButton } from "@/features/management/management-forms";
 import { CustomerDisplayManager } from "@/features/customer-display/customer-display-manager";
 import { loadManagementRegisters } from "@/features/management/data";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Registers" };
 
 export default async function RegistersPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("registers.manage");
   const { registers, stores: storeRows, displaySessions } = await loadManagementRegisters(context, {
     includeDisplaySessions:
       hasPermission(context, "registers.manage") && context.features.customer_display,

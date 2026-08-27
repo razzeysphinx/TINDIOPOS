@@ -11,12 +11,12 @@ import type {
   ManagementRolePermissionRow,
   ManagementRoleRow,
 } from "@/features/management/management-types";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Roles and access" };
 
 export default async function RolesPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("roles.manage");
   const { roles, rolePermissions, permissions } = await loadManagementRoles(context);
   const permissionDetails = new Map(
     permissions.map((permission) => [permission.code, permission]),

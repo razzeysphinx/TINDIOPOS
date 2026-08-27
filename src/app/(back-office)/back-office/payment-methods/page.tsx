@@ -1,13 +1,13 @@
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { CreatePaymentMethodDialog, PaymentMethodsManager } from "@/features/payments/payment-methods-manager";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Payment methods" };
 
 export default async function PaymentMethodsPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("settings.manage");
   const supabase = await createClient();
   const [methodResult, storeResult, availabilityResult] = await Promise.all([
     supabase

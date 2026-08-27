@@ -9,7 +9,7 @@ import { formatMinorMoney } from "@/features/catalog/catalog-money";
 import { CustomerProfileForm, CustomerStatusButton, LoyaltyAdjustmentForm } from "@/features/customers/customer-forms";
 import { loadCustomerProfile } from "@/features/customers/data";
 import { LoyaltyCardManager } from "@/features/customers/loyalty-card-manager";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Customer profile" };
 
@@ -27,7 +27,7 @@ export default async function CustomerDetailPage({
   params: Promise<{ customerId: string }>;
 }) {
   const { customerId } = await params;
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("customers.manage");
   if (!hasPermission(context, "customers.manage")) notFound();
 
   const workspace = await loadCustomerProfile(context, customerId);

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { loadPosWorkspace } from "@/features/pos/data";
 import { PosTerminal } from "@/features/pos/pos-terminal";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { canAccessBackOffice, getWorkspaceHome, hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 
 export const metadata = { title: "Point of sale" };
 
@@ -12,7 +12,7 @@ export default async function PosPage() {
   const context = await requireBusinessContext();
 
   if (!hasPermission(context, "sales.create")) {
-    redirect("/back-office");
+    redirect(getWorkspaceHome(context));
   }
 
   const features = context.features;
@@ -23,6 +23,7 @@ export default async function PosPage() {
   return (
     <PosTerminal
       activeShift={activeShift}
+      canAccessBackOffice={canAccessBackOffice(context)}
       canCloseShift={hasPermission(context, "shifts.close")}
       canOpenShift={hasPermission(context, "shifts.open")}
       canManageTiles={hasPermission(context, "products.manage")}

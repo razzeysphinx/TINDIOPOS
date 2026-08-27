@@ -6,12 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateStoreForm, EditStoreButton } from "@/features/management/management-forms";
 import { loadManagementStores } from "@/features/management/data";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Stores" };
 
 export default async function StoresPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("stores.manage");
   const stores = await loadManagementStores(context);
 
   const canManage = hasPermission(context, "stores.manage");

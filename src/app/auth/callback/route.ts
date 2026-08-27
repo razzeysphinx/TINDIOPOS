@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     requestedNext.startsWith("/") &&
     !requestedNext.startsWith("//")
       ? requestedNext
-      : "/back-office";
+      : "/workspace";
 
   if (!code) {
     return NextResponse.redirect(new URL("/auth/error", requestUrl.origin));

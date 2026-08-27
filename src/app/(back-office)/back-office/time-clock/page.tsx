@@ -5,12 +5,12 @@ import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { loadTimeClockWorkspace } from "@/features/time-clock/data";
 import { TimeClockControl } from "@/features/time-clock/time-clock-control";
-import { requireBusinessContext } from "@/lib/auth/dal";
+import { requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Time clock" };
 
 export default async function TimeClockPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("dashboard.view");
 
   if (!context.features.time_clock) {
     return (

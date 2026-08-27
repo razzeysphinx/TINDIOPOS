@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Receipts" };
@@ -26,7 +26,7 @@ export default async function ReceiptsPage({
 }: {
   searchParams: Promise<{ before?: string }>;
 }) {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("receipts.view");
   const canViewReceipts = hasPermission(context, "receipts.view");
 
   if (!canViewReceipts) {

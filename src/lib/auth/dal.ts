@@ -321,3 +321,113 @@ export function hasPermission(context: BusinessContext, permission: string) {
 export function hasFeature(context: BusinessContext, feature: FeatureKey) {
   return context.features[feature];
 }
+
+/**
+ * Permissions that represent a Back Office responsibility. Operational POS
+ * permissions are deliberately excluded: a cashier should enter the POS,
+ * not receive a Back Office shell solely because they can sell.
+ */
+const BACK_OFFICE_PERMISSIONS = [
+  "dashboard.view",
+  "reports.view",
+  "products.manage",
+  "inventory.manage",
+  "customers.manage",
+  "employees.manage",
+  "roles.manage",
+  "stores.manage",
+  "registers.manage",
+  "organization.manage",
+  "settings.manage",
+  "approvals.manage",
+  "audit.view",
+  "devices.manage",
+  "organization.export",
+  "organization.archive",
+  "organization.lifecycle",
+  "recovery.view",
+  "recovery.manage",
+] as const;
+
+export function hasAnyPermission(context: BusinessContext, permissions: readonly string[]) {
+  return permissions.some((permission) => hasPermission(context, permission));
+}
+
+export function canAccessBackOffice(context: BusinessContext) {
+  return hasAnyPermission(context, BACK_OFFICE_PERMISSIONS);
+}
+
+/**
+ * Select an authorized Back Office landing page. This doubles as the safe
+ * fallback for a denied Back Office deep link.
+ */
+export function getBackOfficeHome(context: BusinessContext) {
+  if (hasPermission(context, "dashboard.view")) return "/back-office";
+  if (hasPermission(context, "reports.view")) return "/back-office/reports";
+  if (hasPermission(context, "inventory.manage") && context.features.inventory) {
+    return "/back-office/inventory";
+  }
+  if (hasPermission(context, "products.manage")) return "/back-office/catalog";
+  if (hasPermission(context, "customers.manage")) return "/back-office/customers";
+  if (hasPermission(context, "employees.manage")) return "/back-office/employees";
+  if (hasPermission(context, "roles.manage")) return "/back-office/roles";
+  if (hasPermission(context, "stores.manage")) return "/back-office/stores";
+  if (hasPermission(context, "registers.manage")) return "/back-office/registers";
+  if (hasPermission(context, "devices.manage")) return "/back-office/devices";
+  if (hasAnyPermission(context, ["approvals.manage", "audit.view"])) {
+    return "/back-office/security";
+  }
+  if (hasAnyPermission(context, [
+    "settings.manage",
+    "organization.manage",
+    "organization.export",
+    "organization.archive",
+    "organization.lifecycle",
+    "recovery.view",
+    "recovery.manage",
+  ])) {
+    return "/back-office/business-profile";
+  }
+  return "/workspace/no-access";
+}
+
+export function getWorkspaceHome(context: BusinessContext) {
+  if (canAccessBackOffice(context)) return getBackOfficeHome(context);
+  if (hasPermission(context, "sales.create")) return "/pos";
+  if (
+    context.features.kitchen_display &&
+    hasAnyPermission(context, ["kitchen.view", "kitchen.manage"])
+  ) {
+    return "/kitchen";
+  }
+  return "/workspace/no-access";
+}
+
+/**
+ * Route gate for every Back Office page. Server actions, RPCs, and RLS remain
+ * the command authorization source; this prevents POS-only users from using
+ * a typed Back Office URL to load the Back Office UI.
+ */
+export async function requireBackOfficeContext() {
+  const context = await requireBusinessContext();
+
+  if (!canAccessBackOffice(context)) {
+    redirect(getWorkspaceHome(context));
+  }
+
+  return context;
+}
+
+/** Require one of the route's declared Back Office permissions. */
+export async function requireBackOfficePermission(
+  permissions: string | readonly string[],
+) {
+  const context = await requireBackOfficeContext();
+  const requiredPermissions = typeof permissions === "string" ? [permissions] : permissions;
+
+  if (!hasAnyPermission(context, requiredPermissions)) {
+    redirect(getBackOfficeHome(context));
+  }
+
+  return context;
+}

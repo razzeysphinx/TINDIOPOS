@@ -2,13 +2,13 @@ import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReceiptSettingsManager } from "@/features/receipts/receipt-settings-manager";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Receipt settings" };
 
 export default async function ReceiptSettingsPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("settings.manage");
   const canManage = hasPermission(context, "settings.manage");
 
   if (!canManage) {

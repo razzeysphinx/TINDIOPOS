@@ -13,6 +13,7 @@ import {
   LockKeyhole,
   LoaderCircle,
   LogIn,
+  LogOut,
   MonitorSmartphone,
   PackageOpen,
   Search,
@@ -53,6 +54,7 @@ import {
   type PosCustomerDisplaySession,
 } from "@/features/customer-display/customer-display-types";
 import { PosCustomerPicker } from "@/features/customers/pos-customer-picker";
+import { signOutAction } from "@/features/auth/actions";
 import { closeShiftAction, openShiftAction } from "@/features/shifts/actions";
 import { TimeClockControl } from "@/features/time-clock/time-clock-control";
 import type { TimeClockEntry } from "@/features/time-clock/time-clock-types";
@@ -97,6 +99,17 @@ type CompletedCustomerDisplaySale = {
 const selectClassName =
   "h-9 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
+function PosSignOutButton() {
+  return (
+    <form action={signOutAction}>
+      <Button size="sm" type="submit" variant="outline">
+        <LogOut aria-hidden="true" />
+        Sign out
+      </Button>
+    </form>
+  );
+}
+
 function createCheckoutKey() {
   return crypto.randomUUID();
 }
@@ -107,6 +120,7 @@ function lineTotalMinor(priceMinor: number, quantity: number) {
 
 export function PosTerminal({
   activeShift: initialActiveShift,
+  canAccessBackOffice,
   canAssignTickets,
   canUseDining,
   canUseOpenTickets,
@@ -139,6 +153,7 @@ export function PosTerminal({
   timezone,
 }: {
   activeShift: PosActiveShift | null;
+  canAccessBackOffice: boolean;
   canAssignTickets: boolean;
   canUseDining: boolean;
   canUseOpenTickets: boolean;
@@ -791,20 +806,21 @@ export function PosTerminal({
   };
 
   if (deviceManagementEnabled && posDevice.state !== "ready") {
-    return <PosDeviceConfigurationState employeeName={employeeName} organizationName={organizationName} state={posDevice} />;
+    return <PosDeviceConfigurationState canAccessBackOffice={canAccessBackOffice} employeeName={employeeName} organizationName={organizationName} state={posDevice} />;
   }
 
   if (stores.length === 0) {
-    return <PosConfigurationState employeeName={employeeName} organizationName={organizationName} type="store" />;
+    return <PosConfigurationState canAccessBackOffice={canAccessBackOffice} employeeName={employeeName} organizationName={organizationName} type="store" />;
   }
 
   if (registers.length === 0) {
-    return <PosConfigurationState employeeName={employeeName} organizationName={organizationName} type="register" />;
+    return <PosConfigurationState canAccessBackOffice={canAccessBackOffice} employeeName={employeeName} organizationName={organizationName} type="register" />;
   }
 
   if (!isOperational) {
     return (
       <PosShiftGate
+        canAccessBackOffice={canAccessBackOffice}
         canOpenShift={canOpenShift}
         canUseTimeClock={canUseTimeClock}
         currencyCode={currencyCode}
@@ -853,7 +869,7 @@ export function PosTerminal({
                 Close shift
               </Button>
             ) : null}
-            <Link href="/back-office/shifts">
+            <Link href="/pos/shifts">
               <Badge className="h-9 cursor-pointer px-3" variant="secondary">
                 <Clock3 aria-hidden="true" />
                 Shift open
@@ -865,13 +881,16 @@ export function PosTerminal({
                 {timeClockEntry ? "Clocked in" : "Clocked out"}
               </Badge>
             </Link>
-            <Link
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-              href="/back-office"
-            >
-              <ArrowLeft className="size-4" aria-hidden="true" />
-              Back Office
-            </Link>
+            {canAccessBackOffice ? (
+              <Link
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                href="/back-office"
+              >
+                <ArrowLeft className="size-4" aria-hidden="true" />
+                Back Office
+              </Link>
+            ) : null}
+            <PosSignOutButton />
           </div>
         </header>
 
@@ -1352,6 +1371,7 @@ function PosCloseShiftDialog({
 }
 
 function PosShiftGate({
+  canAccessBackOffice,
   canOpenShift,
   canUseTimeClock,
   currencyCode,
@@ -1364,6 +1384,7 @@ function PosShiftGate({
   timeClockEntry,
   timezone,
 }: {
+  canAccessBackOffice: boolean;
   canOpenShift: boolean;
   canUseTimeClock: boolean;
   currencyCode: string;
@@ -1421,15 +1442,20 @@ function PosShiftGate({
               <p className="truncate text-xs text-muted-foreground">Cashier: {employeeName} · Register entry</p>
             </div>
           </div>
-          <Button
-            nativeButton={false}
-            render={<Link href="/back-office" />}
-            size="sm"
-            variant="ghost"
-          >
-            <ArrowLeft aria-hidden="true" />
-            Back Office
-          </Button>
+          <div className="flex items-center gap-2">
+            {canAccessBackOffice ? (
+              <Button
+                nativeButton={false}
+                render={<Link href="/back-office" />}
+                size="sm"
+                variant="ghost"
+              >
+                <ArrowLeft aria-hidden="true" />
+                Back Office
+              </Button>
+            ) : null}
+            <PosSignOutButton />
+          </div>
         </header>
 
         <div className="grid place-items-center px-5 py-12 text-center sm:px-10">
@@ -1522,10 +1548,12 @@ function PosShiftGate({
 }
 
 function PosConfigurationState({
+  canAccessBackOffice,
   employeeName,
   organizationName,
   type,
 }: {
+  canAccessBackOffice: boolean;
   employeeName: string;
   organizationName: string;
   type: "store" | "register";
@@ -1544,24 +1572,27 @@ function PosConfigurationState({
             : "Ask a manager to assign you to an active store before opening the POS."}
         </p>
         <p className="mt-4 text-sm font-medium">{organizationName} · {employeeName}</p>
-        <Button
-          className="mt-6"
-          nativeButton={false}
-          render={<Link href="/back-office" />}
-        >
-          <ArrowLeft />
-          Return to Back Office
-        </Button>
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          {canAccessBackOffice ? (
+            <Button nativeButton={false} render={<Link href="/back-office" />}>
+              <ArrowLeft />
+              Return to Back Office
+            </Button>
+          ) : null}
+          <PosSignOutButton />
+        </div>
       </section>
     </main>
   );
 }
 
 function PosDeviceConfigurationState({
+  canAccessBackOffice,
   employeeName,
   organizationName,
   state,
 }: {
+  canAccessBackOffice: boolean;
   employeeName: string;
   organizationName: string;
   state: PosDeviceState;
@@ -1584,10 +1615,15 @@ function PosDeviceConfigurationState({
         <p className="mt-3 text-sm leading-6 text-muted-foreground">{message}</p>
         <p className="mt-4 text-sm font-medium">{organizationName} · {employeeName}</p>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">Ask an owner or admin to register this browser from Back Office → POS devices, or to check whether its assigned register was changed or revoked.</p>
-        <Button className="mt-6" nativeButton={false} render={<Link href="/back-office" />}>
-          <ArrowLeft />
-          Return to Back Office
-        </Button>
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          {canAccessBackOffice ? (
+            <Button nativeButton={false} render={<Link href="/back-office" />}>
+              <ArrowLeft />
+              Return to Back Office
+            </Button>
+          ) : null}
+          <PosSignOutButton />
+        </div>
       </section>
     </main>
   );

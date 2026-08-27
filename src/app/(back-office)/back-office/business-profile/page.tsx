@@ -6,12 +6,20 @@ import { BusinessProfileManager } from "@/features/business-profile/business-pro
 import { BackupRecoveryManager } from "@/features/organization-recovery/backup-recovery-manager";
 import { loadOrganizationRecoverySnapshot } from "@/features/organization-recovery/data";
 import { TenantReadinessManager } from "@/features/organization-readiness/tenant-readiness-manager";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Business profile" };
 
 export default async function BusinessProfilePage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission([
+    "settings.manage",
+    "organization.manage",
+    "organization.export",
+    "organization.archive",
+    "organization.lifecycle",
+    "recovery.view",
+    "recovery.manage",
+  ]);
   const canManage = hasPermission(context, "settings.manage");
   const recoverySnapshot = context.tenantReadiness.canViewRecovery
     ? await loadOrganizationRecoverySnapshot(context.organization.id)

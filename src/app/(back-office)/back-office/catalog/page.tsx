@@ -27,12 +27,12 @@ import {
 import { ProductLabelPrintButton } from "@/features/catalog/catalog-label-print";
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
 import { loadCatalogWorkspace } from "@/features/catalog/data";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Catalog" };
 
 export default async function CatalogPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("products.manage");
   const canManage = hasPermission(context, "products.manage");
   const canViewCost = hasPermission(context, "products.view_cost");
 

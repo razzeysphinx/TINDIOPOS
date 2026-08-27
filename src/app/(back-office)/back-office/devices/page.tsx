@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { DeviceManager } from "@/features/devices/device-manager";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "POS devices" };
@@ -33,7 +33,7 @@ type PosDeviceQuery = {
 };
 
 export default async function DevicesPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("devices.manage");
   if (!hasPermission(context, "devices.manage")) redirect("/back-office");
 
   const supabase = await createClient();

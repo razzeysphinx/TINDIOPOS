@@ -4,23 +4,28 @@ import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ShiftManager } from "@/features/shifts/shift-manager";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission, requireBusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata = { title: "Register shifts" };
+export const metadata = { title: "Shift reports" };
 
 const SHIFT_PERMISSIONS = ["shifts.open", "shifts.close", "cash.pay_in", "cash.pay_out"] as const;
 
-export default async function ShiftsPage() {
+export async function ShiftWorkspacePage({
+  mode,
+}: {
+  mode: "operations" | "reports";
+}) {
   const context = await requireBusinessContext();
-  const canManageSettings = hasPermission(context, "settings.manage");
-  const canOpen = hasPermission(context, "shifts.open");
-  const canClose = hasPermission(context, "shifts.close");
-  const canPayIn = hasPermission(context, "cash.pay_in");
-  const canPayOut = hasPermission(context, "cash.pay_out");
+  const isOperationsMode = mode === "operations";
+  const canManageSettings = isOperationsMode && hasPermission(context, "settings.manage");
+  const canOpen = isOperationsMode && hasPermission(context, "shifts.open");
+  const canClose = isOperationsMode && hasPermission(context, "shifts.close");
+  const canPayIn = isOperationsMode && hasPermission(context, "cash.pay_in");
+  const canPayOut = isOperationsMode && hasPermission(context, "cash.pay_out");
   const canAccessShifts = canManageSettings || SHIFT_PERMISSIONS.some((permission) => hasPermission(context, permission));
 
-  if (!canAccessShifts) {
+  if (isOperationsMode && !canAccessShifts) {
     return (
       <div className="space-y-8">
         <PageHeader
@@ -90,9 +95,16 @@ export default async function ShiftsPage() {
     openedAt: shift.opened_at,
     closedAt: shift.closed_at,
   }));
-  const openShifts = shifts.filter(
-    (shift) => shift.status === "open" && shift.openedByEmployeeId === context.employee.id,
+  const accessibleOpenShifts = shifts.filter(
+    (shift) => shift.status === "open" && context.storeIds.includes(shift.storeId),
   );
+  // A shift closer must be able to recover a register when the original
+  // cashier is unavailable. Report viewers see the same context but receive
+  // no operational controls through the false permission props below.
+  const openShifts =
+    !isOperationsMode || canClose
+      ? accessibleOpenShifts
+      : accessibleOpenShifts.filter((shift) => shift.openedByEmployeeId === context.employee.id);
   const recentClosedShifts = shifts.filter((shift) => shift.status === "closed").slice(0, 25);
   const openShiftIds = openShifts.map((shift) => shift.id);
   const [summariesResult, movementsResult] = await Promise.all([
@@ -144,8 +156,12 @@ export default async function ShiftsPage() {
     <div className="space-y-8">
       <PageHeader
         eyebrow="Cash control"
-        title="Register shifts"
-        description="Keep each drawer accountable: opening cash, sales and refunds, pay-ins and pay-outs, counted cash, and any difference."
+        title={isOperationsMode ? "Shift controls" : "Shift reports"}
+        description={
+          isOperationsMode
+            ? "Open drawers, record cash movements, and close against a counted amount."
+            : "Review recent drawer closures and cash accountability without changing a register shift."
+        }
         action={<Badge variant="secondary"><CircleDollarSign aria-hidden="true" />{openShifts.length} open</Badge>}
       />
       <ShiftManager
@@ -171,4 +187,9 @@ export default async function ShiftsPage() {
       />
     </div>
   );
+}
+
+export default async function ShiftsPage() {
+  await requireBackOfficePermission(["dashboard.view", "reports.view"]);
+  return <ShiftWorkspacePage mode="reports" />;
 }

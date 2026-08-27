@@ -17,7 +17,7 @@ import {
 import { ReceiptPrintButton } from "@/features/receipts/receipt-print-button";
 import { SaleExchangeForm } from "@/features/receipts/sale-exchange-form";
 import { cn } from "@/lib/utils";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Receipt" };
@@ -36,7 +36,7 @@ export default async function ReceiptDetailPage({
     notFound();
   }
 
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("receipts.view");
   if (!hasPermission(context, "receipts.view")) {
     notFound();
   }

@@ -11,12 +11,12 @@ import {
 } from "@/features/management/management-forms";
 import { EmployeePinForm } from "@/features/approvals/employee-pin-form";
 import { loadManagementEmployees } from "@/features/management/data";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Employees" };
 
 export default async function EmployeesPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("employees.manage");
   const canManage = hasPermission(context, "employees.manage");
   const {
     employees,

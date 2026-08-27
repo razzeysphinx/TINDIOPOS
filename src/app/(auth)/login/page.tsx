@@ -17,7 +17,7 @@ export default async function LoginPage({
 }) {
   await connection();
   const { confirmed, email, next } = await searchParams;
-  const nextPath = getSafeRedirectPath(next, "/back-office");
+  const nextPath = getSafeRedirectPath(next, "/workspace");
   const user = await getVerifiedUser();
 
   if (user) {

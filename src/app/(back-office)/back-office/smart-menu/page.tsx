@@ -5,12 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadSmartMenuWorkspace } from "@/features/smart-menu/data";
 import { SmartMenuManager } from "@/features/smart-menu/smart-menu-manager";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Smart Menu" };
 
 export default async function SmartMenuPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("settings.manage");
   const canManage = hasPermission(context, "settings.manage");
 
   if (!canManage) {

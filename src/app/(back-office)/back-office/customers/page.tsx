@@ -7,12 +7,12 @@ import { CustomerDirectory } from "@/features/customers/customer-directory";
 import { CustomerCsvTools } from "@/features/customers/customer-csv-tools";
 import { CreateCustomerForm, CustomerSegmentForm, LoyaltyProgramForm } from "@/features/customers/customer-forms";
 import { loadCustomersOverview } from "@/features/customers/data";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Customers" };
 
 export default async function CustomersPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("customers.manage");
   const canManageCustomers = hasPermission(context, "customers.manage");
   const canManageSettings = hasPermission(context, "settings.manage");
 

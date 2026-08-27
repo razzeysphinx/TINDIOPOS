@@ -16,13 +16,13 @@ import {
   CreateCategoryForm,
   EditCategoryButton,
 } from "@/features/catalog/catalog-forms";
-import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Categories" };
 
 export default async function CategoriesPage() {
-  const context = await requireBusinessContext();
+  const context = await requireBackOfficePermission("products.manage");
   const supabase = await createClient();
   const canManage = hasPermission(context, "products.manage");
   const { data: categories, error } = await supabase

@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(30);
+select plan(35);
 
 select ok(to_regprocedure('public.get_dashboard_snapshot(uuid,date,date,uuid)') is not null, 'dashboard snapshot routine exists');
 select ok(to_regprocedure('public.get_reports_snapshot(uuid,date,date,uuid)') is not null, 'reports snapshot routine exists');
@@ -13,19 +13,23 @@ select ok(to_regclass('public.inventory_movements_organization_store_created_rep
 select ok(to_regclass('public.shifts_organization_closed_report_idx') is not null, 'closed shift reporting index exists');
 select ok(not has_function_privilege('anon', 'public.get_dashboard_snapshot(uuid,date,date,uuid)', 'execute'), 'anonymous callers cannot read dashboard snapshots');
 select ok(not has_function_privilege('anon', 'public.get_reports_snapshot(uuid,date,date,uuid)', 'execute'), 'anonymous callers cannot read reports snapshots');
-select ok(has_function_privilege('authenticated', 'private.get_reporting_snapshot(uuid,date,date,uuid,text)', 'execute'), 'authenticated callers can execute the protected reporting implementation');
+select ok(not has_function_privilege('authenticated', 'private.get_reporting_snapshot(uuid,date,date,uuid,text)', 'execute'), 'raw reporting implementation is not directly executable by authenticated callers');
+select ok(has_function_privilege('authenticated', 'private.get_scoped_reporting_snapshot(uuid,date,date,uuid,text)', 'execute'), 'authenticated callers can execute the scope-protected reporting implementation');
 select ok(not has_function_privilege('anon', 'private.get_reporting_snapshot(uuid,date,date,uuid,text)', 'execute'), 'anonymous callers cannot execute the protected reporting implementation');
 
 insert into auth.users (id, email, raw_user_meta_data)
 values
   ('a1010101-0101-4101-8101-010101010101', 'report-owner@tindio.test', '{"full_name":"Report Owner"}'::jsonb),
-  ('a2020202-0202-4202-8202-020202020202', 'report-outsider@tindio.test', '{"full_name":"Report Outsider"}'::jsonb);
+  ('a2020202-0202-4202-8202-020202020202', 'report-outsider@tindio.test', '{"full_name":"Report Outsider"}'::jsonb),
+  ('a4040404-0404-4404-8404-040404040404', 'report-manager@tindio.test', '{"full_name":"Report Manager"}'::jsonb);
 
 create temporary table reports_test_context (
   organization_id uuid not null,
   store_id uuid not null,
   register_id uuid not null,
   product_id uuid,
+  secondary_store_id uuid,
+  manager_employee_id uuid,
   report_date date not null default (now() at time zone 'Asia/Manila')::date
 );
 
@@ -157,6 +161,80 @@ select ok(
 select ok(
   public.get_reports_snapshot((select organization_id from reports_test_context), (select report_date from reports_test_context), (select report_date from reports_test_context), null) ? 'security',
   'reports expose the security and accountability section'
+);
+
+insert into public.stores (organization_id, name, code)
+select organization_id, 'Reports Secondary', 'REPORT-02'
+from reports_test_context;
+
+update reports_test_context context
+set secondary_store_id = store.id
+from public.stores store
+where store.organization_id = context.organization_id
+  and store.code = 'REPORT-02';
+
+insert into public.employees (organization_id, profile_id, employee_number, job_title)
+select organization_id, 'a4040404-0404-4404-8404-040404040404', 'REPORT-MANAGER', 'Report Manager'
+from reports_test_context;
+
+update reports_test_context context
+set manager_employee_id = employee.id
+from public.employees employee
+where employee.organization_id = context.organization_id
+  and employee.profile_id = 'a4040404-0404-4404-8404-040404040404';
+
+insert into public.employee_roles (organization_id, employee_id, role_id)
+select context.organization_id, context.manager_employee_id, role.id
+from reports_test_context context
+join public.roles role
+  on role.organization_id = context.organization_id
+ and role.code = 'manager';
+
+insert into public.employee_stores (organization_id, employee_id, store_id)
+select organization_id, manager_employee_id, store_id
+from reports_test_context;
+
+set local request.jwt.claim.sub = 'a4040404-0404-4404-8404-040404040404';
+select lives_ok(
+  format(
+    $$select public.get_dashboard_snapshot(%L, %L::date, %L::date, %L::uuid)$$,
+    (select organization_id from reports_test_context),
+    (select report_date from reports_test_context),
+    (select report_date from reports_test_context),
+    (select store_id from reports_test_context)
+  ),
+  'manager dashboard succeeds for an assigned store'
+);
+
+create or replace function pg_temp.unscoped_manager_report_is_rejected() returns boolean language plpgsql as $$
+begin
+  perform public.get_reports_snapshot((select organization_id from reports_test_context), (select report_date from reports_test_context), (select report_date from reports_test_context), null);
+  return false;
+exception when insufficient_privilege then
+  return true;
+end;
+$$;
+select ok(pg_temp.unscoped_manager_report_is_rejected(), 'manager cannot request organization-wide reporting');
+
+create or replace function pg_temp.unassigned_store_manager_report_is_rejected() returns boolean language plpgsql as $$
+begin
+  perform public.get_reports_snapshot((select organization_id from reports_test_context), (select report_date from reports_test_context), (select report_date from reports_test_context), (select secondary_store_id from reports_test_context));
+  return false;
+exception when insufficient_privilege then
+  return true;
+end;
+$$;
+select ok(pg_temp.unassigned_store_manager_report_is_rejected(), 'manager cannot request reporting for an unassigned store');
+
+select lives_ok(
+  format(
+    $$select public.get_reports_snapshot(%L, %L::date, %L::date, %L::uuid)$$,
+    (select organization_id from reports_test_context),
+    (select report_date from reports_test_context),
+    (select report_date from reports_test_context),
+    (select store_id from reports_test_context)
+  ),
+  'manager reports succeed for an assigned store'
 );
 
 create or replace function pg_temp.report_access_is_rejected() returns boolean language plpgsql as $$

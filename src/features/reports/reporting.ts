@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
-import type { BusinessContext } from "@/lib/auth/dal";
+import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -204,11 +204,50 @@ export function resolveReportFilter(
   return { startDate, endDate, storeId };
 }
 
+/**
+ * Store management is the explicit organization-wide reporting authority.
+ * Everyone else who can report is constrained to stores assigned to their
+ * employee record. This is permission-based intentionally: a renamed system
+ * role or a custom role cannot accidentally change data scope.
+ */
+export function hasOrganizationReportingScope(context: BusinessContext) {
+  return hasPermission(context, "stores.manage");
+}
+
+export function canQueryReportingScope(context: BusinessContext) {
+  return hasOrganizationReportingScope(context) || context.storeIds.length > 0;
+}
+
+export function resolveScopedReportFilter(
+  context: BusinessContext,
+  searchParams: { start?: string | string[]; end?: string | string[]; store?: string | string[] },
+) {
+  const filter = resolveReportFilter(searchParams, context.organization.timezone);
+
+  if (hasOrganizationReportingScope(context)) {
+    return filter;
+  }
+
+  return {
+    ...filter,
+    storeId: filter.storeId && context.storeIds.includes(filter.storeId)
+      ? filter.storeId
+      : context.storeIds[0] ?? null,
+  };
+}
+
 export async function getReportingSnapshot(
   context: BusinessContext,
   filter: ReportFilter,
   mode: "dashboard" | "reports",
 ): Promise<ReportSnapshot> {
+  if (
+    !hasOrganizationReportingScope(context) &&
+    (!filter.storeId || !context.storeIds.includes(filter.storeId))
+  ) {
+    throw new Error("Reporting requires an assigned store.");
+  }
+
   const supabase = await createClient();
   const { data, error } = await supabase.rpc(
     mode === "dashboard" ? "get_dashboard_snapshot" : "get_reports_snapshot",

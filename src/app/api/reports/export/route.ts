@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getReportingSnapshot, resolveReportFilter, type ReportSnapshot } from "@/features/reports/reporting";
+import {
+  canQueryReportingScope,
+  getReportingSnapshot,
+  resolveScopedReportFilter,
+  type ReportSnapshot,
+} from "@/features/reports/reporting";
 import { getBusinessContext, hasPermission } from "@/lib/auth/dal";
 import { csvRows } from "@/lib/csv";
 
@@ -164,13 +169,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Choose a supported report export." }, { status: 400 });
   }
 
-  const filter = resolveReportFilter(
+  if (!canQueryReportingScope(context)) {
+    return NextResponse.json({ error: "An assigned store is required for reporting." }, { status: 403 });
+  }
+
+  const filter = resolveScopedReportFilter(
+    context,
     {
       start: request.nextUrl.searchParams.get("start") ?? undefined,
       end: request.nextUrl.searchParams.get("end") ?? undefined,
       store: request.nextUrl.searchParams.get("store") ?? undefined,
     },
-    context.organization.timezone,
   );
   const snapshot = await getReportingSnapshot(context, filter, "reports");
   const filename = `tindio-${kind.data}-report-${filter.startDate}-to-${filter.endDate}.csv`;

@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Boxes, PackageOpen, Warehouse } from "lucide-react";
+import Link from "next/link";
 
 import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { PageHeader } from "@/components/back-office/page-header";
@@ -22,11 +23,61 @@ import { InventoryIntegrityWorkflows } from "@/features/inventory/inventory-inte
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import type { TableRow } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Inventory" };
 
-export default async function InventoryPage() {
+const INVENTORY_TABS = [
+  { id: "overview", label: "Stock overview" },
+  { id: "adjustments", label: "Adjust stock" },
+  { id: "purchasing", label: "Purchasing & counts" },
+  { id: "controls", label: "Inventory controls" },
+] as const;
+
+type InventoryTab = (typeof INVENTORY_TABS)[number]["id"];
+
+function resolveInventoryTab(value: string | string[] | undefined): InventoryTab {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return INVENTORY_TABS.some((tab) => tab.id === candidate)
+    ? candidate as InventoryTab
+    : "overview";
+}
+
+function InventoryTabs({ activeTab }: { activeTab: InventoryTab }) {
+  return (
+    <nav aria-label="Inventory sections" className="overflow-x-auto border-b">
+      <div className="flex min-w-max gap-1">
+        {INVENTORY_TABS.map((tab) => {
+          const active = tab.id === activeTab;
+
+          return (
+            <Link
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "border-b-2 px-3 py-3 text-sm font-medium transition-colors",
+                active
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
+              )}
+              href={`/back-office/inventory?tab=${tab.id}`}
+              key={tab.id}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string | string[] }>;
+}) {
   const context = await requireBackOfficePermission("inventory.manage");
+  const activeTab = resolveInventoryTab((await searchParams).tab);
 
   if (!context.features.inventory) {
     return (
@@ -350,14 +401,16 @@ export default async function InventoryPage() {
         }
       />
 
-      {canManage ? (
+      <InventoryTabs activeTab={activeTab} />
+
+      {activeTab === "adjustments" && canManage ? (
         <InventoryAdjustmentForm
           items={items}
           stores={stores.map(({ id, name }) => ({ id, name }))}
         />
       ) : null}
 
-      {canManage ? (
+      {activeTab === "purchasing" && canManage ? (
         <AdvancedInventoryWorkflows
           stores={stores.map(({ id, name }) => ({ id, name }))}
           items={advancedItems}
@@ -377,7 +430,7 @@ export default async function InventoryPage() {
         />
       ) : null}
 
-      {canManage ? (
+      {activeTab === "controls" && canManage ? (
         <InventoryIntegrityWorkflows
           stores={stores.map(({ id, name }) => ({ id, name }))}
           items={advancedItems}
@@ -397,7 +450,9 @@ export default async function InventoryPage() {
         />
       ) : null}
 
-      <section className="space-y-3" aria-labelledby="stock-levels-title">
+      {activeTab === "overview" ? (
+        <>
+          <section className="space-y-3" aria-labelledby="stock-levels-title">
         <div>
           <h2 className="text-lg font-semibold" id="stock-levels-title">
             Current stock
@@ -469,10 +524,10 @@ export default async function InventoryPage() {
             title="No stock levels yet"
           />
         )}
-      </section>
+          </section>
 
-      {canManage ? (
-        <section className="space-y-3" aria-labelledby="movement-history-title">
+          {canManage ? (
+            <section className="space-y-3" aria-labelledby="movement-history-title">
           <div>
             <h2 className="text-lg font-semibold" id="movement-history-title">
               Recent movements
@@ -541,7 +596,9 @@ export default async function InventoryPage() {
               title="No movements recorded"
             />
           )}
-        </section>
+            </section>
+          ) : null}
+        </>
       ) : null}
     </div>
   );

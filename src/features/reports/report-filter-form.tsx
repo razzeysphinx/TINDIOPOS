@@ -13,11 +13,13 @@ export function ReportFilterForm({
   filter,
   stores,
   showExports = false,
+  allowAllStores = true,
 }: {
   action: string;
   filter: ReportFilter;
   stores: Array<{ id: string; name: string }>;
   showExports?: boolean;
+  allowAllStores?: boolean;
 }) {
   const query = new URLSearchParams({ start: filter.startDate, end: filter.endDate });
   if (filter.storeId) query.set("store", filter.storeId);
@@ -37,7 +39,7 @@ export function ReportFilterForm({
         <div className="grid gap-1.5">
           <Label htmlFor={`${action}-report-store`}>Store</Label>
           <select className={selectClassName} defaultValue={filter.storeId ?? ""} id={`${action}-report-store`} name="store">
-            <option value="">All stores</option>
+            {allowAllStores ? <option value="">All stores</option> : null}
             {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
           </select>
         </div>

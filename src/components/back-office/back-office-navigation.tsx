@@ -39,6 +39,7 @@ export type BackOfficeNavigationAccess = {
   canUseTimeClock?: boolean;
   canManageDevices?: boolean;
   canManageCatalog?: boolean;
+  canManageAdvancedSales?: boolean;
   canManageEmployees?: boolean;
   canManageRoles?: boolean;
   canManageStores?: boolean;
@@ -64,15 +65,26 @@ const primaryNavigation: NavigationItem[] = [
     icon: LayoutDashboard,
     isVisible: (access) => access.canViewDashboard === true,
   },
-  {
-    href: "/back-office/reports",
-    label: "Reports",
-    icon: BarChart3,
-    isVisible: (access) => access.canViewReports === true,
-  },
 ];
 
 const navigationGroups: NavigationGroup[] = [
+  {
+    label: "Reports",
+    items: [
+      {
+        href: "/back-office/reports",
+        label: "Reports overview",
+        icon: BarChart3,
+        isVisible: (access) => access.canViewReports === true,
+      },
+      {
+        href: "/back-office/shifts",
+        label: "Shift reports",
+        icon: CircleDollarSign,
+        isVisible: (access) => access.canViewReports === true || access.canViewDashboard === true,
+      },
+    ],
+  },
   {
     label: "Sales",
     items: [
@@ -81,12 +93,6 @@ const navigationGroups: NavigationGroup[] = [
         label: "Receipts",
         icon: ReceiptText,
         isVisible: (access) => access.canViewReceipts === true,
-      },
-      {
-        href: "/back-office/shifts",
-        label: "Shift reports",
-        icon: CircleDollarSign,
-        isVisible: (access) => access.canViewReports === true || access.canViewDashboard === true,
       },
       {
         href: "/kitchen",
@@ -125,7 +131,7 @@ const navigationGroups: NavigationGroup[] = [
     items: [
       {
         href: "/back-office/customers",
-        label: "Customer list & loyalty",
+        label: "Customers & loyalty",
         icon: Users,
         isVisible: (access) => access.canManageCustomers === true,
       },
@@ -174,7 +180,7 @@ const navigationGroups: NavigationGroup[] = [
     items: [
       {
         href: "/back-office/business-profile",
-        label: "Business profile",
+        label: "Business & features",
         icon: Settings2,
         isVisible: (access) => access.canManageSettings === true,
       },
@@ -192,9 +198,9 @@ const navigationGroups: NavigationGroup[] = [
       },
       {
         href: "/back-office/advanced-sales",
-        label: "Advanced sales",
+        label: "Sales configuration",
         icon: Settings2,
-        isVisible: (access) => access.canManageSettings === true,
+        isVisible: (access) => access.canManageAdvancedSales === true,
       },
       {
         href: "/back-office/smart-menu",

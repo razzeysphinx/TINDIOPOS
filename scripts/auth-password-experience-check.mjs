@@ -12,9 +12,12 @@ const [authForm, authSchema, authActions] = await Promise.all([
 
 test("password fields provide an accessible visibility toggle", () => {
   assert.match(authForm, /function PasswordInput\(/);
+  assert.match(authForm, /<input/);
   assert.match(authForm, /type=\{isVisible \? "text" : "password"\}/);
   assert.match(authForm, /aria-label=\{`\$\{isVisible \? "Hide" : "Show"\} \$\{fieldLabel\}`\}/);
   assert.match(authForm, /aria-pressed=\{isVisible\}/);
+  assert.match(authForm, /absolute inset-y-0 right-0 z-10/);
+  assert.match(authForm, /onClick=\{\(\) => setIsVisible\(\(current\) => !current\)\}/);
   assert.match(authForm, /type="button"/);
   assert.match(authForm, /<Eye aria-hidden="true" \/>/);
   assert.match(authForm, /<EyeOff aria-hidden="true" \/>/);

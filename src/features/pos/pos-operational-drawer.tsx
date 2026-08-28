@@ -1,7 +1,16 @@
 "use client";
 
-import { Clock3, LogOut, Menu, UserRound } from "lucide-react";
+import {
+  PackageSearch,
+  ReceiptText,
+  Settings2,
+  ShoppingCart,
+  WalletCards,
+  LogOut,
+  Menu,
+} from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import {
@@ -32,9 +41,11 @@ export function focusCustomerPicker() {
   window.setTimeout(() => document.getElementById("pos-customer-search")?.focus(), 100);
 }
 
-type PosOperationalNavigationProps = {
+export type PosOperationalNavigationProps = {
+  /** @deprecated Navigation is now always the shared five-area POS workspace. */
   canSelectCustomer?: boolean;
-  canUseShiftControls: boolean;
+  /** @deprecated Shift remains a visible POS destination; server/RPC authorization decides actions. */
+  canUseShiftControls?: boolean;
   canUseTimeClock: boolean;
   employeeName: string;
   organizationName: string;
@@ -43,50 +54,52 @@ type PosOperationalNavigationProps = {
   timezone: string;
 };
 
+const navigationItems = [
+  { href: "/pos", icon: ShoppingCart, label: "Sales", matches: (pathname: string) => pathname === "/pos" },
+  { href: "/pos/receipts", icon: ReceiptText, label: "Receipts", matches: (pathname: string) => pathname.startsWith("/pos/receipts") },
+  { href: "/pos/shifts", icon: WalletCards, label: "Shift", matches: (pathname: string) => pathname.startsWith("/pos/shifts") },
+  { href: "/pos/items", icon: PackageSearch, label: "Items", matches: (pathname: string) => pathname.startsWith("/pos/items") },
+  { href: "/pos/settings", icon: Settings2, label: "Settings", matches: (pathname: string) => pathname.startsWith("/pos/settings") },
+] as const;
+
 function PosOperationalNavigationContent({
-  canSelectCustomer = false,
-  canUseShiftControls,
   canUseTimeClock,
   onNavigate,
   stores,
   timeClockEntry,
   timezone,
-}: Pick<PosOperationalNavigationProps, "canSelectCustomer" | "canUseShiftControls" | "canUseTimeClock" | "stores" | "timeClockEntry" | "timezone"> & {
+}: Pick<PosOperationalNavigationProps, "canUseTimeClock" | "stores" | "timeClockEntry" | "timezone"> & {
   onNavigate: () => void;
 }) {
+  const pathname = usePathname();
+
   return (
-    <div className="space-y-6">
-      <section aria-labelledby="pos-tools-workspace">
-        <h2 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase" id="pos-tools-workspace">
-          Available features
-        </h2>
-        <div className="mt-3 grid gap-2">
-          {canSelectCustomer ? (
-            <Button
-              className="justify-start"
-              onClick={() => {
-                onNavigate();
-                window.setTimeout(focusCustomerPicker, 0);
-              }}
-              type="button"
-              variant="outline"
-            >
-              <UserRound aria-hidden="true" />
-              Customer lookup
-            </Button>
-          ) : null}
-          {canUseShiftControls ? (
-            <Link
-              className={cn(buttonVariants({ variant: "outline" }), "justify-start")}
-              href="/pos/shifts"
-              onClick={onNavigate}
-            >
-              <Clock3 aria-hidden="true" />
-              Shift controls
-            </Link>
-          ) : null}
+    <div className="space-y-7">
+      <nav aria-label="POS workspace" className="space-y-2">
+        <h2 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">Available features</h2>
+        <div className="grid gap-1.5">
+          {navigationItems.map((item) => {
+            const active = item.matches(pathname);
+            const Icon = item.icon;
+
+            return (
+              <Link
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  buttonVariants({ variant: active ? "secondary" : "ghost" }),
+                  "h-10 justify-start",
+                )}
+                href={item.href}
+                key={item.href}
+                onClick={onNavigate}
+              >
+                <Icon aria-hidden="true" />
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
-      </section>
+      </nav>
 
       {canUseTimeClock ? (
         <section aria-labelledby="pos-tools-time-clock">

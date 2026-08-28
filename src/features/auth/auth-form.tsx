@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 export function AuthForm({
   defaultEmail,
@@ -230,28 +231,29 @@ function PasswordInput({
 
   return (
     <div className="relative">
-      <Input
+      <input
+        autoComplete={autoComplete}
+        className={cn(
+          "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 pr-10 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
+          isValid && "border-emerald-600 focus-visible:border-emerald-600 focus-visible:ring-emerald-600/20",
+        )}
         id={id}
         name={name}
-        type={isVisible ? "text" : "password"}
-        autoComplete={autoComplete}
-        className={isValid ? "border-emerald-600 pr-10 focus-visible:border-emerald-600 focus-visible:ring-emerald-600/20" : "pr-10"}
-        required
-        aria-invalid={error}
         onChange={onChange}
+        required
+        type={isVisible ? "text" : "password"}
         value={value}
+        aria-invalid={error}
       />
-      <Button
+      <button
         aria-label={`${isVisible ? "Hide" : "Show"} ${fieldLabel}`}
         aria-pressed={isVisible}
-        className="absolute inset-y-0 right-0 text-muted-foreground hover:text-foreground"
+        className="absolute inset-y-0 right-0 z-10 grid w-10 place-items-center rounded-r-lg text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         onClick={() => setIsVisible((current) => !current)}
-        size="icon"
         type="button"
-        variant="ghost"
       >
         {isVisible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
-      </Button>
+      </button>
     </div>
   );
 }

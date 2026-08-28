@@ -69,6 +69,35 @@ type CashMovement = {
   createdAt: string;
 };
 
+export type ShiftOperationalSummary = {
+  shift: {
+    id: string;
+    number: string;
+    status: "open" | "closed";
+    openedBy: string;
+    openedAt: string;
+    closedAt: string | null;
+    store: string;
+    register: string;
+    startingCashMinor: number;
+    actualCashMinor: number | null;
+    differenceMinor: number | null;
+  };
+  cash: {
+    cashPaymentsMinor: number | null;
+    cashRefundsMinor: number | null;
+    paidInMinor: number | null;
+    paidOutMinor: number | null;
+    expectedCashMinor: number | null;
+  };
+  sales: {
+    grossSalesMinor: number;
+    refundsMinor: number;
+    discountsMinor: number;
+    netSalesMinor: number;
+  };
+};
+
 const selectClassName =
   "h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
@@ -93,6 +122,7 @@ export function ShiftManager({
   registers,
   stores,
   summaries,
+  operationalSummaries,
   showExpectedCashBeforeClose,
   timezone,
 }: {
@@ -108,6 +138,7 @@ export function ShiftManager({
   registers: RegisterOption[];
   stores: StoreOption[];
   summaries: CashSummary[];
+  operationalSummaries: ShiftOperationalSummary[];
   showExpectedCashBeforeClose: boolean;
   timezone: string;
 }) {
@@ -117,6 +148,7 @@ export function ShiftManager({
     differenceMinor: number;
   } | null>(null);
   const summaryByShiftId = new Map(summaries.map((summary) => [summary.shiftId, summary]));
+  const operationalSummaryByShiftId = new Map(operationalSummaries.map((summary) => [summary.shift.id, summary]));
   const movementsByShiftId = new Map<string, CashMovement[]>();
   for (const movement of cashMovements) {
     movementsByShiftId.set(movement.shiftId, [
@@ -150,6 +182,7 @@ export function ShiftManager({
               shift={shift}
               store={stores.find((item) => item.id === shift.storeId)}
               summary={summaryByShiftId.get(shift.id)}
+              operationalSummary={operationalSummaryByShiftId.get(shift.id)}
               timezone={timezone}
             />
           ))}
@@ -169,6 +202,7 @@ export function ShiftManager({
       <ClosedShiftHistory
         currencyCode={currencyCode}
         registers={registers}
+        operationalSummaryByShiftId={operationalSummaryByShiftId}
         shifts={recentClosedShifts}
         stores={stores}
         timezone={timezone}
@@ -270,6 +304,7 @@ function OpenShiftCard({
   shift,
   store,
   summary,
+  operationalSummary,
   timezone,
 }: {
   canClose: boolean;
@@ -282,6 +317,7 @@ function OpenShiftCard({
   shift: ShiftRecord;
   store: StoreOption | undefined;
   summary: CashSummary | undefined;
+  operationalSummary: ShiftOperationalSummary | undefined;
   timezone: string;
 }) {
   return (
@@ -296,6 +332,7 @@ function OpenShiftCard({
         <Badge variant="secondary"><CheckCircle2 aria-hidden="true" />Open</Badge>
       </CardHeader>
       <CardContent className="space-y-5">
+        {operationalSummary ? <ShiftOperationalOverview currencyCode={currencyCode} summary={operationalSummary} timezone={timezone} /> : null}
         {summary?.expectedCashMinor !== null && summary ? (
           <CashExpectation currencyCode={currencyCode} summary={summary} />
         ) : (
@@ -339,6 +376,66 @@ function OpenShiftCard({
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+function ShiftOperationalOverview({
+  currencyCode,
+  summary,
+  timezone,
+}: {
+  currencyCode: string;
+  summary: ShiftOperationalSummary;
+  timezone: string;
+}) {
+  const cashRows = [
+    ["Starting cash", summary.shift.startingCashMinor],
+    ["Cash payments", summary.cash.cashPaymentsMinor],
+    ["Cash refunds", -(summary.cash.cashRefundsMinor ?? 0)],
+    ["Paid in", summary.cash.paidInMinor],
+    ["Paid out", -(summary.cash.paidOutMinor ?? 0)],
+  ] as const;
+  const salesRows = [
+    ["Gross sales", summary.sales.grossSalesMinor],
+    ["Refunds", -summary.sales.refundsMinor],
+    ["Discounts", -summary.sales.discountsMinor],
+    ["Net sales", summary.sales.netSalesMinor],
+  ] as const;
+
+  return (
+    <div className="space-y-3 rounded-xl border bg-muted/20 p-3">
+      <div className="grid gap-2 text-sm sm:grid-cols-2">
+        <p><span className="block text-xs text-muted-foreground">Shift number</span><span className="font-semibold">{summary.shift.number}</span></p>
+        <p><span className="block text-xs text-muted-foreground">Opened by</span><span className="font-semibold">{summary.shift.openedBy}</span></p>
+        <p><span className="block text-xs text-muted-foreground">Opened time</span>{formatShiftTime(summary.shift.openedAt, timezone)}</p>
+        <p><span className="block text-xs text-muted-foreground">Store / register</span>{summary.shift.store} · {summary.shift.register}</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <SummaryRows currencyCode={currencyCode} title="Cash drawer summary" rows={cashRows} />
+        <SummaryRows currencyCode={currencyCode} title="Sales summary" rows={salesRows} />
+      </div>
+    </div>
+  );
+}
+
+function SummaryRows({
+  currencyCode,
+  rows,
+  title,
+}: {
+  currencyCode: string;
+  rows: ReadonlyArray<readonly [string, number | null]>;
+  title: string;
+}) {
+  return (
+    <div className="rounded-lg bg-background p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+      <div className="mt-2 grid gap-1 text-xs">
+        {rows.map(([label, amount]) => (
+          <p className="flex justify-between gap-3" key={label}><span>{label}</span><span className="font-medium">{amount === null ? "Hidden" : `${amount < 0 ? "−" : ""}${formatMinorMoney(Math.abs(amount), currencyCode)}`}</span></p>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -607,12 +704,14 @@ function CashCloseVisibilitySetting({ initialValue }: { initialValue: boolean })
 
 function ClosedShiftHistory({
   currencyCode,
+  operationalSummaryByShiftId,
   registers,
   shifts,
   stores,
   timezone,
 }: {
   currencyCode: string;
+  operationalSummaryByShiftId: Map<string, ShiftOperationalSummary>;
   registers: RegisterOption[];
   shifts: ShiftRecord[];
   stores: StoreOption[];
@@ -652,6 +751,7 @@ function ClosedShiftHistory({
                         registerName={registers.find((item) => item.id === shift.registerId)?.name ?? "Register"}
                         shiftId={shift.id}
                         storeName={stores.find((item) => item.id === shift.storeId)?.name ?? "Store"}
+                        operationalSummary={operationalSummaryByShiftId.get(shift.id)}
                         timezone={timezone}
                       />
                     </td>
@@ -683,6 +783,7 @@ function ShiftClosePrintButton({
   differenceMinor,
   expectedCashMinor,
   openedAt,
+  operationalSummary,
   registerName,
   shiftId,
   storeName,
@@ -694,6 +795,7 @@ function ShiftClosePrintButton({
   differenceMinor: number;
   expectedCashMinor: number;
   openedAt: string;
+  operationalSummary: ShiftOperationalSummary | undefined;
   registerName: string;
   shiftId: string;
   storeName: string;
@@ -708,11 +810,26 @@ function ShiftClosePrintButton({
       : differenceMinor > 0
         ? "Over"
         : "Short";
-    const rows = [
-      ["Expected cash", formatMinorMoney(expectedCashMinor, currencyCode)],
-      ["Counted cash", formatMinorMoney(countedCashMinor, currencyCode)],
-      [differenceLabel, `${differenceMinor > 0 ? "+" : ""}${formatMinorMoney(differenceMinor, currencyCode)}`],
-    ];
+    const rows = operationalSummary
+      ? [
+          ["Starting cash", formatMinorMoney(operationalSummary.shift.startingCashMinor, currencyCode)],
+          ["Cash payments", formatMinorMoney(operationalSummary.cash.cashPaymentsMinor ?? 0, currencyCode)],
+          ["Cash refunds", formatMinorMoney(operationalSummary.cash.cashRefundsMinor ?? 0, currencyCode)],
+          ["Paid in", formatMinorMoney(operationalSummary.cash.paidInMinor ?? 0, currencyCode)],
+          ["Paid out", formatMinorMoney(operationalSummary.cash.paidOutMinor ?? 0, currencyCode)],
+          ["Expected cash", operationalSummary.cash.expectedCashMinor === null ? "Hidden until close" : formatMinorMoney(operationalSummary.cash.expectedCashMinor, currencyCode)],
+          ["Actual cash", formatMinorMoney(operationalSummary.shift.actualCashMinor ?? countedCashMinor, currencyCode)],
+          [differenceLabel, `${differenceMinor > 0 ? "+" : ""}${formatMinorMoney(differenceMinor, currencyCode)}`],
+          ["Gross sales", formatMinorMoney(operationalSummary.sales.grossSalesMinor, currencyCode)],
+          ["Refunds", formatMinorMoney(operationalSummary.sales.refundsMinor, currencyCode)],
+          ["Discounts", formatMinorMoney(operationalSummary.sales.discountsMinor, currencyCode)],
+          ["Net sales", formatMinorMoney(operationalSummary.sales.netSalesMinor, currencyCode)],
+        ]
+      : [
+          ["Expected cash", formatMinorMoney(expectedCashMinor, currencyCode)],
+          ["Counted cash", formatMinorMoney(countedCashMinor, currencyCode)],
+          [differenceLabel, `${differenceMinor > 0 ? "+" : ""}${formatMinorMoney(differenceMinor, currencyCode)}`],
+        ];
     const details = [
       ["Store", storeName],
       ["Register", registerName],

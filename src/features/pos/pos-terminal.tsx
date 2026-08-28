@@ -45,6 +45,8 @@ import { usePosDevice, type PosDeviceState } from "@/features/devices/pos-device
 import type { PosDeviceCredential } from "@/features/devices/device-schema";
 import { OfflineQueueStatus } from "@/features/offline/offline-queue-status";
 import { focusCustomerPicker, PosOperationalDrawer } from "@/features/pos/pos-operational-drawer";
+import { readPosWorkspacePreferences } from "@/features/pos/pos-preferences";
+import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
 import {
   cachePosCatalog,
   cachePosRuntimeSnapshot,
@@ -123,6 +125,7 @@ export function PosTerminal({
   canAccessBackOffice,
   canAssignTickets,
   canUseDining,
+  canUseCustomerLoyalty,
   canUseOpenTickets,
   canUseShiftControls,
   canUseTimeClock,
@@ -157,6 +160,7 @@ export function PosTerminal({
   canAccessBackOffice: boolean;
   canAssignTickets: boolean;
   canUseDining: boolean;
+  canUseCustomerLoyalty: boolean;
   canUseOpenTickets: boolean;
   canUseShiftControls: boolean;
   canUseTimeClock: boolean;
@@ -205,6 +209,7 @@ export function PosTerminal({
   const [isLoading, setIsLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [cart, setCart] = useState<PosCartLine[]>([]);
+  const [itemLayout, setItemLayout] = useState<"grid" | "list">("grid");
   const [selectedCustomer, setSelectedCustomer] = useState<PosCustomer | null>(null);
   const [discountId, setDiscountId] = useState<string | null>(null);
   const [taxRateId, setTaxRateId] = useState<string | null>(() => taxRates.find((rate) => rate.isDefault)?.id ?? null);
@@ -244,6 +249,16 @@ export function PosTerminal({
     activeShift?.storeId === selectedStoreId &&
     activeShift.registerId === selectedRegisterId;
   const isOperational = Boolean(selectedStore && selectedRegister && hasOpenShift);
+
+  useEffect(() => {
+    const syncPreferences = () => {
+      setItemLayout(readPosWorkspacePreferences(offlineScope).itemLayout);
+    };
+
+    syncPreferences();
+    window.addEventListener("tindio-pos-preferences", syncPreferences);
+    return () => window.removeEventListener("tindio-pos-preferences", syncPreferences);
+  }, [offlineScope]);
   const favoriteItemKeys = useMemo(
     () => new Set(favoriteItems.map((item) => posItemKey(item))),
     [favoriteItems],
@@ -842,7 +857,23 @@ export function PosTerminal({
     <>
       <main className="min-h-svh bg-background lg:h-svh lg:overflow-hidden">
         <div className="grid min-h-svh grid-rows-[auto_1fr] lg:h-svh">
-        <header className="flex flex-col gap-3 border-b bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <PosWorkspaceHeader
+          canAccessBackOffice={canAccessBackOffice}
+          canCloseShift={canCloseShift}
+          canUseTimeClock={canUseTimeClock}
+          closeShiftDisabled={cart.length > 0 || isPaymentScreenOpen}
+          employeeName={employeeName}
+          itemCount={cartSummary.itemCount}
+          onCloseShift={() => setIsShiftCloseOpen(true)}
+          onSelectCustomer={canUseCustomerLoyalty && !isPaymentScreenOpen ? focusCustomerPicker : undefined}
+          organizationName={organizationName}
+          scope={offlineScope}
+          stores={stores}
+          timeClockEntry={timeClockEntry}
+          timezone={timezone}
+          title="Ticket"
+        />
+        <header className="hidden flex-col gap-3 border-b bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="order-1 self-start">
             <PosOperationalDrawer
               canSelectCustomer={!isPaymentScreenOpen}
@@ -1008,7 +1039,12 @@ export function PosTerminal({
                 ) : null}
                 {displayedItems.length > 0 ? (
                   <>
-                    <div className="grid gap-3 min-[420px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    <div className={cn(
+                      "grid gap-3",
+                      itemLayout === "grid"
+                        ? "min-[420px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+                        : "grid-cols-1",
+                    )}>
                       {displayedItems.map((item, index) => (
                         <ProductButton
                           canManageTiles={canManageTiles}

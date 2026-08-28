@@ -3,7 +3,7 @@ import { CircleDollarSign } from "lucide-react";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ShiftManager } from "@/features/shifts/shift-manager";
+import { ShiftManager, type ShiftOperationalSummary } from "@/features/shifts/shift-manager";
 import { hasPermission, requireBackOfficePermission, requireBusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
@@ -107,7 +107,14 @@ export async function ShiftWorkspacePage({
       : accessibleOpenShifts.filter((shift) => shift.openedByEmployeeId === context.employee.id);
   const recentClosedShifts = shifts.filter((shift) => shift.status === "closed").slice(0, 25);
   const openShiftIds = openShifts.map((shift) => shift.id);
-  const [summariesResult, movementsResult] = await Promise.all([
+  const visibleShiftIds = [...new Set([...openShiftIds, ...recentClosedShifts.map((shift) => shift.id)])];
+  const database = supabase as unknown as {
+    rpc: (name: string, args: Record<string, unknown>) => Promise<{
+      data: unknown;
+      error: { message: string } | null;
+    }>;
+  };
+  const [summariesResult, movementsResult, operationalSummaryResults] = await Promise.all([
     Promise.all(
       openShiftIds.map((shiftId) =>
         supabase.rpc("get_shift_cash_summary", {
@@ -125,11 +132,20 @@ export async function ShiftWorkspacePage({
           .order("created_at", { ascending: false })
           .limit(100)
       : Promise.resolve({ data: [], error: null }),
+    Promise.all(
+      visibleShiftIds.map((shiftId) =>
+        database.rpc("get_pos_shift_operational_summary", {
+          target_organization_id: context.organization.id,
+          target_shift_id: shiftId,
+        }),
+      ),
+    ),
   ]);
 
   const summaryError = summariesResult.find((result) => result.error)?.error;
-  if (summaryError || movementsResult.error) {
-    throw new Error(`Unable to calculate register cash: ${summaryError?.message ?? movementsResult.error?.message}`);
+  const operationalSummaryError = operationalSummaryResults.find((result) => result.error)?.error;
+  if (summaryError || movementsResult.error || operationalSummaryError) {
+    throw new Error(`Unable to calculate register cash: ${summaryError?.message ?? movementsResult.error?.message ?? operationalSummaryError?.message}`);
   }
 
   const summaries = summariesResult.flatMap((result) =>
@@ -151,6 +167,11 @@ export async function ShiftWorkspacePage({
     reason: movement.reason,
     createdAt: movement.created_at,
   }));
+  const operationalSummaries = operationalSummaryResults.flatMap((result) =>
+    result.data && typeof result.data === "object" && !Array.isArray(result.data)
+      ? [result.data as ShiftOperationalSummary]
+      : [],
+  );
 
   return (
     <div className="space-y-8">
@@ -182,6 +203,7 @@ export async function ShiftWorkspacePage({
         }))}
         stores={storesResult.data ?? []}
         summaries={summaries}
+        operationalSummaries={operationalSummaries}
         showExpectedCashBeforeClose={cashCloseSettingResult.data?.show_expected_cash_before_close ?? true}
         timezone={context.organization.timezone}
       />

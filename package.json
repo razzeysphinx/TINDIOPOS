@@ -17,6 +17,7 @@
     "test:offline-integrity": "node --test scripts/phase-8-offline-integrity-check.mjs",
     "test:production-readiness": "node --test scripts/phase-9-production-readiness-check.mjs",
     "test:auth-passwords": "node --test scripts/auth-password-experience-check.mjs",
+    "test:pos-workspace-navigation": "node scripts/pos-workspace-navigation-check.mjs",
     "test:global-filters": "node --test scripts/global-filter-bar-check.mjs",
     "test:tenant-load": "node scripts/phase-16-tenant-load-check.mjs",
     "typecheck": "tsc --noEmit --incremental false"

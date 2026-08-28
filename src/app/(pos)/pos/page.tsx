@@ -41,6 +41,7 @@ export default async function PosPage() {
       ])}
       canManageTiles={hasPermission(context, "products.manage")}
       canAssignTickets={canAssignTickets}
+      canUseCustomerLoyalty={features.loyalty}
       canUseDining={features.dining}
       canUseOpenTickets={features.open_tickets}
       canUseTimeClock={features.time_clock}

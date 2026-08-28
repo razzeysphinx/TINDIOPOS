@@ -22,7 +22,7 @@ test("cashier tools use a responsive left hamburger menu without a collapsible P
   assert.match(drawer, /buttonVariants\(\{ size: "icon", variant: "outline" \}\)/);
   assert.match(drawer, /showCloseButton=\{false\} side="left"/);
   assert.match(drawer, /Available features/);
-  assert.match(drawer, /onNavigate\(\)/);
+  assert.match(drawer, /const closeNavigation = \(\) => setOpen\(false\)/);
   assert.match(drawer, /onClick=\{onNavigate\}/);
   assert.doesNotMatch(drawer, /POS settings/);
   assert.doesNotMatch(drawer, /requestFullscreen/);

@@ -7,6 +7,7 @@ import {
   hasPermission,
   type BusinessContext,
 } from "@/lib/auth/dal";
+import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 import type {
   PosActiveShift,
@@ -40,6 +41,56 @@ export type PosPageData = {
   initialRecentItems: PosCatalogItem[];
   openTickets: PosOpenTicket[];
   ticketAssignees: PosTicketAssignee[];
+};
+
+export type PosReceiptSummary = {
+  receipt_id: string;
+  sale_id: string;
+  receipt_number: number;
+  issued_at: string;
+  store_id: string;
+  register_id: string;
+  store_name: string;
+  register_name: string;
+  cashier_name: string;
+  total_minor: number;
+  currency_code: string;
+  refund_total_minor: number;
+};
+
+export type PosReceiptDetail = {
+  receipt: { id: string; number: number; issuedAt: string; layout: Json | null };
+  sale: {
+    id: string;
+    storeId: string;
+    registerId: string;
+    currencyCode: string;
+    organizationName: string;
+    storeName: string;
+    registerName: string;
+    cashierName: string;
+    subtotalMinor: number;
+    discountMinor: number;
+    taxMinor: number;
+    totalMinor: number;
+  };
+  items: Array<{ id: string; name: string; sku: string | null; quantity: number; unit: string; unitPriceMinor: number; lineTotalMinor: number }>;
+  payments: Array<{ id: string; name: string; type: "CASH" | "CARD" | "E_WALLET" | "BANK_TRANSFER" | "VOUCHER" | "OTHER"; amountMinor: number; tenderedMinor: number | null; changeMinor: number | null; referenceNumber: string | null }>;
+  refunds: Array<{
+    id: string;
+    number: number;
+    totalMinor: number;
+    completedAt: string;
+    reason: string;
+    items: Array<{ id: string; saleItemId: string; name: string; quantity: number; unit: string; lineTotalMinor: number }>;
+  }>;
+};
+
+type PosReceiptRpc = {
+  rpc: (name: string, args: Record<string, unknown>) => Promise<{
+    data: unknown;
+    error: { message: string } | null;
+  }>;
 };
 
 // Canonical server-side mapping from `search_pos_catalog` /
@@ -342,4 +393,37 @@ export async function loadPosWorkspace(
     openTickets,
     ticketAssignees,
   };
+}
+
+export async function loadPosReceiptHistory(
+  context: BusinessContext,
+  input: { beforeReceiptNumber?: number; query?: string } = {},
+) {
+  const supabase = await createClient();
+  const database = supabase as unknown as PosReceiptRpc;
+  const { data, error } = await database.rpc("get_pos_receipt_history", {
+    target_organization_id: context.organization.id,
+    target_query: input.query?.trim() || null,
+    target_before_receipt_number: input.beforeReceiptNumber ?? null,
+    target_limit: 25,
+  });
+
+  if (error) throw new Error(`Unable to load POS receipts: ${error.message}`);
+  return Array.isArray(data) ? data as PosReceiptSummary[] : [];
+}
+
+export async function loadPosReceiptDetail(
+  context: BusinessContext,
+  receiptId: string,
+) {
+  const supabase = await createClient();
+  const database = supabase as unknown as PosReceiptRpc;
+  const { data, error } = await database.rpc("get_pos_receipt_detail", {
+    target_organization_id: context.organization.id,
+    target_receipt_id: receiptId,
+  });
+
+  if (error) throw new Error(`Unable to load POS receipt: ${error.message}`);
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  return data as PosReceiptDetail;
 }

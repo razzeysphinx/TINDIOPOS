@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BarChart3,
   ChefHat,
@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { createPortal } from "react-dom";
 
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,7 @@ type NavigationItem = {
 };
 
 type NavigationGroup = {
+  icon: LucideIcon;
   label: string;
   items: NavigationItem[];
 };
@@ -71,6 +73,7 @@ const primaryNavigation: NavigationItem[] = [
 
 const navigationGroups: NavigationGroup[] = [
   {
+    icon: BarChart3,
     label: "Reports",
     items: [
       {
@@ -92,6 +95,7 @@ const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
+    icon: CircleDollarSign,
     label: "Sales",
     items: [
       {
@@ -107,6 +111,7 @@ const navigationGroups: NavigationGroup[] = [
   {
     // Kitchen is an authorized operational display, not a Back Office sales
     // management page. Its distinct group preserves that workspace boundary.
+    icon: ChefHat,
     label: "Operations",
     items: [
       {
@@ -118,6 +123,7 @@ const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
+    icon: PackageSearch,
     label: "Catalog",
     items: [
       { href: "/back-office/catalog", label: "Products", icon: PackageSearch, isVisible: (access) => access.canManageCatalog === true },
@@ -125,6 +131,7 @@ const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
+    icon: Warehouse,
     label: "Inventory",
     items: [
       {
@@ -142,6 +149,7 @@ const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
+    icon: Users,
     label: "Customers",
     items: [
       {
@@ -153,6 +161,7 @@ const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
+    icon: Users,
     label: "Team",
     items: [
       { href: "/back-office/employees", label: "Employees", icon: Users, isVisible: (access) => access.canManageEmployees === true },
@@ -172,6 +181,7 @@ const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
+    icon: Store,
     label: "Management",
     items: [
       { href: "/back-office/stores", label: "Stores", icon: Store, isVisible: (access) => access.canManageStores === true },
@@ -191,6 +201,7 @@ const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
+    icon: Settings2,
     label: "Settings",
     items: [
       {
@@ -233,13 +244,21 @@ function isCurrentRoute(pathname: string, href: string) {
     : pathname === href || pathname.startsWith(`${href}/`);
 }
 
+export function getBackOfficePageTitle(pathname: string) {
+  const navigationItems = [...primaryNavigation, ...navigationGroups.flatMap((group) => group.items)]
+    .sort((first, second) => second.href.length - first.href.length);
+
+  return navigationItems.find((item) => isCurrentRoute(pathname, item.href))?.label ?? "Back Office";
+}
+
 function NavigationLink({
   href,
   icon: Icon,
   label,
   active,
   collapsed = false,
-}: NavigationItem & { active: boolean; collapsed?: boolean }) {
+  onNavigate,
+}: NavigationItem & { active: boolean; collapsed?: boolean; onNavigate?: () => void }) {
   const link = (
     <Link
       aria-current={active ? "page" : undefined}
@@ -252,6 +271,7 @@ function NavigationLink({
           : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
       href={href}
+      onClick={onNavigate}
     >
       <Icon className="size-4 shrink-0" aria-hidden="true" />
       {collapsed ? null : <span className="min-w-0 truncate">{label}</span>}
@@ -264,12 +284,15 @@ function NavigationLink({
 function ExpandableNavigationGroup({
   group,
   pathname,
+  onNavigate,
 }: {
   group: NavigationGroup;
   pathname: string;
+  onNavigate?: () => void;
 }) {
   const hasActiveItem = group.items.some((item) => isCurrentRoute(pathname, item.href));
   const [isOpen, setIsOpen] = useState(hasActiveItem);
+  const Icon = group.icon;
 
   return (
     <details
@@ -278,7 +301,10 @@ function ExpandableNavigationGroup({
       open={isOpen}
     >
       <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground [&::-webkit-details-marker]:hidden">
-        {group.label}
+        <span className="flex min-w-0 items-center gap-2">
+          <Icon aria-hidden="true" className="size-3.5 shrink-0" />
+          <span className="truncate">{group.label}</span>
+        </span>
         <ChevronDown
           className="size-4 transition-transform group-open:rotate-180"
           aria-hidden="true"
@@ -290,6 +316,7 @@ function ExpandableNavigationGroup({
             {...item}
             active={isCurrentRoute(pathname, item.href)}
             key={item.href}
+            onNavigate={onNavigate}
           />
         ))}
       </div>
@@ -297,43 +324,208 @@ function ExpandableNavigationGroup({
   );
 }
 
+function CollapsedNavigationSection({
+  active,
+  group,
+  isOpen,
+  onClick,
+  sectionRef,
+}: {
+  active: boolean;
+  group: NavigationGroup;
+  isOpen: boolean;
+  onClick: () => void;
+  sectionRef: (element: HTMLButtonElement | null) => void;
+}) {
+  const Icon = group.icon;
+
+  return (
+    <Tooltip content={group.label} side="right">
+      <button
+        aria-expanded={isOpen}
+        aria-label={`${isOpen ? "Close" : "Open"} ${group.label} submenu`}
+        className={cn(
+          "flex min-h-10 w-full items-center justify-center rounded-lg px-2 py-2 text-sm font-medium transition-colors",
+          active || isOpen
+            ? "bg-secondary text-secondary-foreground"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        )}
+        onClick={onClick}
+        ref={sectionRef}
+        type="button"
+      >
+        <Icon aria-hidden="true" className="size-4 shrink-0" />
+      </button>
+    </Tooltip>
+  );
+}
+
+function CollapsedNavigation({
+  groups,
+  onNavigate,
+  pathname,
+  primaryItems,
+}: {
+  groups: NavigationGroup[];
+  onNavigate?: () => void;
+  pathname: string;
+  primaryItems: NavigationItem[];
+}) {
+  const [openGroupState, setOpenGroupState] = useState<{ label: string; pathname: string } | null>(null);
+  const [popupPosition, setPopupPosition] = useState<{ left: number; top: number } | null>(null);
+  const navigationRef = useRef<HTMLElement | null>(null);
+  const popupRef = useRef<HTMLDivElement | null>(null);
+  const sectionRefs = useRef(new Map<string, HTMLButtonElement>());
+  const openGroupLabel = openGroupState?.pathname === pathname ? openGroupState.label : null;
+  const openGroup = groups.find((group) => group.label === openGroupLabel);
+
+  useEffect(() => {
+    if (!openGroupLabel) {
+      return;
+    }
+
+    const updatePopupPosition = () => {
+      const section = sectionRefs.current.get(openGroupLabel);
+      if (!section) return;
+
+      const sectionRect = section.getBoundingClientRect();
+      const popupHeight = popupRef.current?.getBoundingClientRect().height ?? 0;
+      const viewportPadding = 8;
+      setPopupPosition({
+        left: sectionRect.right + viewportPadding,
+        top: Math.max(
+          viewportPadding,
+          Math.min(sectionRect.top, window.innerHeight - popupHeight - viewportPadding),
+        ),
+      });
+    };
+    const closeWhenClickingOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        (navigationRef.current?.contains(target) || popupRef.current?.contains(target))
+      ) {
+        return;
+      }
+      setOpenGroupState(null);
+    };
+
+    const frame = window.requestAnimationFrame(updatePopupPosition);
+    document.addEventListener("pointerdown", closeWhenClickingOutside);
+    window.addEventListener("resize", updatePopupPosition);
+    window.addEventListener("scroll", updatePopupPosition, true);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", closeWhenClickingOutside);
+      window.removeEventListener("resize", updatePopupPosition);
+      window.removeEventListener("scroll", updatePopupPosition, true);
+    };
+  }, [openGroupLabel]);
+
+  const toggleGroup = (groupLabel: string) => {
+    if (openGroupLabel === groupLabel) {
+      setOpenGroupState(null);
+      setPopupPosition(null);
+      return;
+    }
+
+    const section = sectionRefs.current.get(groupLabel);
+    setOpenGroupState({ label: groupLabel, pathname });
+    setPopupPosition(
+      section
+        ? { left: section.getBoundingClientRect().right + 8, top: section.getBoundingClientRect().top }
+        : null,
+    );
+  };
+
+  return (
+    <nav aria-label="Back Office" className="relative min-h-0 flex-1" ref={navigationRef}>
+      <div className="h-full overflow-y-auto px-2 py-4">
+        <div className="grid gap-1">
+          {primaryItems.map((item) => (
+            <NavigationLink
+              {...item}
+              active={isCurrentRoute(pathname, item.href)}
+              collapsed
+              key={item.href}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </div>
+        <div className="mt-2 grid gap-1">
+          {groups.map((group) => (
+            <CollapsedNavigationSection
+              active={group.items.some((item) => isCurrentRoute(pathname, item.href))}
+              group={group}
+              isOpen={openGroupLabel === group.label}
+              key={group.label}
+              onClick={() => toggleGroup(group.label)}
+              sectionRef={(element) => {
+                if (element) {
+                  sectionRefs.current.set(group.label, element);
+                } else {
+                  sectionRefs.current.delete(group.label);
+                }
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {typeof document !== "undefined" && openGroup
+        ? createPortal(
+            <div
+              aria-label={`${openGroup.label} submenu`}
+              className={cn(
+                "fixed z-50 max-h-[calc(100svh-1rem)] w-64 overflow-y-auto rounded-xl border border-border bg-popover p-2 shadow-lg",
+                popupPosition ? undefined : "invisible",
+              )}
+              ref={popupRef}
+              style={popupPosition ?? { left: 0, top: 0 }}
+            >
+              <p className="px-2 py-1 text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                {openGroup.label}
+              </p>
+              <div className="mt-1 grid gap-1">
+                {openGroup.items.map((item) => (
+                  <NavigationLink
+                    {...item}
+                    active={isCurrentRoute(pathname, item.href)}
+                    key={item.href}
+                    onNavigate={() => {
+                      setOpenGroupState(null);
+                      onNavigate?.();
+                    }}
+                  />
+                ))}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </nav>
+  );
+}
+
 function NavigationGroupSection({
-  collapsed,
   group,
   pathname,
+  onNavigate,
 }: {
-  collapsed: boolean;
   group: NavigationGroup;
   pathname: string;
+  onNavigate?: () => void;
 }) {
-  if (collapsed) {
-    return (
-      <div className="grid gap-1">
-        {group.items.map((item) => (
-          <NavigationLink
-            {...item}
-            active={isCurrentRoute(pathname, item.href)}
-            collapsed
-            key={item.href}
-          />
-        ))}
-      </div>
-    );
-  }
-
-  if (group.items.length === 1) {
-    const [item] = group.items;
-    return <NavigationLink {...item} active={isCurrentRoute(pathname, item.href)} />;
-  }
-
-  return <ExpandableNavigationGroup group={group} pathname={pathname} />;
+  return <ExpandableNavigationGroup group={group} onNavigate={onNavigate} pathname={pathname} />;
 }
 
 export function BackOfficeNavigation({
   collapsed = false,
   mobile = false,
+  onNavigate,
   ...access
-}: BackOfficeNavigationAccess & { collapsed?: boolean; mobile?: boolean }) {
+}: BackOfficeNavigationAccess & { collapsed?: boolean; mobile?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
   const visiblePrimaryNavigation = primaryNavigation.filter(
     (item) => !item.isVisible || item.isVisible(access),
@@ -346,15 +538,24 @@ export function BackOfficeNavigation({
     .filter((group) => group.items.length > 0);
   const iconOnly = collapsed && !mobile;
 
+  if (iconOnly) {
+    return (
+      <CollapsedNavigation
+        groups={visibleNavigationGroups}
+        onNavigate={onNavigate}
+        pathname={pathname}
+        primaryItems={visiblePrimaryNavigation}
+      />
+    );
+  }
+
   return (
     <nav
       aria-label="Back Office"
       className={cn(
         mobile
           ? "max-h-[min(28rem,calc(100svh-4rem))] overflow-y-auto border-t border-border bg-background px-4 py-3"
-          : iconOnly
-            ? "min-h-0 flex-1 overflow-y-auto px-2 py-4"
-            : "min-h-0 flex-1 overflow-y-auto px-3 py-5",
+          : "min-h-0 flex-1 overflow-y-auto px-3 py-5",
       )}
     >
       <div className="grid gap-1">
@@ -362,8 +563,8 @@ export function BackOfficeNavigation({
           <NavigationLink
             {...item}
             active={isCurrentRoute(pathname, item.href)}
-            collapsed={iconOnly}
             key={item.href}
+            onNavigate={mobile ? onNavigate : undefined}
           />
         ))}
       </div>
@@ -371,9 +572,9 @@ export function BackOfficeNavigation({
       <div className={cn(iconOnly ? "mt-2 grid gap-1" : "mt-4 grid gap-2")}>
         {visibleNavigationGroups.map((group) => (
           <NavigationGroupSection
-            collapsed={iconOnly}
             group={group}
             key={`${pathname}:${group.label}`}
+            onNavigate={mobile ? onNavigate : undefined}
             pathname={pathname}
           />
         ))}

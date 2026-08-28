@@ -64,7 +64,7 @@ test("navigation remains permission-aware and inventory stays internally tabbed"
   assert.match(inventory, /href=\{`\/back-office\/inventory\?tab=\$\{tab\.id\}`\}/);
 });
 
-test("desktop navigation collapses to tooltip-labelled icons while retaining direct and expandable routes", async () => {
+test("shared Back Office shell defaults to section-only navigation and expands from the fixed header", async () => {
   const [navigation, shell, layout] = await Promise.all([
     source("src/components/back-office/back-office-navigation.tsx"),
     source("src/components/back-office/back-office-workspace-shell.tsx"),
@@ -73,9 +73,39 @@ test("desktop navigation collapses to tooltip-labelled icons while retaining dir
 
   assert.match(navigation, /collapsed = false/);
   assert.match(navigation, /<Tooltip content=\{label\} side="right">/);
-  assert.match(navigation, /if \(group\.items\.length === 1\)/);
   assert.match(navigation, /ExpandableNavigationGroup/);
+  assert.match(navigation, /onNavigate=\{mobile \? onNavigate : undefined\}/);
+  assert.match(navigation, /min-h-0 flex-1 overflow-y-auto/);
+  assert.match(navigation, /type NavigationGroup = \{\s+icon: LucideIcon;/);
+  assert.match(navigation, /function CollapsedNavigationSection/);
+  assert.match(navigation, /function CollapsedNavigation/);
+  assert.match(navigation, /<CollapsedNavigation/);
+  assert.match(navigation, /createPortal\(/);
+  assert.match(navigation, /document\.addEventListener\("pointerdown", closeWhenClickingOutside\)/);
+  assert.match(navigation, /const openGroupLabel = openGroupState\?\.pathname === pathname \? openGroupState\.label : null;/);
+  assert.match(navigation, /const toggleGroup = \(groupLabel: string\) =>/);
+  assert.match(navigation, /setOpenGroupState\(\{ label: groupLabel, pathname \}\)/);
+  assert.match(navigation, /active=\{group\.items\.some\(\(item\) => isCurrentRoute\(pathname, item\.href\)\)\}/);
+  assert.match(shell, /const \[isCollapsed, setIsCollapsed\] = useState\(true\);/);
+  assert.match(shell, /export function BackOfficeHeaderControls/);
+  assert.match(shell, /<Menu aria-hidden="true" \/>/);
+  assert.match(shell, /aria-expanded=\{!isCollapsed\}/);
+  assert.match(shell, /getBackOfficePageTitle\(pathname\)/);
+  assert.match(shell, /export function BackOfficeMobileNavigation/);
   assert.match(shell, /lg:grid-cols-\[5rem_minmax\(0,1fr\)\]/);
+  assert.match(shell, /lg:grid-cols-\[16rem_minmax\(0,1fr\)\]/);
+  assert.match(shell, /header: ReactNode;/);
+  assert.match(shell, /\{header\}/);
+  assert.match(shell, /min-h-\[calc\(100svh-3\.5rem\)\]/);
+  assert.match(shell, /lg:top-14 lg:flex lg:h-\[calc\(100svh-3\.5rem\)\]/);
+  assert.doesNotMatch(shell, /TindioMark/);
   assert.match(shell, /<BackOfficeNavigation \{\.\.\.navigationAccess\} collapsed=\{isCollapsed\} \/>/);
   assert.match(layout, /<BackOfficeWorkspaceShell/);
+  assert.match(layout, /header=\{\(/);
+  assert.match(layout, /<BackOfficeHeaderControls \/>/);
+  assert.match(layout, /<BackOfficeMobileNavigation navigationAccess=\{navigationAccess\} \/>/);
+  assert.match(layout, /className="flex h-14 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8"/);
+  assert.doesNotMatch(layout, /mx-auto flex min-h-15 w-full max-w-7xl/);
+  assert.match(layout, /fixed inset-x-0 top-0/);
+  assert.match(shell, /min-h-svh bg-muted\/35 pt-14/);
 });

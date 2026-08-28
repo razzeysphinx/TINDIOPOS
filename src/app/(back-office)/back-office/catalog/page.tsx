@@ -254,6 +254,7 @@ export default async function CatalogPage() {
                         categories={categories
                           .filter((category) => !category.is_archived)
                           .map(({ id, name }) => ({ id, name }))}
+                        stores={activeStores.map(({ id, name }) => ({ id, name }))}
                         product={{
                           id: product.id,
                           name: product.name,
@@ -269,6 +270,9 @@ export default async function CatalogPage() {
                           imageUrl: product.image_url,
                           isVariablePrice: product.is_variable_price,
                           allowFractionalQuantity: product.allow_fractional_quantity,
+                          availableStoreIds: productSettings
+                            .filter((setting) => setting.is_available)
+                            .map((setting) => setting.store_id),
                         }}
                       />
                       <ProductArchiveButton

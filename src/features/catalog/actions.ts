@@ -15,6 +15,7 @@ import {
   setCategoryArchived,
   setProductArchived,
   setProductAvailability,
+  setProductStoreAvailability,
   setProductStoreConfiguration,
   updateCategory,
   updateProduct,
@@ -159,6 +160,25 @@ export async function setProductAvailabilityAction(
   }
 
   const result = await setProductAvailability(context, input);
+
+  if (result.ok) {
+    revalidatePath("/back-office/catalog");
+    revalidatePath("/back-office/inventory");
+  }
+
+  return result;
+}
+
+export async function setProductStoreAvailabilityAction(
+  input: unknown,
+): Promise<CatalogActionResult> {
+  const context = await requireBusinessContext();
+
+  if (!hasPermission(context, "products.manage")) {
+    return { ok: false, message: "You do not have permission to change availability." };
+  }
+
+  const result = await setProductStoreAvailability(context, input);
 
   if (result.ok) {
     revalidatePath("/back-office/catalog");

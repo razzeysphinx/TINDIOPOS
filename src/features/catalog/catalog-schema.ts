@@ -196,6 +196,21 @@ export const setProductAvailabilitySchema = z.object({
   isAvailable: z.boolean(),
 });
 
+export const setProductStoreAvailabilitySchema = z
+  .object({
+    productId: z.uuid(),
+    storeIds: z.array(z.uuid()).max(100),
+  })
+  .superRefine((value, context) => {
+    if (new Set(value.storeIds).size !== value.storeIds.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["storeIds"],
+        message: "Each store can only be selected once.",
+      });
+    }
+  });
+
 export const setProductStoreConfigurationSchema = z.object({
   productId: z.uuid(),
   storeId: z.uuid(),

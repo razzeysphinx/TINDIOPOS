@@ -11,6 +11,7 @@ import {
   setCategoryArchivedSchema,
   setProductArchivedSchema,
   setProductAvailabilitySchema,
+  setProductStoreAvailabilitySchema,
   setProductStoreConfigurationSchema,
   updateCategorySchema,
   updateProductSchema,
@@ -264,73 +265,31 @@ export async function updateProduct(
     return { ok: false, message: "Weighted products are disabled for this business." };
   }
 
-  const supabase = await createClient();
-  const { data: existing, error: existingError } = await supabase
-    .from("products")
-    .select("id, product_type")
-    .eq("id", parsed.data.productId)
-    .eq("organization_id", context.organization.id)
-    .maybeSingle();
-
-  if (existingError || !existing) {
-    return { ok: false, message: "The product could not be found." };
-  }
-
-  if (parsed.data.categoryId) {
-    const { data: category, error: categoryError } = await supabase
-      .from("categories")
-      .select("id")
-      .eq("id", parsed.data.categoryId)
-      .eq("organization_id", context.organization.id)
-      .eq("is_archived", false)
-      .maybeSingle();
-
-    if (categoryError || !category) {
-      return { ok: false, message: "Select an active category in this organization." };
-    }
-  }
-
-  const isVariable = existing.product_type === "variable";
+  const canViewCost = hasPermission(context, "products.view_cost");
   const productCost = moneyInputToMinor(parsed.data.cost);
-  if (!isVariable && !hasPermission(context, "products.view_cost") && productCost !== 0) {
-    return { ok: false, message: "You do not have permission to enter product cost." };
-  }
 
-  const update = isVariable
-    ? {
-        name: parsed.data.name,
-        description: parsed.data.description || null,
-        category_id: (parsed.data.categoryId || null) as never,
-        track_inventory: parsed.data.trackInventory,
-        unit: parsed.data.unit.toLowerCase(),
-        image_url: parsed.data.imageUrl || null,
-        is_variable_price: false,
-        allow_fractional_quantity: parsed.data.allowFractionalQuantity,
-      }
-    : {
-        name: parsed.data.name,
-        description: parsed.data.description || null,
-        category_id: (parsed.data.categoryId || null) as never,
-        sku: parsed.data.sku || null,
-        barcode: parsed.data.barcode || null,
-        price_minor: moneyInputToMinor(parsed.data.price),
-        cost_minor: productCost,
-        track_inventory: parsed.data.trackInventory,
-        unit: parsed.data.unit.toLowerCase(),
-        image_url: parsed.data.imageUrl || null,
-        is_variable_price: parsed.data.isVariablePrice,
-        allow_fractional_quantity: parsed.data.allowFractionalQuantity,
-      };
+  const supabase = await createClient();
+  const { data: productType, error } = await supabase.rpc("update_catalog_product_v2", {
+    target_organization_id: context.organization.id,
+    target_product_id: parsed.data.productId,
+    target_name: parsed.data.name,
+    target_description: parsed.data.description,
+    target_category_id: (parsed.data.categoryId || null) as never,
+    target_sku: parsed.data.sku,
+    target_barcode: parsed.data.barcode,
+    target_price_minor: moneyInputToMinor(parsed.data.price),
+    // A caller who cannot view cost also cannot safely send the form's
+    // placeholder value. Null tells the database routine to retain the
+    // authoritative existing cost while it updates the other product fields.
+    target_cost_minor: (canViewCost ? productCost : null) as never,
+    target_track_inventory: parsed.data.trackInventory,
+    target_unit: parsed.data.unit,
+    target_image_url: parsed.data.imageUrl,
+    target_is_variable_price: parsed.data.isVariablePrice,
+    target_allow_fractional_quantity: parsed.data.allowFractionalQuantity,
+  });
 
-  const { data, error } = await supabase
-    .from("products")
-    .update(update)
-    .eq("id", parsed.data.productId)
-    .eq("organization_id", context.organization.id)
-    .select("id")
-    .maybeSingle();
-
-  if (error || !data) {
+  if (error || !productType) {
     return {
       ok: false,
       message: databaseMessage(error?.code, "TINDIO could not update the product."),
@@ -339,7 +298,7 @@ export async function updateProduct(
 
   return {
     ok: true,
-    message: isVariable ? "Product details updated." : "Product updated.",
+    message: productType === "variable" ? "Product details updated." : "Product updated.",
   };
 }
 
@@ -370,6 +329,89 @@ export async function setProductAvailability(
   }
 
   return { ok: true, message: "Store availability updated." };
+}
+
+/**
+ * Reconciles one product's availability across the caller's authorized active
+ * stores. An unselected store becomes unavailable instead of being deleted, so
+ * its configuration and inventory history remain intact.
+ */
+export async function setProductStoreAvailability(
+  context: BusinessContext,
+  input: unknown,
+): Promise<CatalogActionResult> {
+  const parsed = setProductStoreAvailabilitySchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  const supabase = await createClient();
+  const [productResult, activeStoresResult, settingsResult] = await Promise.all([
+    supabase
+      .from("products")
+      .select("id")
+      .eq("id", parsed.data.productId)
+      .eq("organization_id", context.organization.id)
+      .maybeSingle(),
+    supabase
+      .from("stores")
+      .select("id")
+      .eq("organization_id", context.organization.id)
+      .eq("is_active", true),
+    supabase
+      .from("product_store_settings")
+      .select("store_id, is_available")
+      .eq("organization_id", context.organization.id)
+      .eq("product_id", parsed.data.productId),
+  ]);
+
+  if (productResult.error || !productResult.data) {
+    return { ok: false, message: "The product could not be found." };
+  }
+
+  if (activeStoresResult.error || settingsResult.error) {
+    return { ok: false, message: "Store availability could not be updated." };
+  }
+
+  const activeStoreIds = new Set((activeStoresResult.data ?? []).map((store) => store.id));
+  if (activeStoreIds.size === 0) {
+    return { ok: false, message: "No active stores are available for this product." };
+  }
+
+  const selectedStoreIds = new Set(parsed.data.storeIds);
+  if ([...selectedStoreIds].some((storeId) => !activeStoreIds.has(storeId))) {
+    return { ok: false, message: "Select only active stores you are allowed to manage." };
+  }
+
+  const availabilityByStoreId = new Map(
+    (settingsResult.data ?? []).map((setting) => [setting.store_id, Boolean(setting.is_available)]),
+  );
+  const changes = [...activeStoreIds]
+    .filter((storeId) => availabilityByStoreId.get(storeId) !== selectedStoreIds.has(storeId))
+    .map((storeId) => ({
+      organization_id: context.organization.id,
+      product_id: parsed.data.productId,
+      store_id: storeId,
+      is_available: selectedStoreIds.has(storeId),
+    }));
+
+  if (changes.length === 0) {
+    return { ok: true, message: "Store availability is already up to date." };
+  }
+
+  const { error } = await supabase
+    .from("product_store_settings")
+    .upsert(changes, { onConflict: "store_id,product_id" });
+
+  if (error) {
+    return {
+      ok: false,
+      message: databaseMessage(error.code, "Store availability could not be updated."),
+    };
+  }
+
+  return {
+    ok: true,
+    message: `${selectedStoreIds.size} active store${selectedStoreIds.size === 1 ? " is" : "s are"} now available for this product.`,
+  };
 }
 
 export async function setProductStoreConfiguration(

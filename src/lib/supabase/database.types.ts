@@ -5998,6 +5998,25 @@ export type Database = {
         }
         Returns: string
       }
+      update_catalog_product_v2: {
+        Args: {
+          target_allow_fractional_quantity: boolean
+          target_barcode: string
+          target_category_id: string
+          target_cost_minor: number
+          target_description: string
+          target_image_url: string
+          target_is_variable_price: boolean
+          target_name: string
+          target_organization_id: string
+          target_price_minor: number
+          target_product_id: string
+          target_sku: string
+          target_track_inventory: boolean
+          target_unit: string
+        }
+        Returns: string
+      }
       create_custom_role: {
         Args: {
           permission_codes: string[]

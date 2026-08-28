@@ -54,6 +54,7 @@ import {
   setCategoryArchivedAction,
   setProductArchivedAction,
   setProductAvailabilityAction,
+  setProductStoreAvailabilityAction,
   updateCategoryAction,
   updateProductAction,
 } from "@/features/catalog/actions";
@@ -266,12 +267,14 @@ export function EditProductButton({
   canTrackInventory,
   canUseWeightedProducts,
   canViewCost,
+  stores,
   product,
 }: {
   categories: Array<{ id: string; name: string }>;
   canTrackInventory: boolean;
   canUseWeightedProducts: boolean;
   canViewCost: boolean;
+  stores: Array<{ id: string; name: string }>;
   product: {
     id: string;
     name: string;
@@ -287,12 +290,14 @@ export function EditProductButton({
     imageUrl: string | null;
     isVariablePrice: boolean;
     allowFractionalQuantity: boolean;
+    availableStoreIds: string[];
   };
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<CatalogActionResult<unknown> | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [availableStoreIds, setAvailableStoreIds] = useState(() => new Set(product.availableStoreIds));
   const isVariable = product.productType === "variable";
   const form = useForm<UpdateProductValues>({
     resolver: zodResolver(updateProductSchema),
@@ -317,17 +322,64 @@ export function EditProductButton({
   const submit = form.handleSubmit((values) => {
     setResult(null);
     startTransition(async () => {
-      const nextResult = await updateProductAction(values);
-      setResult(nextResult);
-      if (nextResult.ok) {
+      const productResult = await updateProductAction(values);
+      if (!productResult.ok) {
+        setResult(productResult);
+        return;
+      }
+
+      if (stores.length === 0) {
+        setResult(productResult);
         setOpen(false);
         router.refresh();
+        return;
       }
+
+      const availabilityResult = await setProductStoreAvailabilityAction({
+        productId: values.productId,
+        storeIds: [...availableStoreIds],
+      });
+
+      if (!availabilityResult.ok) {
+        setResult({
+          ok: false,
+          message: `Product details were saved, but ${availabilityResult.message.toLocaleLowerCase()}`,
+        });
+        router.refresh();
+        return;
+      }
+
+      setResult({
+        ok: true,
+        message: availabilityResult.message === "Store availability is already up to date."
+          ? productResult.message
+          : "Product and store availability updated.",
+      });
+      setOpen(false);
+      router.refresh();
     });
   });
 
+  const toggleStoreAvailability = (storeId: string) => {
+    setAvailableStoreIds((current) => {
+      const next = new Set(current);
+      if (next.has(storeId)) next.delete(storeId);
+      else next.add(storeId);
+      return next;
+    });
+  };
+
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (nextOpen) {
+          setAvailableStoreIds(new Set(product.availableStoreIds));
+          setResult(null);
+        }
+      }}
+    >
       <DialogTrigger className={buttonVariants({ variant: "ghost", size: "sm" })}>
         <Pencil aria-hidden="true" />
         Edit
@@ -414,6 +466,32 @@ export function EditProductButton({
                 Allow fractional quantity{!canUseWeightedProducts ? " (disabled)" : ""}
               </Label>
             </div>
+            <fieldset className="rounded-xl border p-4">
+              <legend className="px-1 text-sm font-medium">Available in stores</legend>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Select the active stores where this product can be sold. Clearing a store removes it from that store&apos;s POS without deleting product or inventory history.
+              </p>
+              {stores.length > 0 ? (
+                <div className="flex flex-wrap gap-3">
+                  {stores.map((store) => {
+                    const checked = availableStoreIds.has(store.id);
+                    return (
+                      <Label className="flex min-h-9 items-center gap-2 rounded-lg border px-3 py-2" key={store.id}>
+                        <input
+                          checked={checked}
+                          disabled={isPending}
+                          onChange={() => toggleStoreAvailability(store.id)}
+                          type="checkbox"
+                        />
+                        {store.name}
+                      </Label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">There are no active stores to assign.</p>
+              )}
+            </fieldset>
             <DialogFooter>
               <Button disabled={isPending} type="submit">
                 {isPending ? <LoaderCircle className="animate-spin" /> : <Pencil />}

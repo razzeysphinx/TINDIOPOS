@@ -15,10 +15,18 @@ const posPage = await readFile(
   "utf8",
 );
 
-test("cashier drawer has navigation and POS display settings without Back Office navigation", () => {
-  assert.match(drawer, /Cashier navigation/);
-  assert.match(drawer, /POS settings/);
-  assert.match(drawer, /document\.documentElement\.requestFullscreen\(\)/);
+test("cashier tools use a responsive left hamburger menu without a collapsible POS sidebar or Back Office navigation", () => {
+  assert.doesNotMatch(drawer, /PosOperationalSidebar/);
+  assert.match(drawer, /aria-label="Open POS navigation"/);
+  assert.match(drawer, /aria-label="Close POS navigation"/);
+  assert.match(drawer, /buttonVariants\(\{ size: "icon", variant: "outline" \}\)/);
+  assert.match(drawer, /showCloseButton=\{false\} side="left"/);
+  assert.match(drawer, /Available features/);
+  assert.match(drawer, /onNavigate\(\)/);
+  assert.match(drawer, /onClick=\{onNavigate\}/);
+  assert.doesNotMatch(drawer, /POS settings/);
+  assert.doesNotMatch(drawer, /requestFullscreen/);
+  assert.doesNotMatch(drawer, /Enter full-screen mode/);
   assert.doesNotMatch(drawer, /href="\/back-office"/);
 });
 
@@ -26,6 +34,12 @@ test("active terminal keeps the existing sync status and adds a customer header 
   assert.match(terminal, /<OfflineQueueStatus scope=\{offlineScope\} \/>/);
   assert.match(terminal, /aria-label="Select customer"/);
   assert.match(terminal, /onClick=\{focusCustomerPicker\}/);
+  assert.doesNotMatch(terminal, /PosOperationalSidebar/);
+  assert.match(terminal, /sm:justify-between/);
+  assert.match(terminal, /order-1 self-start/);
+  assert.match(terminal, /flex min-w-0 flex-col items-end gap-3/);
+  assert.match(terminal, /order-1 flex min-w-0 items-center gap-3 sm:order-2/);
+  assert.match(terminal, /order-2 flex flex-wrap items-center gap-2 sm:order-1/);
   assert.match(terminal, /min-h-svh bg-background/);
 });
 

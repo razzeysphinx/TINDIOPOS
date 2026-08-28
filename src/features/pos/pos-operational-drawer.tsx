@@ -1,8 +1,8 @@
 "use client";
 
-import { Clock3, LogOut, Menu, MonitorSmartphone, UserRound } from "lucide-react";
+import { Clock3, LogOut, Menu, UserRound } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   Dialog,
@@ -16,9 +16,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { signOutAction } from "@/features/auth/actions";
+import type { PosStore } from "@/features/pos/pos-types";
 import { TimeClockControl } from "@/features/time-clock/time-clock-control";
 import type { TimeClockEntry } from "@/features/time-clock/time-clock-types";
-import type { PosStore } from "@/features/pos/pos-types";
 import { cn } from "@/lib/utils";
 
 export function focusCustomerPicker() {
@@ -32,16 +32,7 @@ export function focusCustomerPicker() {
   window.setTimeout(() => document.getElementById("pos-customer-search")?.focus(), 100);
 }
 
-export function PosOperationalDrawer({
-  canSelectCustomer = false,
-  canUseShiftControls,
-  canUseTimeClock,
-  employeeName,
-  organizationName,
-  stores,
-  timeClockEntry,
-  timezone,
-}: {
+type PosOperationalNavigationProps = {
   canSelectCustomer?: boolean;
   canUseShiftControls: boolean;
   canUseTimeClock: boolean;
@@ -50,107 +41,108 @@ export function PosOperationalDrawer({
   stores: PosStore[];
   timeClockEntry: TimeClockEntry | null;
   timezone: string;
+};
+
+function PosOperationalNavigationContent({
+  canSelectCustomer = false,
+  canUseShiftControls,
+  canUseTimeClock,
+  onNavigate,
+  stores,
+  timeClockEntry,
+  timezone,
+}: Pick<PosOperationalNavigationProps, "canSelectCustomer" | "canUseShiftControls" | "canUseTimeClock" | "stores" | "timeClockEntry" | "timezone"> & {
+  onNavigate: () => void;
 }) {
+  return (
+    <div className="space-y-6">
+      <section aria-labelledby="pos-tools-workspace">
+        <h2 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase" id="pos-tools-workspace">
+          Available features
+        </h2>
+        <div className="mt-3 grid gap-2">
+          {canSelectCustomer ? (
+            <Button
+              className="justify-start"
+              onClick={() => {
+                onNavigate();
+                window.setTimeout(focusCustomerPicker, 0);
+              }}
+              type="button"
+              variant="outline"
+            >
+              <UserRound aria-hidden="true" />
+              Customer lookup
+            </Button>
+          ) : null}
+          {canUseShiftControls ? (
+            <Link
+              className={cn(buttonVariants({ variant: "outline" }), "justify-start")}
+              href="/pos/shifts"
+              onClick={onNavigate}
+            >
+              <Clock3 aria-hidden="true" />
+              Shift controls
+            </Link>
+          ) : null}
+        </div>
+      </section>
+
+      {canUseTimeClock ? (
+        <section aria-labelledby="pos-tools-time-clock">
+          <h2 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase" id="pos-tools-time-clock">
+            Attendance
+          </h2>
+          <div className="mt-3">
+            <TimeClockControl initialEntry={timeClockEntry} stores={stores} timezone={timezone} />
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+export function PosOperationalDrawer({
+  employeeName,
+  organizationName,
+  ...navigationProps
+}: PosOperationalNavigationProps) {
   const [open, setOpen] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [fullscreenMessage, setFullscreenMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    const updateFullscreenState = () => setIsFullscreen(document.fullscreenElement !== null);
-
-    updateFullscreenState();
-    document.addEventListener("fullscreenchange", updateFullscreenState);
-    return () => document.removeEventListener("fullscreenchange", updateFullscreenState);
-  }, []);
-
-  const toggleFullscreen = async () => {
-    try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      } else {
-        await document.documentElement.requestFullscreen();
-      }
-      setFullscreenMessage(null);
-    } catch {
-      setFullscreenMessage("This browser does not allow full-screen mode right now.");
-    }
-  };
+  const closeNavigation = () => setOpen(false);
 
   return (
     <Dialog.Root onOpenChange={setOpen} open={open}>
       <DialogTrigger
-        aria-label="Open POS tools"
-        className={buttonVariants({ size: "sm", variant: "outline" })}
+        aria-label="Open POS navigation"
+        className={buttonVariants({ size: "icon", variant: "outline" })}
+        title="Open POS navigation"
       >
         <Menu aria-hidden="true" />
-        POS tools
       </DialogTrigger>
-      <DialogContent className="flex flex-col" side="right">
-        <DialogHeader>
-          <DialogTitle>Cashier navigation</DialogTitle>
-          <DialogDescription>
-            {organizationName} · {employeeName}
-          </DialogDescription>
+      <DialogContent className="flex flex-col" showCloseButton={false} side="left">
+        <DialogHeader className="flex items-start justify-between gap-3 pr-5">
+          <div>
+            <DialogTitle>POS navigation</DialogTitle>
+            <DialogDescription>
+              {organizationName} / {employeeName}
+            </DialogDescription>
+          </div>
+          <Button
+            aria-label="Close POS navigation"
+            onClick={closeNavigation}
+            size="icon"
+            title="Close POS navigation"
+            type="button"
+            variant="ghost"
+          >
+            <Menu aria-hidden="true" />
+          </Button>
         </DialogHeader>
-        <DialogBody className="max-h-none flex-1 space-y-6 overflow-y-auto p-5">
-          <section aria-labelledby="pos-tools-workspace">
-            <h2 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase" id="pos-tools-workspace">
-              Register tools
-            </h2>
-            <div className="mt-3 grid gap-2">
-              {canSelectCustomer ? (
-                <Button
-                  className="justify-start"
-                  onClick={() => {
-                    setOpen(false);
-                    window.setTimeout(focusCustomerPicker, 0);
-                  }}
-                  type="button"
-                  variant="outline"
-                >
-                  <UserRound aria-hidden="true" />
-                  Customer lookup
-                </Button>
-              ) : null}
-              {canUseShiftControls ? (
-                <Link
-                  className={cn(buttonVariants({ variant: "outline" }), "justify-start")}
-                  href="/pos/shifts"
-                  onClick={() => setOpen(false)}
-                >
-                  <Clock3 aria-hidden="true" />
-                  Shift controls
-                </Link>
-              ) : null}
-            </div>
-          </section>
-
-          <section aria-labelledby="pos-tools-settings">
-            <h2 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase" id="pos-tools-settings">
-              POS settings
-            </h2>
-            <div className="mt-3 grid gap-2">
-              <Button className="justify-start" onClick={() => void toggleFullscreen()} type="button" variant="outline">
-                <MonitorSmartphone aria-hidden="true" />
-                {isFullscreen ? "Exit full-screen mode" : "Enter full-screen mode"}
-              </Button>
-              {fullscreenMessage ? <p aria-live="polite" className="text-xs text-muted-foreground">{fullscreenMessage}</p> : null}
-            </div>
-          </section>
-
-          {canUseTimeClock ? (
-            <section aria-labelledby="pos-tools-time-clock">
-              <h2 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase" id="pos-tools-time-clock">
-                Attendance
-              </h2>
-              <div className="mt-3">
-                <TimeClockControl initialEntry={timeClockEntry} stores={stores} timezone={timezone} />
-              </div>
-            </section>
-          ) : null}
+        <DialogBody className="max-h-none flex-1 overflow-y-auto p-5">
+          <PosOperationalNavigationContent {...navigationProps} onNavigate={closeNavigation} />
         </DialogBody>
         <DialogFooter className="border-t p-5">
-          <form action={signOutAction} className="w-full">
+          <form action={signOutAction} className="w-full" onSubmit={closeNavigation}>
             <Button className="w-full" type="submit" variant="outline">
               <LogOut aria-hidden="true" />
               Sign out

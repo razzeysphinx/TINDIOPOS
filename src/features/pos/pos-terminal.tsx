@@ -841,9 +841,22 @@ export function PosTerminal({
   return (
     <>
       <main className="min-h-svh bg-background lg:h-svh lg:overflow-hidden">
-       <div className="grid min-h-svh grid-rows-[auto_1fr] lg:h-svh">
+        <div className="grid min-h-svh grid-rows-[auto_1fr] lg:h-svh">
         <header className="flex flex-col gap-3 border-b bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="order-1 self-start">
+            <PosOperationalDrawer
+              canSelectCustomer={!isPaymentScreenOpen}
+              canUseShiftControls={canUseShiftControls}
+              canUseTimeClock={canUseTimeClock}
+              employeeName={employeeName}
+              organizationName={organizationName}
+              stores={stores}
+              timeClockEntry={timeClockEntry}
+              timezone={timezone}
+            />
+          </div>
+          <div className="order-2 flex min-w-0 flex-col items-end gap-3 sm:flex-row sm:items-center">
+          <div className="order-1 flex min-w-0 items-center gap-3 sm:order-2">
             <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
               <ShoppingBag className="size-4" aria-hidden="true" />
             </span>
@@ -855,7 +868,7 @@ export function PosTerminal({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="order-2 flex flex-wrap items-center gap-2 sm:order-1">
             <Badge variant="outline">{currencyCode}</Badge>
             <OfflineQueueStatus scope={offlineScope} />
             <Button
@@ -882,16 +895,7 @@ export function PosTerminal({
                 Close shift
               </Button>
             ) : null}
-            <PosOperationalDrawer
-              canSelectCustomer={!isPaymentScreenOpen}
-              canUseShiftControls={canUseShiftControls}
-              canUseTimeClock={canUseTimeClock}
-              employeeName={employeeName}
-              organizationName={organizationName}
-              stores={stores}
-              timeClockEntry={timeClockEntry}
-              timezone={timezone}
-            />
+          </div>
           </div>
         </header>
 
@@ -1189,7 +1193,7 @@ export function PosTerminal({
             </div>
           </div>
         )}
-      </div>
+        </div>
       </main>
       {isPaymentScreenOpen && selectedRegister && activeShift ? (
         <PaymentScreen
@@ -1433,7 +1437,16 @@ function PosShiftGate({
   return (
     <main className="min-h-svh bg-background">
       <section className="grid min-h-svh grid-rows-[auto_1fr] overflow-hidden bg-background">
-        <header className="flex flex-col gap-3 border-b bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <header className="flex items-center justify-between gap-3 border-b bg-card px-5 py-4">
+          <PosOperationalDrawer
+            canUseShiftControls={canUseShiftControls}
+            canUseTimeClock={canUseTimeClock}
+            employeeName={employeeName}
+            organizationName={organizationName}
+            stores={stores}
+            timeClockEntry={timeClockEntry}
+            timezone={timezone}
+          />
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
               <ShoppingBag className="size-5" aria-hidden="true" />
@@ -1442,17 +1455,6 @@ function PosShiftGate({
               <p className="truncate text-sm font-semibold">TINDIO POS <span className="font-normal text-muted-foreground">· {organizationName}</span></p>
               <p className="truncate text-xs text-muted-foreground">Cashier: {employeeName} · Register entry</p>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <PosOperationalDrawer
-              canUseShiftControls={canUseShiftControls}
-              canUseTimeClock={canUseTimeClock}
-              employeeName={employeeName}
-              organizationName={organizationName}
-              stores={stores}
-              timeClockEntry={timeClockEntry}
-              timezone={timezone}
-            />
           </div>
         </header>
 

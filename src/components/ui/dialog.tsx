@@ -22,11 +22,13 @@ function DialogContent({
   children,
   className,
   size = "default",
+  showCloseButton = true,
   side = "center",
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Popup> & {
   size?: "default" | "wide" | "large";
-  side?: "center" | "right";
+  showCloseButton?: boolean;
+  side?: "center" | "left" | "right";
 }) {
   return (
     <DialogPrimitive.Portal>
@@ -34,7 +36,11 @@ function DialogContent({
       <DialogPrimitive.Viewport
         className={cn(
           "fixed inset-0 z-50 flex overflow-y-auto",
-          side === "right" ? "items-stretch justify-end" : "items-end justify-center p-3 sm:items-center sm:p-6",
+          side === "left"
+            ? "items-stretch justify-start"
+            : side === "right"
+              ? "items-stretch justify-end"
+              : "items-end justify-center p-3 sm:items-center sm:p-6",
         )}
       >
         <DialogPrimitive.Popup
@@ -44,20 +50,23 @@ function DialogContent({
             size === "wide" && "max-w-3xl",
             size === "large" && "max-w-6xl",
             side === "right" && "my-0 h-svh max-w-md rounded-none border-y-0 border-r-0 data-ending-style:translate-x-full",
+            side === "left" && "my-0 h-svh max-w-md rounded-none border-y-0 border-l-0 data-ending-style:-translate-x-full",
             className,
           )}
           {...props}
         >
           {children}
-          <DialogPrimitive.Close
-            aria-label="Close dialog"
-            className={cn(
-              buttonVariants({ variant: "ghost", size: "icon-sm" }),
-              "absolute top-3 right-3 text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <X aria-hidden="true" />
-          </DialogPrimitive.Close>
+          {showCloseButton ? (
+            <DialogPrimitive.Close
+              aria-label="Close dialog"
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                "absolute top-3 right-3 text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <X aria-hidden="true" />
+            </DialogPrimitive.Close>
+          ) : null}
         </DialogPrimitive.Popup>
       </DialogPrimitive.Viewport>
     </DialogPrimitive.Portal>

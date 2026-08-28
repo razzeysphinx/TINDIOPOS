@@ -1,9 +1,15 @@
 import { CircleDollarSign } from "lucide-react";
+import { notFound } from "next/navigation";
 
+import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ShiftManager, type ShiftOperationalSummary } from "@/features/shifts/shift-manager";
+import {
+  loadAuthorizedBackOfficeStores,
+  resolveBackOfficeStoreScope,
+} from "@/lib/server/back-office-store-scope";
 import { hasPermission, requireBackOfficePermission, requireBusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
@@ -13,8 +19,10 @@ const SHIFT_PERMISSIONS = ["shifts.open", "shifts.close", "cash.pay_in", "cash.p
 
 export async function ShiftWorkspacePage({
   mode,
+  searchParams = {},
 }: {
   mode: "operations" | "reports";
+  searchParams?: { employee?: string; end?: string; register?: string; start?: string; store?: string };
 }) {
   const context = await requireBusinessContext();
   const isOperationsMode = mode === "operations";
@@ -26,6 +34,8 @@ export async function ShiftWorkspacePage({
   const canPayOut = isOperationsMode && hasPermission(context, "cash.pay_out");
   const canViewClosedShiftAudit = canManageOrganizationSettings || hasPermission(context, "shifts.view_history");
   const canAccessShifts = canManageSettings || SHIFT_PERMISSIONS.some((permission) => hasPermission(context, permission));
+  const storeScope = resolveBackOfficeStoreScope(context, searchParams);
+  if (!isOperationsMode && storeScope.invalidSelection) notFound();
 
   if (isOperationsMode && !canAccessShifts) {
     return (
@@ -70,9 +80,12 @@ export async function ShiftWorkspacePage({
 
   // Settings managers can audit every store in the organization. Other
   // viewers stay limited to their assigned stores, which matches the RPC.
-  if (!canManageOrganizationSettings) {
+  if (isOperationsMode && !canManageOrganizationSettings) {
     storesQuery.in("id", context.storeIds);
     registersQuery.in("store_id", context.storeIds);
+  } else if (!isOperationsMode && storeScope.storeIds) {
+    storesQuery.in("id", storeScope.storeIds);
+    registersQuery.in("store_id", storeScope.storeIds);
   }
 
   const [storesResult, registersResult, shiftsResult, cashCloseSettingResult, auditHistoryResult] = await Promise.all([
@@ -96,7 +109,7 @@ export async function ShiftWorkspacePage({
     !isOperationsMode && canViewClosedShiftAudit
       ? database.rpc("get_shift_audit_history", {
           target_organization_id: context.organization.id,
-          target_limit: 25,
+          target_limit: 100,
         })
       : Promise.resolve({ data: [], error: null }),
   ]);
@@ -104,12 +117,13 @@ export async function ShiftWorkspacePage({
   const baseError = [storesResult, registersResult, shiftsResult, cashCloseSettingResult, auditHistoryResult].find((result) => result.error)?.error;
   if (baseError) throw new Error(`Unable to load register shifts: ${baseError.message}`);
 
-  const shifts = (!isOperationsMode && canViewClosedShiftAudit && Array.isArray(auditHistoryResult.data)
+  const allShifts = (!isOperationsMode && canViewClosedShiftAudit && Array.isArray(auditHistoryResult.data)
     ? auditHistoryResult.data.map((shift) => ({
       id: (shift as { shift_id: string }).shift_id,
       storeId: (shift as { store_id: string }).store_id,
       registerId: (shift as { register_id: string }).register_id,
       openedByEmployeeId: (shift as { opened_by_employee_id: string }).opened_by_employee_id,
+      openedByName: (shift as { opened_by_name?: string }).opened_by_name ?? "Employee",
       status: "closed" as const,
       openingCashMinor: (shift as { opening_cash_minor: number }).opening_cash_minor,
       expectedCashMinor: (shift as { expected_cash_minor: number | null }).expected_cash_minor,
@@ -125,6 +139,7 @@ export async function ShiftWorkspacePage({
     storeId: shift.store_id,
     registerId: shift.register_id,
     openedByEmployeeId: shift.opened_by_employee_id,
+    openedByName: "Employee",
     status: shift.status as "open" | "closed",
     openingCashMinor: shift.opening_cash_minor,
     expectedCashMinor: shift.expected_cash_minor,
@@ -139,6 +154,7 @@ export async function ShiftWorkspacePage({
     storeId: string;
     registerId: string;
     openedByEmployeeId: string;
+    openedByName: string;
     status: "open" | "closed";
     openingCashMinor: number;
     expectedCashMinor: number | null;
@@ -149,6 +165,17 @@ export async function ShiftWorkspacePage({
     openedAt: string;
     closedAt: string | null;
   }>;
+  const registerFilter = searchParams.register;
+  const employeeFilter = searchParams.employee;
+  const shifts = !isOperationsMode
+    ? allShifts.filter((shift) =>
+      (!storeScope.selectedStoreId || shift.storeId === storeScope.selectedStoreId)
+      && (!registerFilter || shift.registerId === registerFilter)
+      && (!employeeFilter || shift.openedByEmployeeId === employeeFilter)
+      && (!searchParams.start || shift.openedAt >= `${searchParams.start}T00:00:00.000Z`)
+      && (!searchParams.end || (shift.closedAt ?? shift.openedAt) <= `${searchParams.end}T23:59:59.999Z`),
+    )
+    : allShifts;
   const accessibleOpenShifts = shifts.filter(
     (shift) => shift.status === "open" && context.storeIds.includes(shift.storeId),
   );
@@ -236,6 +263,17 @@ export async function ShiftWorkspacePage({
         }
         action={<Badge variant="secondary"><CircleDollarSign aria-hidden="true" />{openShifts.length} open</Badge>}
       />
+      {!isOperationsMode ? (
+        <GlobalFilterBar
+          action="/back-office/shifts"
+          additionalFields={<><label className="grid min-w-36 gap-1.5 text-sm font-medium">Register<select className="h-8 min-w-36 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" defaultValue={registerFilter ?? ""} name="register"><option value="">All registers</option>{(registersResult.data ?? []).map((register) => <option key={register.id} value={register.id}>{register.name} ({register.code})</option>)}</select></label><label className="grid min-w-36 gap-1.5 text-sm font-medium">Employee<select className="h-8 min-w-36 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" defaultValue={employeeFilter ?? ""} name="employee"><option value="">All employees</option>{Array.from(new Map(allShifts.map((shift) => [shift.openedByEmployeeId, shift.openedByName])).entries()).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label></>}
+          fromDate={searchParams.start}
+          namePrefix="shift-report-filter"
+          storeId={storeScope.selectedStoreId}
+          stores={await loadAuthorizedBackOfficeStores(context)}
+          toDate={searchParams.end}
+        />
+      ) : null}
       <ShiftManager
         canClose={canClose}
         canManageSettings={canManageSettings}
@@ -263,7 +301,11 @@ export async function ShiftWorkspacePage({
   );
 }
 
-export default async function ShiftsPage() {
+export default async function ShiftsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ employee?: string; end?: string; register?: string; start?: string; store?: string }>;
+}) {
   await requireBackOfficePermission(["dashboard.view", "reports.view", "shifts.view_history", "settings.manage"]);
-  return <ShiftWorkspacePage mode="reports" />;
+  return <ShiftWorkspacePage mode="reports" searchParams={await searchParams} />;
 }

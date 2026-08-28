@@ -1,7 +1,9 @@
 import { ArrowDown, ArrowUp, Boxes, PackageOpen, Warehouse } from "lucide-react";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
+import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,6 +23,10 @@ import {
   type AdvancedPurchaseOrder,
 } from "@/features/inventory/advanced-inventory-workflows";
 import { InventoryIntegrityWorkflows } from "@/features/inventory/inventory-integrity-workflows";
+import {
+  loadAuthorizedBackOfficeStores,
+  resolveBackOfficeStoreScope,
+} from "@/lib/server/back-office-store-scope";
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import type { TableRow } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
@@ -44,7 +50,7 @@ function resolveInventoryTab(value: string | string[] | undefined): InventoryTab
     : "overview";
 }
 
-function InventoryTabs({ activeTab }: { activeTab: InventoryTab }) {
+function InventoryTabs({ activeTab, storeId }: { activeTab: InventoryTab; storeId: string | null }) {
   return (
     <nav aria-label="Inventory sections" className="overflow-x-auto border-b">
       <div className="flex min-w-max gap-1">
@@ -60,7 +66,7 @@ function InventoryTabs({ activeTab }: { activeTab: InventoryTab }) {
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
               )}
-              href={`/back-office/inventory?tab=${tab.id}`}
+              href={`/back-office/inventory?tab=${tab.id}${storeId ? `&store=${storeId}` : ""}`}
               key={tab.id}
             >
               {tab.label}
@@ -75,10 +81,13 @@ function InventoryTabs({ activeTab }: { activeTab: InventoryTab }) {
 export default async function InventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string | string[] }>;
+  searchParams: Promise<{ store?: string; tab?: string | string[] }>;
 }) {
   const context = await requireBackOfficePermission("inventory.manage");
-  const activeTab = resolveInventoryTab((await searchParams).tab);
+  const parameters = await searchParams;
+  const activeTab = resolveInventoryTab(parameters.tab);
+  const storeScope = resolveBackOfficeStoreScope(context, parameters);
+  if (storeScope.invalidSelection) notFound();
 
   if (!context.features.inventory) {
     return (
@@ -249,18 +258,19 @@ export default async function InventoryPage({
     throw new Error(`Unable to load inventory: ${error.message}`);
   }
 
-  const stores = storesResult.data ?? [];
+  const visibleStore = (storeId: string) => !storeScope.selectedStoreId || storeId === storeScope.selectedStoreId;
+  const stores = (storesResult.data ?? []).filter((store) => visibleStore(store.id));
   const products = productsResult.data ?? [];
   const variants = variantsResult.data ?? [];
-  const settings = settingsResult.data ?? [];
-  const levels = levelsResult.data ?? [];
-  const movements = movementsResult.data ?? [];
+  const settings = (settingsResult.data ?? []).filter((setting) => visibleStore(setting.store_id));
+  const levels = (levelsResult.data ?? []).filter((level) => visibleStore(level.store_id));
+  const movements = (movementsResult.data ?? []).filter((movement) => visibleStore(movement.store_id));
   const suppliers = suppliersResult.data ?? [];
-  const purchaseOrders = purchaseOrdersResult.data ?? [];
+  const purchaseOrders = (purchaseOrdersResult.data ?? []).filter((order) => visibleStore(order.store_id));
   const purchaseOrderLines = purchaseOrderLinesResult.data ?? [];
-  const inventoryPolicies = inventoryPoliciesResult.data ?? [];
+  const inventoryPolicies = (inventoryPoliciesResult.data ?? []).filter((policy) => visibleStore(policy.store_id));
   const adjustmentReasons = adjustmentReasonsResult.data ?? [];
-  const stockTransfers = stockTransfersResult.data ?? [];
+  const stockTransfers = (stockTransfersResult.data ?? []).filter((transfer) => visibleStore(transfer.source_store_id) || visibleStore(transfer.destination_store_id));
   const stockTransferLines = stockTransferLinesResult.data ?? [];
   const storeNames = new Map(stores.map((store) => [store.id, store.name]));
   const productById = new Map(products.map((product) => [product.id, product]));
@@ -402,13 +412,15 @@ export default async function InventoryPage({
         }
       />
 
+      <GlobalFilterBar action="/back-office/inventory" hiddenFields={{ tab: activeTab }} namePrefix="inventory-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={await loadAuthorizedBackOfficeStores(context)} />
+
       <DashboardActionGrid
         inventoryEnabled={context.features.inventory}
         permissions={context.permissions}
         surface="inventory"
       />
 
-      <InventoryTabs activeTab={activeTab} />
+      <InventoryTabs activeTab={activeTab} storeId={storeScope.selectedStoreId} />
 
       {activeTab === "adjustments" && canManage ? (
         <InventoryAdjustmentForm

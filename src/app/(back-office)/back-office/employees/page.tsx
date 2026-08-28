@@ -1,6 +1,8 @@
 import { Building2, Clock3, IdCard, ShieldCheck, UserRound } from "lucide-react";
+import { notFound } from "next/navigation";
 
 import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
+import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,12 +13,23 @@ import {
 } from "@/features/management/management-forms";
 import { EmployeePinForm } from "@/features/approvals/employee-pin-form";
 import { loadManagementEmployees } from "@/features/management/data";
+import {
+  loadAuthorizedBackOfficeStores,
+  resolveBackOfficeStoreScope,
+} from "@/lib/server/back-office-store-scope";
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Employees" };
 
-export default async function EmployeesPage() {
+export default async function EmployeesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ store?: string }>;
+}) {
   const context = await requireBackOfficePermission("employees.manage");
+  const parameters = await searchParams;
+  const storeScope = resolveBackOfficeStoreScope(context, parameters);
+  if (storeScope.invalidSelection) notFound();
   const canManage = hasPermission(context, "employees.manage");
   const {
     employees,
@@ -28,6 +41,7 @@ export default async function EmployeesPage() {
     rolePermissions,
     invitations,
   } = await loadManagementEmployees(context, { includeInvitations: canManage });
+  const authorizedStores = await loadAuthorizedBackOfficeStores(context);
 
   const profiles = new Map(profilesData.map((profile) => [profile.id, profile]));
   const roles = new Map(rolesData.map((role) => [role.id, role.name]));
@@ -41,6 +55,9 @@ export default async function EmployeesPage() {
   const pendingInvitations = invitations.filter(
     (invitation) => !invitation.accepted_at && !invitation.revoked_at,
   );
+  const visibleEmployees = storeScope.selectedStoreId
+    ? employees.filter((employee) => storeLinks.some((link) => link.employee_id === employee.id && link.store_id === storeScope.selectedStoreId))
+    : employees;
 
   return (
     <div className="space-y-8">
@@ -59,6 +76,7 @@ export default async function EmployeesPage() {
           </div>
         }
       />
+      <GlobalFilterBar action="/back-office/employees" namePrefix="employee-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={authorizedStores} />
 
       {canManage && pendingInvitations.length > 0 ? (
         <section className="space-y-3" aria-labelledby="pending-invitations-title">
@@ -107,9 +125,9 @@ export default async function EmployeesPage() {
         </section>
       ) : null}
 
-      {employees.length > 0 ? (
+      {visibleEmployees.length > 0 ? (
         <section className="grid gap-4 lg:grid-cols-2">
-          {employees.map((employee) => {
+          {visibleEmployees.map((employee) => {
           const profile = profiles.get(employee.profile_id);
           const employeeRoles = roleLinks
             .filter((link) => link.employee_id === employee.id)

@@ -40,6 +40,7 @@ type ShiftRecord = {
   storeId: string;
   registerId: string;
   openedByEmployeeId: string;
+  openedByName: string;
   status: "open" | "closed";
   openingCashMinor: number;
   expectedCashMinor: number | null;
@@ -737,8 +738,8 @@ function ClosedShiftHistory({
       <CardContent>
         {shifts.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full min-w-170 text-left text-sm">
-              <thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th className="px-3 py-2 font-medium">Register</th><th className="px-3 py-2 font-medium">Closed</th><th className="px-3 py-2 text-right font-medium">Expected</th><th className="px-3 py-2 text-right font-medium">Counted</th><th className="px-3 py-2 text-right font-medium">Difference</th><th className="px-3 py-2 text-right font-medium">Print</th></tr></thead>
+            <table className="w-full min-w-220 text-left text-sm">
+              <thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th className="px-3 py-2 font-medium">Store</th><th className="px-3 py-2 font-medium">Register</th><th className="px-3 py-2 font-medium">Employee</th><th className="px-3 py-2 font-medium">Closed</th><th className="px-3 py-2 text-right font-medium">Expected</th><th className="px-3 py-2 text-right font-medium">Counted</th><th className="px-3 py-2 text-right font-medium">Difference</th><th className="px-3 py-2 text-right font-medium">Print</th></tr></thead>
               <tbody className="divide-y">
                 {shifts.map((shift) => {
                   const difference = shift.differenceMinor ?? 0;
@@ -761,7 +762,9 @@ function ClosedShiftHistory({
                     role={canViewClosedShiftAudit ? "link" : undefined}
                     tabIndex={canViewClosedShiftAudit ? 0 : undefined}
                   >
-                    <td className="px-3 py-3"><p className="flex items-center gap-1.5 font-medium">{registerName}{canViewClosedShiftAudit ? <ArrowUpRight aria-hidden="true" className="size-3.5 text-muted-foreground transition-colors group-hover:text-primary" /> : null}</p><p className="mt-0.5 text-xs text-muted-foreground">{storeName}</p></td>
+                    <td className="px-3 py-3 font-medium">{storeName}</td>
+                    <td className="px-3 py-3"><p className="flex items-center gap-1.5 font-medium">{registerName}{canViewClosedShiftAudit ? <ArrowUpRight aria-hidden="true" className="size-3.5 text-muted-foreground transition-colors group-hover:text-primary" /> : null}</p></td>
+                    <td className="px-3 py-3 text-muted-foreground">{shift.openedByName}</td>
                     <td className="px-3 py-3 text-muted-foreground">{shift.closedAt ? formatShiftTime(shift.closedAt, timezone) : "—"}</td>
                     <td className="px-3 py-3 text-right">{formatMinorMoney(shift.expectedCashMinor ?? 0, currencyCode)}</td>
                     <td className="px-3 py-3 text-right">{formatMinorMoney(shift.countedCashMinor ?? 0, currencyCode)}</td>

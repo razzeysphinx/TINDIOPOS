@@ -19,8 +19,10 @@ const selectClassName =
  */
 export function GlobalFilterBar({
   action,
+  additionalFields,
   allowAllStores = true,
   fromDate,
+  hiddenFields,
   namePrefix,
   storeId,
   stores = [],
@@ -30,8 +32,10 @@ export function GlobalFilterBar({
   showStore = stores.length > 0,
 }: {
   action: string;
+  additionalFields?: ReactNode;
   allowAllStores?: boolean;
   fromDate?: string;
+  hiddenFields?: Record<string, string | undefined>;
   namePrefix: string;
   storeId?: string | null;
   stores?: FilterStoreOption[];
@@ -50,6 +54,9 @@ export function GlobalFilterBar({
           className="grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end"
           method="get"
         >
+          {Object.entries(hiddenFields ?? {}).map(([name, value]) =>
+            value === undefined ? null : <input key={name} name={name} type="hidden" value={value} />,
+          )}
           {showDateRange ? (
             <>
               <div className="grid min-w-36 gap-1.5 lg:flex-none">
@@ -80,6 +87,7 @@ export function GlobalFilterBar({
               </select>
             </div>
           ) : null}
+          {additionalFields}
           <Button className="sm:col-span-2 lg:col-span-1" type="submit">
             Apply
           </Button>

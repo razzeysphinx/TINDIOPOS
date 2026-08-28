@@ -1,18 +1,31 @@
 import { MonitorSmartphone, Store } from "lucide-react";
+import { notFound } from "next/navigation";
 
 import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
+import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateRegisterForm, EditRegisterButton } from "@/features/management/management-forms";
 import { CustomerDisplayManager } from "@/features/customer-display/customer-display-manager";
 import { loadManagementRegisters } from "@/features/management/data";
+import {
+  loadAuthorizedBackOfficeStores,
+  resolveBackOfficeStoreScope,
+} from "@/lib/server/back-office-store-scope";
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Registers" };
 
-export default async function RegistersPage() {
+export default async function RegistersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ store?: string }>;
+}) {
   const context = await requireBackOfficePermission("registers.manage");
+  const parameters = await searchParams;
+  const storeScope = resolveBackOfficeStoreScope(context, parameters);
+  if (storeScope.invalidSelection) notFound();
   const { registers, stores: storeRows, displaySessions } = await loadManagementRegisters(context, {
     includeDisplaySessions:
       hasPermission(context, "registers.manage") && context.features.customer_display,
@@ -20,9 +33,13 @@ export default async function RegistersPage() {
 
   const stores = new Map(storeRows.map((store) => [store.id, store.name]));
   const canManage = hasPermission(context, "registers.manage");
+  const authorizedStores = await loadAuthorizedBackOfficeStores(context);
   const activeStores = storeRows
     .filter((store) => store.is_active)
     .map((store) => ({ id: store.id, name: store.name }));
+  const visibleRegisters = storeScope.selectedStoreId
+    ? registers.filter((register) => register.store_id === storeScope.selectedStoreId)
+    : registers;
 
   return (
     <div className="space-y-8">
@@ -39,10 +56,11 @@ export default async function RegistersPage() {
           </div>
         }
       />
+      <GlobalFilterBar action="/back-office/registers" namePrefix="register-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={authorizedStores} />
 
-      {canManage && context.features.customer_display && registers.length > 0 ? (
+      {canManage && context.features.customer_display && visibleRegisters.length > 0 ? (
         <CustomerDisplayManager
-          registers={registers.map((register) => ({
+          registers={visibleRegisters.map((register) => ({
             id: register.id,
             name: register.name,
             code: register.code,
@@ -56,9 +74,9 @@ export default async function RegistersPage() {
         />
       ) : null}
 
-      {registers.length > 0 ? (
+      {visibleRegisters.length > 0 ? (
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {registers.map((register) => (
+          {visibleRegisters.map((register) => (
           <Card key={register.id}>
             <CardHeader className="flex-row items-start justify-between">
               <span className="grid size-10 place-items-center rounded-lg bg-secondary text-primary">

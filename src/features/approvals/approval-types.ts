@@ -39,6 +39,8 @@ export type ApprovalRequestDbRow = {
 
 export type ApprovalAuditLogRow = {
   id: string;
+  store_id: string | null;
+  register_id: string | null;
   event_type: string;
   operation_code: string | null;
   amount_minor: number | null;

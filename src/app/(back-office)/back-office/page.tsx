@@ -1,4 +1,5 @@
 import { ChartColumnBig } from "lucide-react";
+import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +10,7 @@ import { loadReportStores } from "@/features/reports/data";
 import {
   canQueryReportingScope,
   getReportingSnapshot,
+  hasAuthorizedReportStoreSelection,
   hasOrganizationReportingScope,
   resolveScopedReportFilter,
 } from "@/features/reports/reporting";
@@ -25,6 +27,7 @@ export default async function BackOfficePage({
   const context = await requireBackOfficePermission("dashboard.view");
 
   const parameters = await searchParams;
+  if (!hasAuthorizedReportStoreSelection(context, parameters)) notFound();
   const hasOrganizationScope = hasOrganizationReportingScope(context);
 
   if (!canQueryReportingScope(context)) {

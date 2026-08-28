@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
-import { ArrowRight, LoaderCircle } from "lucide-react";
+import { useActionState, useState } from "react";
+import { ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
 
 import {
   signInFormAction,
@@ -81,13 +81,11 @@ function SignInForm({
         id="password"
         label="Password"
       >
-        <Input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           autoComplete="current-password"
-          required
-          aria-invalid={Boolean(state?.fieldErrors?.password)}
+          error={Boolean(state?.fieldErrors?.password)}
         />
       </Field>
       <SubmitButton isPending={isPending}>Sign in</SubmitButton>
@@ -162,13 +160,23 @@ function SignUpForm({
         label="Password"
         hint="12+ characters with upper, lower, number, and symbol."
       >
-        <Input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           autoComplete="new-password"
-          required
-          aria-invalid={Boolean(state?.fieldErrors?.password)}
+          error={Boolean(state?.fieldErrors?.password)}
+        />
+      </Field>
+      <Field
+        error={state?.fieldErrors?.confirmPassword?.[0]}
+        id="confirmPassword"
+        label="Confirm password"
+      >
+        <PasswordInput
+          id="confirmPassword"
+          name="confirmPassword"
+          autoComplete="new-password"
+          error={Boolean(state?.fieldErrors?.confirmPassword)}
         />
       </Field>
       <SubmitButton isPending={isPending}>Create account</SubmitButton>
@@ -181,6 +189,47 @@ function SignUpForm({
         </p>
       ) : null}
     </form>
+  );
+}
+
+function PasswordInput({
+  autoComplete,
+  error,
+  id,
+  name,
+}: {
+  autoComplete: React.ComponentProps<"input">["autoComplete"];
+  error: boolean;
+  id: string;
+  name: string;
+}) {
+  const [isVisible, setIsVisible] = useState(false);
+
+  const fieldLabel = name === "confirmPassword" ? "confirm password" : "password";
+
+  return (
+    <div className="relative">
+      <Input
+        id={id}
+        name={name}
+        type={isVisible ? "text" : "password"}
+        autoComplete={autoComplete}
+        className="pr-10"
+        required
+        aria-invalid={error}
+      />
+      <Button
+        aria-label={`${isVisible ? "Hide" : "Show"} ${fieldLabel}`}
+        aria-pressed={isVisible}
+        className="absolute inset-y-0 right-0 text-muted-foreground hover:text-foreground"
+        onClick={() => setIsVisible((current) => !current)}
+        size="icon"
+        type="button"
+        variant="ghost"
+      >
+        {isVisible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+      </Button>
+    </div>
   );
 }
 

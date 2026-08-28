@@ -189,6 +189,7 @@ export async function signUpFormAction(
       fullName: formData.get("fullName"),
       email: formData.get("email"),
       password: formData.get("password"),
+      confirmPassword: formData.get("confirmPassword"),
     },
     formData.get("next"),
   );

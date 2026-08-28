@@ -1,12 +1,8 @@
 import Link from "next/link";
 
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
+import { buttonVariants } from "@/components/ui/button";
 import type { ReportFilter } from "@/features/reports/reporting";
-
-const selectClassName =
-  "h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export function ReportFilterForm({
   action,
@@ -26,27 +22,16 @@ export function ReportFilterForm({
   const exportQuery = query.toString();
 
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border bg-card p-4">
-      <form action={action} className="flex flex-wrap items-end gap-3" method="get">
-        <div className="grid gap-1.5">
-          <Label htmlFor={`${action}-report-start`}>From</Label>
-          <Input defaultValue={filter.startDate} id={`${action}-report-start`} name="start" type="date" />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor={`${action}-report-end`}>To</Label>
-          <Input defaultValue={filter.endDate} id={`${action}-report-end`} name="end" type="date" />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor={`${action}-report-store`}>Store</Label>
-          <select className={selectClassName} defaultValue={filter.storeId ?? ""} id={`${action}-report-store`} name="store">
-            {allowAllStores ? <option value="">All stores</option> : null}
-            {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
-          </select>
-        </div>
-        <Button type="submit">Apply</Button>
-      </form>
-      {showExports ? (
-        <div className="flex flex-wrap gap-2">
+    <GlobalFilterBar
+      action={action}
+      allowAllStores={allowAllStores}
+      fromDate={filter.startDate}
+      namePrefix="report-filter"
+      storeId={filter.storeId}
+      stores={stores}
+      toDate={filter.endDate}
+      trailing={showExports ? (
+        <>
           {[
             ["sales", "Sales CSV"],
             ["inventory", "Inventory CSV"],
@@ -64,8 +49,8 @@ export function ReportFilterForm({
               {label}
             </Link>
           ))}
-        </div>
-      ) : null}
-    </div>
+        </>
+      ) : undefined}
+    />
   );
 }

@@ -65,16 +65,16 @@ export default async function BackOfficePage({
           : "Track completed sales and stock activity only for your assigned store."}
         action={<Badge variant="secondary">{hasOrganizationScope ? "Organization dashboard" : "Assigned-store dashboard"}</Badge>}
       />
-      <DashboardActionGrid
-        inventoryEnabled={context.features.inventory}
-        permissions={context.permissions}
-        surface="business"
-      />
       <ReportFilterForm
         action="/back-office"
         allowAllStores={hasOrganizationScope}
         filter={filter}
         stores={stores}
+      />
+      <DashboardActionGrid
+        inventoryEnabled={context.features.inventory}
+        permissions={context.permissions}
+        surface="business"
       />
       <ReportingOverview
         currencyCode={context.organization.currency_code}

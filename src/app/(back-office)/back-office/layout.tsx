@@ -4,6 +4,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 
 import { BackOfficeNavigation } from "@/components/back-office/back-office-navigation";
+import { BackOfficeWorkspaceShell } from "@/components/back-office/back-office-workspace-shell";
 import { TindioMark } from "@/components/brand/tindio-mark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,20 +37,11 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
   };
 
   return (
-    <div className="min-h-svh bg-muted/35 lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
-      <aside className="hidden border-r border-border bg-card print:hidden lg:sticky lg:top-0 lg:flex lg:h-svh lg:self-start lg:flex-col">
-        <Link className="border-b border-border px-5 py-5" href="/back-office">
-          <TindioMark />
-        </Link>
-        <BackOfficeNavigation {...navigationAccess} />
-        <div className="mt-auto border-t border-border p-4">
-          <p className="truncate text-sm font-semibold">{displayName}</p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            {context.employee.employee_number}
-          </p>
-        </div>
-      </aside>
-
+    <BackOfficeWorkspaceShell
+      displayName={displayName}
+      employeeNumber={context.employee.employee_number}
+      navigationAccess={navigationAccess}
+    >
       <div className="min-w-0">
         <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur print:hidden">
           <div className="flex min-h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
@@ -92,6 +84,6 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
           {children}
         </main>
       </div>
-    </div>
+    </BackOfficeWorkspaceShell>
   );
 }

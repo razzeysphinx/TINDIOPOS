@@ -25,6 +25,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export type BackOfficeNavigationAccess = {
@@ -232,12 +233,20 @@ function isCurrentRoute(pathname: string, href: string) {
     : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function NavigationLink({ href, icon: Icon, label, active }: NavigationItem & { active: boolean }) {
-  return (
+function NavigationLink({
+  href,
+  icon: Icon,
+  label,
+  active,
+  collapsed = false,
+}: NavigationItem & { active: boolean; collapsed?: boolean }) {
+  const link = (
     <Link
       aria-current={active ? "page" : undefined}
+      aria-label={collapsed ? label : undefined}
       className={cn(
-        "flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+        "flex min-h-10 items-center rounded-lg py-2 text-sm font-medium transition-colors",
+        collapsed ? "justify-center px-2" : "gap-3 px-3",
         active
           ? "bg-secondary text-secondary-foreground"
           : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -245,12 +254,14 @@ function NavigationLink({ href, icon: Icon, label, active }: NavigationItem & { 
       href={href}
     >
       <Icon className="size-4 shrink-0" aria-hidden="true" />
-      <span className="min-w-0 truncate">{label}</span>
+      {collapsed ? null : <span className="min-w-0 truncate">{label}</span>}
     </Link>
   );
+
+  return collapsed ? <Tooltip content={label} side="right">{link}</Tooltip> : link;
 }
 
-function NavigationGroupSection({
+function ExpandableNavigationGroup({
   group,
   pathname,
 }: {
@@ -286,10 +297,43 @@ function NavigationGroupSection({
   );
 }
 
+function NavigationGroupSection({
+  collapsed,
+  group,
+  pathname,
+}: {
+  collapsed: boolean;
+  group: NavigationGroup;
+  pathname: string;
+}) {
+  if (collapsed) {
+    return (
+      <div className="grid gap-1">
+        {group.items.map((item) => (
+          <NavigationLink
+            {...item}
+            active={isCurrentRoute(pathname, item.href)}
+            collapsed
+            key={item.href}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (group.items.length === 1) {
+    const [item] = group.items;
+    return <NavigationLink {...item} active={isCurrentRoute(pathname, item.href)} />;
+  }
+
+  return <ExpandableNavigationGroup group={group} pathname={pathname} />;
+}
+
 export function BackOfficeNavigation({
+  collapsed = false,
   mobile = false,
   ...access
-}: BackOfficeNavigationAccess & { mobile?: boolean }) {
+}: BackOfficeNavigationAccess & { collapsed?: boolean; mobile?: boolean }) {
   const pathname = usePathname();
   const visiblePrimaryNavigation = primaryNavigation.filter(
     (item) => !item.isVisible || item.isVisible(access),
@@ -300,6 +344,7 @@ export function BackOfficeNavigation({
       items: group.items.filter((item) => !item.isVisible || item.isVisible(access)),
     }))
     .filter((group) => group.items.length > 0);
+  const iconOnly = collapsed && !mobile;
 
   return (
     <nav
@@ -307,7 +352,9 @@ export function BackOfficeNavigation({
       className={cn(
         mobile
           ? "max-h-[min(28rem,calc(100svh-4rem))] overflow-y-auto border-t border-border bg-background px-4 py-3"
-          : "min-h-0 flex-1 overflow-y-auto px-3 py-5",
+          : iconOnly
+            ? "min-h-0 flex-1 overflow-y-auto px-2 py-4"
+            : "min-h-0 flex-1 overflow-y-auto px-3 py-5",
       )}
     >
       <div className="grid gap-1">
@@ -315,14 +362,16 @@ export function BackOfficeNavigation({
           <NavigationLink
             {...item}
             active={isCurrentRoute(pathname, item.href)}
+            collapsed={iconOnly}
             key={item.href}
           />
         ))}
       </div>
 
-      <div className="mt-4 grid gap-2">
+      <div className={cn(iconOnly ? "mt-2 grid gap-1" : "mt-4 grid gap-2")}>
         {visibleNavigationGroups.map((group) => (
           <NavigationGroupSection
+            collapsed={iconOnly}
             group={group}
             key={`${pathname}:${group.label}`}
             pathname={pathname}

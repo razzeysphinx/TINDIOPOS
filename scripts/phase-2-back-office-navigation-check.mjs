@@ -63,3 +63,19 @@ test("navigation remains permission-aware and inventory stays internally tabbed"
   assert.match(inventory, /const INVENTORY_TABS = \[/);
   assert.match(inventory, /href=\{`\/back-office\/inventory\?tab=\$\{tab\.id\}`\}/);
 });
+
+test("desktop navigation collapses to tooltip-labelled icons while retaining direct and expandable routes", async () => {
+  const [navigation, shell, layout] = await Promise.all([
+    source("src/components/back-office/back-office-navigation.tsx"),
+    source("src/components/back-office/back-office-workspace-shell.tsx"),
+    source("src/app/(back-office)/back-office/layout.tsx"),
+  ]);
+
+  assert.match(navigation, /collapsed = false/);
+  assert.match(navigation, /<Tooltip content=\{label\} side="right">/);
+  assert.match(navigation, /if \(group\.items\.length === 1\)/);
+  assert.match(navigation, /ExpandableNavigationGroup/);
+  assert.match(shell, /lg:grid-cols-\[5rem_minmax\(0,1fr\)\]/);
+  assert.match(shell, /<BackOfficeNavigation \{\.\.\.navigationAccess\} collapsed=\{isCollapsed\} \/>/);
+  assert.match(layout, /<BackOfficeWorkspaceShell/);
+});

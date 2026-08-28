@@ -36,3 +36,16 @@ test("signup requires and validates a matching password confirmation before Supa
   );
   assert.doesNotMatch(signUpCall, /confirmPassword/);
 });
+
+test("signup gives immediate mismatch and match feedback while confirmation is typed", () => {
+  assert.match(authForm, /const \[password, setPassword\] = useState\(""\)/);
+  assert.match(authForm, /const \[confirmPassword, setConfirmPassword\] = useState\(""\)/);
+  assert.match(authForm, /const passwordsMatch = hasPasswordConfirmation && password === confirmPassword/);
+  assert.match(authForm, /\? "Passwords do not match\."/);
+  assert.match(authForm, /success=\{passwordsMatch \? "Passwords match\." : undefined\}/);
+  assert.match(authForm, /isValid=\{passwordsMatch\}/);
+  assert.match(authForm, /setPassword\(event\.target\.value\)/);
+  assert.match(authForm, /setConfirmPassword\(event\.target\.value\)/);
+  assert.match(authForm, /border-emerald-600/);
+  assert.match(authForm, /text-emerald-600/);
+});

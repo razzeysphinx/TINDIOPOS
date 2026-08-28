@@ -114,6 +114,15 @@ function SignUpForm({
     signUpFormAction,
     null,
   );
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const hasPasswordConfirmation = confirmPassword.length > 0;
+  const passwordsMatch = hasPasswordConfirmation && password === confirmPassword;
+  const confirmationError = hasPasswordConfirmation && !passwordsMatch
+    ? "Passwords do not match."
+    : passwordsMatch
+      ? undefined
+      : state?.fieldErrors?.confirmPassword?.[0];
 
   return (
     <form action={formAction} className="space-y-5">
@@ -165,18 +174,24 @@ function SignUpForm({
           name="password"
           autoComplete="new-password"
           error={Boolean(state?.fieldErrors?.password)}
+          onChange={(event) => setPassword(event.target.value)}
+          value={password}
         />
       </Field>
       <Field
-        error={state?.fieldErrors?.confirmPassword?.[0]}
+        error={confirmationError}
         id="confirmPassword"
         label="Confirm password"
+        success={passwordsMatch ? "Passwords match." : undefined}
       >
         <PasswordInput
           id="confirmPassword"
           name="confirmPassword"
           autoComplete="new-password"
-          error={Boolean(state?.fieldErrors?.confirmPassword)}
+          error={Boolean(confirmationError)}
+          isValid={passwordsMatch}
+          onChange={(event) => setConfirmPassword(event.target.value)}
+          value={confirmPassword}
         />
       </Field>
       <SubmitButton isPending={isPending}>Create account</SubmitButton>
@@ -196,12 +211,18 @@ function PasswordInput({
   autoComplete,
   error,
   id,
+  isValid = false,
   name,
+  onChange,
+  value,
 }: {
   autoComplete: React.ComponentProps<"input">["autoComplete"];
   error: boolean;
   id: string;
+  isValid?: boolean;
   name: string;
+  onChange?: React.ChangeEventHandler<HTMLInputElement>;
+  value?: string;
 }) {
   const [isVisible, setIsVisible] = useState(false);
 
@@ -214,9 +235,11 @@ function PasswordInput({
         name={name}
         type={isVisible ? "text" : "password"}
         autoComplete={autoComplete}
-        className="pr-10"
+        className={isValid ? "border-emerald-600 pr-10 focus-visible:border-emerald-600 focus-visible:ring-emerald-600/20" : "pr-10"}
         required
         aria-invalid={error}
+        onChange={onChange}
+        value={value}
       />
       <Button
         aria-label={`${isVisible ? "Hide" : "Show"} ${fieldLabel}`}
@@ -239,19 +262,25 @@ function Field({
   hint,
   id,
   label,
+  success,
 }: {
   children: React.ReactNode;
   error?: string;
   hint?: string;
   id: string;
   label: string;
+  success?: string;
 }) {
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
       {children}
       {error ? (
-        <p className="text-sm text-destructive">{error}</p>
+        <p aria-live="polite" className="text-sm text-destructive">{error}</p>
+      ) : success ? (
+        <p aria-live="polite" className="text-sm text-emerald-600 dark:text-emerald-400">
+          {success}
+        </p>
       ) : hint ? (
         <p className="text-xs leading-5 text-muted-foreground">{hint}</p>
       ) : null}

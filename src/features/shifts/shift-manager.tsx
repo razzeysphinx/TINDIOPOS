@@ -2,6 +2,7 @@
 
 import {
   ArrowDownToLine,
+  ArrowUpRight,
   ArrowUpFromLine,
   Calculator,
   CheckCircle2,
@@ -115,6 +116,7 @@ export function ShiftManager({
   canOpen,
   canPayIn,
   canPayOut,
+  canViewClosedShiftAudit,
   cashMovements,
   currencyCode,
   openShifts,
@@ -131,6 +133,7 @@ export function ShiftManager({
   canOpen: boolean;
   canPayIn: boolean;
   canPayOut: boolean;
+  canViewClosedShiftAudit: boolean;
   cashMovements: CashMovement[];
   currencyCode: string;
   openShifts: ShiftRecord[];
@@ -200,6 +203,7 @@ export function ShiftManager({
       )}
 
       <ClosedShiftHistory
+        canViewClosedShiftAudit={canViewClosedShiftAudit}
         currencyCode={currencyCode}
         registers={registers}
         operationalSummaryByShiftId={operationalSummaryByShiftId}
@@ -703,6 +707,7 @@ function CashCloseVisibilitySetting({ initialValue }: { initialValue: boolean })
 }
 
 function ClosedShiftHistory({
+  canViewClosedShiftAudit,
   currencyCode,
   operationalSummaryByShiftId,
   registers,
@@ -710,6 +715,7 @@ function ClosedShiftHistory({
   stores,
   timezone,
 }: {
+  canViewClosedShiftAudit: boolean;
   currencyCode: string;
   operationalSummaryByShiftId: Map<string, ShiftOperationalSummary>;
   registers: RegisterOption[];
@@ -717,13 +723,15 @@ function ClosedShiftHistory({
   stores: StoreOption[];
   timezone: string;
 }) {
+  const router = useRouter();
+
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3">
         <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><ReceiptText className="size-5" /></span>
         <div>
           <CardTitle>Shift-close audit trail</CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">Stored expected cash, drawer count, and difference for the latest 25 closed shifts.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Stored expected cash, drawer count, and difference for the latest 25 closed shifts.{canViewClosedShiftAudit ? " Select a row to inspect its full reconciliation report." : ""}</p>
         </div>
       </CardHeader>
       <CardContent>
@@ -734,26 +742,46 @@ function ClosedShiftHistory({
               <tbody className="divide-y">
                 {shifts.map((shift) => {
                   const difference = shift.differenceMinor ?? 0;
-                  return <tr key={shift.id}>
-                    <td className="px-3 py-3"><p className="font-medium">{registers.find((item) => item.id === shift.registerId)?.name ?? "Register"}</p><p className="mt-0.5 text-xs text-muted-foreground">{stores.find((item) => item.id === shift.storeId)?.name ?? "Store"}</p></td>
+                  const registerName = registers.find((item) => item.id === shift.registerId)?.name ?? "Register";
+                  const storeName = stores.find((item) => item.id === shift.storeId)?.name ?? "Store";
+                  const reportHref = `/back-office/shifts/${shift.id}`;
+                  const navigateToReport = () => {
+                    if (canViewClosedShiftAudit) router.push(reportHref);
+                  };
+                  return <tr
+                    aria-label={canViewClosedShiftAudit ? `View audit report for ${registerName}` : undefined}
+                    className={canViewClosedShiftAudit ? "group cursor-pointer transition-colors hover:bg-muted/50 focus-visible:bg-muted/50" : undefined}
+                    key={shift.id}
+                    onClick={navigateToReport}
+                    onKeyDown={(event) => {
+                      if (!canViewClosedShiftAudit || event.currentTarget !== event.target || (event.key !== "Enter" && event.key !== " ")) return;
+                      event.preventDefault();
+                      navigateToReport();
+                    }}
+                    role={canViewClosedShiftAudit ? "link" : undefined}
+                    tabIndex={canViewClosedShiftAudit ? 0 : undefined}
+                  >
+                    <td className="px-3 py-3"><p className="flex items-center gap-1.5 font-medium">{registerName}{canViewClosedShiftAudit ? <ArrowUpRight aria-hidden="true" className="size-3.5 text-muted-foreground transition-colors group-hover:text-primary" /> : null}</p><p className="mt-0.5 text-xs text-muted-foreground">{storeName}</p></td>
                     <td className="px-3 py-3 text-muted-foreground">{shift.closedAt ? formatShiftTime(shift.closedAt, timezone) : "—"}</td>
                     <td className="px-3 py-3 text-right">{formatMinorMoney(shift.expectedCashMinor ?? 0, currencyCode)}</td>
                     <td className="px-3 py-3 text-right">{formatMinorMoney(shift.countedCashMinor ?? 0, currencyCode)}</td>
                     <td className={difference === 0 ? "px-3 py-3 text-right font-medium" : difference > 0 ? "px-3 py-3 text-right font-medium text-emerald-700 dark:text-emerald-400" : "px-3 py-3 text-right font-medium text-destructive"}>{difference > 0 ? "+" : ""}{formatMinorMoney(difference, currencyCode)}</td>
                     <td className="px-3 py-3 text-right">
-                      <ShiftClosePrintButton
+                      <span onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                        <ShiftClosePrintButton
                         closedAt={shift.closedAt}
                         countedCashMinor={shift.countedCashMinor ?? 0}
                         currencyCode={currencyCode}
                         expectedCashMinor={shift.expectedCashMinor ?? 0}
                         differenceMinor={difference}
                         openedAt={shift.openedAt}
-                        registerName={registers.find((item) => item.id === shift.registerId)?.name ?? "Register"}
+                        registerName={registerName}
                         shiftId={shift.id}
-                        storeName={stores.find((item) => item.id === shift.storeId)?.name ?? "Store"}
+                        storeName={storeName}
                         operationalSummary={operationalSummaryByShiftId.get(shift.id)}
                         timezone={timezone}
-                      />
+                        />
+                      </span>
                     </td>
                   </tr>;
                 })}
@@ -776,7 +804,7 @@ function escapePrintHtml(value: string) {
   })[character] ?? character);
 }
 
-function ShiftClosePrintButton({
+export function ShiftClosePrintButton({
   closedAt,
   countedCashMinor,
   currencyCode,

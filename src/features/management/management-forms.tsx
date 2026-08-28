@@ -64,6 +64,14 @@ export function CreateStoreForm() {
     resolver: zodResolver(createStoreSchema),
     defaultValues: { name: "", code: "", address: "", phone: "" },
   });
+  const resetForm = () => form.reset({ name: "", code: "", address: "", phone: "" });
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (nextOpen) {
+      setResult(null);
+      resetForm();
+    }
+  };
 
   const submit = form.handleSubmit((values) => {
     setResult(null);
@@ -71,7 +79,7 @@ export function CreateStoreForm() {
       const nextResult = await createStoreAction(values);
       setResult(nextResult);
       if (nextResult.ok) {
-        form.reset();
+        resetForm();
         setOpen(false);
         router.refresh();
       }
@@ -79,7 +87,7 @@ export function CreateStoreForm() {
   });
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger className={buttonVariants()}>
         <Plus aria-hidden="true" />
         Add store
@@ -126,6 +134,14 @@ export function CreateRegisterForm({
     resolver: zodResolver(createRegisterSchema),
     defaultValues: { storeId: stores[0]?.id ?? "", name: "", code: "" },
   });
+  const resetForm = () => form.reset({ storeId: stores[0]?.id ?? "", name: "", code: "" });
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (nextOpen) {
+      setResult(null);
+      resetForm();
+    }
+  };
 
   const submit = form.handleSubmit((values) => {
     setResult(null);
@@ -133,7 +149,7 @@ export function CreateRegisterForm({
       const nextResult = await createRegisterAction(values);
       setResult(nextResult);
       if (nextResult.ok) {
-        form.reset({ storeId: stores[0]?.id ?? "", name: "", code: "" });
+        resetForm();
         setOpen(false);
         router.refresh();
       }
@@ -141,7 +157,7 @@ export function CreateRegisterForm({
   });
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger className={buttonVariants()}>
         <Plus aria-hidden="true" />
         Add register

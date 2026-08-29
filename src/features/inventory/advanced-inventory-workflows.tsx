@@ -104,6 +104,13 @@ type SupplierDraft = {
   notes: string;
 };
 type WorkflowResult = { ok: boolean; message: string };
+export type AdvancedInventorySection = "purchasing" | "counts" | "transfers";
+
+const ALL_ADVANCED_INVENTORY_SECTIONS: readonly AdvancedInventorySection[] = [
+  "purchasing",
+  "counts",
+  "transfers",
+];
 
 export function AdvancedInventoryWorkflows({
   stores,
@@ -112,6 +119,7 @@ export function AdvancedInventoryWorkflows({
   purchaseOrders,
   currencyCode,
   adjustmentReasons,
+  sections = ALL_ADVANCED_INVENTORY_SECTIONS,
 }: {
   stores: StoreOption[];
   items: AdvancedInventoryItem[];
@@ -119,6 +127,7 @@ export function AdvancedInventoryWorkflows({
   purchaseOrders: AdvancedPurchaseOrder[];
   currencyCode: string;
   adjustmentReasons: Array<{ code: string; name: string }>;
+  sections?: readonly AdvancedInventorySection[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -187,6 +196,23 @@ export function AdvancedInventoryWorkflows({
     [items, sourceStoreId],
   );
   const selectedReceiptOrder = purchaseOrders.find((order) => order.id === receiptOrderId);
+  const showPurchasing = sections.includes("purchasing");
+  const showCounts = sections.includes("counts");
+  const showTransfers = sections.includes("transfers");
+  const title = sections.length === 1
+    ? sections[0] === "purchasing"
+      ? "Purchasing"
+      : sections[0] === "counts"
+        ? "Inventory counts"
+        : "Stock transfers"
+    : "Inventory operations";
+  const description = sections.length === 1
+    ? sections[0] === "purchasing"
+      ? "Manage suppliers, purchase orders, and receiving without mixing them into stock levels."
+      : sections[0] === "counts"
+        ? "Record physical counts and post only the verified variance."
+        : "Prepare accountable stock transfers between stores."
+    : "Order from suppliers, receive goods, reconcile stock, and transfer items between stores.";
 
   function finish(result: WorkflowResult, setResult: (value: WorkflowResult) => void) {
     setResult(result);
@@ -288,16 +314,17 @@ export function AdvancedInventoryWorkflows({
     <section className="space-y-4" aria-labelledby="advanced-inventory-title">
       <div>
         <h2 className="text-lg font-semibold" id="advanced-inventory-title">
-          Advanced inventory
+          {title}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Order from suppliers, receive goods, reconcile stock, and transfer items between stores.
+          {description}
         </p>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <SupplierCsvTools />
-        <InventoryCsvTools stores={stores} items={items} suppliers={activeSuppliers} adjustmentReasons={adjustmentReasons} />
+        {showPurchasing ? <>
+          <SupplierCsvTools />
+          <InventoryCsvTools stores={stores} items={items} suppliers={activeSuppliers} adjustmentReasons={adjustmentReasons} />
         <WorkflowCard
           title="Supplier management"
           description="Keep procurement contacts available for every purchase order."
@@ -511,8 +538,9 @@ export function AdvancedInventoryWorkflows({
             <EmptyWorkflow message="Open purchase orders will be available here for partial or complete receiving." />
           )}
         </WorkflowCard>
+        </> : null}
 
-        <WorkflowCard
+        {showCounts ? <WorkflowCard
           title="Complete inventory count"
           description="Enter the physical quantity; a count movement posts only the variance."
           icon={<ClipboardCheck aria-hidden="true" />}
@@ -545,9 +573,9 @@ export function AdvancedInventoryWorkflows({
           ) : (
             <EmptyWorkflow message="Create a tracked item in a store before counting inventory." />
           )}
-        </WorkflowCard>
+        </WorkflowCard> : null}
 
-        <WorkflowCard
+        {showTransfers ? <WorkflowCard
           title="Transfer stock"
           description="TINDIO records an equal transfer-out and transfer-in, preserving stock accountability."
           icon={<SendHorizontal aria-hidden="true" />}
@@ -587,7 +615,7 @@ export function AdvancedInventoryWorkflows({
           ) : (
             <EmptyWorkflow message="At least two stores and one tracked item are required for stock transfers." />
           )}
-        </WorkflowCard>
+        </WorkflowCard> : null}
       </div>
     </section>
   );

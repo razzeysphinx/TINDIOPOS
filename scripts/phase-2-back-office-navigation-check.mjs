@@ -54,14 +54,24 @@ test("Settings labels expose the existing profile/features and advanced-sales su
 });
 
 test("navigation remains permission-aware and inventory stays internally tabbed", async () => {
-  const [navigation, inventory] = await Promise.all([
+  const [navigation, inventory, advancedWorkflows, integrityWorkflows] = await Promise.all([
     source("src/components/back-office/back-office-navigation.tsx"),
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
+    source("src/features/inventory/advanced-inventory-workflows.tsx"),
+    source("src/features/inventory/inventory-integrity-workflows.tsx"),
   ]);
 
   assert.match(navigation, /isVisible: \(access: BackOfficeNavigationAccess\) => boolean;/);
   assert.match(inventory, /const INVENTORY_TABS = \[/);
-  assert.match(inventory, /href=\{`\/back-office\/inventory\?tab=\$\{tab\.id\}`\}/);
+  for (const label of ["Overview", "Stock", "Activity", "Counts", "Purchasing", "Transfers"]) {
+    assert.match(inventory, new RegExp(`label: "${label}"`));
+  }
+  assert.match(inventory, /href=\{`\/back-office\/inventory\?tab=\$\{tab\.id\}\$\{storeId \? `&store=\$\{storeId\}` : ""\}`\}/);
+  assert.match(inventory, /sections=\{\["counts"\]\}/);
+  assert.match(inventory, /sections=\{\["purchasing"\]\}/);
+  assert.match(inventory, /sections=\{\["transfers"\]\}/);
+  assert.match(advancedWorkflows, /export type AdvancedInventorySection = "purchasing" \| "counts" \| "transfers";/);
+  assert.match(integrityWorkflows, /export type InventoryIntegritySection =/);
 });
 
 test("shared Back Office shell defaults to section-only navigation and expands from the fixed header", async () => {

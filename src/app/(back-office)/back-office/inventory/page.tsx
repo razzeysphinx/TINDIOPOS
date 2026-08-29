@@ -24,6 +24,10 @@ import {
 } from "@/features/inventory/advanced-inventory-workflows";
 import { InventoryIntegrityWorkflows } from "@/features/inventory/inventory-integrity-workflows";
 import {
+  InventoryStockView,
+  type InventoryStockStatus,
+} from "@/features/inventory/inventory-stock-view";
+import {
   loadAuthorizedBackOfficeStores,
   resolveBackOfficeStoreScope,
 } from "@/lib/server/back-office-store-scope";
@@ -35,19 +39,38 @@ import { cn } from "@/lib/utils";
 export const metadata = { title: "Inventory" };
 
 const INVENTORY_TABS = [
-  { id: "overview", label: "Stock overview" },
-  { id: "adjustments", label: "Adjust stock" },
-  { id: "purchasing", label: "Purchasing & counts" },
-  { id: "controls", label: "Inventory controls" },
+  { id: "overview", label: "Overview" },
+  { id: "stock", label: "Stock" },
+  { id: "activity", label: "Activity" },
+  { id: "counts", label: "Counts" },
+  { id: "purchasing", label: "Purchasing" },
+  { id: "transfers", label: "Transfers" },
 ] as const;
 
 type InventoryTab = (typeof INVENTORY_TABS)[number]["id"];
+
+const INVENTORY_STOCK_STATUSES = [
+  "all",
+  "attention",
+  "available",
+  "in_stock",
+  "low",
+  "negative",
+  "out_of_stock",
+] as const satisfies readonly InventoryStockStatus[];
 
 function resolveInventoryTab(value: string | string[] | undefined): InventoryTab {
   const candidate = Array.isArray(value) ? value[0] : value;
   return INVENTORY_TABS.some((tab) => tab.id === candidate)
     ? candidate as InventoryTab
     : "overview";
+}
+
+function resolveInventoryStockStatus(value: string | string[] | undefined): InventoryStockStatus {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return INVENTORY_STOCK_STATUSES.some((status) => status === candidate)
+    ? candidate as InventoryStockStatus
+    : "all";
 }
 
 function InventoryTabs({ activeTab, storeId }: { activeTab: InventoryTab; storeId: string | null }) {
@@ -81,11 +104,12 @@ function InventoryTabs({ activeTab, storeId }: { activeTab: InventoryTab; storeI
 export default async function InventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ store?: string; tab?: string | string[] }>;
+  searchParams: Promise<{ status?: string | string[]; store?: string; tab?: string | string[] }>;
 }) {
   const context = await requireBackOfficePermission("inventory.manage");
   const parameters = await searchParams;
   const activeTab = resolveInventoryTab(parameters.tab);
+  const initialStockStatus = resolveInventoryStockStatus(parameters.status);
   const storeScope = resolveBackOfficeStoreScope(context, parameters);
   if (storeScope.invalidSelection) notFound();
 
@@ -111,9 +135,31 @@ export default async function InventoryPage({
   const organizationId = context.organization.id;
   const canManage = hasPermission(context, "inventory.manage");
   const canViewCosts = hasPermission(context, "products.view_cost");
+  const selectedStoreId = storeScope.selectedStoreId;
+  const settingsQuery = supabase
+    .from("product_store_settings")
+    .select("product_id, store_id, is_available")
+    .eq("organization_id", organizationId);
+  const levelsQuery = supabase
+    .from("inventory_levels")
+    .select("id, store_id, product_id, variant_id, quantity, average_cost_minor, updated_at")
+    .eq("organization_id", organizationId);
+  const replenishmentRulesQuery = canManage
+    ? supabase
+        .from("inventory_replenishment_rules")
+        .select("store_id, product_id, variant_id, reorder_point")
+        .eq("organization_id", organizationId)
+    : null;
+
+  if (selectedStoreId) {
+    settingsQuery.eq("store_id", selectedStoreId);
+    levelsQuery.eq("store_id", selectedStoreId);
+    replenishmentRulesQuery?.eq("store_id", selectedStoreId);
+  }
 
   const [
     storesResult,
+    categoriesResult,
     productsResult,
     variantsResult,
     settingsResult,
@@ -126,6 +172,7 @@ export default async function InventoryPage({
     adjustmentReasonsResult,
     stockTransfersResult,
     stockTransferLinesResult,
+    replenishmentRulesResult,
   ] = await Promise.all([
     supabase
       .from("stores")
@@ -134,8 +181,14 @@ export default async function InventoryPage({
       .eq("is_active", true)
       .order("created_at", { ascending: true }),
     supabase
+      .from("categories")
+      .select("id, name, is_archived")
+      .eq("organization_id", organizationId)
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true }),
+    supabase
       .from("products")
-      .select("id, name, sku, barcode, product_type, is_composite, unit, status, track_inventory")
+      .select("id, category_id, name, sku, barcode, product_type, is_composite, unit, status, track_inventory")
       .eq("organization_id", organizationId)
       .eq("status", "active")
       .eq("track_inventory", true)
@@ -146,14 +199,8 @@ export default async function InventoryPage({
       .eq("organization_id", organizationId)
       .eq("is_active", true)
       .order("sort_order", { ascending: true }),
-    supabase
-      .from("product_store_settings")
-      .select("product_id, store_id, is_available")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("inventory_levels")
-      .select("id, store_id, product_id, variant_id, quantity, average_cost_minor, updated_at")
-      .eq("organization_id", organizationId),
+    settingsQuery,
+    levelsQuery,
     canManage
       ? supabase
           .from("inventory_movements")
@@ -236,10 +283,12 @@ export default async function InventoryPage({
           .select("id, stock_transfer_id, product_id, variant_id, quantity, received_quantity")
           .eq("organization_id", organizationId)
       : Promise.resolve({ data: [], error: null }),
+    replenishmentRulesQuery ?? Promise.resolve({ data: [], error: null }),
   ]);
 
   const error = [
     storesResult,
+    categoriesResult,
     productsResult,
     variantsResult,
     settingsResult,
@@ -252,6 +301,7 @@ export default async function InventoryPage({
     adjustmentReasonsResult,
     stockTransfersResult,
     stockTransferLinesResult,
+    replenishmentRulesResult,
   ].find((result) => result.error)?.error;
 
   if (error) {
@@ -260,6 +310,7 @@ export default async function InventoryPage({
 
   const visibleStore = (storeId: string) => !storeScope.selectedStoreId || storeId === storeScope.selectedStoreId;
   const stores = (storesResult.data ?? []).filter((store) => visibleStore(store.id));
+  const categories = categoriesResult.data ?? [];
   const products = productsResult.data ?? [];
   const variants = variantsResult.data ?? [];
   const settings = (settingsResult.data ?? []).filter((setting) => visibleStore(setting.store_id));
@@ -272,13 +323,21 @@ export default async function InventoryPage({
   const adjustmentReasons = adjustmentReasonsResult.data ?? [];
   const stockTransfers = (stockTransfersResult.data ?? []).filter((transfer) => visibleStore(transfer.source_store_id) || visibleStore(transfer.destination_store_id));
   const stockTransferLines = stockTransferLinesResult.data ?? [];
+  const replenishmentRules = (replenishmentRulesResult.data ?? []).filter((rule) => visibleStore(rule.store_id));
   const storeNames = new Map(stores.map((store) => [store.id, store.name]));
+  const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
   const productById = new Map(products.map((product) => [product.id, product]));
   const variantById = new Map(variants.map((variant) => [variant.id, variant]));
   const availability = new Map(
     settings.map((setting) => [
       `${setting.product_id}|${setting.store_id}`,
       setting.is_available,
+    ]),
+  );
+  const reorderPoints = new Map(
+    replenishmentRules.map((rule) => [
+      `${rule.store_id}|${rule.product_id}|${rule.variant_id ?? ""}`,
+      Number(rule.reorder_point),
     ]),
   );
   const items = products.flatMap<InventorySaleableItem>((product) => {
@@ -398,13 +457,43 @@ export default async function InventoryPage({
         )
         .map((setting) => setting.store_id),
     }));
+  const outOfStockCount = levels.filter((level) => Number(level.quantity) === 0).length;
+  const negativeStockCount = levels.filter((level) => Number(level.quantity) < 0).length;
+  const needsAttentionCount = outOfStockCount + negativeStockCount;
+  const inventoryTabHref = (tab: InventoryTab, status?: InventoryStockStatus) =>
+    `/back-office/inventory?tab=${tab}${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}${status && status !== "all" ? `&status=${status}` : ""}`;
+  const stockRows = levels.flatMap((level) => {
+    const product = productById.get(level.product_id);
+    const variant = level.variant_id ? variantById.get(level.variant_id) : undefined;
+    const storeName = storeNames.get(level.store_id);
+
+    if (!product || !storeName) return [];
+
+    return [{
+      averageCostMinor: canViewCosts ? Number(level.average_cost_minor) : null,
+      barcode: variant?.barcode ?? product.barcode,
+      categoryId: product.category_id,
+      categoryName: product.category_id ? categoryNames.get(product.category_id) ?? "Uncategorized" : "Uncategorized",
+      id: level.id,
+      isAvailable: availability.get(`${level.product_id}|${level.store_id}`) === true,
+      productName: product.name,
+      quantity: Number(level.quantity),
+      reorderPoint: canManage ? reorderPoints.get(`${level.store_id}|${level.product_id}|${level.variant_id ?? ""}`) ?? null : null,
+      sku: variant?.sku ?? product.sku,
+      storeId: level.store_id,
+      storeName,
+      unit: product.unit,
+      updatedAt: level.updated_at,
+      variantName: variant?.name ?? null,
+    }];
+  });
 
   return (
     <div className="space-y-8">
       <PageHeader
         eyebrow="Stock control"
         title="Inventory"
-        description="See current stock and record accountable opening balances or signed adjustments."
+        description="Understand what you have, what needs attention, and the accountable activity behind every stock change."
         action={
           <Badge variant={canManage ? "secondary" : "outline"}>
             {canManage ? "Stock management" : "Level view"}
@@ -412,25 +501,96 @@ export default async function InventoryPage({
         }
       />
 
-      <GlobalFilterBar action="/back-office/inventory" hiddenFields={{ tab: activeTab }} namePrefix="inventory-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={await loadAuthorizedBackOfficeStores(context)} />
+      <GlobalFilterBar action="/back-office/inventory" hiddenFields={{ tab: activeTab, status: activeTab === "stock" && initialStockStatus !== "all" ? initialStockStatus : undefined }} namePrefix="inventory-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={await loadAuthorizedBackOfficeStores(context)} />
 
-      <DashboardActionGrid
-        inventoryEnabled={context.features.inventory}
-        permissions={context.permissions}
-        surface="inventory"
-      />
-
-      <InventoryTabs activeTab={activeTab} storeId={storeScope.selectedStoreId} />
-
-      {activeTab === "adjustments" && canManage ? (
-        <InventoryAdjustmentForm
-          items={items}
-          stores={stores.map(({ id, name }) => ({ id, name }))}
+      {activeTab === "overview" ? (
+        <DashboardActionGrid
+          inventoryEnabled={context.features.inventory}
+          permissions={context.permissions}
+          surface="inventory"
         />
       ) : null}
 
+      <InventoryTabs activeTab={activeTab} storeId={storeScope.selectedStoreId} />
+
+      {activeTab === "overview" ? (
+        <section className="space-y-4" aria-labelledby="inventory-health-title">
+          <div>
+            <h2 className="text-lg font-semibold" id="inventory-health-title">Inventory health</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Start with the items and operational work that need attention now.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <InventoryMetricCard
+              href={inventoryTabHref("stock")}
+              label="Tracked items"
+              detail="Available across the selected stores"
+              value={items.length}
+            />
+            <InventoryMetricCard
+              href={inventoryTabHref("stock", "attention")}
+              label="Needs attention"
+              detail={`${outOfStockCount} out of stock · ${negativeStockCount} negative`}
+              value={needsAttentionCount}
+            />
+            <InventoryMetricCard
+              href={inventoryTabHref("purchasing")}
+              label="Awaiting receiving"
+              detail="Open or partially received purchase orders"
+              value={receivableOrders.length}
+            />
+            <InventoryMetricCard
+              href={inventoryTabHref("transfers")}
+              label="Transfers awaiting receipt"
+              detail="Shipped stock not yet fully received"
+              value={inTransitTransfers.length}
+            />
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Simple first</CardTitle>
+              <CardDescription>
+                Use Stock for current balances, Activity for recent changes, and the operational tabs only when work needs to be done.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("stock")}>View stock</Link>
+              <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("activity")}>View activity</Link>
+              <Link className="text-sm font-medium text-primary hover:underline" href="/back-office/replenishment">Open replenishment</Link>
+            </CardContent>
+          </Card>
+        </section>
+      ) : null}
+
+      {activeTab === "overview" && canManage ? (
+        <details className="group rounded-xl border bg-card">
+          <summary className="cursor-pointer list-none px-5 py-4 font-medium marker:hidden">
+            More inventory operations
+            <span className="ml-2 text-sm font-normal text-muted-foreground">Adjustments, safeguards, and production</span>
+          </summary>
+          <div className="space-y-6 border-t p-5">
+            <InventoryAdjustmentForm
+              items={items}
+              stores={stores.map(({ id, name }) => ({ id, name }))}
+            />
+            <InventoryIntegrityWorkflows
+              stores={stores.map(({ id, name }) => ({ id, name }))}
+              items={advancedItems}
+              suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
+              policies={policiesByStore}
+              adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
+              inTransitTransfers={inTransitTransfers}
+              composites={compositeProducts}
+              sections={["safeguards", "adjustments", "production"]}
+            />
+          </div>
+        </details>
+      ) : null}
+
       {activeTab === "purchasing" && canManage ? (
-        <AdvancedInventoryWorkflows
+        <>
+          <AdvancedInventoryWorkflows
           stores={stores.map(({ id, name }) => ({ id, name }))}
           items={advancedItems}
           suppliers={suppliers.map((supplier) => ({
@@ -446,32 +606,62 @@ export default async function InventoryPage({
           purchaseOrders={receivableOrders}
           currencyCode={context.organization.currency_code}
           adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name }))}
-        />
+          sections={["purchasing"]}
+          />
+          <InventoryIntegrityWorkflows
+            stores={stores.map(({ id, name }) => ({ id, name }))}
+            items={advancedItems}
+            suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
+            policies={policiesByStore}
+            adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
+            inTransitTransfers={inTransitTransfers}
+            composites={compositeProducts}
+            sections={["supplier-returns"]}
+          />
+        </>
       ) : null}
 
-      {activeTab === "controls" && canManage ? (
-        <InventoryIntegrityWorkflows
+      {activeTab === "counts" && canManage ? (
+        <AdvancedInventoryWorkflows
           stores={stores.map(({ id, name }) => ({ id, name }))}
           items={advancedItems}
-          suppliers={suppliers.map((supplier) => ({
-            id: supplier.id,
-            name: supplier.name,
-            isActive: supplier.is_active,
-          }))}
-          policies={policiesByStore}
-          adjustmentReasons={adjustmentReasons.map((reason) => ({
-            code: reason.code,
-            name: reason.name,
-            movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS",
-          }))}
-          inTransitTransfers={inTransitTransfers}
-          composites={compositeProducts}
+          suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, contactName: supplier.contact_name, email: supplier.email, phone: supplier.phone, address: supplier.address, notes: supplier.notes, isActive: supplier.is_active }))}
+          purchaseOrders={receivableOrders}
+          currencyCode={context.organization.currency_code}
+          adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name }))}
+          sections={["counts"]}
         />
       ) : null}
 
-      {activeTab === "overview" ? (
+      {activeTab === "transfers" && canManage ? (
         <>
-          <section className="space-y-3" aria-labelledby="stock-levels-title">
+          <AdvancedInventoryWorkflows
+            stores={stores.map(({ id, name }) => ({ id, name }))}
+            items={advancedItems}
+            suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, contactName: supplier.contact_name, email: supplier.email, phone: supplier.phone, address: supplier.address, notes: supplier.notes, isActive: supplier.is_active }))}
+            purchaseOrders={receivableOrders}
+            currencyCode={context.organization.currency_code}
+            adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name }))}
+            sections={["transfers"]}
+          />
+          <InventoryIntegrityWorkflows
+            stores={stores.map(({ id, name }) => ({ id, name }))}
+            items={advancedItems}
+            suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
+            policies={policiesByStore}
+            adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
+            inTransitTransfers={inTransitTransfers}
+            composites={compositeProducts}
+            sections={["transfer-receipt"]}
+          />
+        </>
+      ) : null}
+
+      {(activeTab === "stock" || activeTab === "activity") ? (
+        <>
+          {activeTab === "stock" ? <InventoryStockView canUseReorderStatus={canManage} canViewCosts={canViewCosts} currencyCode={context.organization.currency_code} initialStatus={initialStockStatus} preferenceScope={organizationId} rows={stockRows} /> : null}
+          {/* CANDIDATE_FOR_REMOVAL: retained legacy stock-card renderer pending Phase 2 visual QA. */}
+          {false ? <section className="space-y-3" aria-labelledby="stock-levels-title">
         <div>
           <h2 className="text-lg font-semibold" id="stock-levels-title">
             Current stock
@@ -543,9 +733,9 @@ export default async function InventoryPage({
             title="No stock levels yet"
           />
         )}
-          </section>
+          </section> : null}
 
-          {canManage ? (
+          {activeTab === "activity" && canManage ? (
             <section className="space-y-3" aria-labelledby="movement-history-title">
           <div>
             <h2 className="text-lg font-semibold" id="movement-history-title">
@@ -620,6 +810,30 @@ export default async function InventoryPage({
         </>
       ) : null}
     </div>
+  );
+}
+
+function InventoryMetricCard({
+  href,
+  label,
+  detail,
+  value,
+}: {
+  href: string;
+  label: string;
+  detail: string;
+  value: number;
+}) {
+  return (
+    <Link className="block rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2" href={href}>
+      <Card className="h-full transition-colors hover:border-primary/40 hover:bg-secondary/20">
+        <CardContent className="space-y-1 p-4">
+          <p className="text-sm font-medium">{label}</p>
+          <p className="text-3xl font-semibold tracking-tight">{formatQuantity(value)}</p>
+          <p className="text-xs text-muted-foreground">{detail}</p>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
 

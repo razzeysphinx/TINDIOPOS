@@ -34,6 +34,20 @@ type Transfer = {
 };
 type CompositeOption = { id: string; name: string; unit: string; storeIds: string[] };
 type Result = { ok: boolean; message: string };
+export type InventoryIntegritySection =
+  | "safeguards"
+  | "adjustments"
+  | "transfer-receipt"
+  | "supplier-returns"
+  | "production";
+
+const ALL_INTEGRITY_SECTIONS: readonly InventoryIntegritySection[] = [
+  "safeguards",
+  "adjustments",
+  "transfer-receipt",
+  "supplier-returns",
+  "production",
+];
 
 export function InventoryIntegrityWorkflows({
   stores,
@@ -43,6 +57,7 @@ export function InventoryIntegrityWorkflows({
   adjustmentReasons,
   inTransitTransfers,
   composites,
+  sections = ALL_INTEGRITY_SECTIONS,
 }: {
   stores: StoreOption[];
   items: AdvancedInventoryItem[];
@@ -51,6 +66,7 @@ export function InventoryIntegrityWorkflows({
   adjustmentReasons: AdjustmentReason[];
   inTransitTransfers: Transfer[];
   composites: CompositeOption[];
+  sections?: readonly InventoryIntegritySection[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -92,6 +108,18 @@ export function InventoryIntegrityWorkflows({
   const returnItems = useMemo(() => items.filter((item) => item.storeIds.includes(returnStoreId)), [items, returnStoreId]);
   const availableComposites = useMemo(() => composites.filter((composite) => composite.storeIds.includes(productionStoreId)), [composites, productionStoreId]);
   const selectedTransfer = inTransitTransfers.find((transfer) => transfer.id === transferId);
+  const showSafeguards = sections.includes("safeguards");
+  const showAdjustments = sections.includes("adjustments");
+  const showTransferReceipt = sections.includes("transfer-receipt");
+  const showSupplierReturns = sections.includes("supplier-returns");
+  const showProduction = sections.includes("production");
+  const title = sections.length === 1
+    ? sections[0] === "transfer-receipt"
+      ? "Receive stock transfer"
+      : sections[0] === "supplier-returns"
+        ? "Supplier returns"
+        : "Inventory controls"
+    : "Inventory controls";
 
   function complete(result: Result, setter: (result: Result) => void) {
     setter(result);
@@ -194,19 +222,19 @@ export function InventoryIntegrityWorkflows({
   return (
     <section className="space-y-4" aria-labelledby="inventory-integrity-title">
       <div>
-        <h2 className="text-lg font-semibold" id="inventory-integrity-title">Inventory integrity</h2>
+        <h2 className="text-lg font-semibold" id="inventory-integrity-title">{title}</h2>
         <p className="mt-1 text-sm text-muted-foreground">Set stock safeguards and record traceable operations without silently changing balances.</p>
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
-        <WorkflowCard title="Negative-stock safeguard" description="Block is safest. Warn allows the movement but retains a visible policy record." icon={<Settings2 aria-hidden="true" />}>
+        {showSafeguards ? <WorkflowCard title="Negative-stock safeguard" description="Block is safest. Warn allows the movement but retains a visible policy record." icon={<Settings2 aria-hidden="true" />}>
           {stores.length ? <form className="space-y-3" onSubmit={submitPolicy} noValidate>
             <Field label="Store"><select className={selectClassName} value={policyStoreId} onChange={(event) => choosePolicyStore(event.target.value)}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></Field>
             <Field label="When stock would become negative"><select className={selectClassName} value={policy} onChange={(event) => setPolicy(event.target.value as typeof policy)}><option value="block">Block the movement</option><option value="warn">Allow with warning policy</option><option value="allow">Allow</option></select></Field>
             <SubmitRow pending={isPending} result={policyResult} label="Save safeguard" icon={<Settings2 />} />
           </form> : <Empty message="Create a store before setting stock safeguards." />}
-        </WorkflowCard>
+        </WorkflowCard> : null}
 
-        <WorkflowCard title="Adjustment reasons" description="Create controlled reasons, then post an adjustment with the selected reason code." icon={<AlertTriangle aria-hidden="true" />}>
+        {showAdjustments ? <WorkflowCard title="Adjustment reasons" description="Create controlled reasons, then post an adjustment with the selected reason code." icon={<AlertTriangle aria-hidden="true" />}>
           <div className="space-y-5">
             <form className="grid gap-3 sm:grid-cols-2" onSubmit={submitReason} noValidate>
               <Field label="Code"><Input value={reasonCode} onChange={(event) => setReasonCode(event.target.value.toUpperCase())} placeholder="DAMAGE" /></Field>
@@ -224,18 +252,18 @@ export function InventoryIntegrityWorkflows({
               <div className="sm:col-span-2"><SubmitRow pending={isPending} result={adjustmentResult} label="Post adjustment" icon={<AlertTriangle />} /></div>
             </form> : <Empty message="Create a reason and make a tracked item available in a store to post controlled adjustments." />}
           </div>
-        </WorkflowCard>
+        </WorkflowCard> : null}
 
-        <WorkflowCard title="Receive stock transfer" description="Receive a shipped transfer in parts or all at once. Destination stock changes only as received." icon={<RotateCcw aria-hidden="true" />}>
+        {showTransferReceipt ? <WorkflowCard title="Receive stock transfer" description="Receive a shipped transfer in parts or all at once. Destination stock changes only as received." icon={<RotateCcw aria-hidden="true" />}>
           {inTransitTransfers.length ? <form className="space-y-3" onSubmit={submitTransferReceipt} noValidate>
             <Field label="Transfer"><select className={selectClassName} value={transferId} onChange={(event) => chooseTransfer(event.target.value)}>{inTransitTransfers.map((transfer) => <option key={transfer.id} value={transfer.id}>{transfer.sourceStoreName} → {transfer.destinationStoreName} ({transfer.status.replace("_", " ")})</option>)}</select></Field>
             {selectedTransfer?.lines.map((line) => <div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_9rem] sm:items-end" key={line.id}><div><p className="font-medium">{line.label}</p><p className="mt-1 text-xs text-muted-foreground">{formatQuantity(line.quantity - line.receivedQuantity)} {line.unit} remaining</p></div><Field label="Receive now"><Input inputMode="decimal" value={transferQuantities[line.id] ?? ""} onChange={(event) => setTransferQuantities({ ...transferQuantities, [line.id]: event.target.value })} /></Field></div>)}
             <Field label="Receipt note"><Input value={transferNote} onChange={(event) => setTransferNote(event.target.value)} placeholder="Optional receiving note" /></Field>
             <SubmitRow pending={isPending} result={transferResult} label="Receive transfer" icon={<RotateCcw />} />
           </form> : <Empty message="Shipped transfers will appear here for partial or complete receiving." />}
-        </WorkflowCard>
+        </WorkflowCard> : null}
 
-        <WorkflowCard title="Return to supplier" description="Remove returned stock with an immutable supplier-return ledger entry." icon={<PackageMinus aria-hidden="true" />}>
+        {showSupplierReturns ? <WorkflowCard title="Return to supplier" description="Remove returned stock with an immutable supplier-return ledger entry." icon={<PackageMinus aria-hidden="true" />}>
           {stores.length && activeSuppliers.length && returnItems.length ? <form className="grid gap-3 sm:grid-cols-2" onSubmit={submitSupplierReturn} noValidate>
             <Field label="Store"><select className={selectClassName} value={returnStoreId} onChange={(event) => setReturnStoreId(event.target.value)}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></Field>
             <Field label="Supplier"><select className={selectClassName} value={returnSupplierId} onChange={(event) => setReturnSupplierId(event.target.value)}>{activeSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></Field>
@@ -244,9 +272,9 @@ export function InventoryIntegrityWorkflows({
             <Field className="sm:col-span-2" label="Return note"><Input value={returnNote} onChange={(event) => setReturnNote(event.target.value)} placeholder="Optional supplier reference" /></Field>
             <div className="sm:col-span-2"><SubmitRow pending={isPending} result={returnResult} label="Post supplier return" icon={<PackageMinus />} /></div>
           </form> : <Empty message="An active supplier, store, and tracked item are required for a supplier return." />}
-        </WorkflowCard>
+        </WorkflowCard> : null}
 
-        <WorkflowCard title="Produce composite item" description="Consume its recipe components, add the output, and retain the calculated production cost." icon={<Factory aria-hidden="true" />}>
+        {showProduction ? <WorkflowCard title="Produce composite item" description="Consume its recipe components, add the output, and retain the calculated production cost." icon={<Factory aria-hidden="true" />}>
           {stores.length && availableComposites.length ? <form className="grid gap-3 sm:grid-cols-2" onSubmit={submitProduction} noValidate>
             <Field label="Store"><select className={selectClassName} value={productionStoreId} onChange={(event) => setProductionStoreId(event.target.value)}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></Field>
             <Field label="Composite output"><select className={selectClassName} value={compositeId} onChange={(event) => setCompositeId(event.target.value)}>{availableComposites.map((composite) => <option key={composite.id} value={composite.id}>{composite.name}</option>)}</select></Field>
@@ -254,7 +282,7 @@ export function InventoryIntegrityWorkflows({
             <Field label="Production note"><Input value={productionNote} onChange={(event) => setProductionNote(event.target.value)} placeholder="Optional batch note" /></Field>
             <div className="sm:col-span-2"><SubmitRow pending={isPending} result={productionResult} label="Post production" icon={<Factory />} /></div>
           </form> : <Empty message="Create a composite product with a recipe and make it available in a store before producing it." />}
-        </WorkflowCard>
+        </WorkflowCard> : null}
       </div>
     </section>
   );

@@ -122,28 +122,40 @@ function getBusinessActions(
 function getInventoryActions(): DashboardAction[] {
   return [
     {
-      title: "Stock overview",
-      description: "Check current levels and recent movements.",
+      title: "Overview",
+      description: "Review inventory health and the work needing attention.",
       href: "/back-office/inventory?tab=overview",
       icon: Boxes,
     },
     {
-      title: "Adjust stock",
-      description: "Record accountable opening balances and adjustments.",
-      href: "/back-office/inventory?tab=adjustments",
-      icon: SlidersHorizontal,
+      title: "Stock",
+      description: "Check current store-level balances.",
+      href: "/back-office/inventory?tab=stock",
+      icon: PackageSearch,
     },
     {
-      title: "Purchasing & counts",
-      description: "Receive orders and carry out stock-count work.",
-      href: "/back-office/inventory?tab=purchasing",
+      title: "Activity",
+      description: "Review the latest accountable stock changes.",
+      href: "/back-office/inventory?tab=activity",
       icon: ClipboardList,
     },
     {
-      title: "Inventory controls",
-      description: "Handle policies, transfers, and integrity work.",
-      href: "/back-office/inventory?tab=controls",
-      icon: ShieldCheck,
+      title: "Counts",
+      description: "Record and reconcile physical stock counts.",
+      href: "/back-office/inventory?tab=counts",
+      icon: ClipboardList,
+    },
+    {
+      title: "Purchasing",
+      description: "Manage suppliers, orders, and receiving.",
+      href: "/back-office/inventory?tab=purchasing",
+      icon: PackageSearch,
+    },
+    {
+      title: "Transfers",
+      description: "Send stock between stores and receive it safely.",
+      href: "/back-office/inventory?tab=transfers",
+      icon: SlidersHorizontal,
     },
   ];
 }

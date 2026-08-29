@@ -4,20 +4,21 @@ import { redirect } from "next/navigation";
 import { loadPosWorkspace } from "@/features/pos/data";
 import { PosSettingsWorkspace } from "@/features/pos/pos-settings-workspace";
 import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
-import { canAccessBackOffice, getWorkspaceHome, hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { canAccessBackOffice, getPosNavigationCapabilities, getWorkspaceHome, hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 
 export const metadata = { title: "POS settings" };
 
 export default async function PosSettingsPage() {
   await connection();
   const context = await requireBusinessContext();
-  if (!hasPermission(context, "sales.create")) redirect(getWorkspaceHome(context));
+  if (!hasPermission(context, "pos.access")) redirect(getWorkspaceHome(context));
   const workspace = await loadPosWorkspace(context);
 
   return (
     <main className="min-h-svh bg-background">
       <PosWorkspaceHeader
         canAccessBackOffice={canAccessBackOffice(context)}
+        {...getPosNavigationCapabilities(context)}
         canUseTimeClock={context.features.time_clock}
         employeeName={context.profile.full_name || context.profile.email || "Cashier"}
         organizationName={context.organization.name}

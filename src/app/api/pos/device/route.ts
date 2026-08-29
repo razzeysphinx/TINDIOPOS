@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { posDeviceValidationSchema } from "@/features/devices/device-schema";
-import { getBusinessContext } from "@/lib/auth/dal";
+import { getBusinessContext, hasPermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
 const headers = { "Cache-Control": "private, no-store" };
@@ -10,6 +10,9 @@ export async function POST(request: Request) {
   const context = await getBusinessContext();
   if (!context) {
     return NextResponse.json({ ok: false, message: "Sign in is required to use this POS device." }, { status: 401, headers });
+  }
+  if (!hasPermission(context, "pos.access")) {
+    return NextResponse.json({ ok: false, message: "POS access is not permitted." }, { status: 403, headers });
   }
 
   const input = posDeviceValidationSchema.safeParse(await request.json().catch(() => null));

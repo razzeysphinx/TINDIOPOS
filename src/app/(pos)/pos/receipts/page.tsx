@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
 import { loadPosReceiptHistory, loadPosWorkspace } from "@/features/pos/data";
 import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
-import { canAccessBackOffice, getWorkspaceHome, hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { canAccessBackOffice, getPosNavigationCapabilities, getWorkspaceHome, hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "POS receipts" };
@@ -30,7 +30,7 @@ export default async function PosReceiptsPage({
 }) {
   await connection();
   const context = await requireBusinessContext();
-  if (!hasPermission(context, "sales.create")) redirect(getWorkspaceHome(context));
+  if (!hasPermission(context, "pos.access") || !hasPermission(context, "receipts.view")) redirect(getWorkspaceHome(context));
 
   const parameters = await searchParams;
   const query = parameters.q?.trim().slice(0, 100) ?? "";
@@ -52,6 +52,7 @@ export default async function PosReceiptsPage({
     <main className="min-h-svh bg-background">
       <PosWorkspaceHeader
         canAccessBackOffice={canAccessBackOffice(context)}
+        {...getPosNavigationCapabilities(context)}
         canUseTimeClock={context.features.time_clock}
         employeeName={context.profile.full_name || context.profile.email || "Cashier"}
         organizationName={context.organization.name}

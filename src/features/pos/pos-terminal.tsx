@@ -123,15 +123,20 @@ function lineTotalMinor(priceMinor: number, quantity: number) {
 export function PosTerminal({
   activeShift: initialActiveShift,
   canAccessBackOffice,
+  canAcceptPayments,
+  canApplyDiscounts,
   canAssignTickets,
   canUseDining,
   canUseCustomerLoyalty,
   canUseOpenTickets,
   canUseShiftControls,
   canUseTimeClock,
+  canViewReceipts,
   canCloseShift,
+  canEditQuantity,
   canOpenShift,
   canManageTiles,
+  canRemoveItems,
   categories,
   customerDisplaySessions,
   deviceManagementEnabled,
@@ -158,15 +163,20 @@ export function PosTerminal({
 }: {
   activeShift: PosActiveShift | null;
   canAccessBackOffice: boolean;
+  canAcceptPayments: boolean;
+  canApplyDiscounts: boolean;
   canAssignTickets: boolean;
   canUseDining: boolean;
   canUseCustomerLoyalty: boolean;
   canUseOpenTickets: boolean;
   canUseShiftControls: boolean;
   canUseTimeClock: boolean;
+  canViewReceipts: boolean;
   canCloseShift: boolean;
+  canEditQuantity: boolean;
   canOpenShift: boolean;
   canManageTiles: boolean;
+  canRemoveItems: boolean;
   categories: PosCategory[];
   customerDisplaySessions: PosCustomerDisplaySession[];
   deviceManagementEnabled: boolean;
@@ -386,6 +396,7 @@ export function PosTerminal({
   }, [activeCustomerDisplaySession, customerDisplayState, isOperational]);
   const canStartPayment =
     !isPaymentScreenOpen &&
+    canAcceptPayments &&
     cart.length > 0 &&
     selectedRegister !== undefined &&
     isOperational &&
@@ -563,6 +574,10 @@ export function PosTerminal({
         const existing = current.find((line) => posItemKey(line) === itemKey);
 
         if (existing) {
+          if (!canEditQuantity) {
+            setNotice("You do not have permission to change cart quantities.");
+            return current;
+          }
           return current.map((line) =>
             posItemKey(line) === itemKey
               ? { ...line, quantity: line.quantity + 1 }
@@ -576,7 +591,7 @@ export function PosTerminal({
       setCompletedDisplaySale(null);
       setNotice(`${item.productName}${item.variantName ? ` / ${item.variantName}` : ""} added.`);
     },
-    [isOperational, isPaymentScreenOpen],
+    [canEditQuantity, isOperational, isPaymentScreenOpen],
   );
 
   const addWithModifiers = async (item: PosCatalogItem, manualPriceMinor: number | null = null) => {
@@ -635,8 +650,18 @@ export function PosTerminal({
         return;
       }
 
-      setCart((current) =>
-        normalizedQuantity <= 0
+      setCart((current) => {
+        const currentLine = current.find((line) => posItemKey(line) === itemKey);
+        if (!currentLine) return current;
+        if (normalizedQuantity <= 0 && !canRemoveItems) {
+          setNotice("You do not have permission to remove cart items.");
+          return current;
+        }
+        if (normalizedQuantity > 0 && normalizedQuantity !== currentLine.quantity && !canEditQuantity) {
+          setNotice("You do not have permission to change cart quantities.");
+          return current;
+        }
+        return normalizedQuantity <= 0
           ? current.filter((line) => posItemKey(line) !== itemKey)
           : current.map((line) =>
               posItemKey(line) === itemKey
@@ -647,12 +672,12 @@ export function PosTerminal({
                       : Math.max(1, Math.round(normalizedQuantity)),
                   }
                 : line,
-            ),
-      );
+            );
+      });
       setCheckoutKey(createCheckoutKey());
       setCompletedDisplaySale(null);
     },
-    [isOperational, isPaymentScreenOpen],
+    [canEditQuantity, canRemoveItems, isOperational, isPaymentScreenOpen],
   );
 
   const handleSearchSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -714,6 +739,10 @@ export function PosTerminal({
 
   const clearCart = () => {
     if (!isOperational || isPaymentScreenOpen) return;
+    if (!canRemoveItems) {
+      setNotice("You do not have permission to remove cart items.");
+      return;
+    }
 
     setCart([]);
     setSelectedCustomer(null);
@@ -840,6 +869,7 @@ export function PosTerminal({
         canOpenShift={canOpenShift}
         canUseShiftControls={canUseShiftControls}
         canUseTimeClock={canUseTimeClock}
+        canViewReceipts={canViewReceipts}
         currencyCode={currencyCode}
         employeeName={employeeName}
         device={deviceCredential}
@@ -860,7 +890,10 @@ export function PosTerminal({
         <PosWorkspaceHeader
           canAccessBackOffice={canAccessBackOffice}
           canCloseShift={canCloseShift}
+          canCreateSales
+          canUseShiftControls={canUseShiftControls}
           canUseTimeClock={canUseTimeClock}
+          canViewReceipts={canViewReceipts}
           closeShiftDisabled={cart.length > 0 || isPaymentScreenOpen}
           employeeName={employeeName}
           itemCount={cartSummary.itemCount}
@@ -876,9 +909,10 @@ export function PosTerminal({
         <header className="hidden flex-col gap-3 border-b bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="order-1 self-start">
             <PosOperationalDrawer
-              canSelectCustomer={!isPaymentScreenOpen}
+              canCreateSales
               canUseShiftControls={canUseShiftControls}
               canUseTimeClock={canUseTimeClock}
+              canViewReceipts={canViewReceipts}
               employeeName={employeeName}
               organizationName={organizationName}
               stores={stores}
@@ -1124,11 +1158,11 @@ export function PosTerminal({
               <div className="border-b px-4 py-3 sm:px-5"><div className="flex flex-wrap items-center gap-2"><Button disabled={cart.length === 0 || isPaymentScreenOpen || isTicketPending} onClick={() => setIsTicketEditorOpen(true)} size="sm" type="button" variant="outline">{isTicketPending ? "Saving…" : activeTicketId ? "Update ticket" : "Hold ticket"}</Button>{openTickets.length > 1 ? <Button disabled={isPaymentScreenOpen || isTicketPending} onClick={() => setIsTicketWorkspaceOpen(true)} size="sm" type="button" variant="ghost">Manage tickets</Button> : null}{openTickets.map((ticket) => <span className="inline-flex items-center gap-1" key={ticket.id}><Button disabled={isPaymentScreenOpen} onClick={() => { setCart(ticket.cart); setSelectedCustomer(ticket.customer); setDiningOptionId(ticket.diningOptionId); setActiveTicketId(ticket.id); setCheckoutKey(createCheckoutKey()); setNotice(`${ticket.label} loaded.`); }} size="sm" type="button" variant={ticket.id === activeTicketId ? "secondary" : "ghost"}>{ticket.label}</Button><button aria-label={`Cancel ${ticket.label}`} className="text-xs text-muted-foreground hover:text-destructive" disabled={isTicketPending} onClick={() => startTicketTransition(async () => { const result = await cancelOpenTicketAction({ ticketId: ticket.id, device: deviceCredential }); setNotice(result.message); if (result.ok) { setOpenTickets((current) => current.filter((item) => item.id !== ticket.id)); if (activeTicketId === ticket.id) setActiveTicketId(null); router.refresh(); } })} type="button">×</button></span>)}</div></div>
 
               <div className="grid gap-2 border-b px-4 py-3 sm:grid-cols-3 sm:px-5">
-                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Discount
+                {canApplyDiscounts ? <label className="grid gap-1 text-xs font-medium text-muted-foreground">Discount
                   <select className={selectClassName} disabled={isPaymentScreenOpen} onChange={(event) => { setDiscountId(event.target.value || null); setCheckoutKey(createCheckoutKey()); }} value={discountId ?? ""}>
                     <option value="">No discount</option>{discounts.map((discount) => <option key={discount.id} value={discount.id}>{discount.name}</option>)}
                   </select>
-                </label>
+                </label> : null}
                 <label className="grid gap-1 text-xs font-medium text-muted-foreground">Tax
                   <select className={selectClassName} disabled={isPaymentScreenOpen} onChange={(event) => { setTaxRateId(event.target.value || null); setCheckoutKey(createCheckoutKey()); }} value={taxRateId ?? ""}>
                     <option value="">No tax</option>{taxRates.map((tax) => <option key={tax.id} value={tax.id}>{tax.name}{tax.isInclusive ? " (inclusive)" : ""}</option>)}
@@ -1153,6 +1187,8 @@ export function PosTerminal({
                     {cart.map((line) => (
                       <CartLine
                         currencyCode={currencyCode}
+                        canEditQuantity={canEditQuantity}
+                        canRemoveItems={canRemoveItems}
                         disabled={!isOperational || isPaymentScreenOpen}
                         key={posItemKey(line)}
                         line={line}
@@ -1415,6 +1451,7 @@ function PosShiftGate({
   canOpenShift,
   canUseShiftControls,
   canUseTimeClock,
+  canViewReceipts,
   currencyCode,
   device,
   employeeName,
@@ -1428,6 +1465,7 @@ function PosShiftGate({
   canOpenShift: boolean;
   canUseShiftControls: boolean;
   canUseTimeClock: boolean;
+  canViewReceipts: boolean;
   currencyCode: string;
   device: PosDeviceCredential | null;
   employeeName: string;
@@ -1475,8 +1513,10 @@ function PosShiftGate({
       <section className="grid min-h-svh grid-rows-[auto_1fr] overflow-hidden bg-background">
         <header className="flex items-center justify-between gap-3 border-b bg-card px-5 py-4">
           <PosOperationalDrawer
+            canCreateSales
             canUseShiftControls={canUseShiftControls}
             canUseTimeClock={canUseTimeClock}
+            canViewReceipts={canViewReceipts}
             employeeName={employeeName}
             organizationName={organizationName}
             stores={stores}
@@ -1840,12 +1880,16 @@ function ModifierPicker({ currencyCode, groups, item, onCancel, onConfirm }: { c
 }
 
 function CartLine({
+  canEditQuantity,
+  canRemoveItems,
   currencyCode,
   disabled,
   line,
   onEditNote,
   onQuantityChange,
 }: {
+  canEditQuantity: boolean;
+  canRemoveItems: boolean;
   currencyCode: string;
   disabled: boolean;
   line: PosCartLine;
@@ -1863,7 +1907,7 @@ function CartLine({
         </div>
         <Button
           aria-label={`Remove ${line.productName}`}
-          disabled={disabled}
+          disabled={disabled || !canRemoveItems}
           onClick={() => onQuantityChange(0)}
           size="icon-xs"
           type="button"
@@ -1879,7 +1923,7 @@ function CartLine({
             Quantity ({line.unit})
             <Input
               className="h-8 w-28 text-sm"
-              disabled={disabled}
+              disabled={disabled || !canEditQuantity}
               inputMode="decimal"
               min="0.001"
               onChange={(event) => {
@@ -1895,7 +1939,7 @@ function CartLine({
           <div className="flex items-center rounded-lg border bg-background p-0.5">
             <Button
               aria-label={`Decrease ${line.productName} quantity`}
-              disabled={disabled}
+              disabled={disabled || !canEditQuantity || (line.quantity <= 1 && !canRemoveItems)}
               onClick={() => onQuantityChange(line.quantity - 1)}
               size="icon-xs"
               type="button"
@@ -1906,7 +1950,7 @@ function CartLine({
             <span className="min-w-8 text-center text-sm font-semibold">{line.quantity}</span>
             <Button
               aria-label={`Increase ${line.productName} quantity`}
-              disabled={disabled}
+              disabled={disabled || !canEditQuantity}
               onClick={() => onQuantityChange(line.quantity + 1)}
               size="icon-xs"
               type="button"

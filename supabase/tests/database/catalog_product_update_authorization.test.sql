@@ -2,12 +2,13 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(10);
+select plan(18);
 
 insert into auth.users (id, email, raw_user_meta_data)
 values
   ('28282828-2828-4828-8828-282828282828', 'catalog-update-owner@tindio.test', '{"full_name":"Catalog Update Owner"}'::jsonb),
-  ('29292929-2929-4929-8929-292929292929', 'catalog-update-unapproved@tindio.test', '{"full_name":"Catalog Update Unapproved"}'::jsonb);
+  ('29292929-2929-4929-8929-292929292929', 'catalog-update-unapproved@tindio.test', '{"full_name":"Catalog Update Unapproved"}'::jsonb),
+  ('30303030-3030-4030-8030-303030303030', 'catalog-update-store-manager@tindio.test', '{"full_name":"Catalog Update Store Manager"}'::jsonb);
 
 create temporary table catalog_update_context (
   organization_id uuid not null,
@@ -60,6 +61,37 @@ with inserted_store as (
 update catalog_update_context
 set secondary_store_id = (select id from inserted_store);
 
+with inserted_employee as (
+  insert into public.employees (
+    organization_id,
+    profile_id,
+    employee_number,
+    job_title
+  )
+  select
+    organization_id,
+    '30303030-3030-4030-8030-303030303030',
+    'CAT-SCOPE-1',
+    'Scoped catalog manager'
+  from catalog_update_context
+  returning id, organization_id
+), assigned_role as (
+  insert into public.employee_roles (organization_id, employee_id, role_id)
+  select
+    employee.organization_id,
+    employee.id,
+    role.id
+  from inserted_employee employee
+  join public.roles role
+    on role.organization_id = employee.organization_id
+   and role.code = 'manager'
+  returning organization_id, employee_id
+)
+insert into public.employee_stores (organization_id, employee_id, store_id)
+select assignment.organization_id, assignment.employee_id, context.store_id
+from assigned_role assignment
+cross join catalog_update_context context;
+
 set local role authenticated;
 set local request.jwt.claim.sub = '28282828-2828-4828-8828-282828282828';
 
@@ -91,16 +123,41 @@ select ok(
   'direct product-name updates remain unavailable to authenticated clients'
 );
 
-insert into public.product_store_settings (
-  organization_id,
-  product_id,
-  store_id,
-  is_available
-)
-select organization_id, product_id, secondary_store_id, true
-from catalog_update_context
-on conflict (store_id, product_id) do update
-set is_available = excluded.is_available;
+select ok(
+  to_regprocedure('public.set_catalog_product_store_availability(uuid,uuid,uuid[])') is not null,
+  'the catalog store-availability routine exists'
+);
+
+select ok(
+  has_function_privilege(
+    'authenticated',
+    'public.set_catalog_product_store_availability(uuid,uuid,uuid[])',
+    'EXECUTE'
+  ),
+  'authenticated callers can invoke the guarded store-availability routine'
+);
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.set_catalog_product_store_availability(uuid,uuid,uuid[])',
+    'EXECUTE'
+  ),
+  'anonymous callers cannot invoke the store-availability routine'
+);
+
+select is(
+  public.set_catalog_product_store_availability(
+    (select organization_id from catalog_update_context),
+    (select product_id from catalog_update_context),
+    array[
+      (select store_id from catalog_update_context),
+      (select secondary_store_id from catalog_update_context)
+    ]
+  ),
+  2,
+  'an authorized owner can add a product to another active store'
+);
 
 select is(
   (
@@ -110,13 +167,18 @@ select is(
       and is_available
   ),
   2::bigint,
-  'an authorized owner can add a product to another active store'
+  'the availability routine enables each selected store'
 );
 
-update public.product_store_settings
-set is_available = false
-where product_id = (select product_id from catalog_update_context)
-  and store_id = (select store_id from catalog_update_context);
+select is(
+  public.set_catalog_product_store_availability(
+    (select organization_id from catalog_update_context),
+    (select product_id from catalog_update_context),
+    array[(select secondary_store_id from catalog_update_context)]
+  ),
+  1,
+  'an authorized owner can remove a product from one store by making it unavailable'
+);
 
 select is(
   (
@@ -184,6 +246,43 @@ select throws_ok(
   '42501',
   'Product management permission is required.',
   'a caller without product-management permission cannot update the product'
+);
+
+select throws_ok(
+  format(
+    $$select public.set_catalog_product_store_availability(%L, %L, '{}'::uuid[])$$,
+    (select organization_id from catalog_update_context),
+    (select product_id from catalog_update_context)
+  ),
+  '42501',
+  'Product management permission is required.',
+  'a caller without product-management permission cannot change store availability'
+);
+
+set local request.jwt.claim.sub = '30303030-3030-4030-8030-303030303030';
+
+select throws_ok(
+  format(
+    $$insert into public.product_store_settings (organization_id, product_id, store_id, is_available) values (%L, %L, %L, true)$$,
+    (select organization_id from catalog_update_context),
+    (select product_id from catalog_update_context),
+    (select secondary_store_id from catalog_update_context)
+  ),
+  '42501',
+  'new row violates row-level security policy for table "product_store_settings"',
+  'a product manager cannot bypass assigned-store scope through the raw settings API'
+);
+
+select throws_ok(
+  format(
+    $$select public.set_catalog_product_store_availability(%L, %L, array[%L::uuid])$$,
+    (select organization_id from catalog_update_context),
+    (select product_id from catalog_update_context),
+    (select secondary_store_id from catalog_update_context)
+  ),
+  '42501',
+  'Store access is required to change product availability.',
+  'the availability routine rejects an unassigned store for a product manager'
 );
 
 select * from finish();

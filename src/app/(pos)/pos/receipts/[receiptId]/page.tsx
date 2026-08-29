@@ -16,7 +16,7 @@ import {
 import { ReceiptPrintButton } from "@/features/receipts/receipt-print-button";
 import { loadPosReceiptDetail, loadPosWorkspace } from "@/features/pos/data";
 import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
-import { canAccessBackOffice, getWorkspaceHome, hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { canAccessBackOffice, getPosNavigationCapabilities, getWorkspaceHome, hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "POS receipt" };
@@ -33,7 +33,7 @@ export default async function PosReceiptDetailPage({
   }
 
   const context = await requireBusinessContext();
-  if (!hasPermission(context, "sales.create")) redirect(getWorkspaceHome(context));
+  if (!hasPermission(context, "pos.access") || !hasPermission(context, "receipts.view")) redirect(getWorkspaceHome(context));
   const [workspace, detail] = await Promise.all([
     loadPosWorkspace(context),
     loadPosReceiptDetail(context, receiptId),
@@ -94,6 +94,7 @@ export default async function PosReceiptDetailPage({
     <main className="min-h-svh bg-background">
       <PosWorkspaceHeader
         canAccessBackOffice={canAccessBackOffice(context)}
+        {...getPosNavigationCapabilities(context)}
         canUseTimeClock={context.features.time_clock}
         employeeName={context.profile.full_name || context.profile.email || "Cashier"}
         organizationName={context.organization.name}

@@ -1,8 +1,19 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 
 const source = async (path) => readFile(new URL(path, import.meta.url), "utf8");
+
+async function findBackOfficePages(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const nested = await Promise.all(entries.map(async (entry) => {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return findBackOfficePages(entryPath);
+    return entry.isFile() && entry.name === "page.tsx" ? [entryPath] : [];
+  }));
+  return nested.flat();
+}
 
 const [
   checkoutAction,
@@ -19,6 +30,15 @@ const [
   deviceActions,
   deviceRoute,
   advancedSalesActions,
+  posPage,
+  posData,
+  ticketActions,
+  posTerminal,
+  posDrawer,
+  posCatalogRoute,
+  posModifiersRoute,
+  posCustomersRoute,
+  posCustomerDisplayRoute,
   taxBoundaryTest,
   checkoutTest,
   refundTest,
@@ -43,6 +63,15 @@ const [
   source("../src/features/devices/actions.ts"),
   source("../src/app/api/pos/device/route.ts"),
   source("../src/features/advanced-sales/actions.ts"),
+  source("../src/app/(pos)/pos/page.tsx"),
+  source("../src/features/pos/data.ts"),
+  source("../src/features/advanced-sales/ticket-actions.ts"),
+  source("../src/features/pos/pos-terminal.tsx"),
+  source("../src/features/pos/pos-operational-drawer.tsx"),
+  source("../src/app/api/pos/catalog/route.ts"),
+  source("../src/app/api/pos/modifiers/route.ts"),
+  source("../src/app/api/pos/customers/route.ts"),
+  source("../src/app/api/pos/customer-display/route.ts"),
   source("../supabase/tests/database/phase_7_security_boundary_hardening.test.sql"),
   source("../supabase/tests/database/phase_4_cash_checkout.test.sql"),
   source("../supabase/tests/database/phase_5_receipts_refunds.test.sql"),
@@ -61,6 +90,37 @@ test("checkout keeps session-derived organization scope and assigned-store valid
   assert.match(checkoutService, /context\.storeIds\.includes\(parsed\.storeId\)/);
   assert.match(checkoutService, /target_organization_id: context\.organization\.id/);
   assert.match(checkoutService, /\.rpc\("checkout_advanced_sale"/);
+  assert.match(checkoutService, /hasPermission\(context, "pos\.access"/);
+  assert.match(checkoutService, /hasPermission\(context, "payments\.accept"/);
+  assert.match(checkoutService, /data\.discountId && !hasPermission\(context, "discounts\.apply"/);
+  assert.match(checkoutService, /data\.openTicketId && !hasPermission\(context, "tickets\.manage"/);
+});
+
+test("POS capability gates are enforced consistently in the UI, server actions, and API routes", () => {
+  assert.match(posPage, /hasPermission\(context, "pos\.access"/);
+  assert.match(posPage, /hasPermission\(context, "sales\.create"/);
+  assert.match(posPage, /hasPermission\(context, "payments\.accept"/);
+  assert.match(posPage, /hasPermission\(context, "discounts\.apply"/);
+  assert.match(posPage, /hasPermission\(context, "tickets\.manage"/);
+  assert.match(posData, /hasPermission\(context, "tickets\.manage"/);
+  assert.match(ticketActions, /hasPermission\(context, "pos\.access"/);
+  assert.match(ticketActions, /hasPermission\(context, "tickets\.manage"/);
+  assert.match(posTerminal, /canApplyDiscounts/);
+  assert.match(posTerminal, /canEditQuantity/);
+  assert.match(posTerminal, /canRemoveItems/);
+  assert.match(posDrawer, /canCreateSales/);
+  assert.match(posDrawer, /canViewReceipts/);
+  assert.match(posDrawer, /canUseShiftControls/);
+
+  for (const [name, content] of [
+    ["catalog", posCatalogRoute],
+    ["modifier", posModifiersRoute],
+    ["customer", posCustomersRoute],
+    ["customer display", posCustomerDisplayRoute],
+  ]) {
+    assert.match(content, /hasPermission\(context, "pos\.access"/, `${name} API requires POS access`);
+    assert.match(content, /hasPermission\(context, "sales\.create"/, `${name} API requires sales authority`);
+  }
 });
 
 test("sensitive server actions require a business context and their established permission boundary", () => {
@@ -105,4 +165,20 @@ test("the database attack suite covers every Phase 7 negative path", () => {
   assert.match(paymentTest, /a cashier cannot reconfigure payment methods/);
   assert.match(featureTest, /an unrelated user cannot update business features/);
   assert.match(taxBoundaryTest, /cashier tax-rate changes are rejected by RLS/);
+});
+
+test("every Back Office page declares a server-side authorization boundary", async () => {
+  const pages = await findBackOfficePages(
+    path.resolve(process.cwd(), "src/app/(back-office)/back-office"),
+  );
+  assert.ok(pages.length > 0, "Back Office pages were found");
+
+  await Promise.all(pages.map(async (page) => {
+    const content = await readFile(page, "utf8");
+    assert.match(
+      content,
+      /requireBackOffice(?:Permission|Context)\(/,
+      `${path.relative(process.cwd(), page)} has a server-side authorization boundary`,
+    );
+  }));
 });

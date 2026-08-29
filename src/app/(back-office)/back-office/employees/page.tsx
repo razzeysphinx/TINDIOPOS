@@ -188,7 +188,7 @@ export default async function EmployeesPage({
                     employeeName={profile?.full_name || employee.employee_number}
                   />
                 ) : null}
-                {canManage && employee.id !== context.employee.id ? (
+                {canManage && (employee.id !== context.employee.id || hasPermission(context, "organization.manage")) ? (
                   <div className="flex justify-end border-t pt-3">
                     <EditEmployeeButton
                       employee={{
@@ -200,6 +200,10 @@ export default async function EmployeesPage({
                       }}
                       roles={grantableRoles.map((role) => ({ id: role.id, name: role.name }))}
                       stores={activeStores.map((store) => ({ id: store.id, name: store.name }))}
+                      lockOwnRoleAndStatus={employee.id === context.employee.id}
+                      organizationWideStoreAccess={
+                        employee.id === context.employee.id && hasPermission(context, "organization.manage")
+                      }
                     />
                   </div>
                 ) : null}

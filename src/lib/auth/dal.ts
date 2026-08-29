@@ -353,6 +353,25 @@ export function hasAnyPermission(context: BusinessContext, permissions: readonly
   return permissions.some((permission) => hasPermission(context, permission));
 }
 
+/**
+ * Shared, capability-based visibility model for the operational POS menu.
+ * It deliberately returns permissions rather than role labels so customer
+ * roles work without application changes.
+ */
+export function getPosNavigationCapabilities(context: BusinessContext) {
+  return {
+    canCreateSales: hasPermission(context, "sales.create"),
+    canUseShiftControls: hasAnyPermission(context, [
+      "shifts.open",
+      "shifts.close",
+      "cash.pay_in",
+      "cash.pay_out",
+      "settings.manage",
+    ]),
+    canViewReceipts: hasPermission(context, "receipts.view"),
+  };
+}
+
 export function canAccessBackOffice(context: BusinessContext) {
   return hasAnyPermission(context, BACK_OFFICE_PERMISSIONS);
 }
@@ -393,7 +412,8 @@ export function getBackOfficeHome(context: BusinessContext) {
 
 export function getWorkspaceHome(context: BusinessContext) {
   if (canAccessBackOffice(context)) return getBackOfficeHome(context);
-  if (hasPermission(context, "sales.create")) return "/pos";
+  if (hasPermission(context, "pos.access") && hasPermission(context, "sales.create")) return "/pos";
+  if (hasPermission(context, "pos.access")) return "/pos/items";
   if (
     context.features.kitchen_display &&
     hasAnyPermission(context, ["kitchen.view", "kitchen.manage"])

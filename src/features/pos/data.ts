@@ -139,6 +139,7 @@ export async function loadPosWorkspace(
 ): Promise<PosPageData> {
   const features = context.features;
   const canAssignTickets = hasPermission(context, "employees.manage");
+  const canUseOpenTickets = features.open_tickets && hasPermission(context, "tickets.manage");
   const supabase = await createClient();
   const database = supabase as unknown as { from: (table: string) => any };
   const [storesResult, categoriesResult, registersResult, paymentMethodsResult, storePaymentMethodsResult, openShiftsResult, loyaltyProgramResult, discountsResult, taxRatesResult, diningOptionsResult, ticketTemplatesResult, customerDisplaySessionsResult, timeClockResult] = await Promise.all([
@@ -320,14 +321,14 @@ export async function loadPosWorkspace(
         target_store_id: activeShift.storeId,
         target_limit: 12,
       }),
-      features.open_tickets
+      canUseOpenTickets
         ? supabase.rpc("get_pos_open_tickets", {
             target_organization_id: context.organization.id,
             target_store_id: activeShift.storeId,
             target_register_id: activeShift.registerId,
           })
         : Promise.resolve({ data: [], error: null }),
-      canAssignTickets && features.open_tickets
+      canAssignTickets && canUseOpenTickets
         ? supabase.rpc("get_pos_ticket_assignees", {
             target_organization_id: context.organization.id,
             target_store_id: activeShift.storeId,

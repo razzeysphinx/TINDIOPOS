@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Sign in is required." }, { status: 401 });
   }
 
-  if (!hasPermission(context, "sales.create")) {
+  if (!hasPermission(context, "pos.access") || !hasPermission(context, "sales.create")) {
     return NextResponse.json({ error: "POS access is not permitted." }, { status: 403 });
   }
 

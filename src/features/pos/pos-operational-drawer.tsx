@@ -42,10 +42,12 @@ export function focusCustomerPicker() {
 }
 
 export type PosOperationalNavigationProps = {
-  /** @deprecated Navigation is now always the shared five-area POS workspace. */
-  canSelectCustomer?: boolean;
-  /** @deprecated Shift remains a visible POS destination; server/RPC authorization decides actions. */
-  canUseShiftControls?: boolean;
+  /** Sales requires both POS access and the sales.create capability. */
+  canCreateSales: boolean;
+  /** Receipt history is a separate capability from selling. */
+  canViewReceipts: boolean;
+  /** A shift link is useful only when at least one operational shift action is allowed. */
+  canUseShiftControls: boolean;
   canUseTimeClock: boolean;
   employeeName: string;
   organizationName: string;
@@ -55,20 +57,23 @@ export type PosOperationalNavigationProps = {
 };
 
 const navigationItems = [
-  { href: "/pos", icon: ShoppingCart, label: "Sales", matches: (pathname: string) => pathname === "/pos" },
-  { href: "/pos/receipts", icon: ReceiptText, label: "Receipts", matches: (pathname: string) => pathname.startsWith("/pos/receipts") },
-  { href: "/pos/shifts", icon: WalletCards, label: "Shift", matches: (pathname: string) => pathname.startsWith("/pos/shifts") },
+  { capability: "canCreateSales", href: "/pos", icon: ShoppingCart, label: "Sales", matches: (pathname: string) => pathname === "/pos" },
+  { capability: "canViewReceipts", href: "/pos/receipts", icon: ReceiptText, label: "Receipts", matches: (pathname: string) => pathname.startsWith("/pos/receipts") },
+  { capability: "canUseShiftControls", href: "/pos/shifts", icon: WalletCards, label: "Shift", matches: (pathname: string) => pathname.startsWith("/pos/shifts") },
   { href: "/pos/items", icon: PackageSearch, label: "Items", matches: (pathname: string) => pathname.startsWith("/pos/items") },
   { href: "/pos/settings", icon: Settings2, label: "Settings", matches: (pathname: string) => pathname.startsWith("/pos/settings") },
 ] as const;
 
 function PosOperationalNavigationContent({
+  canCreateSales,
   canUseTimeClock,
+  canUseShiftControls,
+  canViewReceipts,
   onNavigate,
   stores,
   timeClockEntry,
   timezone,
-}: Pick<PosOperationalNavigationProps, "canUseTimeClock" | "stores" | "timeClockEntry" | "timezone"> & {
+}: Pick<PosOperationalNavigationProps, "canCreateSales" | "canUseShiftControls" | "canUseTimeClock" | "canViewReceipts" | "stores" | "timeClockEntry" | "timezone"> & {
   onNavigate: () => void;
 }) {
   const pathname = usePathname();
@@ -78,7 +83,13 @@ function PosOperationalNavigationContent({
       <nav aria-label="POS workspace" className="space-y-2">
         <h2 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">Available features</h2>
         <div className="grid gap-1.5">
-          {navigationItems.map((item) => {
+          {navigationItems.filter((item) => {
+            if (!("capability" in item)) return true;
+            if (item.capability === "canCreateSales") return canCreateSales;
+            if (item.capability === "canViewReceipts") return canViewReceipts;
+            if (item.capability === "canUseShiftControls") return canUseShiftControls;
+            return true;
+          }).map((item) => {
             const active = item.matches(pathname);
             const Icon = item.icon;
 

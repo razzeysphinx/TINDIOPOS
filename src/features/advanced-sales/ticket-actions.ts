@@ -95,7 +95,12 @@ function databaseMessage(error: { code?: string; message?: string } | null) {
 
 async function requireTicketContext() {
   const context = await requireBusinessContext();
-  return hasPermission(context, "sales.create") && context.features.open_tickets ? context : null;
+  return hasPermission(context, "pos.access")
+    && hasPermission(context, "sales.create")
+    && hasPermission(context, "tickets.manage")
+    && context.features.open_tickets
+    ? context
+    : null;
 }
 
 function ticketCart(lines: z.infer<typeof cartLineSchema>[]): Json {

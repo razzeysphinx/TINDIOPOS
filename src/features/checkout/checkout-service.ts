@@ -126,7 +126,11 @@ export async function completeCheckout(
   input: unknown,
   options: { guardOfflineTotal?: boolean } = {},
 ): Promise<CheckoutSaleActionResult> {
-  if (!hasPermission(context, "sales.create")) {
+  if (
+    !hasPermission(context, "pos.access")
+    || !hasPermission(context, "sales.create")
+    || !hasPermission(context, "payments.accept")
+  ) {
     return {
       ok: false,
       message: "You do not have permission to complete sales.",
@@ -160,6 +164,24 @@ export async function completeCheckout(
   }
 
   const data = parsed satisfies CheckoutSaleValues;
+  if (data.discountId && !hasPermission(context, "discounts.apply")) {
+    return {
+      ok: false,
+      message: "You do not have permission to apply discounts.",
+      retryable: false,
+      failureCode: "PERMISSION_CHANGED",
+    };
+  }
+
+  if (data.openTicketId && !hasPermission(context, "tickets.manage")) {
+    return {
+      ok: false,
+      message: "You do not have permission to use open tickets.",
+      retryable: false,
+      failureCode: "PERMISSION_CHANGED",
+    };
+  }
+
   const offlineTotalMarker = options.guardOfflineTotal
     ? data.offlineExpectedTotalMinor
       ? `[tindio-offline-total:${data.offlineExpectedTotalMinor}]`

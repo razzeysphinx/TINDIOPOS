@@ -6017,6 +6017,14 @@ export type Database = {
         }
         Returns: string
       }
+      set_catalog_product_store_availability: {
+        Args: {
+          target_organization_id: string
+          target_product_id: string
+          target_store_ids: string[]
+        }
+        Returns: number
+      }
       create_custom_role: {
         Args: {
           permission_codes: string[]

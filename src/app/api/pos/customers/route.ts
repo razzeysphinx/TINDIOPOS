@@ -11,7 +11,7 @@ const querySchema = z.object({
 
 export async function GET(request: Request) {
   const context = await getBusinessContext();
-  if (!context || !hasPermission(context, "sales.create")) {
+  if (!context || !hasPermission(context, "pos.access") || !hasPermission(context, "sales.create")) {
     return NextResponse.json({ error: "POS access is not permitted." }, { status: 403 });
   }
 

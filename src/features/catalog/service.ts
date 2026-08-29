@@ -310,25 +310,40 @@ export async function setProductAvailability(
   if (!parsed.success) return validationError();
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("product_store_settings")
-    .upsert(
-      {
-        organization_id: context.organization.id,
-        product_id: parsed.data.productId,
-        store_id: parsed.data.storeId,
-        is_available: parsed.data.isAvailable,
-      },
-      { onConflict: "store_id,product_id" },
-    )
-    .select("product_id")
-    .maybeSingle();
+  const [activeStoresResult, settingsResult] = await Promise.all([
+    supabase
+      .from("stores")
+      .select("id")
+      .eq("organization_id", context.organization.id)
+      .eq("is_active", true),
+    supabase
+      .from("product_store_settings")
+      .select("store_id, is_available")
+      .eq("organization_id", context.organization.id)
+      .eq("product_id", parsed.data.productId),
+  ]);
 
-  if (error || !data) {
+  if (activeStoresResult.error || settingsResult.error) {
     return { ok: false, message: "Store availability could not be updated." };
   }
 
-  return { ok: true, message: "Store availability updated." };
+  const activeStoreIds = new Set((activeStoresResult.data ?? []).map((store) => store.id));
+  if (!activeStoreIds.has(parsed.data.storeId)) {
+    return { ok: false, message: "You do not have access to manage this active store." };
+  }
+
+  const selectedStoreIds = new Set(
+    (settingsResult.data ?? [])
+      .filter((setting) => setting.is_available && activeStoreIds.has(setting.store_id))
+      .map((setting) => setting.store_id),
+  );
+  if (parsed.data.isAvailable) selectedStoreIds.add(parsed.data.storeId);
+  else selectedStoreIds.delete(parsed.data.storeId);
+
+  return setProductStoreAvailability(context, {
+    productId: parsed.data.productId,
+    storeIds: [...selectedStoreIds],
+  });
 }
 
 /**
@@ -344,73 +359,22 @@ export async function setProductStoreAvailability(
   if (!parsed.success) return validationError();
 
   const supabase = await createClient();
-  const [productResult, activeStoresResult, settingsResult] = await Promise.all([
-    supabase
-      .from("products")
-      .select("id")
-      .eq("id", parsed.data.productId)
-      .eq("organization_id", context.organization.id)
-      .maybeSingle(),
-    supabase
-      .from("stores")
-      .select("id")
-      .eq("organization_id", context.organization.id)
-      .eq("is_active", true),
-    supabase
-      .from("product_store_settings")
-      .select("store_id, is_available")
-      .eq("organization_id", context.organization.id)
-      .eq("product_id", parsed.data.productId),
-  ]);
+  const { data, error } = await supabase.rpc("set_catalog_product_store_availability", {
+    target_organization_id: context.organization.id,
+    target_product_id: parsed.data.productId,
+    target_store_ids: parsed.data.storeIds,
+  });
 
-  if (productResult.error || !productResult.data) {
-    return { ok: false, message: "The product could not be found." };
-  }
-
-  if (activeStoresResult.error || settingsResult.error) {
-    return { ok: false, message: "Store availability could not be updated." };
-  }
-
-  const activeStoreIds = new Set((activeStoresResult.data ?? []).map((store) => store.id));
-  if (activeStoreIds.size === 0) {
-    return { ok: false, message: "No active stores are available for this product." };
-  }
-
-  const selectedStoreIds = new Set(parsed.data.storeIds);
-  if ([...selectedStoreIds].some((storeId) => !activeStoreIds.has(storeId))) {
-    return { ok: false, message: "Select only active stores you are allowed to manage." };
-  }
-
-  const availabilityByStoreId = new Map(
-    (settingsResult.data ?? []).map((setting) => [setting.store_id, Boolean(setting.is_available)]),
-  );
-  const changes = [...activeStoreIds]
-    .filter((storeId) => availabilityByStoreId.get(storeId) !== selectedStoreIds.has(storeId))
-    .map((storeId) => ({
-      organization_id: context.organization.id,
-      product_id: parsed.data.productId,
-      store_id: storeId,
-      is_available: selectedStoreIds.has(storeId),
-    }));
-
-  if (changes.length === 0) {
-    return { ok: true, message: "Store availability is already up to date." };
-  }
-
-  const { error } = await supabase
-    .from("product_store_settings")
-    .upsert(changes, { onConflict: "store_id,product_id" });
-
-  if (error) {
+  if (error || data === null) {
     return {
       ok: false,
-      message: databaseMessage(error.code, "Store availability could not be updated."),
+      message: databaseMessage(error?.code, "Store availability could not be updated."),
     };
   }
 
   return {
     ok: true,
-    message: `${selectedStoreIds.size} active store${selectedStoreIds.size === 1 ? " is" : "s are"} now available for this product.`,
+    message: `${data} active store${data === 1 ? " is" : "s are"} now available for this product.`,
   };
 }
 

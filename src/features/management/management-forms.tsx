@@ -572,6 +572,8 @@ export function EditEmployeeButton({
   employee,
   roles,
   stores,
+  lockOwnRoleAndStatus = false,
+  organizationWideStoreAccess = false,
 }: {
   employee: {
     id: string;
@@ -582,6 +584,8 @@ export function EditEmployeeButton({
   };
   roles: Array<{ id: string; name: string }>;
   stores: Array<{ id: string; name: string }>;
+  lockOwnRoleAndStatus?: boolean;
+  organizationWideStoreAccess?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -639,8 +643,8 @@ export function EditEmployeeButton({
               <FormField label="Job title" error={form.formState.errors.jobTitle?.message}>
                 <Input autoFocus {...form.register("jobTitle")} />
               </FormField>
-              <FormField label="Status" error={form.formState.errors.status?.message}>
-                <select className={selectClassName} {...form.register("status")}>
+                <FormField label="Status" error={form.formState.errors.status?.message}>
+                  <select disabled={lockOwnRoleAndStatus} className={selectClassName} {...form.register("status")}>
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                   <option value="suspended">Suspended</option>
@@ -653,8 +657,9 @@ export function EditEmployeeButton({
                 {roles.map((role) => (
                   <label className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm" key={role.id}>
                     <input
-                      checked={selectedRoles.includes(role.id)}
-                      className="size-4 accent-primary"
+                        checked={selectedRoles.includes(role.id)}
+                        className="size-4 accent-primary"
+                        disabled={lockOwnRoleAndStatus}
                       onChange={(event) => toggle("roleIds", role.id, event.target.checked)}
                       type="checkbox"
                     />
@@ -666,12 +671,18 @@ export function EditEmployeeButton({
             </fieldset>
             <fieldset>
               <legend className="text-sm font-medium">Active stores</legend>
+              {organizationWideStoreAccess ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Organization managers are automatically assigned to every active store. Store access updates when stores are added or activated.
+                </p>
+              ) : null}
               <div className="mt-2 flex flex-wrap gap-2">
                 {stores.map((store) => (
                   <label className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm" key={store.id}>
                     <input
-                      checked={selectedStores.includes(store.id)}
-                      className="size-4 accent-primary"
+                        checked={selectedStores.includes(store.id)}
+                        className="size-4 accent-primary"
+                        disabled={organizationWideStoreAccess}
                       onChange={(event) => toggle("storeIds", store.id, event.target.checked)}
                       type="checkbox"
                     />

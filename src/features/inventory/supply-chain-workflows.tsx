@@ -13,10 +13,11 @@ import {
   Truck,
   Warehouse,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -101,6 +102,7 @@ export function SupplyChainWorkflows({
   rules,
   requests,
   inboundPurchaseOrders,
+  defaultStoreId,
 }: {
   stores: Store[];
   warehouses: WarehouseOption[];
@@ -109,10 +111,11 @@ export function SupplyChainWorkflows({
   rules: ReplenishmentRule[];
   requests: SupplyChainRequest[];
   inboundPurchaseOrders: InboundPurchaseOrder[];
+  defaultStoreId?: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const firstStoreId = stores[0]?.id ?? "";
+  const firstStoreId = stores.find((store) => store.id === defaultStoreId)?.id ?? stores[0]?.id ?? "";
   const firstItem = items[0];
   const [warehouseStoreId, setWarehouseStoreId] = useState(firstStoreId);
   const [warehouseCode, setWarehouseCode] = useState("");
@@ -185,6 +188,7 @@ export function SupplyChainWorkflows({
   }
 
   function applyRuleSuggestion(rule: ReplenishmentRule) {
+    if (!rule.preferredWarehouseId) return;
     const suggested = Math.max(0, rule.targetStock - rule.currentQuantity);
     setRequestStoreId(rule.storeId);
     setRequestWarehouseId(rule.preferredWarehouseId ?? "");
@@ -347,14 +351,15 @@ export function SupplyChainWorkflows({
         </WorkflowCard>
       </div>
 
-      <section className="space-y-3" aria-labelledby="reorder-watch-title">
+      {/* CANDIDATE_FOR_REMOVAL: retained prior reorder-watch renderer while Phase 7 QA validates the source-aware recommendation view below. */}
+      {false ? <section className="space-y-3" aria-labelledby="reorder-watch-title">
         <div><h3 className="font-semibold" id="reorder-watch-title">Reorder watch</h3><p className="mt-1 text-sm text-muted-foreground">Suggested requests are based on current on-hand stock versus each target level.</p></div>
         {rules.length ? <div className="grid gap-3 lg:grid-cols-2">{rules.map((rule) => {
           const suggested = Math.max(0, rule.targetStock - rule.currentQuantity);
           const needsReorder = rule.currentQuantity <= rule.reorderPoint;
           return <Card key={rule.id} size="sm"><CardContent className="flex flex-wrap items-center justify-between gap-3 py-4"><div><p className="font-medium">{rule.label}</p><p className="mt-1 text-xs text-muted-foreground">{rule.storeName} · on hand {formatQuantity(rule.currentQuantity)} {rule.unit} · reorder {formatQuantity(rule.reorderPoint)} · target {formatQuantity(rule.targetStock)}</p>{rule.warehouseName ? <p className="mt-1 text-xs text-muted-foreground">Preferred source: {rule.warehouseName}</p> : null}</div><div className="flex items-center gap-2"><Badge variant={needsReorder ? "secondary" : "outline"}>{needsReorder ? `Request ${formatQuantity(suggested)}` : "Above reorder point"}</Badge>{suggested > 0 ? <Button size="sm" type="button" variant="outline" onClick={() => applyRuleSuggestion(rule)}>Use suggestion</Button> : null}</div></CardContent></Card>;
         })}</div> : <Empty message="Save a reorder point and target stock rule to see replenishment suggestions." />}
-      </section>
+      </section> : <ReplenishmentRecommendations rules={rules} onPrepareTransfer={applyRuleSuggestion} />}
 
       <section className="space-y-3" aria-labelledby="inbound-stock-title">
         <div><h3 className="font-semibold" id="inbound-stock-title">Inbound stock</h3><p className="mt-1 text-sm text-muted-foreground">Open supplier orders remain inbound until their goods receipt is posted in Inventory.</p></div>
@@ -365,6 +370,31 @@ export function SupplyChainWorkflows({
         <div><h3 className="font-semibold" id="request-workflow-title">Stock request workflow</h3><p className="mt-1 text-sm text-muted-foreground">Approval and picking do not move stock. Dispatch moves it out; receiving adds only the quantities actually received.</p></div>
         {requests.length ? <div className="grid gap-4">{requests.map((request) => <StockRequestCard key={request.id} request={request} isPending={isPending} dispatchNote={dispatchNotes[request.id] ?? ""} receiptNote={receiptNotes[request.id] ?? ""} result={workflowResults[request.id] ?? null} onDispatchNote={(note) => setDispatchNotes((current) => ({ ...current, [request.id]: note }))} onReceiptNote={(note) => setReceiptNotes((current) => ({ ...current, [request.id]: note }))} receiptValue={receiptValue} onReceiptChange={updateReceiptValue} onApprove={() => approveRequest(request)} onStartPicking={() => startPicking(request)} onDispatch={() => dispatchRequest(request)} onReceive={() => receiveRequest(request)} />)}</div> : <Empty message="Submitted stock requests will appear here as they move through approval, picking, dispatch, and receiving." />}
       </section>
+    </section>
+  );
+}
+
+function ReplenishmentRecommendations({
+  rules,
+  onPrepareTransfer,
+}: {
+  rules: ReplenishmentRule[];
+  onPrepareTransfer: (rule: ReplenishmentRule) => void;
+}) {
+  return (
+    <section className="space-y-3" aria-labelledby="replenishment-recommendations-title">
+      <div>
+        <h3 className="font-semibold" id="replenishment-recommendations-title">Replenishment watch</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Suggestions are rule-driven. They identify the store, quantity, and source action, but never create a transfer or purchase order automatically.
+        </p>
+      </div>
+      {rules.length ? <div className="grid gap-3 lg:grid-cols-2">{rules.map((rule) => {
+        const suggestedQuantity = Math.max(0, rule.targetStock - rule.currentQuantity);
+        const needsReorder = rule.currentQuantity <= rule.reorderPoint;
+        const canPrepareTransfer = needsReorder && suggestedQuantity > 0 && Boolean(rule.preferredWarehouseId && rule.warehouseName);
+        return <Card key={rule.id} size="sm"><CardContent className="flex flex-wrap items-center justify-between gap-3 py-4"><div><p className="font-medium">{rule.label}</p><p className="mt-1 text-xs text-muted-foreground">{rule.storeName} · on hand {formatQuantity(rule.currentQuantity)} {rule.unit} · reorder {formatQuantity(rule.reorderPoint)} · target {formatQuantity(rule.targetStock)}</p>{needsReorder ? <p className="mt-1 text-xs text-muted-foreground">{rule.warehouseName ? `Suggested transfer source: ${rule.warehouseName}` : "No warehouse source is configured. Plan supplier replenishment or set a preferred warehouse."}</p> : null}</div><div className="flex flex-wrap items-center gap-2"><Badge variant={needsReorder ? "secondary" : "outline"}>{needsReorder ? rule.warehouseName ? `Transfer ${formatQuantity(suggestedQuantity)}` : "Plan supplier replenishment" : "Above reorder point"}</Badge>{canPrepareTransfer ? <Button size="sm" type="button" variant="outline" onClick={() => onPrepareTransfer(rule)}>Prepare transfer request</Button> : null}{needsReorder && !rule.warehouseName ? <Link className={buttonVariants({ size: "sm", variant: "outline" })} href="/back-office/inventory?tab=purchasing">Plan supplier purchase</Link> : null}</div></CardContent></Card>;
+      })}</div> : <Empty message="Save a reorder point and target stock rule to see replenishment suggestions." />}
     </section>
   );
 }

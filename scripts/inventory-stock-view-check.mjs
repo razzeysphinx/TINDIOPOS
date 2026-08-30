@@ -27,11 +27,15 @@ test("Stock view provides the Phase 2 operational controls and keeps the layout 
 });
 
 test("Stock status derives from the existing projection and optional replenishment threshold", async () => {
-  const stockView = await source("src/features/inventory/inventory-stock-view.tsx");
+  const [stockView, stockStatus] = await Promise.all([
+    source("src/features/inventory/inventory-stock-view.tsx"),
+    source("src/features/inventory/inventory-stock-status.ts"),
+  ]);
 
-  assert.match(stockView, /if \(row\.quantity < 0\) return "negative";/);
-  assert.match(stockView, /if \(row\.quantity === 0\) return "out_of_stock";/);
-  assert.match(stockView, /row\.reorderPoint !== null && row\.quantity <= row\.reorderPoint/);
+  assert.match(stockView, /getInventoryStockCondition\(\{ quantity: row\.quantity, reorderPoint: row\.reorderPoint \}\)/);
+  assert.match(stockStatus, /if \(quantity < 0\) return "negative";/);
+  assert.match(stockStatus, /if \(quantity === 0\) return "out_of_stock";/);
+  assert.match(stockStatus, /reorderPoint !== null && quantity <= reorderPoint/);
   assert.match(stockView, /if \(status === "available"\) return row\.isAvailable;/);
   assert.match(stockView, /condition === "low" \|\| condition === "negative" \|\| condition === "out_of_stock"/);
 });
@@ -41,10 +45,12 @@ test("Inventory page scopes selected-store stock queries and redacts financial f
 
   assert.match(inventoryPage, /const settingsQuery = supabase/);
   assert.match(inventoryPage, /const levelsQuery = supabase/);
-  assert.match(inventoryPage, /settingsQuery\.eq\("store_id", selectedStoreId\)/);
-  assert.match(inventoryPage, /levelsQuery\.eq\("store_id", selectedStoreId\)/);
-  assert.match(inventoryPage, /replenishmentRulesQuery\?\.eq\("store_id", selectedStoreId\)/);
-  assert.match(inventoryPage, /averageCostMinor: canViewCosts \? Number\(level\.average_cost_minor\) : null/);
+  assert.match(inventoryPage, /const scopedStoreIds = selectedStoreId \? \[selectedStoreId\] : storeScope\.storeIds/);
+  assert.match(inventoryPage, /settingsQuery\.in\("store_id", scopedStoreIds\)/);
+  assert.match(inventoryPage, /levelsQuery\.in\("store_id", scopedStoreIds\)/);
+  assert.match(inventoryPage, /replenishmentRulesQuery\?\.in\("store_id", scopedStoreIds\)/);
+  assert.match(inventoryPage, /averageCostMinor: canViewCosts\s+\? averageCostByStockLevel\.get/);
+  assert.match(inventoryPage, /rpc\("get_inventory_valuation"/);
   assert.match(inventoryPage, /reorderPoint: canManage \? reorderPoints\.get/);
   assert.match(inventoryPage, /<InventoryStockView/);
   assert.match(inventoryPage, /href=\{inventoryTabHref\("stock", "attention"\)\}\s+label="Needs attention"/);

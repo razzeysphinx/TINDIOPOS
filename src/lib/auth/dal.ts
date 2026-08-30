@@ -331,6 +331,7 @@ const BACK_OFFICE_PERMISSIONS = [
   "dashboard.view",
   "reports.view",
   "products.manage",
+  "inventory.view",
   "inventory.manage",
   "customers.manage",
   "employees.manage",
@@ -383,7 +384,7 @@ export function canAccessBackOffice(context: BusinessContext) {
 export function getBackOfficeHome(context: BusinessContext) {
   if (hasPermission(context, "dashboard.view")) return "/back-office";
   if (hasPermission(context, "reports.view")) return "/back-office/reports";
-  if (hasPermission(context, "inventory.manage") && context.features.inventory) {
+  if (hasAnyPermission(context, ["inventory.view", "inventory.manage"]) && context.features.inventory) {
     return "/back-office/inventory";
   }
   if (hasPermission(context, "products.manage")) return "/back-office/catalog";

@@ -1,20 +1,28 @@
 "use client";
 
 import { Grid2X2, List, Search, SlidersHorizontal } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  getInventoryStockCondition,
+  inventoryStockConditionLabels,
+  type InventoryStockCondition,
+} from "@/features/inventory/inventory-stock-status";
 
 export type InventoryStockRow = {
   averageCostMinor: number | null;
   barcode: string | null;
   categoryId: string | null;
   categoryName: string | null;
+  detailHref: string;
   id: string;
   isAvailable: boolean;
+  productId: string;
   productName: string;
   quantity: number;
   reorderPoint: number | null;
@@ -23,6 +31,7 @@ export type InventoryStockRow = {
   storeName: string;
   unit: string;
   updatedAt: string;
+  variantId: string | null;
   variantName: string | null;
 };
 
@@ -31,6 +40,7 @@ type InventoryStockViewProps = {
   canViewCosts: boolean;
   currencyCode: string;
   initialStatus?: InventoryStockStatus;
+  multiStoreCount: number;
   preferenceScope: string;
   rows: InventoryStockRow[];
 };
@@ -47,6 +57,13 @@ export type InventoryStockStatus =
 type InventoryStockLayout = "grid" | "list";
 type InventoryStockSort = "name_asc" | "name_desc" | "quantity_asc" | "quantity_desc" | "updated_desc" | "value_desc";
 type InventoryStockGroup = "none" | "category" | "status" | "store";
+type InventoryStockRollup = {
+  availableStoreCount: number;
+  id: string;
+  rows: InventoryStockRow[];
+  totalQuantity: number;
+  updatedAt: string;
+};
 
 const selectClassName =
   "h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -60,11 +77,8 @@ const stockStatusLabels: Record<Exclude<InventoryStockStatus, "all">, string> = 
   out_of_stock: "Out of stock",
 };
 
-function stockCondition(row: InventoryStockRow): Exclude<InventoryStockStatus, "all" | "attention" | "available"> {
-  if (row.quantity < 0) return "negative";
-  if (row.quantity === 0) return "out_of_stock";
-  if (row.reorderPoint !== null && row.quantity <= row.reorderPoint) return "low";
-  return "in_stock";
+function stockCondition(row: InventoryStockRow): InventoryStockCondition {
+  return getInventoryStockCondition({ quantity: row.quantity, reorderPoint: row.reorderPoint });
 }
 
 function matchesStatus(row: InventoryStockRow, status: InventoryStockStatus) {
@@ -84,6 +98,73 @@ function statusVariant(status: ReturnType<typeof stockCondition>) {
 
 function rowLabel(row: InventoryStockRow) {
   return row.variantName ? `${row.productName} / ${row.variantName}` : row.productName;
+}
+
+function stockRowMatchesQuery(row: InventoryStockRow, query: string) {
+  return !query || [row.productName, row.variantName, row.sku, row.barcode]
+    .filter((value): value is string => Boolean(value))
+    .some((value) => value.toLocaleLowerCase().includes(query));
+}
+
+function stockRowMatchesCategory(row: InventoryStockRow, categoryId: string) {
+  return categoryId === "all" || (row.categoryId ?? "uncategorized") === categoryId;
+}
+
+function buildStockRollups(rows: InventoryStockRow[]): InventoryStockRollup[] {
+  const rollups = new Map<string, InventoryStockRollup>();
+
+  for (const row of rows) {
+    const id = `${row.productId}:${row.variantId ?? "base"}`;
+    const existing = rollups.get(id);
+
+    if (existing) {
+      existing.rows.push(row);
+      existing.totalQuantity += row.quantity;
+      existing.availableStoreCount += row.isAvailable ? 1 : 0;
+      if (new Date(row.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) existing.updatedAt = row.updatedAt;
+    } else {
+      rollups.set(id, {
+        availableStoreCount: row.isAvailable ? 1 : 0,
+        id,
+        rows: [row],
+        totalQuantity: row.quantity,
+        updatedAt: row.updatedAt,
+      });
+    }
+  }
+
+  return Array.from(rollups.values());
+}
+
+function matchesRollupStatus(rollup: InventoryStockRollup, status: InventoryStockStatus) {
+  return rollup.rows.some((row) => matchesStatus(row, status));
+}
+
+function rollupLabel(rollup: InventoryStockRollup) {
+  return rowLabel(rollup.rows[0]);
+}
+
+function stockValue(row: InventoryStockRow) {
+  return (row.averageCostMinor ?? 0) * row.quantity;
+}
+
+function sortRollups(rows: InventoryStockRollup[], sort: InventoryStockSort) {
+  return [...rows].sort((left, right) => {
+    switch (sort) {
+      case "name_desc":
+        return rollupLabel(right).localeCompare(rollupLabel(left));
+      case "quantity_asc":
+        return left.totalQuantity - right.totalQuantity || rollupLabel(left).localeCompare(rollupLabel(right));
+      case "quantity_desc":
+        return right.totalQuantity - left.totalQuantity || rollupLabel(left).localeCompare(rollupLabel(right));
+      case "updated_desc":
+        return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime() || rollupLabel(left).localeCompare(rollupLabel(right));
+      case "value_desc":
+        return right.rows.reduce((total, row) => total + stockValue(row), 0) - left.rows.reduce((total, row) => total + stockValue(row), 0) || rollupLabel(left).localeCompare(rollupLabel(right));
+      default:
+        return rollupLabel(left).localeCompare(rollupLabel(right));
+    }
+  });
 }
 
 function localStorageKey(scope: string) {
@@ -108,6 +189,7 @@ export function InventoryStockView({
   canViewCosts,
   currencyCode,
   initialStatus = "all",
+  multiStoreCount,
   preferenceScope,
   rows,
 }: InventoryStockViewProps) {
@@ -139,14 +221,19 @@ export function InventoryStockView({
     const query = search.trim().toLocaleLowerCase();
 
     return rows.filter((row) => {
-      const matchesQuery = !query || [row.productName, row.variantName, row.sku, row.barcode]
-        .filter((value): value is string => Boolean(value))
-        .some((value) => value.toLocaleLowerCase().includes(query));
-      const matchesCategory = categoryId === "all" || (row.categoryId ?? "uncategorized") === categoryId;
-
-      return matchesQuery && matchesCategory && matchesStatus(row, status);
+      return stockRowMatchesQuery(row, query) && stockRowMatchesCategory(row, categoryId) && matchesStatus(row, status);
     });
   }, [categoryId, rows, search, status]);
+
+  const multiStoreRollups = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    const matchingRollups = buildStockRollups(rows).filter((rollup) => (
+      rollup.rows.some((row) => stockRowMatchesQuery(row, query) && stockRowMatchesCategory(row, categoryId))
+      && matchesRollupStatus(rollup, status)
+    ));
+
+    return sortRollups(matchingRollups, sort);
+  }, [categoryId, rows, search, sort, status]);
 
   const sortedRows = useMemo(() => [...filteredRows].sort((left, right) => {
     switch (sort) {
@@ -175,7 +262,7 @@ export function InventoryStockView({
         : group === "store"
           ? { id: `store:${row.storeId}`, label: row.storeName }
           : group === "status"
-            ? { id: `status:${condition}`, label: stockStatusLabels[condition] }
+            ? { id: `status:${condition}`, label: inventoryStockConditionLabels[condition] }
             : { id: "all", label: "All stock" };
       const existing = result.get(value.id);
       if (existing) existing.rows.push(row);
@@ -206,8 +293,8 @@ export function InventoryStockView({
     <section className="space-y-4" aria-labelledby="stock-levels-title">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold" id="stock-levels-title">Current stock</h2>
-          <p className="mt-1 text-sm text-muted-foreground">One projected balance per store and saleable item. Use the page filter above to change the store scope.</p>
+          <h2 className="text-lg font-semibold" id="stock-levels-title">{multiStoreCount > 1 ? "Store records" : "Current stock"}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{multiStoreCount > 1 ? "Individual projected balances remain store-specific. Use the page filter above to change the store scope." : "One projected balance per store and saleable item. Use the page filter above to change the store scope."}</p>
         </div>
         <div className="flex items-center gap-1 self-start rounded-lg border bg-muted/30 p-1 sm:self-auto" aria-label="Stock layout">
           <Button aria-label="List view" aria-pressed={layout === "list"} onClick={() => updateLayout("list")} size="icon-sm" type="button" variant={layout === "list" ? "secondary" : "ghost"}>
@@ -278,6 +365,8 @@ export function InventoryStockView({
         </div>
       </div>
 
+      {multiStoreCount > 1 ? <MultiStoreStockSummary rollups={multiStoreRollups} storeCount={multiStoreCount} /> : null}
+
       {rows.length === 0 ? (
         <StockEmptyState title="No stock levels yet" description="Inventory levels appear when a tracked product is assigned to a store." />
       ) : groups.length === 0 ? (
@@ -292,6 +381,47 @@ export function InventoryStockView({
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+function MultiStoreStockSummary({ rollups, storeCount }: { rollups: InventoryStockRollup[]; storeCount: number }) {
+  return (
+    <section aria-labelledby="multi-store-stock-title" className="rounded-xl border bg-muted/20 p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="font-semibold" id="multi-store-stock-title">Across stores</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Totals across {storeCount} authorized stores. Select a store level to inspect its stock activity.</p>
+        </div>
+        <Badge variant="outline">{rollups.length} product{rollups.length === 1 ? "" : "s"}</Badge>
+      </div>
+
+      {rollups.length ? (
+        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          {rollups.map((rollup) => {
+            const item = rollup.rows[0];
+            const attentionCount = rollup.rows.filter((row) => {
+              const condition = stockCondition(row);
+              return condition === "low" || condition === "negative" || condition === "out_of_stock";
+            }).length;
+
+            return (
+              <article className="rounded-xl border bg-card p-4" key={rollup.id}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0"><p className="truncate font-medium">{rollupLabel(rollup)}</p><p className="mt-1 text-xs text-muted-foreground">{item.categoryName ?? "Uncategorized"} · {rollup.rows.length} store{rollup.rows.length === 1 ? "" : "s"}</p></div>
+                  <div className="text-right"><p className="text-xs text-muted-foreground">Total on hand</p><p className="text-lg font-semibold">{formatQuantity(rollup.totalQuantity)} <span className="text-xs font-normal text-muted-foreground">{item.unit}</span></p></div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs"><Badge variant="secondary">{rollup.availableStoreCount} available</Badge>{attentionCount ? <Badge variant="outline">{attentionCount} need attention</Badge> : <Badge variant="secondary">All stores healthy</Badge>}</div>
+                <ul className="mt-4 divide-y rounded-lg border">
+                  {rollup.rows.slice().sort((left, right) => left.storeName.localeCompare(right.storeName)).map((row) => (
+                    <li key={row.id}><Link className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href={row.detailHref}><span className="min-w-0 truncate font-medium">{row.storeName}</span><span className="flex shrink-0 items-center gap-2"><span>{formatQuantity(row.quantity)} {row.unit}</span><Badge variant={statusVariant(stockCondition(row))}>{inventoryStockConditionLabels[stockCondition(row)]}</Badge></span></Link></li>
+                  ))}
+                </ul>
+              </article>
+            );
+          })}
+        </div>
+      ) : <p className="mt-4 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No products match the current filters across your authorized stores.</p>}
     </section>
   );
 }
@@ -334,7 +464,7 @@ function StockListRow({ canViewCosts, currencyCode, row }: { canViewCosts: boole
 
   return (
     <tr className="transition-colors hover:bg-muted/30">
-      <td className="max-w-72 px-4 py-3"><p className="truncate font-medium">{rowLabel(row)}</p><p className="mt-1 truncate text-xs text-muted-foreground">{identifier}</p></td>
+      <td className="max-w-72 px-4 py-3"><Link className="block truncate rounded-sm font-medium outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring" href={row.detailHref}>{rowLabel(row)}</Link><p className="mt-1 truncate text-xs text-muted-foreground">{identifier}</p></td>
       <td className="px-4 py-3 text-muted-foreground">{row.categoryName ?? "Uncategorized"}</td>
       <td className="px-4 py-3 text-muted-foreground">{row.storeName}</td>
       <td className="px-4 py-3 text-right"><p className="font-semibold">{formatQuantity(row.quantity)}</p><p className="text-xs text-muted-foreground">{row.unit}</p></td>
@@ -350,7 +480,8 @@ function StockCard({ canViewCosts, currencyCode, row }: { canViewCosts: boolean;
   const identifier = row.sku ? `SKU: ${row.sku}` : row.barcode ? `Barcode: ${row.barcode}` : "No SKU or barcode";
 
   return (
-    <Card size="sm">
+    <Link className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring" href={row.detailHref}>
+    <Card className="transition-colors hover:ring-primary/30" size="sm">
       <CardHeader className="flex-row items-start justify-between gap-3">
         <div className="min-w-0"><CardTitle className="truncate">{rowLabel(row)}</CardTitle><CardDescription className="mt-1 truncate">{row.categoryName ?? "Uncategorized"} · {row.storeName}</CardDescription></div>
         <StatusBadges condition={condition} isAvailable={row.isAvailable} />
@@ -361,6 +492,7 @@ function StockCard({ canViewCosts, currencyCode, row }: { canViewCosts: boolean;
         {canViewCosts && row.averageCostMinor !== null ? <p className="text-xs text-muted-foreground">Avg. cost {formatMoney(row.averageCostMinor, currencyCode)} · Value {formatMoney(row.quantity * row.averageCostMinor, currencyCode)}</p> : null}
       </CardContent>
     </Card>
+    </Link>
   );
 }
 

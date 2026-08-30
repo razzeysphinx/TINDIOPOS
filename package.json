@@ -15,6 +15,8 @@
     "test:feature-inventory-safeguards": "node --test scripts/phase-6-feature-inventory-safeguards-check.mjs",
     "test:security-boundaries": "node --test scripts/phase-7-security-boundary-check.mjs",
     "test:offline-integrity": "node --test scripts/phase-8-offline-integrity-check.mjs",
+    "test:inventory-offline-integrity": "node --test scripts/inventory-offline-performance-integrity-check.mjs",
+    "test:inventory-final-ux": "node --test scripts/inventory-final-ux-check.mjs",
     "test:production-readiness": "node --test scripts/phase-9-production-readiness-check.mjs",
     "test:auth-passwords": "node --test scripts/auth-password-experience-check.mjs",
     "test:management-create-dialogs": "node scripts/management-create-dialog-state-check.mjs",

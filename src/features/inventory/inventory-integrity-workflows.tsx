@@ -34,6 +34,20 @@ type Transfer = {
 };
 type CompositeOption = { id: string; name: string; unit: string; storeIds: string[] };
 type Result = { ok: boolean; message: string };
+type AdjustmentReview = {
+  currentQuantity: number;
+  itemLabel: string;
+  nextQuantity: number;
+  note: string;
+  quantityDelta: string;
+  reasonCode: string;
+  reasonName: string;
+  storeId: string;
+  storeName: string;
+  unit: string;
+  productId: string;
+  variantId: string;
+};
 export type InventoryIntegritySection =
   | "safeguards"
   | "adjustments"
@@ -86,6 +100,7 @@ export function InventoryIntegrityWorkflows({
   const [adjustmentQuantity, setAdjustmentQuantity] = useState("1");
   const [adjustmentNote, setAdjustmentNote] = useState("");
   const [adjustmentResult, setAdjustmentResult] = useState<Result | null>(null);
+  const [adjustmentReview, setAdjustmentReview] = useState<AdjustmentReview | null>(null);
   const [transferId, setTransferId] = useState(inTransitTransfers[0]?.id ?? "");
   const [transferNote, setTransferNote] = useState("");
   const [transferQuantities, setTransferQuantities] = useState<Record<string, string>>(() => receiptDraft(inTransitTransfers[0]));
@@ -105,6 +120,8 @@ export function InventoryIntegrityWorkflows({
 
   const activeSuppliers = suppliers.filter((supplier) => supplier.isActive);
   const adjustmentItems = useMemo(() => items.filter((item) => item.storeIds.includes(adjustmentStoreId)), [adjustmentStoreId, items]);
+  const selectedAdjustmentItem = adjustmentItems.find((item) => item.productId === adjustmentProductId && (item.variantId ?? "") === adjustmentVariantId);
+  const selectedAdjustmentReason = adjustmentReasons.find((reason) => reason.code === adjustmentReasonCode);
   const returnItems = useMemo(() => items.filter((item) => item.storeIds.includes(returnStoreId)), [items, returnStoreId]);
   const availableComposites = useMemo(() => composites.filter((composite) => composite.storeIds.includes(productionStoreId)), [composites, productionStoreId]);
   const selectedTransfer = inTransitTransfers.find((transfer) => transfer.id === transferId);
@@ -141,6 +158,15 @@ export function InventoryIntegrityWorkflows({
     setVariantId(variantId);
   }
 
+  function chooseAdjustmentStore(storeId: string) {
+    const firstItemForStore = items.find((item) => item.storeIds.includes(storeId));
+    setAdjustmentStoreId(storeId);
+    setAdjustmentProductId(firstItemForStore?.productId ?? "");
+    setAdjustmentVariantId(firstItemForStore?.variantId ?? "");
+    setAdjustmentReview(null);
+    setAdjustmentResult(null);
+  }
+
   function chooseTransfer(nextId: string) {
     const transfer = inTransitTransfers.find((item) => item.id === nextId);
     setTransferId(nextId);
@@ -164,19 +190,51 @@ export function InventoryIntegrityWorkflows({
     });
   }
 
-  function submitAdjustment(event: FormEvent<HTMLFormElement>) {
+  function reviewAdjustment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setAdjustmentResult(null);
+    const quantityDelta = Number(adjustmentQuantity);
+    const store = stores.find((candidate) => candidate.id === adjustmentStoreId);
+
+    if (!selectedAdjustmentItem || !selectedAdjustmentReason || !store || !Number.isFinite(quantityDelta) || quantityDelta === 0) {
+      setAdjustmentReview(null);
+      setAdjustmentResult({ ok: false, message: "Choose a store, reason, item, and non-zero quantity before reviewing." });
+      return;
+    }
+
+    const currentQuantity = selectedAdjustmentItem.quantitiesByStore[adjustmentStoreId] ?? 0;
+    setAdjustmentReview({
+      currentQuantity,
+      itemLabel: selectedAdjustmentItem.label,
+      nextQuantity: currentQuantity + quantityDelta,
+      note: adjustmentNote,
+      productId: adjustmentProductId,
+      quantityDelta: adjustmentQuantity,
+      reasonCode: selectedAdjustmentReason.code,
+      reasonName: selectedAdjustmentReason.name,
+      storeId: adjustmentStoreId,
+      storeName: store.name,
+      unit: selectedAdjustmentItem.unit,
+      variantId: adjustmentVariantId,
+    });
+  }
+
+  function postReviewedAdjustment() {
+    if (!adjustmentReview) return;
     startTransition(async () => {
       const result = await recordInventoryAdjustmentV2Action({
-        storeId: adjustmentStoreId,
-        reasonCode: adjustmentReasonCode,
-        productId: adjustmentProductId,
-        variantId: adjustmentVariantId,
-        quantityDelta: adjustmentQuantity,
-        note: adjustmentNote,
+        storeId: adjustmentReview.storeId,
+        reasonCode: adjustmentReview.reasonCode,
+        productId: adjustmentReview.productId,
+        variantId: adjustmentReview.variantId,
+        quantityDelta: adjustmentReview.quantityDelta,
+        note: adjustmentReview.note,
       });
       complete(result, setAdjustmentResult);
-      if (result.ok) setAdjustmentNote("");
+      if (result.ok) {
+        setAdjustmentNote("");
+        setAdjustmentReview(null);
+      }
     });
   }
 
@@ -243,14 +301,16 @@ export function InventoryIntegrityWorkflows({
               <div className="flex items-end"><Button disabled={isPending} type="submit">{isPending ? <LoaderCircle className="animate-spin" /> : <Settings2 />} Add reason</Button></div>
               <div className="sm:col-span-2"><ResultMessage result={reasonResult} /></div>
             </form>
-            {adjustmentReasons.length && adjustmentItems.length ? <form className="grid gap-3 sm:grid-cols-2" onSubmit={submitAdjustment} noValidate>
-              <Field label="Store"><select className={selectClassName} value={adjustmentStoreId} onChange={(event) => setAdjustmentStoreId(event.target.value)}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></Field>
-              <Field label="Reason"><select className={selectClassName} value={adjustmentReasonCode} onChange={(event) => setAdjustmentReasonCode(event.target.value)}>{adjustmentReasons.map((reason) => <option key={reason.code} value={reason.code}>{reason.name} ({reason.code})</option>)}</select></Field>
-              <ItemSelect label="Item" items={adjustmentItems} productId={adjustmentProductId} variantId={adjustmentVariantId} onChange={(value) => chooseItem(value, setAdjustmentProductId, setAdjustmentVariantId)} />
-              <Field label="Quantity change"><Input inputMode="decimal" value={adjustmentQuantity} onChange={(event) => setAdjustmentQuantity(event.target.value)} placeholder="Use - for a reduction" /></Field>
-              <Field className="sm:col-span-2" label="Note"><Input value={adjustmentNote} onChange={(event) => setAdjustmentNote(event.target.value)} placeholder="Optional supporting note" /></Field>
-              <div className="sm:col-span-2"><SubmitRow pending={isPending} result={adjustmentResult} label="Post adjustment" icon={<AlertTriangle />} /></div>
-            </form> : <Empty message="Create a reason and make a tracked item available in a store to post controlled adjustments." />}
+            {adjustmentReasons.length && adjustmentItems.length ? <><form className="grid gap-3 sm:grid-cols-2" onSubmit={reviewAdjustment} noValidate>
+              <Field label="Store"><select className={selectClassName} value={adjustmentStoreId} onChange={(event) => chooseAdjustmentStore(event.target.value)}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></Field>
+              <Field label="Reason"><select className={selectClassName} value={adjustmentReasonCode} onChange={(event) => { setAdjustmentReasonCode(event.target.value); setAdjustmentReview(null); }}>{adjustmentReasons.map((reason) => <option key={reason.code} value={reason.code}>{reason.name} ({reason.code})</option>)}</select></Field>
+              <ItemSelect label="Item" items={adjustmentItems} productId={adjustmentProductId} variantId={adjustmentVariantId} onChange={(value) => { chooseItem(value, setAdjustmentProductId, setAdjustmentVariantId); setAdjustmentReview(null); }} />
+              <Field label="Quantity change"><Input inputMode="decimal" value={adjustmentQuantity} onChange={(event) => { setAdjustmentQuantity(event.target.value); setAdjustmentReview(null); }} placeholder="Use - for a reduction" /></Field>
+              <Field className="sm:col-span-2" label="Reason / notes"><Input value={adjustmentNote} onChange={(event) => { setAdjustmentNote(event.target.value); setAdjustmentReview(null); }} placeholder="Optional supporting note" /></Field>
+              <div className="sm:col-span-2"><Button disabled={isPending} type="submit"><AlertTriangle /> Review adjustment</Button></div>
+            </form>
+            {adjustmentReview ? <AdjustmentReviewCard policy={policies[adjustmentReview.storeId] ?? "block"} pending={isPending} review={adjustmentReview} onBack={() => setAdjustmentReview(null)} onPost={postReviewedAdjustment} /> : null}
+            <ResultMessage result={adjustmentResult} /></> : <Empty message="Create a reason and make a tracked item available in a store to post controlled adjustments." />}
           </div>
         </WorkflowCard> : null}
 
@@ -286,6 +346,37 @@ export function InventoryIntegrityWorkflows({
       </div>
     </section>
   );
+}
+
+function AdjustmentReviewCard({
+  onBack,
+  onPost,
+  pending,
+  policy,
+  review,
+}: {
+  onBack: () => void;
+  onPost: () => void;
+  pending: boolean;
+  policy: "allow" | "warn" | "block";
+  review: AdjustmentReview;
+}) {
+  const quantityDelta = Number(review.quantityDelta);
+
+  return (
+    <section aria-labelledby="adjustment-review-title" className="rounded-xl border bg-muted/20 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-medium" id="adjustment-review-title">Review adjustment</h3><p className="mt-1 text-sm text-muted-foreground">{review.itemLabel} · {review.storeName} · {review.reasonName}</p></div><span className={quantityDelta > 0 ? "text-sm font-semibold text-primary" : "text-sm font-semibold text-destructive"}>{quantityDelta > 0 ? "+" : ""}{formatQuantity(quantityDelta)} {review.unit}</span></div>
+      <dl className="mt-4 grid gap-3 sm:grid-cols-3"><ReviewMetric label="Current" value={`${formatQuantity(review.currentQuantity)} ${review.unit}`} /><ReviewMetric label="Adjustment" value={`${quantityDelta > 0 ? "+" : ""}${formatQuantity(quantityDelta)} ${review.unit}`} /><ReviewMetric label="Result" value={`${formatQuantity(review.nextQuantity)} ${review.unit}`} /></dl>
+      {review.note ? <p className="mt-3 text-sm text-muted-foreground">Notes: {review.note}</p> : null}
+      {review.nextQuantity < 0 ? <p className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">This would result in negative stock. The store’s {policy} policy is enforced by the server when posting.</p> : null}
+      <p className="mt-3 text-xs text-muted-foreground">The displayed balance is a review preview. TINDIO locks and recalculates the authoritative stock level before creating the movement.</p>
+      <div className="mt-4 flex flex-wrap justify-end gap-2"><Button disabled={pending} onClick={onBack} type="button" variant="outline">Back</Button><Button disabled={pending} onClick={onPost} type="button">{pending ? <LoaderCircle className="animate-spin" /> : <AlertTriangle />} Post adjustment</Button></div>
+    </section>
+  );
+}
+
+function ReviewMetric({ label, value }: { label: string; value: string }) {
+  return <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium">{value}</dd></div>;
 }
 
 function WorkflowCard({ title, description, icon, children }: { title: string; description: string; icon: ReactNode; children: ReactNode }) {

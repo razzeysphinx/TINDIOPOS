@@ -76,11 +76,12 @@ export type AdvancedInventorySupplier = {
 export type AdvancedPurchaseOrder = {
   id: string;
   orderNumber: number;
-  status: "ordered" | "partially_received";
+  status: "draft" | "ordered" | "partially_received" | "received" | "cancelled";
   supplierName: string;
   storeName: string;
   expectedAt: string | null;
   createdAt: string;
+  totalCostMinor: number;
   lines: Array<{
     id: string;
     label: string;
@@ -91,10 +92,34 @@ export type AdvancedPurchaseOrder = {
   }>;
 };
 
+export type AdvancedGoodsReceipt = {
+  id: string;
+  lines: Array<{ label: string; quantity: number; unit: string }>;
+  note: string | null;
+  purchaseOrderId: string;
+  purchaseOrderNumber: number;
+  receivedAt: string;
+  storeName: string;
+};
+
 type StoreOption = { id: string; name: string };
 type SaleableDraft = { productId: string; variantId: string; quantity: string };
 type PurchaseDraft = SaleableDraft & { unitCost: string };
 type CountDraft = { productId: string; variantId: string; countedQuantity: string };
+type CountReview = {
+  lines: Array<{
+    countedQuantity: number;
+    difference: number;
+    expectedQuantity: number;
+    label: string;
+    productId: string;
+    unit: string;
+    variantId: string;
+  }>;
+  note: string;
+  storeId: string;
+  storeName: string;
+};
 type SupplierDraft = {
   name: string;
   contactName: string;
@@ -117,7 +142,9 @@ export function AdvancedInventoryWorkflows({
   items,
   suppliers,
   purchaseOrders,
+  receipts,
   currencyCode,
+  canViewCosts,
   adjustmentReasons,
   sections = ALL_ADVANCED_INVENTORY_SECTIONS,
 }: {
@@ -125,7 +152,9 @@ export function AdvancedInventoryWorkflows({
   items: AdvancedInventoryItem[];
   suppliers: AdvancedInventorySupplier[];
   purchaseOrders: AdvancedPurchaseOrder[];
+  receipts?: AdvancedGoodsReceipt[];
   currencyCode: string;
+  canViewCosts?: boolean;
   adjustmentReasons: Array<{ code: string; name: string }>;
   sections?: readonly AdvancedInventorySection[];
 }) {
@@ -142,6 +171,7 @@ export function AdvancedInventoryWorkflows({
   const [supplierResult, setSupplierResult] = useState<WorkflowResult | null>(null);
   const [purchaseResult, setPurchaseResult] = useState<WorkflowResult | null>(null);
   const [receiptResult, setReceiptResult] = useState<WorkflowResult | null>(null);
+  const [purchasingSection, setPurchasingSection] = useState<"orders" | "receiving" | "suppliers">("orders");
   const [countResult, setCountResult] = useState<WorkflowResult | null>(null);
   const [transferResult, setTransferResult] = useState<WorkflowResult | null>(null);
 
@@ -169,14 +199,22 @@ export function AdvancedInventoryWorkflows({
   const [purchaseExpectedAt, setPurchaseExpectedAt] = useState("");
   const [purchaseNotes, setPurchaseNotes] = useState("");
   const [purchaseLines, setPurchaseLines] = useState<PurchaseDraft[]>([emptyPurchaseLine()]);
-  const [receiptOrderId, setReceiptOrderId] = useState(purchaseOrders[0]?.id ?? "");
+  const receivableOrders = purchaseOrders
+    .filter((order) => order.status === "ordered" || order.status === "partially_received")
+    .map((order) => ({
+      ...order,
+      lines: order.lines.filter((line) => line.receivedQuantity < line.orderedQuantity),
+    }))
+    .filter((order) => order.lines.length > 0);
+  const [receiptOrderId, setReceiptOrderId] = useState(receivableOrders[0]?.id ?? "");
   const [receiptNote, setReceiptNote] = useState("");
   const [receiptQuantities, setReceiptQuantities] = useState<Record<string, string>>(() =>
-    receiptDraft(purchaseOrders[0]),
+    receiptDraft(receivableOrders[0]),
   );
   const [countStoreId, setCountStoreId] = useState(firstStoreId);
   const [countNote, setCountNote] = useState("");
   const [countLines, setCountLines] = useState<CountDraft[]>([emptyCountLine()]);
+  const [countReview, setCountReview] = useState<CountReview | null>(null);
   const [sourceStoreId, setSourceStoreId] = useState(firstStoreId);
   const [destinationStoreId, setDestinationStoreId] = useState(stores[1]?.id ?? "");
   const [transferNote, setTransferNote] = useState("");
@@ -195,7 +233,7 @@ export function AdvancedInventoryWorkflows({
     () => items.filter((item) => item.storeIds.includes(sourceStoreId)),
     [items, sourceStoreId],
   );
-  const selectedReceiptOrder = purchaseOrders.find((order) => order.id === receiptOrderId);
+  const selectedReceiptOrder = receivableOrders.find((order) => order.id === receiptOrderId);
   const showPurchasing = sections.includes("purchasing");
   const showCounts = sections.includes("counts");
   const showTransfers = sections.includes("transfers");
@@ -275,19 +313,63 @@ export function AdvancedInventoryWorkflows({
     });
   }
 
-  function submitCount(event: FormEvent<HTMLFormElement>) {
+  function reviewCount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setCountResult(null);
+    const store = stores.find((candidate) => candidate.id === countStoreId);
+    const seenItems = new Set<string>();
+    const reviewLines: CountReview["lines"] = [];
+
+    if (!store) {
+      setCountReview(null);
+      setCountResult({ ok: false, message: "Choose a valid store before reviewing." });
+      return;
+    }
+
+    for (const line of countLines) {
+      const item = findItem(countableItems, line);
+      const countedQuantity = Number(line.countedQuantity);
+      const itemKey = `${line.productId}|${line.variantId}`;
+
+      if (!item || !/^\d{1,8}(?:\.\d{1,3})?$/.test(line.countedQuantity) || !Number.isFinite(countedQuantity) || countedQuantity < 0 || seenItems.has(itemKey)) {
+        setCountReview(null);
+        setCountResult({ ok: false, message: "Choose unique counted items and enter non-negative quantities with up to 3 decimals before reviewing." });
+        return;
+      }
+
+      seenItems.add(itemKey);
+      const expectedQuantity = item.quantitiesByStore[countStoreId] ?? 0;
+      reviewLines.push({
+        countedQuantity,
+        difference: countedQuantity - expectedQuantity,
+        expectedQuantity,
+        label: item.label,
+        productId: line.productId,
+        unit: item.unit,
+        variantId: line.variantId,
+      });
+    }
+
+    setCountReview({ storeId: countStoreId, storeName: store.name, note: countNote, lines: reviewLines });
+  }
+
+  function submitReviewedCount() {
+    if (!countReview) return;
     startTransition(async () => {
       const result = await completeInventoryCountAction({
-        storeId: countStoreId,
-        note: countNote,
-        lines: countLines,
+        storeId: countReview.storeId,
+        note: countReview.note,
+        lines: countReview.lines.map((line) => ({
+          productId: line.productId,
+          variantId: line.variantId,
+          countedQuantity: String(line.countedQuantity),
+        })),
       });
       finish(result, setCountResult);
       if (result.ok) {
         setCountNote("");
         setCountLines([emptyCountLine()]);
+        setCountReview(null);
       }
     });
   }
@@ -321,10 +403,13 @@ export function AdvancedInventoryWorkflows({
         </p>
       </div>
 
+      {showPurchasing ? (
+        <PurchasingSectionTabs activeSection={purchasingSection} onChange={setPurchasingSection} />
+      ) : null}
+
       <div className="grid gap-4 xl:grid-cols-2">
-        {showPurchasing ? <>
+        {showPurchasing && purchasingSection === "suppliers" ? <>
           <SupplierCsvTools />
-          <InventoryCsvTools stores={stores} items={items} suppliers={activeSuppliers} adjustmentReasons={adjustmentReasons} />
         <WorkflowCard
           title="Supplier management"
           description="Keep procurement contacts available for every purchase order."
@@ -427,13 +512,25 @@ export function AdvancedInventoryWorkflows({
             </div>
           ) : null}
         </WorkflowCard>
+        </> : null}
 
+        {showPurchasing && purchasingSection === "orders" ? <>
+        <PurchaseOrdersCard
+          canViewCosts={Boolean(canViewCosts)}
+          currencyCode={currencyCode}
+          orders={purchaseOrders}
+          onReceive={(order) => {
+            setReceiptOrderId(order.id);
+            setReceiptQuantities(receiptDraft(order));
+            setPurchasingSection("receiving");
+          }}
+        />
         <WorkflowCard
           title="Create purchase order"
           description="Commit expected items and unit cost before goods arrive."
           icon={<Truck aria-hidden="true" />}
         >
-          {activeSuppliers.length > 0 && stores.length > 0 && items.length > 0 ? (
+          {canViewCosts && activeSuppliers.length > 0 && stores.length > 0 && items.length > 0 ? (
             <form className="space-y-3" onSubmit={submitPurchaseOrder} noValidate>
               <div className="grid gap-3 sm:grid-cols-3">
                 <Field label="Receiving store">
@@ -478,17 +575,22 @@ export function AdvancedInventoryWorkflows({
                 </Button>
               </div>
             </form>
-          ) : (
+          ) : canViewCosts ? (
             <EmptyWorkflow message="Add an active supplier, store, and tracked item before creating a purchase order." />
+          ) : (
+            <EmptyWorkflow message="Purchase-order creation requires the existing cost-view permission." />
           )}
         </WorkflowCard>
+        {canViewCosts ? <details className="xl:col-span-2 rounded-xl border bg-card"><summary className="cursor-pointer px-4 py-3 text-sm font-medium">Import inventory records</summary><div className="border-t p-4"><InventoryCsvTools stores={stores} items={items} suppliers={activeSuppliers} adjustmentReasons={adjustmentReasons} /></div></details> : null}
+        </> : null}
 
+        {showPurchasing && purchasingSection === "receiving" ? <>
         <WorkflowCard
           title="Receive purchase order"
           description="Received quantities post receipt movements and update stock immediately."
           icon={<PackageCheck aria-hidden="true" />}
         >
-          {purchaseOrders.length > 0 ? (
+          {receivableOrders.length > 0 ? (
             <form className="space-y-3" onSubmit={submitReceipt} noValidate>
               <Field label="Open purchase order">
                 <select
@@ -496,7 +598,7 @@ export function AdvancedInventoryWorkflows({
                   value={receiptOrderId}
                   onChange={(event) => chooseReceiptOrder(event.target.value)}
                 >
-                  {purchaseOrders.map((order) => (
+                  {receivableOrders.map((order) => (
                     <option key={order.id} value={order.id}>
                       PO #{order.orderNumber} · {order.supplierName} · {order.storeName}
                     </option>
@@ -510,7 +612,7 @@ export function AdvancedInventoryWorkflows({
                     <div>
                       <p className="font-medium">{line.label}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {formatQuantity(remaining)} {line.unit} remaining · {formatMoney(line.unitCostMinor, currencyCode)} each
+                        {formatQuantity(remaining)} {line.unit} remaining{canViewCosts ? ` · ${formatMoney(line.unitCostMinor, currencyCode)} each` : ""}
                       </p>
                     </div>
                     <Field label="Receive now">
@@ -538,6 +640,7 @@ export function AdvancedInventoryWorkflows({
             <EmptyWorkflow message="Open purchase orders will be available here for partial or complete receiving." />
           )}
         </WorkflowCard>
+        <RecentReceiptsCard receipts={receipts ?? []} />
         </> : null}
 
         {showCounts ? <WorkflowCard
@@ -546,9 +649,10 @@ export function AdvancedInventoryWorkflows({
           icon={<ClipboardCheck aria-hidden="true" />}
         >
           {stores.length > 0 && items.length > 0 ? (
-            <form className="space-y-3" onSubmit={submitCount} noValidate>
+            <>
+            <form className="space-y-3" onSubmit={reviewCount} noValidate>
               <Field label="Store">
-                <select className={selectClassName} value={countStoreId} onChange={(event) => setCountStoreId(event.target.value)}>
+                <select className={selectClassName} value={countStoreId} onChange={(event) => { setCountStoreId(event.target.value); setCountReview(null); }}>
                   {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
                 </select>
               </Field>
@@ -556,25 +660,28 @@ export function AdvancedInventoryWorkflows({
                 lines={countLines}
                 items={countableItems}
                 storeId={countStoreId}
-                onChange={setCountLines}
+                onChange={(lines) => { setCountLines(lines); setCountReview(null); }}
                 onAdd={emptyCountLine}
               />
               <Field label="Count note">
-                <Input value={countNote} onChange={(event) => setCountNote(event.target.value)} placeholder="Optional count reason" />
+                <Input value={countNote} onChange={(event) => { setCountNote(event.target.value); setCountReview(null); }} placeholder="Optional count reason" />
               </Field>
               <div className="flex items-center justify-between gap-3">
                 <ResultMessage result={countResult} />
                 <Button disabled={isPending || countableItems.length === 0} type="submit">
                   {isPending ? <LoaderCircle className="animate-spin" /> : <ClipboardCheck />}
-                  Complete count
+                  Review count
                 </Button>
               </div>
             </form>
+            {countReview ? <CountReviewCard pending={isPending} review={countReview} onBack={() => setCountReview(null)} onPost={submitReviewedCount} /> : null}
+            </>
           ) : (
             <EmptyWorkflow message="Create a tracked item in a store before counting inventory." />
           )}
         </WorkflowCard> : null}
 
+        {/* CANDIDATE_FOR_REMOVAL: this immediate-shipment form is retained for source compatibility only. New transfer creation is routed through the approval-aware Replenishment workflow. */}
         {showTransfers ? <WorkflowCard
           title="Transfer stock"
           description="TINDIO records an equal transfer-out and transfer-in, preserving stock accountability."
@@ -712,6 +819,170 @@ function DraftPurchaseLines({
         </div>
       ))}
     </DraftList>
+  );
+}
+
+function CountReviewCard({
+  onBack,
+  onPost,
+  pending,
+  review,
+}: {
+  onBack: () => void;
+  onPost: () => void;
+  pending: boolean;
+  review: CountReview;
+}) {
+  const varianceCount = review.lines.filter((line) => line.difference !== 0).length;
+
+  return (
+    <section aria-labelledby="count-review-title" className="rounded-xl border bg-muted/20 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-medium" id="count-review-title">Review count</h3><p className="mt-1 text-sm text-muted-foreground">{review.storeName} · {review.lines.length} item{review.lines.length === 1 ? "" : "s"}</p></div><span className="text-sm text-muted-foreground">{varianceCount} variance{varianceCount === 1 ? "" : "s"}</span></div>
+      <div className="mt-4 overflow-x-auto rounded-lg border"><table className="w-full min-w-[34rem] text-left text-sm"><thead className="border-b bg-muted/30 text-xs text-muted-foreground"><tr><th className="px-3 py-2 font-medium">Product</th><th className="px-3 py-2 text-right font-medium">Expected</th><th className="px-3 py-2 text-right font-medium">Counted</th><th className="px-3 py-2 text-right font-medium">Difference</th></tr></thead><tbody className="divide-y">{review.lines.map((line) => <tr key={`${line.productId}|${line.variantId}`}><td className="px-3 py-2 font-medium">{line.label}</td><td className="px-3 py-2 text-right">{formatQuantity(line.expectedQuantity)} {line.unit}</td><td className="px-3 py-2 text-right">{formatQuantity(line.countedQuantity)} {line.unit}</td><td className={line.difference === 0 ? "px-3 py-2 text-right" : line.difference > 0 ? "px-3 py-2 text-right font-medium text-primary" : "px-3 py-2 text-right font-medium text-destructive"}>{line.difference > 0 ? "+" : ""}{formatQuantity(line.difference)} {line.unit}</td></tr>)}</tbody></table></div>
+      {review.note ? <p className="mt-3 text-sm text-muted-foreground">Notes: {review.note}</p> : null}
+      <p className="mt-3 text-xs text-muted-foreground">The expected quantity is a review preview. TINDIO locks and recalculates each authoritative stock level before posting count variances.</p>
+      <div className="mt-4 flex flex-wrap justify-end gap-2"><Button disabled={pending} onClick={onBack} type="button" variant="outline">Back</Button><Button disabled={pending} onClick={onPost} type="button">{pending ? <LoaderCircle className="animate-spin" /> : <ClipboardCheck />} Post count adjustments</Button></div>
+    </section>
+  );
+}
+
+function PurchasingSectionTabs({
+  activeSection,
+  onChange,
+}: {
+  activeSection: "orders" | "receiving" | "suppliers";
+  onChange: (section: "orders" | "receiving" | "suppliers") => void;
+}) {
+  const sections = [
+    { id: "orders" as const, label: "Purchase orders" },
+    { id: "receiving" as const, label: "Receiving" },
+    { id: "suppliers" as const, label: "Suppliers" },
+  ];
+
+  return (
+    <div aria-label="Purchasing sections" className="flex flex-wrap gap-2" role="tablist">
+      {sections.map((section) => (
+        <Button
+          aria-selected={activeSection === section.id}
+          key={section.id}
+          onClick={() => onChange(section.id)}
+          role="tab"
+          size="sm"
+          type="button"
+          variant={activeSection === section.id ? "secondary" : "outline"}
+        >
+          {section.label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+function PurchaseOrdersCard({
+  canViewCosts,
+  currencyCode,
+  onReceive,
+  orders,
+}: {
+  canViewCosts: boolean;
+  currencyCode: string;
+  onReceive: (order: AdvancedPurchaseOrder) => void;
+  orders: AdvancedPurchaseOrder[];
+}) {
+  return (
+    <WorkflowCard
+      description="Recent purchase orders stay separate from stock while keeping supplier, store, status, and receiving progress clear."
+      icon={<Truck aria-hidden="true" />}
+      title="Purchase orders"
+    >
+      {orders.length ? (
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full min-w-[44rem] text-left text-sm">
+            <thead className="border-b bg-muted/30 text-xs text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 font-medium">PO</th>
+                <th className="px-3 py-2 font-medium">Supplier</th>
+                <th className="px-3 py-2 font-medium">Store</th>
+                <th className="px-3 py-2 font-medium">Status</th>
+                <th className="px-3 py-2 font-medium">Expected</th>
+                <th className="px-3 py-2 text-right font-medium">Total</th>
+                <th className="px-3 py-2"><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {orders.map((order) => {
+                const receivable = order.status === "ordered" || order.status === "partially_received";
+                return (
+                  <tr key={order.id}>
+                    <td className="px-3 py-3 align-top font-medium">
+                      <p>PO #{order.orderNumber}</p>
+                      <details className="mt-1 text-xs font-normal text-muted-foreground">
+                        <summary className="cursor-pointer">{order.lines.length} item{order.lines.length === 1 ? "" : "s"}</summary>
+                        <ul className="mt-2 space-y-1">
+                          {order.lines.map((line) => <li key={line.id}>{line.label}: {formatQuantity(line.orderedQuantity)} {line.unit} ordered · {formatQuantity(line.receivedQuantity)} received{canViewCosts ? ` · ${formatMoney(line.unitCostMinor, currencyCode)} each` : ""}</li>)}
+                        </ul>
+                      </details>
+                    </td>
+                    <td className="px-3 py-3 align-top">{order.supplierName}</td>
+                    <td className="px-3 py-3 align-top">{order.storeName}</td>
+                    <td className="px-3 py-3 align-top"><PurchaseOrderStatus status={order.status} /></td>
+                    <td className="px-3 py-3 align-top text-muted-foreground">{order.expectedAt ? formatPurchaseDate(order.expectedAt) : "Not scheduled"}</td>
+                    <td className="px-3 py-3 text-right align-top">{canViewCosts ? formatMoney(order.totalCostMinor, currencyCode) : "Restricted"}</td>
+                    <td className="px-3 py-3 text-right align-top">{receivable ? <Button onClick={() => onReceive(order)} size="sm" type="button" variant="outline">Receive</Button> : null}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyWorkflow message="No purchase orders yet. Create an order when stock is expected from a supplier." />
+      )}
+    </WorkflowCard>
+  );
+}
+
+function PurchaseOrderStatus({ status }: { status: AdvancedPurchaseOrder["status"] }) {
+  const labels: Record<AdvancedPurchaseOrder["status"], string> = {
+    cancelled: "Cancelled",
+    draft: "Draft",
+    ordered: "Ordered",
+    partially_received: "Partially received",
+    received: "Received",
+  };
+  const className = status === "received"
+    ? "rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
+    : status === "partially_received"
+      ? "rounded-full bg-secondary px-2 py-1 text-xs font-medium"
+      : "rounded-full border px-2 py-1 text-xs font-medium";
+
+  return <span className={className}>{labels[status]}</span>;
+}
+
+function RecentReceiptsCard({ receipts }: { receipts: AdvancedGoodsReceipt[] }) {
+  return (
+    <WorkflowCard
+      description="Each receipt remains a historical record linked to its purchase order and stock movements."
+      icon={<PackageCheck aria-hidden="true" />}
+      title="Receiving history"
+    >
+      {receipts.length ? (
+        <div className="divide-y rounded-lg border">
+          {receipts.map((receipt) => (
+            <article className="flex flex-wrap items-start justify-between gap-3 px-3 py-3" key={receipt.id}>
+              <div>
+                <p className="font-medium">PO #{receipt.purchaseOrderNumber}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{receipt.storeName} · {formatPurchaseDate(receipt.receivedAt, true)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{receipt.lines.map((line) => `${formatQuantity(line.quantity)} ${line.unit} ${line.label}`).join(" · ")}</p>
+                {receipt.note ? <p className="mt-1 text-xs text-muted-foreground">{receipt.note}</p> : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <EmptyWorkflow message="No receiving records yet. Completed deliveries will remain visible here." />
+      )}
+    </WorkflowCard>
   );
 }
 
@@ -942,6 +1213,12 @@ function findItem(items: AdvancedInventoryItem[], line: { productId: string; var
 
 function formatQuantity(value: number) {
   return new Intl.NumberFormat("en-PH", { maximumFractionDigits: 3 }).format(value);
+}
+
+function formatPurchaseDate(value: string, includeTime = false) {
+  return new Intl.DateTimeFormat("en-PH", includeTime
+    ? { dateStyle: "medium", timeStyle: "short" }
+    : { dateStyle: "medium" }).format(new Date(value));
 }
 
 function formatMoney(valueMinor: number, currencyCode: string) {

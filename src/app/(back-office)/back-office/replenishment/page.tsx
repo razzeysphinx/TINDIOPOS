@@ -69,12 +69,13 @@ export default async function ReplenishmentPage({
   if (firstError) throw new Error(`Unable to load replenishment: ${firstError.message}`);
 
   const visibleStore = (storeId: string) => !storeScope.selectedStoreId || storeId === storeScope.selectedStoreId;
-  const stores = (storesResult.data ?? []).filter((store) => visibleStore(store.id));
+  // The filter narrows recommendations and history. Keep all RLS-authorized stock locations available so a selected destination store can still request from another authorized warehouse.
+  const stores = storesResult.data ?? [];
   const products = productsResult.data ?? [];
   const variants = variantsResult.data ?? [];
-  const settings = (settingsResult.data ?? []).filter((setting) => visibleStore(setting.store_id));
-  const levels = (levelsResult.data ?? []).filter((level) => visibleStore(level.store_id));
-  const warehouses = (warehousesResult.data ?? []).filter((warehouse) => visibleStore(warehouse.store_id));
+  const settings = settingsResult.data ?? [];
+  const levels = levelsResult.data ?? [];
+  const warehouses = warehousesResult.data ?? [];
   const rules = (rulesResult.data ?? []).filter((rule) => visibleStore(rule.store_id));
   const requests = (requestsResult.data ?? []).filter((request) => visibleStore(request.requesting_store_id));
   const suppliers = suppliersResult.data ?? [];
@@ -196,7 +197,7 @@ export default async function ReplenishmentPage({
     remainingQuantity: (purchaseLinesByOrder.get(order.id) ?? []).reduce((total, line) => total + Number(line.ordered_quantity) - Number(line.received_quantity), 0),
   }));
 
-  return <div className="space-y-8"><PageHeader eyebrow="Inventory flow" title="Replenishment" description="Coordinate warehouse stock requests, approval, picking, dispatch, receiving, and shortages without teleporting inventory." action={<Badge variant="secondary">Inventory management</Badge>} /><GlobalFilterBar action="/back-office/replenishment" namePrefix="replenishment-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={await loadAuthorizedBackOfficeStores(context)} /><SupplyChainWorkflows stores={stores} warehouses={warehouses.map((warehouse) => ({ id: warehouse.id, storeId: warehouse.store_id, code: warehouse.code, name: warehouse.name }))} suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, leadTimeDays: supplier.lead_time_days }))} items={saleableItems} rules={replenishmentRules} requests={supplyChainRequests} inboundPurchaseOrders={inboundPurchaseOrders} /></div>;
+  return <div className="space-y-8"><PageHeader eyebrow="Inventory flow" title="Replenishment" description="Coordinate warehouse stock requests, approval, picking, dispatch, receiving, and shortages without teleporting inventory." action={<Badge variant="secondary">Inventory management</Badge>} /><GlobalFilterBar action="/back-office/replenishment" namePrefix="replenishment-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={await loadAuthorizedBackOfficeStores(context)} /><SupplyChainWorkflows defaultStoreId={storeScope.selectedStoreId} stores={stores} warehouses={warehouses.map((warehouse) => ({ id: warehouse.id, storeId: warehouse.store_id, code: warehouse.code, name: warehouse.name }))} suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, leadTimeDays: supplier.lead_time_days }))} items={saleableItems} rules={replenishmentRules} requests={supplyChainRequests} inboundPurchaseOrders={inboundPurchaseOrders} /></div>;
 }
 
 function FeatureState({ title, description }: { title: string; description: string }) {

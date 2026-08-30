@@ -34,8 +34,9 @@ const [
 
 test("Back Office retains the responsive, permission-aware navigation boundary", () => {
   assert.match(backOfficeLayout, /requireBackOfficeContext\(\)/);
-  assert.match(backOfficeLayout, /lg:sticky lg:top-0/);
-  assert.match(backOfficeLayout, /const canUsePos = context\.permissions\.includes\("sales\.create"\)/);
+  assert.match(backOfficeLayout, /BackOfficeWorkspaceShell/);
+  assert.match(backOfficeLayout, /fixed inset-x-0 top-0/);
+  assert.match(backOfficeLayout, /const canUsePos = context\.permissions\.includes\("pos\.access"\)/);
   assert.match(backOfficeNavigation, /isVisible: \(access: BackOfficeNavigationAccess\) => boolean/);
   assert.match(backOfficeNavigation, /<details/);
   assert.match(backOfficeNavigation, /group\.items\.filter\(\(item\) => !item\.isVisible \|\| item\.isVisible\(access\)\)/);

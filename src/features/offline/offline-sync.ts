@@ -30,6 +30,23 @@ export type OfflineSyncReport = OfflineQueueSummary & {
 
 const activeSyncs = new Map<string, Promise<OfflineSyncReport>>();
 
+/**
+ * A terminal can be open in more than one browser tab. The in-memory map
+ * below only coordinates one tab, so use the browser's shared lock when it
+ * is available to prevent concurrent delivery attempts for the same durable
+ * offline queue. The checkout RPC remains the authoritative exactly-once
+ * protection; this avoids needless duplicate requests and audit noise.
+ */
+function withOfflineSyncLock<T>(scope: string, work: () => Promise<T>): Promise<T> {
+  if (typeof navigator === "undefined" || !navigator.locks) {
+    return work();
+  }
+
+  return navigator.locks
+    .request<Promise<T>>(`tindio-offline-sync:${scope}`, { mode: "exclusive" }, () => work())
+    .then(async (result) => result);
+}
+
 function isOnline() {
   return typeof navigator !== "undefined" && navigator.onLine;
 }
@@ -175,7 +192,7 @@ export function syncOfflineCheckouts(scope: string): Promise<OfflineSyncReport> 
   const active = activeSyncs.get(scope);
   if (active) return active;
 
-  const sync = (async () => {
+  const sync = withOfflineSyncLock(scope, async () => {
     const entries = scope ? await listOfflineCheckouts(scope) : [];
     if (!scope || !isOnline()) {
       return { completed: 0, ...syncSummary(entries) };
@@ -194,7 +211,7 @@ export function syncOfflineCheckouts(scope: string): Promise<OfflineSyncReport> 
     await pruneSyncedOfflineCheckouts(scope);
     const remaining = await listOfflineCheckouts(scope);
     return { completed, ...syncSummary(remaining) };
-  })();
+  });
 
   activeSyncs.set(scope, sync);
   void sync.then(

@@ -6248,6 +6248,17 @@ export type Database = {
           variant_id: string
         }[]
       }
+      get_inventory_movement_costs: {
+        Args: {
+          requested_movement_ids: string[]
+          target_organization_id: string
+        }
+        Returns: {
+          id: string
+          unit_cost_minor: number
+          value_delta_minor: number
+        }[]
+      }
       get_kitchen_orders: {
         Args: { target_organization_id: string; target_store_id?: string }
         Returns: {
@@ -6294,6 +6305,16 @@ export type Database = {
       get_organization_usage_snapshot: {
         Args: { target_organization_id: string }
         Returns: Json
+      }
+      get_purchase_order_line_costs: {
+        Args: {
+          requested_purchase_order_line_ids: string[]
+          target_organization_id: string
+        }
+        Returns: {
+          id: string
+          unit_cost_minor: number
+        }[]
       }
       get_pos_customer_display_sessions: {
         Args: { target_organization_id: string }

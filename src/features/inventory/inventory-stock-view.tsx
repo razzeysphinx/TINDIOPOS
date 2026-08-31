@@ -435,7 +435,7 @@ function StockRows({ canViewCosts, currencyCode, layout, rows }: Pick<InventoryS
     <>
       <div className="space-y-3 lg:hidden">{rows.map((row) => <StockCard canViewCosts={canViewCosts} currencyCode={currencyCode} key={row.id} row={row} />)}</div>
       <Card className="hidden lg:block">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overscroll-x-contain">
           <table className="w-full min-w-[48rem] text-left text-sm">
             <thead className="border-b bg-muted/30 text-xs text-muted-foreground">
               <tr>

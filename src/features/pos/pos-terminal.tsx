@@ -1013,7 +1013,7 @@ export function PosTerminal({
                   </div>
                 </form>
 
-                <div className="mt-3 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="POS workspace views">
+                <div className="mt-3 flex gap-2 overflow-x-auto overscroll-x-contain pb-1" role="tablist" aria-label="POS workspace views">
                   <CategoryButton
                     active={catalogView === "all"}
                     label="Catalogue"
@@ -1040,7 +1040,7 @@ export function PosTerminal({
                 </div>
 
                 {categories.length > 0 ? (
-                  <div className="mt-3 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Categories">
+                  <div className="mt-3 flex gap-2 overflow-x-auto overscroll-x-contain pb-1" role="tablist" aria-label="Categories">
                     <CategoryButton
                       active={catalogView === "all" && selectedCategoryId === null}
                       label="All items"
@@ -1391,7 +1391,7 @@ function PosCloseShiftDialog({
       <section
         aria-labelledby="close-pos-shift-title"
         aria-modal="true"
-        className="w-full max-w-lg rounded-xl border bg-background p-5 shadow-xl"
+        className="max-h-[calc(100svh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-xl border bg-background p-4 shadow-xl sm:p-5"
         role="dialog"
       >
         <div className="flex items-start gap-3">
@@ -1435,7 +1435,7 @@ function PosCloseShiftDialog({
         </div>
 
         {message ? <p aria-live="polite" className="mt-3 text-sm text-muted-foreground">{message}</p> : null}
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
           <Button disabled={isPending} onClick={onCancel} type="button" variant="outline">Cancel</Button>
           <Button disabled={isPending || !countedCash} onClick={submit} type="button">
             {isPending ? <LoaderCircle className="animate-spin" /> : <LockKeyhole />}
@@ -1511,7 +1511,7 @@ function PosShiftGate({
   return (
     <main className="min-h-svh bg-background">
       <section className="grid min-h-svh grid-rows-[auto_1fr] overflow-hidden bg-background">
-        <header className="flex items-center justify-between gap-3 border-b bg-card px-5 py-4">
+        <header className="flex items-center justify-between gap-3 border-b bg-card px-3 py-4 sm:px-5">
           <PosOperationalDrawer
             canCreateSales
             canUseShiftControls={canUseShiftControls}
@@ -1564,7 +1564,7 @@ function PosShiftGate({
 
       {isDialogOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/35 p-4" role="presentation">
-          <div aria-labelledby="open-shift-title" aria-modal="true" className="w-full max-w-lg rounded-xl border bg-background p-5 shadow-xl" role="dialog">
+          <div aria-labelledby="open-shift-title" aria-modal="true" className="max-h-[calc(100svh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-xl border bg-background p-4 shadow-xl sm:p-5" role="dialog">
             <div className="flex items-start gap-3">
               <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-secondary text-primary"><LogIn className="size-5" /></span>
               <div>
@@ -1602,7 +1602,7 @@ function PosShiftGate({
               <Input disabled={isPending} maxLength={500} onChange={(event) => setOpeningNote(event.target.value)} placeholder="e.g. Opening float counted" value={openingNote} />
             </label>
             {message ? <p aria-live="polite" className="mt-3 text-sm text-destructive">{message}</p> : null}
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
               <Button disabled={isPending} onClick={() => setIsDialogOpen(false)} type="button" variant="outline">Cancel</Button>
               <Button disabled={isPending || !storeId || !registerId} onClick={submit} type="button">
                 {isPending ? <LoaderCircle className="animate-spin" /> : <LogIn />}
@@ -1848,7 +1848,7 @@ function ManualPriceDialog({
   };
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4">
-      <section aria-modal="true" className="w-full max-w-md rounded-2xl border bg-background p-5 shadow-xl" role="dialog">
+      <section aria-modal="true" className="max-h-[calc(100svh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl border bg-background p-4 shadow-xl sm:p-5" role="dialog">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Variable price</p>
         <h2 className="mt-1 text-lg font-semibold">Set price for {item.productName}</h2>
         <p className="mt-2 text-sm text-muted-foreground">This price is validated and captured on the receipt when the sale is completed.</p>
@@ -1857,7 +1857,7 @@ function ManualPriceDialog({
           <Input autoFocus inputMode="decimal" onChange={(event) => setValue(event.target.value)} placeholder="0.00" value={value} />
         </label>
         {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
           <Button onClick={onCancel} type="button" variant="outline">Cancel</Button>
           <Button onClick={confirm} type="button">Continue</Button>
         </div>
@@ -1876,7 +1876,7 @@ function ModifierPicker({ currencyCode, groups, item, onCancel, onConfirm }: { c
     if (groupSelected.length >= group.maxSelections) return [...current.filter((id) => !group.options.some((option) => option.id === id)), optionId];
     return [...current, optionId];
   });
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4"><section aria-modal="true" className="max-h-[85svh] w-full max-w-lg overflow-y-auto rounded-2xl border bg-background p-5 shadow-xl" role="dialog"><h2 className="text-lg font-semibold">Customize {item.productName}</h2><p className="mt-1 text-sm text-muted-foreground">Choose options before adding this item.</p><div className="mt-5 grid gap-5">{groups.map((group) => <fieldset key={group.id}><legend className="font-medium">{group.name} <span className="text-xs font-normal text-muted-foreground">({group.minSelections === group.maxSelections ? `choose ${group.minSelections}` : `${group.minSelections}–${group.maxSelections}`})</span></legend><div className="mt-2 grid gap-2">{group.options.map((option) => <label className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm" key={option.id}><span><input checked={selected.includes(option.id)} className="mr-2 accent-primary" onChange={() => toggle(group, option.id)} type="checkbox"/>{option.name}</span><span>{option.priceMinor ? `+${formatMinorMoney(option.priceMinor, currencyCode)}` : "Included"}</span></label>)}</div></fieldset>)}</div><div className="mt-6 flex justify-end gap-2"><Button onClick={onCancel} type="button" variant="outline">Cancel</Button><Button disabled={!valid} onClick={() => onConfirm(selectedOptions)} type="button">Add to cart</Button></div></section></div>;
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4"><section aria-modal="true" className="max-h-[calc(100svh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border bg-background p-4 shadow-xl sm:p-5" role="dialog"><h2 className="break-words text-lg font-semibold">Customize {item.productName}</h2><p className="mt-1 text-sm text-muted-foreground">Choose options before adding this item.</p><div className="mt-5 grid gap-5">{groups.map((group) => <fieldset key={group.id}><legend className="break-words font-medium">{group.name} <span className="text-xs font-normal text-muted-foreground">({group.minSelections === group.maxSelections ? `choose ${group.minSelections}` : `${group.minSelections}–${group.maxSelections}`})</span></legend><div className="mt-2 grid gap-2">{group.options.map((option) => <label className="flex min-w-0 items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm" key={option.id}><span className="min-w-0 break-words"><input checked={selected.includes(option.id)} className="mr-2 accent-primary" onChange={() => toggle(group, option.id)} type="checkbox"/>{option.name}</span><span className="shrink-0">{option.priceMinor ? `+${formatMinorMoney(option.priceMinor, currencyCode)}` : "Included"}</span></label>)}</div></fieldset>)}</div><div className="mt-6 flex flex-wrap justify-end gap-2"><Button onClick={onCancel} type="button" variant="outline">Cancel</Button><Button disabled={!valid} onClick={() => onConfirm(selectedOptions)} type="button">Add to cart</Button></div></section></div>;
 }
 
 function CartLine({

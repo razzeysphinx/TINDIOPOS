@@ -42,7 +42,7 @@ export function PosItemsWorkspace({
 
   return (
     <div className="space-y-5">
-      <div className="flex gap-2 overflow-x-auto border-b pb-2" role="tablist">
+      <div className="flex gap-2 overflow-x-auto overscroll-x-contain border-b pb-2" role="tablist">
         {tabs.filter(({ id }) => id !== "discounts" || canApplyDiscounts).map(({ id, icon: Icon, label }) => (
           <button aria-selected={tab === id} className={cn("inline-flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-medium", tab === id ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-muted")} key={id} onClick={() => setTab(id)} role="tab" type="button"><Icon className="size-4" />{label}</button>
         ))}

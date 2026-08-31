@@ -126,7 +126,7 @@ function InventoryTabs({
     : INVENTORY_TABS.filter((tab) => tab.id === "stock" || tab.id === "activity");
 
   return (
-    <nav aria-label="Inventory sections" className="overflow-x-auto border-b">
+    <nav aria-label="Inventory sections" className="overflow-x-auto overscroll-x-contain border-b">
       <div className="flex min-w-max gap-1">
         {tabs.map((tab) => {
           const active = tab.id === activeTab;

@@ -190,7 +190,10 @@ export async function setProductStoreAvailabilityAction(
 
 export async function setProductStoreConfigurationAction(input: unknown): Promise<CatalogActionResult> {
   const context = await requireBusinessContext();
-  if (!hasPermission(context, "products.manage")) return { ok: false, message: "You do not have permission to configure store products." };
+  if (!hasPermission(context, "products.manage")) {
+    return { ok: false, message: "You do not have permission to configure store products." };
+  }
+
   const result = await setProductStoreConfiguration(context, input);
   if (result.ok) {
     revalidatePath("/back-office/catalog");

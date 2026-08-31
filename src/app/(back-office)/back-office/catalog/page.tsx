@@ -27,6 +27,7 @@ import {
 import { ProductLabelPrintButton } from "@/features/catalog/catalog-label-print";
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
 import { loadCatalogWorkspace } from "@/features/catalog/data";
+import { buildProductUnitOptions } from "@/features/catalog/product-unit-options";
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Catalog" };
@@ -45,6 +46,7 @@ export default async function CatalogPage() {
     costs.map((cost) => [`${cost.product_id}|${cost.variant_id ?? ""}`, cost.cost_minor]),
   );
   const currency = context.organization.currency_code;
+  const unitOptions = buildProductUnitOptions(products.map((product) => product.unit));
 
   return (
     <div className="space-y-8">
@@ -67,6 +69,7 @@ export default async function CatalogPage() {
                   .filter((category) => !category.is_archived)
                   .map(({ id, name }) => ({ id, name }))}
                 stores={activeStores.map(({ id, name }) => ({ id, name }))}
+                unitOptions={unitOptions}
               />
             ) : null}
           </div>
@@ -255,6 +258,7 @@ export default async function CatalogPage() {
                           .filter((category) => !category.is_archived)
                           .map(({ id, name }) => ({ id, name }))}
                         stores={activeStores.map(({ id, name }) => ({ id, name }))}
+                        unitOptions={unitOptions}
                         product={{
                           id: product.id,
                           name: product.name,
@@ -309,10 +313,10 @@ function Identifier({
   const Icon = barcode ? Barcode : Tag;
 
   return (
-    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+    <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
       <Icon className="size-4 shrink-0" aria-hidden="true" />
-      <span>{label}:</span>
-      <span className="truncate font-mono text-xs">{value || "Not set"}</span>
+      <span className="shrink-0">{label}:</span>
+      <span className="min-w-0 truncate font-mono text-xs">{value || "Not set"}</span>
     </div>
   );
 }

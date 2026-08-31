@@ -43,11 +43,12 @@ export function BackOfficeHeaderControls() {
   const toggleLabel = isCollapsed ? "Expand Back Office sidebar" : "Collapse Back Office sidebar";
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2">
+    <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
       <Button
         aria-expanded={!isCollapsed}
         aria-label={toggleLabel}
         onClick={() => setIsCollapsed((current) => !current)}
+        className="shrink-0"
         size="icon-sm"
         title={toggleLabel}
         type="button"
@@ -55,7 +56,7 @@ export function BackOfficeHeaderControls() {
       >
         <Menu aria-hidden="true" />
       </Button>
-      <p className="truncate text-base font-semibold tracking-[-0.02em]">
+      <p className="truncate text-sm font-semibold tracking-[-0.02em] sm:text-base">
         {getBackOfficePageTitle(pathname)}
       </p>
     </div>
@@ -74,11 +75,13 @@ export function BackOfficeMobileNavigation({
   }
 
   return (
-    <BackOfficeNavigation
-      {...navigationAccess}
-      mobile
-      onNavigate={() => setIsCollapsed(true)}
-    />
+    <div className="absolute inset-x-0 top-full border-b border-border bg-background shadow-lg lg:hidden">
+      <BackOfficeNavigation
+        {...navigationAccess}
+        mobile
+        onNavigate={() => setIsCollapsed(true)}
+      />
+    </div>
   );
 }
 

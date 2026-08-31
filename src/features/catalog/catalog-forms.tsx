@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type FormEvent, type ReactNode } from "react";
+import { useId, useState, useTransition, type ComponentProps, type FormEvent, type ReactNode } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Archive,
@@ -63,6 +63,7 @@ import {
   adjustInventorySchema,
   createCategorySchema,
   createProductSchema,
+  createProductUnitSchema,
   updateCategorySchema,
   updateProductSchema,
   type AdjustInventoryValues,
@@ -79,6 +80,16 @@ import {
 
 const selectClassName =
   "h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+
+type ProductUnitField = "unitCode" | "unitName" | "factorToBase";
+
+function productUnitFieldErrors(fieldErrors?: Record<string, string[]>) {
+  return {
+    unitCode: fieldErrors?.unitCode?.[0],
+    unitName: fieldErrors?.unitName?.[0],
+    factorToBase: fieldErrors?.factorToBase?.[0],
+  } satisfies Partial<Record<ProductUnitField, string>>;
+}
 
 export function CreateCategoryForm() {
   const router = useRouter();
@@ -268,6 +279,7 @@ export function EditProductButton({
   canUseWeightedProducts,
   canViewCost,
   stores,
+  unitOptions,
   product,
 }: {
   categories: Array<{ id: string; name: string }>;
@@ -275,6 +287,7 @@ export function EditProductButton({
   canUseWeightedProducts: boolean;
   canViewCost: boolean;
   stores: Array<{ id: string; name: string }>;
+  unitOptions: string[];
   product: {
     id: string;
     name: string;
@@ -406,7 +419,7 @@ export function EditProductButton({
                 </select>
               </FormField>
               <FormField label="Unit" error={form.formState.errors.unit?.message}>
-                <Input {...form.register("unit")} />
+                <ProductUnitSelector allowCustom={false} disabled options={unitOptions} {...form.register("unit")} />
               </FormField>
             </div>
             <FormField label="Description" error={form.formState.errors.description?.message}>
@@ -546,12 +559,14 @@ export function CreateProductForm({
   canViewCost,
   canTrackInventory,
   canUseWeightedProducts,
+  unitOptions,
 }: {
   categories: Array<{ id: string; name: string }>;
   stores: Array<{ id: string; name: string }>;
   canViewCost: boolean;
   canTrackInventory: boolean;
   canUseWeightedProducts: boolean;
+  unitOptions: string[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -654,7 +669,7 @@ export function CreateProductForm({
             </select>
           </FormField>
           <FormField label="Unit" error={form.formState.errors.unit?.message}>
-            <Input placeholder="each" {...form.register("unit")} />
+            <ProductUnitSelector options={unitOptions} {...form.register("unit")} />
           </FormField>
         </div>
 
@@ -883,8 +898,13 @@ export function CatalogExtensionForms({
   stores: Array<{ id: string; name: string }>;
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [result, setResult] = useState<CatalogActionResult<unknown> | null>(null);
+  const [isStoreConfigurationPending, startStoreConfigurationTransition] = useTransition();
+  const [isUnitPending, startUnitTransition] = useTransition();
+  const [isComponentPending, startComponentTransition] = useTransition();
+  const [storeConfigurationResult, setStoreConfigurationResult] = useState<CatalogActionResult<unknown> | null>(null);
+  const [unitResult, setUnitResult] = useState<CatalogActionResult<unknown> | null>(null);
+  const [unitFieldErrors, setUnitFieldErrors] = useState<Partial<Record<ProductUnitField, string>>>({});
+  const [componentResult, setComponentResult] = useState<CatalogActionResult<unknown> | null>(null);
   const defaultProductId = products[0]?.id ?? "";
   const [unitProductId, setUnitProductId] = useState(defaultProductId);
   const [storeProductId, setStoreProductId] = useState(defaultProductId);
@@ -893,12 +913,72 @@ export function CatalogExtensionForms({
   const [compositeId, setCompositeId] = useState(compositeProducts[0]?.id ?? "");
   const [componentId, setComponentId] = useState(products.find((product) => product.id !== compositeProducts[0]?.id)?.id ?? "");
 
-  const submit = (action: () => Promise<CatalogActionResult>) => (event: FormEvent<HTMLFormElement>) => {
+  const submitStoreConfiguration = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setResult(null);
-    startTransition(async () => {
-      const next = await action();
-      setResult(next);
+    const form = new FormData(event.currentTarget);
+    setStoreConfigurationResult(null);
+    startStoreConfigurationTransition(async () => {
+      const next = await setProductStoreConfigurationAction({
+        productId: storeProductId,
+        storeId,
+        priceOverride: form.get("priceOverride"),
+        lowStockLevel: form.get("lowStockLevel"),
+      });
+      setStoreConfigurationResult(next);
+      if (next.ok) router.refresh();
+    });
+  };
+
+  const submitUnit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const values = {
+      productId: unitProductId,
+      unitCode: String(form.get("unitCode") ?? ""),
+      unitName: String(form.get("unitName") ?? ""),
+      factorToBase: String(form.get("factorToBase") ?? ""),
+      isSaleUnit: form.get("isSaleUnit") === "on",
+      isPurchaseUnit: form.get("isPurchaseUnit") === "on",
+    };
+    const parsed = createProductUnitSchema.safeParse(values);
+    setUnitResult(null);
+
+    if (!parsed.success) {
+      setUnitFieldErrors(productUnitFieldErrors(parsed.error.flatten().fieldErrors));
+      return;
+    }
+
+    setUnitFieldErrors({});
+    startUnitTransition(async () => {
+      const next = await createProductUnitAction(parsed.data);
+      setUnitResult(next);
+      if (!next.ok && next.fieldErrors) {
+        setUnitFieldErrors(productUnitFieldErrors(next.fieldErrors));
+      }
+      if (next.ok) router.refresh();
+    });
+  };
+
+  const validateUnitField = (field: ProductUnitField, value: string) => {
+    const result = createProductUnitSchema.shape[field].safeParse(value);
+    setUnitFieldErrors((current) => ({
+      ...current,
+      [field]: result.success ? undefined : result.error.issues[0]?.message,
+    }));
+  };
+
+  const submitComponent = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setComponentResult(null);
+    startComponentTransition(async () => {
+      const next = await createProductComponentAction({
+        productId: compositeId,
+        componentProductId: componentId,
+        componentVariantId: "",
+        quantityPerComposite: form.get("quantityPerComposite"),
+      });
+      setComponentResult(next);
       if (next.ok) router.refresh();
     });
   };
@@ -908,45 +988,56 @@ export function CatalogExtensionForms({
   return (
     <section className="grid gap-5 xl:grid-cols-3">
       <ManagementCard title="Store pricing & stock" description="Override a simple/composite price and set a per-store low-stock threshold." icon={<Warehouse aria-hidden="true" />}>
-        <form className="grid gap-3" onSubmit={submit(async () => {
-          const form = new FormData(document.getElementById("store-product-settings") as HTMLFormElement);
-          return setProductStoreConfigurationAction({ productId: storeProductId, storeId, priceOverride: form.get("priceOverride"), lowStockLevel: form.get("lowStockLevel") });
-        })} id="store-product-settings">
+        <form className="grid gap-3" onSubmit={submitStoreConfiguration}>
           <select className={selectClassName} onChange={(event) => setStoreProductId(event.target.value)} value={storeProductId}>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>
           <select className={selectClassName} onChange={(event) => setStoreId(event.target.value)} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select>
           <Input inputMode="decimal" name="priceOverride" placeholder="Store price override (optional)" />
           <Input inputMode="decimal" name="lowStockLevel" placeholder="Low-stock level (optional)" />
-          <Button disabled={isPending} type="submit">{isPending ? <LoaderCircle className="animate-spin" /> : <Warehouse />} Save settings</Button>
+          <Button disabled={isStoreConfigurationPending} type="submit">{isStoreConfigurationPending ? <LoaderCircle className="animate-spin" /> : <Warehouse />} Save settings</Button>
         </form>
+        <ResultMessage result={storeConfigurationResult} />
       </ManagementCard>
 
       <ManagementCard title="Units & conversions" description="Add exact sale or purchase units against the product’s deterministic base unit." icon={<Boxes aria-hidden="true" />}>
-        <form className="grid gap-3" onSubmit={submit(async () => {
-          const form = new FormData(document.getElementById("product-unit") as HTMLFormElement);
-          return createProductUnitAction({ productId: unitProductId, unitCode: form.get("unitCode"), unitName: form.get("unitName"), factorToBase: form.get("factorToBase"), isSaleUnit: form.get("isSaleUnit") === "on", isPurchaseUnit: form.get("isPurchaseUnit") === "on" });
-        })} id="product-unit">
-          <select className={selectClassName} onChange={(event) => setUnitProductId(event.target.value)} value={unitProductId}>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>
-          <Input name="unitCode" placeholder="case" required />
-          <Input name="unitName" placeholder="Case of 24" required />
-          <Input inputMode="decimal" name="factorToBase" placeholder="Factor to base (e.g. 24)" required />
+        <form className="grid gap-3" noValidate onSubmit={submitUnit}>
+          <div className="grid gap-1.5">
+            <Label htmlFor="unit-product">Product</Label>
+            <select className={selectClassName} id="unit-product" onChange={(event) => setUnitProductId(event.target.value)} value={unitProductId}>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="unit-code">Unit Code</Label>
+            <Input aria-describedby="unit-code-help unit-code-error" aria-invalid={Boolean(unitFieldErrors.unitCode)} id="unit-code" name="unitCode" onBlur={(event) => validateUnitField("unitCode", event.currentTarget.value)} onInput={(event) => { if (unitFieldErrors.unitCode) validateUnitField("unitCode", event.currentTarget.value); }} placeholder="e.g. case or 12" />
+            <p className="text-xs text-muted-foreground" id="unit-code-help">Letters or numbers are allowed; spaces, _ and - are also supported.</p>
+            {unitFieldErrors.unitCode ? <p aria-live="polite" className="text-xs text-destructive" id="unit-code-error">{unitFieldErrors.unitCode}</p> : null}
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="unit-name">Unit Name</Label>
+            <Input aria-describedby="unit-name-help unit-name-error" aria-invalid={Boolean(unitFieldErrors.unitName)} id="unit-name" name="unitName" onBlur={(event) => validateUnitField("unitName", event.currentTarget.value)} onInput={(event) => { if (unitFieldErrors.unitName) validateUnitField("unitName", event.currentTarget.value); }} placeholder="e.g. Case of 24" />
+            <p className="text-xs text-muted-foreground" id="unit-name-help">A clear name shown to staff.</p>
+            {unitFieldErrors.unitName ? <p aria-live="polite" className="text-xs text-destructive" id="unit-name-error">{unitFieldErrors.unitName}</p> : null}
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="unit-factor">Conversion Factor</Label>
+            <Input aria-describedby="unit-factor-help unit-factor-error" aria-invalid={Boolean(unitFieldErrors.factorToBase)} id="unit-factor" inputMode="decimal" name="factorToBase" onBlur={(event) => validateUnitField("factorToBase", event.currentTarget.value)} onInput={(event) => { if (unitFieldErrors.factorToBase) validateUnitField("factorToBase", event.currentTarget.value); }} placeholder="e.g. 24" />
+            <p className="text-xs text-muted-foreground" id="unit-factor-help">How many base units this unit represents.</p>
+            {unitFieldErrors.factorToBase ? <p aria-live="polite" className="text-xs text-destructive" id="unit-factor-error">{unitFieldErrors.factorToBase}</p> : null}
+          </div>
           <Label className="flex items-center gap-2 text-sm"><input defaultChecked name="isSaleUnit" type="checkbox" /> Sale unit</Label>
           <Label className="flex items-center gap-2 text-sm"><input name="isPurchaseUnit" type="checkbox" /> Purchase unit</Label>
-          <Button disabled={isPending} type="submit">{isPending ? <LoaderCircle className="animate-spin" /> : <Plus />} Add unit</Button>
+          <Button disabled={isUnitPending} type="submit">{isUnitPending ? <LoaderCircle className="animate-spin" /> : <Plus />} Add unit</Button>
         </form>
+        <ResultMessage result={unitResult} />
       </ManagementCard>
 
       <ManagementCard title="Composite recipe" description="Every component is ledgered when the composite product is sold." icon={<PackagePlus aria-hidden="true" />}>
-        {compositeProducts.length ? <form className="grid gap-3" onSubmit={submit(async () => {
-          const form = new FormData(document.getElementById("composite-component") as HTMLFormElement);
-          return createProductComponentAction({ productId: compositeId, componentProductId: componentId, componentVariantId: "", quantityPerComposite: form.get("quantityPerComposite") });
-        })} id="composite-component">
+        {compositeProducts.length ? <form className="grid gap-3" onSubmit={submitComponent}>
           <select className={selectClassName} onChange={(event) => { setCompositeId(event.target.value); if (componentId === event.target.value) setComponentId(products.find((product) => product.id !== event.target.value)?.id ?? ""); }} value={compositeId}>{compositeProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>
           <select className={selectClassName} onChange={(event) => setComponentId(event.target.value)} value={componentId}>{products.filter((product) => product.id !== compositeId && product.productType !== "variable").map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>
           <Input inputMode="decimal" name="quantityPerComposite" placeholder="Component quantity (e.g. 0.025)" required />
-          <Button disabled={isPending || !componentId} type="submit">{isPending ? <LoaderCircle className="animate-spin" /> : <Plus />} Add component</Button>
+          <Button disabled={isComponentPending || !componentId} type="submit">{isComponentPending ? <LoaderCircle className="animate-spin" /> : <Plus />} Add component</Button>
         </form> : <p className="text-sm text-muted-foreground">Create a composite product first, then add its recipe here.</p>}
+        <ResultMessage result={componentResult} />
       </ManagementCard>
-      <div className="xl:col-span-3"><ResultMessage result={result} /></div>
     </section>
   );
 }
@@ -1429,6 +1520,32 @@ function FormField({
       {children}
       <FieldError message={error} />
     </div>
+  );
+}
+
+function ProductUnitSelector({
+  allowCustom = true,
+  options,
+  ...inputProps
+}: ComponentProps<typeof Input> & { allowCustom?: boolean; options: string[] }) {
+  const optionListId = useId();
+
+  return (
+    <>
+      <Input
+        {...inputProps}
+        list={optionListId}
+        placeholder="Search or select a unit"
+      />
+      <datalist id={optionListId}>
+        {options.map((unit) => <option key={unit} value={unit} />)}
+      </datalist>
+      <p className="text-xs text-muted-foreground">
+        {allowCustom
+          ? "Select a standard unit or type a custom unit. Custom units are saved with this product and become available here after saving."
+          : "The base unit is fixed after product creation to protect inventory and conversion history."}
+      </p>
+    </>
   );
 }
 

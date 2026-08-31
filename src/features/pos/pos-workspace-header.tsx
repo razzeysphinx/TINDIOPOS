@@ -48,8 +48,8 @@ export function PosWorkspaceHeader({
     : title;
 
   return (
-    <header className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b bg-card px-4 py-2.5 sm:px-5">
-      <div className="flex min-w-0 items-center gap-3">
+    <header className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b bg-card px-3 py-2.5 sm:gap-3 sm:px-5">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         <PosOperationalDrawer
           employeeName={employeeName}
           organizationName={organizationName}
@@ -61,7 +61,7 @@ export function PosWorkspaceHeader({
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
         {onSelectCustomer ? (
           <Button className="hidden sm:inline-flex" onClick={onSelectCustomer} size="sm" type="button" variant="outline">
             <UserRound aria-hidden="true" />

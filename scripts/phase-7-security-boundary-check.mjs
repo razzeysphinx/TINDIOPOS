@@ -19,6 +19,8 @@ const [
   checkoutAction,
   checkoutService,
   checkoutRoute,
+  authDal,
+  backOfficeStoreScope,
   receiptActions,
   shiftActions,
   inventoryActions,
@@ -39,6 +41,12 @@ const [
   posModifiersRoute,
   posCustomersRoute,
   posCustomerDisplayRoute,
+  offlineCheckoutRoute,
+  reportsExportRoute,
+  catalogExportRoute,
+  customersExportRoute,
+  suppliersExportRoute,
+  organizationExportRoute,
   taxBoundaryTest,
   checkoutTest,
   refundTest,
@@ -52,6 +60,8 @@ const [
   source("../src/features/checkout/actions.ts"),
   source("../src/features/checkout/checkout-service.ts"),
   source("../src/app/api/pos/checkout/route.ts"),
+  source("../src/lib/auth/dal.ts"),
+  source("../src/lib/server/back-office-store-scope.ts"),
   source("../src/features/receipts/actions.ts"),
   source("../src/features/shifts/actions.ts"),
   source("../src/features/inventory/advanced-inventory-actions.ts"),
@@ -72,6 +82,12 @@ const [
   source("../src/app/api/pos/modifiers/route.ts"),
   source("../src/app/api/pos/customers/route.ts"),
   source("../src/app/api/pos/customer-display/route.ts"),
+  source("../src/app/api/pos/offline-checkout/route.ts"),
+  source("../src/app/api/reports/export/route.ts"),
+  source("../src/app/api/catalog/export/route.ts"),
+  source("../src/app/api/customers/export/route.ts"),
+  source("../src/app/api/inventory/suppliers/export/route.ts"),
+  source("../src/app/api/organization-export/route.ts"),
   source("../supabase/tests/database/phase_7_security_boundary_hardening.test.sql"),
   source("../supabase/tests/database/phase_4_cash_checkout.test.sql"),
   source("../supabase/tests/database/phase_5_receipts_refunds.test.sql"),
@@ -83,7 +99,7 @@ const [
   source("../supabase/tests/database/phase_1_rls.test.sql"),
 ]);
 
-test("checkout keeps session-derived organization scope and assigned-store validation on every entry point", () => {
+test("checkout keeps session-derived organization scope and capability-derived store validation on every entry point", () => {
   assert.match(checkoutAction, /requireBusinessContext\(\)/);
   assert.match(checkoutRoute, /getBusinessContext\(\)/);
   assert.match(checkoutRoute, /completeCheckout\(context, input\)/);
@@ -94,6 +110,11 @@ test("checkout keeps session-derived organization scope and assigned-store valid
   assert.match(checkoutService, /hasPermission\(context, "payments\.accept"/);
   assert.match(checkoutService, /data\.discountId && !hasPermission\(context, "discounts\.apply"/);
   assert.match(checkoutService, /data\.openTicketId && !hasPermission\(context, "tickets\.manage"/);
+  assert.match(authDal, /export function hasOrganizationWideStoreScope/);
+  assert.match(authDal, /context\.permissions\.includes\("stores\.manage"\)/);
+  assert.match(authDal, /\.from\("stores"\)/);
+  assert.match(authDal, /storeIds = \[\.\.\.new Set\(\(organizationStores \?\? \[\]\)\.map/);
+  assert.match(backOfficeStoreScope, /hasOrganizationWideStoreScope\(context\)/);
 });
 
 test("POS capability gates are enforced consistently in the UI, server actions, and API routes", () => {
@@ -150,6 +171,25 @@ test("device validation rejects a caller-supplied organization that differs from
   assert.match(deviceRoute, /input\.data\.organizationId !== context\.organization\.id/);
   assert.match(deviceRoute, /target_organization_id: context\.organization\.id/);
   assert.match(deviceRoute, /\.rpc\("validate_pos_device"/);
+});
+
+test("every authenticated export and offline API has its capability or service authorization boundary", () => {
+  assert.match(offlineCheckoutRoute, /getBusinessContext\(\)/);
+  assert.match(offlineCheckoutRoute, /completeCheckout\(context, input, \{ guardOfflineTotal: true \}\)/);
+
+  for (const [name, content, capability] of [
+    ["report export", reportsExportRoute, "reports.view"],
+    ["catalog export", catalogExportRoute, "products.manage"],
+    ["customer export", customersExportRoute, "customers.manage"],
+    ["supplier export", suppliersExportRoute, "inventory.manage"],
+  ]) {
+    assert.match(content, /getBusinessContext\(\)/, `${name} resolves the active organization`);
+    assert.match(content, new RegExp(`hasPermission\\(context, "${capability.replace(".", "\\.")}"`), `${name} checks ${capability}`);
+  }
+
+  assert.match(organizationExportRoute, /getBusinessContext\(\)/);
+  assert.match(organizationExportRoute, /context\.tenantReadiness\.canExport/);
+  assert.match(organizationExportRoute, /\.rpc\("prepare_organization_export"/);
 });
 
 test("the database attack suite covers every Phase 7 negative path", () => {

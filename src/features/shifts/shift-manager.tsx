@@ -737,7 +737,7 @@ function ClosedShiftHistory({
       </CardHeader>
       <CardContent>
         {shifts.length > 0 ? (
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="overflow-x-auto overscroll-x-contain rounded-lg border">
             <table className="w-full min-w-220 text-left text-sm">
               <thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th className="px-3 py-2 font-medium">Store</th><th className="px-3 py-2 font-medium">Register</th><th className="px-3 py-2 font-medium">Employee</th><th className="px-3 py-2 font-medium">Closed</th><th className="px-3 py-2 text-right font-medium">Expected</th><th className="px-3 py-2 text-right font-medium">Counted</th><th className="px-3 py-2 text-right font-medium">Difference</th><th className="px-3 py-2 text-right font-medium">Print</th></tr></thead>
               <tbody className="divide-y">

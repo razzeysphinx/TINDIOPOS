@@ -11,7 +11,7 @@ export type FilterStoreOption = {
 };
 
 const selectClassName =
-  "h-8 min-w-36 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+  "h-8 w-full min-w-0 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 /**
  * A compact, server-form-compatible filter bar for Back Office pages.
@@ -59,18 +59,18 @@ export function GlobalFilterBar({
           )}
           {showDateRange ? (
             <>
-              <div className="grid min-w-36 gap-1.5 lg:flex-none">
+              <div className="grid min-w-0 gap-1.5 lg:min-w-36 lg:flex-none">
                 <Label htmlFor={`${namePrefix}-from-date`}>From date</Label>
                 <Input defaultValue={fromDate} id={`${namePrefix}-from-date`} name="start" type="date" />
               </div>
-              <div className="grid min-w-36 gap-1.5 lg:flex-none">
+              <div className="grid min-w-0 gap-1.5 lg:min-w-36 lg:flex-none">
                 <Label htmlFor={`${namePrefix}-to-date`}>To date</Label>
                 <Input defaultValue={toDate} id={`${namePrefix}-to-date`} name="end" type="date" />
               </div>
             </>
           ) : null}
           {hasStoreFilter ? (
-            <div className="grid min-w-36 gap-1.5 lg:flex-none">
+            <div className="grid min-w-0 gap-1.5 lg:min-w-36 lg:flex-none">
               <Label htmlFor={`${namePrefix}-store`}>Store</Label>
               <select
                 className={selectClassName}
@@ -88,7 +88,7 @@ export function GlobalFilterBar({
             </div>
           ) : null}
           {additionalFields}
-          <Button className="sm:col-span-2 lg:col-span-1" type="submit">
+          <Button className="w-full sm:col-span-2 sm:w-auto lg:col-span-1" type="submit">
             Apply
           </Button>
         </form>

@@ -212,7 +212,7 @@ export default async function ReceiptsPage({
 
       {receipts.length > 0 ? (
         <Card>
-          <CardContent className="overflow-x-auto p-0">
+          <CardContent className="overflow-x-auto overscroll-x-contain p-0">
             <table className="w-full min-w-225 text-left text-sm">
               <thead className="border-b bg-muted/50 text-xs text-muted-foreground"><tr><th className="px-4 py-3 font-medium">Receipt</th>{!scope.selectedStoreId ? <th className="px-4 py-3 font-medium">Store</th> : null}<th className="px-4 py-3 font-medium">Register</th><th className="px-4 py-3 font-medium">Cashier</th><th className="px-4 py-3 font-medium">Date</th><th className="px-4 py-3 font-medium">Payment</th><th className="px-4 py-3 text-right font-medium">Total</th><th className="px-4 py-3" aria-label="Open receipt" /></tr></thead>
               {groups.map(([storeName, rows]) => (

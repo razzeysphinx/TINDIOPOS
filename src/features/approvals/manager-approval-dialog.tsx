@@ -47,11 +47,11 @@ export function ManagerApprovalDialog({
       }}
       role="dialog"
     >
-      <section className="w-full max-w-md rounded-xl border bg-background p-5 shadow-xl">
+      <section className="max-h-[calc(100svh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-xl border bg-background p-4 shadow-xl sm:p-5">
         <div className="flex items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-semibold tracking-[0.14em] text-primary">TINDIO SECURITY</p>
-            <h2 className="mt-1 text-lg font-semibold" id="manager-approval-title">
+            <h2 className="mt-1 break-words text-lg font-semibold" id="manager-approval-title">
               Manager approval required
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">

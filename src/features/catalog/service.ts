@@ -290,9 +290,14 @@ export async function updateProduct(
   });
 
   if (error || !productType) {
+    const baseUnitIsImmutable = error?.code === "23514"
+      && error.message.startsWith("The base unit is fixed after product creation");
+
     return {
       ok: false,
-      message: databaseMessage(error?.code, "TINDIO could not update the product."),
+      message: baseUnitIsImmutable
+        ? "The base unit is fixed after product creation to protect inventory and conversion history. Create a new product to use a different unit."
+        : databaseMessage(error?.code, "TINDIO could not update the product."),
     };
   }
 
@@ -385,14 +390,17 @@ export async function setProductStoreConfiguration(
   const parsed = setProductStoreConfigurationSchema.safeParse(input);
   if (!parsed.success) return validationError();
   const supabase = await createClient();
-  const { error } = await supabase.from("product_store_settings").upsert({
-    organization_id: context.organization.id,
-    product_id: parsed.data.productId,
-    store_id: parsed.data.storeId,
-    is_available: true,
-    price_override_minor: parsed.data.priceOverride ? moneyInputToMinor(parsed.data.priceOverride) : null,
-    low_stock_level: parsed.data.lowStockLevel ? Number(parsed.data.lowStockLevel) : null,
-  }, { onConflict: "store_id,product_id" });
+  const { error } = await supabase.rpc("set_catalog_product_store_configuration", {
+    target_organization_id: context.organization.id,
+    target_product_id: parsed.data.productId,
+    target_store_id: parsed.data.storeId,
+    target_price_override_minor: (parsed.data.priceOverride
+      ? moneyInputToMinor(parsed.data.priceOverride)
+      : null) as never,
+    target_low_stock_level: (parsed.data.lowStockLevel
+      ? Number(parsed.data.lowStockLevel)
+      : null) as never,
+  });
   if (error) return { ok: false, message: databaseMessage(error.code, "Store product settings could not be updated.") };
   return { ok: true, message: "Store price and low-stock settings updated." };
 }
@@ -402,7 +410,13 @@ export async function createProductUnit(
   input: unknown,
 ): Promise<CatalogActionResult> {
   const parsed = createProductUnitSchema.safeParse(input);
-  if (!parsed.success) return validationError();
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: "Fix the highlighted unit details and try again.",
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
   const supabase = await createClient();
   const { error } = await supabase.from("product_units").insert({
     organization_id: context.organization.id,

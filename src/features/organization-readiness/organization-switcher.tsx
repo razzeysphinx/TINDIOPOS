@@ -38,11 +38,11 @@ export function OrganizationSwitcher({
       <label className="sr-only" htmlFor="active-organization">
         Active organization
       </label>
-      <div className="flex items-center gap-2">
-        <Building2 aria-hidden="true" className="size-4 shrink-0 text-primary" />
+      <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+        <Building2 aria-hidden="true" className="hidden size-4 shrink-0 text-primary min-[375px]:block" />
         <select
           aria-describedby={message ? "active-organization-message" : undefined}
-          className="h-9 max-w-52 rounded-md border border-input bg-background px-2 text-sm font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="h-8 max-w-24 rounded-md border border-input bg-background px-2 text-xs font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 min-[375px]:max-w-32 sm:h-9 sm:max-w-52 sm:text-sm"
           defaultValue={selectedOrganizationId}
           disabled={isPending}
           id="active-organization"

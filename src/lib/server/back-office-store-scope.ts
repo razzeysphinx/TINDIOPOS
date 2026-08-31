@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
-import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
+import { hasOrganizationWideStoreScope, type BusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
 type StoreSearchParams = { store?: string | string[] };
@@ -23,7 +23,7 @@ function firstString(value: string | string[] | undefined) {
  * All other Back Office users are constrained to their employee-store links.
  */
 export function canAccessAllBackOfficeStores(context: BusinessContext) {
-  return hasPermission(context, "stores.manage");
+  return hasOrganizationWideStoreScope(context);
 }
 
 export function resolveBackOfficeStoreScope(

@@ -45,7 +45,7 @@ function DialogContent({
       >
         <DialogPrimitive.Popup
           className={cn(
-            "relative my-auto w-full rounded-xl border bg-background shadow-2xl outline-none transition-all data-ending-style:scale-95 data-ending-style:opacity-0",
+            "relative my-auto max-h-[calc(100svh-1.5rem)] w-full overflow-hidden rounded-xl border bg-background shadow-2xl outline-none transition-all data-ending-style:scale-95 data-ending-style:opacity-0",
             size === "default" && "max-w-lg",
             size === "wide" && "max-w-3xl",
             size === "large" && "max-w-6xl",
@@ -77,7 +77,7 @@ function DialogHeader({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  return <div className={cn("border-b px-6 py-5 pr-14", className)} {...props} />;
+  return <div className={cn("border-b px-4 py-4 pr-12 sm:px-6 sm:py-5 sm:pr-14", className)} {...props} />;
 }
 
 function DialogTitle({
@@ -108,7 +108,7 @@ function DialogBody({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  return <div className={cn("max-h-[calc(100dvh-11rem)] overflow-y-auto px-6 py-5", className)} {...props} />;
+  return <div className={cn("max-h-[calc(100dvh-9.5rem)] overflow-y-auto overscroll-contain px-4 py-4 sm:max-h-[calc(100dvh-11rem)] sm:px-6 sm:py-5", className)} {...props} />;
 }
 
 function DialogFooter({

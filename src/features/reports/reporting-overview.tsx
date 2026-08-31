@@ -570,7 +570,7 @@ function BreakdownCard({
       </CardHeader>
       <CardContent>
         {rows.length > 0 ? (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overscroll-x-contain">
             <table className="w-full min-w-[29rem] text-left text-sm">
               <thead className="border-b text-xs tracking-wide text-muted-foreground uppercase">
                 <tr>

@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(29);
+select plan(30);
 
 select has_table('public', 'product_units', 'product_units table exists');
 select has_table('public', 'product_components', 'product_components table exists');
@@ -76,6 +76,20 @@ insert into public.product_units (organization_id, product_id, unit_code, unit_n
 select organization_id, component_product_id, 'gram', 'Gram', 0.001, true, true
 from catalog_improvement_context;
 select is((select factor_to_base from public.product_units where product_id = (select component_product_id from catalog_improvement_context) and unit_code = 'gram'), 0.001::numeric, 'exact gram-to-kilogram conversion is stored');
+
+insert into public.product_units (organization_id, product_id, unit_code, unit_name, factor_to_base, is_sale_unit, is_purchase_unit)
+select organization_id, component_product_id, '1', 'One pack', 24, true, true
+from catalog_improvement_context;
+select ok(
+  exists (
+    select 1
+    from public.product_units
+    where product_id = (select component_product_id from catalog_improvement_context)
+      and unit_code = '1'
+      and factor_to_base = 24
+  ),
+  'numeric unit codes are accepted as text identifiers with an exact conversion factor'
+);
 
 insert into public.product_components (organization_id, product_id, component_product_id, quantity_per_composite)
 select organization_id, parent_product_id, component_product_id, 0.025

@@ -90,7 +90,7 @@ export default async function SecurityPage({
           <p className="mt-1 text-sm text-muted-foreground">Only the requester and authorized managers can view a request.</p>
         </div>
         {requests.length > 0 ? (
-          <div className="overflow-x-auto rounded-lg border bg-card">
+          <div className="overflow-x-auto overscroll-x-contain rounded-lg border bg-card">
             <table className="w-full min-w-180 text-left text-sm">
               <thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th className="px-3 py-2 font-medium">Operation</th><th className="px-3 py-2 font-medium">Requester</th><th className="px-3 py-2 font-medium">Status</th><th className="px-3 py-2 font-medium">Reason</th><th className="px-3 py-2 font-medium">Requested</th></tr></thead>
               <tbody className="divide-y">

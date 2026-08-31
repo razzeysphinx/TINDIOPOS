@@ -255,6 +255,27 @@ export const getBusinessContext = cache(
       ].sort();
     }
 
+    // `stores.manage` is the capability-defined organization-wide store
+    // scope used by the database RLS policies. Keep the application context
+    // in step with that authority rather than making organization managers
+    // depend on redundant employee-store rows. Scoped roles continue to
+    // receive only their explicit employee-store assignments.
+    let storeIds = [...new Set(storeLinksResult.data.map((link) => link.store_id))];
+    if (hasOrganizationWideStoreScope({ permissions })) {
+      const { data: organizationStores, error: organizationStoresError } = await supabase
+        .from("stores")
+        .select("id")
+        .eq("organization_id", employee.organization_id);
+
+      if (organizationStoresError) {
+        throw new Error(
+          `Unable to load organization-wide store scope: ${organizationStoresError.message}`,
+        );
+      }
+
+      storeIds = [...new Set((organizationStores ?? []).map((store) => store.id))];
+    }
+
     return {
       user,
       profile,
@@ -284,7 +305,7 @@ export const getBusinessContext = cache(
       ),
       roleNames,
       permissions,
-      storeIds: storeLinksResult.data.map((link) => link.store_id),
+      storeIds,
     };
   },
 );
@@ -316,6 +337,26 @@ export async function requireBusinessContext() {
 
 export function hasPermission(context: BusinessContext, permission: string) {
   return context.permissions.includes(permission);
+}
+
+/**
+ * Organization-wide store access is a capability, not a role label. This
+ * mirrors `private.has_store_read_scope` in the database, allowing future
+ * customer-defined roles to opt in simply by receiving `stores.manage`.
+ */
+export function hasOrganizationWideStoreScope(
+  context: Pick<BusinessContext, "permissions">,
+) {
+  return context.permissions.includes("stores.manage");
+}
+
+/**
+ * Use this for a single-store UI decision. Server actions and RLS remain the
+ * authority for mutations, but this keeps page/API checks consistent with
+ * the effective store scope resolved in `getBusinessContext`.
+ */
+export function hasStoreAccess(context: BusinessContext, storeId: string) {
+  return hasOrganizationWideStoreScope(context) || context.storeIds.includes(storeId);
 }
 
 export function hasFeature(context: BusinessContext, feature: FeatureKey) {

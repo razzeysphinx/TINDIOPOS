@@ -226,7 +226,7 @@ export const setProductStoreConfigurationSchema = z.object({
 
 export const createProductUnitSchema = z.object({
   productId: z.uuid(),
-  unitCode: z.string().trim().min(1).max(24).regex(/^[A-Za-z][A-Za-z0-9 _-]*$/, "Use letters, numbers, spaces, _ or -."),
+  unitCode: z.string().trim().min(1).max(24).regex(/^[A-Za-z0-9][A-Za-z0-9 _-]*$/, "Start with a letter or number; use only letters, numbers, spaces, _ or -."),
   unitName: z.string().trim().min(1).max(80),
   factorToBase: z.string().trim().regex(/^\d{1,8}(?:\.\d{1,3})?$/, "Use a positive exact factor with up to 3 decimals.").refine((value) => Number(value) > 0, "The factor must be greater than zero."),
   isSaleUnit: z.boolean(),

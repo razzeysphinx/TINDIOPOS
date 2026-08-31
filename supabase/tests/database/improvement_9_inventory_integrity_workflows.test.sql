@@ -116,9 +116,14 @@ select lives_ok(
   'receiving uses the cost-aware ledger routine'
 );
 select is(
-  (select average_cost_minor from public.inventory_levels where store_id = (select store_id from inventory_integrity_context) and product_id = (select product_id from inventory_integrity_context)),
+  (
+    select valuation.average_cost_minor
+    from public.get_inventory_valuation((select organization_id from inventory_integrity_context)) valuation
+    where valuation.store_id = (select store_id from inventory_integrity_context)
+      and valuation.product_id = (select product_id from inventory_integrity_context)
+  ),
   1000::bigint,
-  'receipt establishes weighted average cost from the purchase-order line'
+  'receipt establishes weighted average cost through the authorized valuation read path'
 );
 
 update inventory_integrity_context
@@ -206,7 +211,16 @@ select lives_ok(
 );
 select is((select quantity from public.inventory_levels where store_id = (select store_id from inventory_integrity_context) and product_id = (select component_product_id from inventory_integrity_context)), 2::numeric, 'production consumes the recipe component');
 select is((select quantity from public.inventory_levels where store_id = (select store_id from inventory_integrity_context) and product_id = (select composite_product_id from inventory_integrity_context)), 2::numeric, 'production adds composite output stock');
-select is((select average_cost_minor from public.inventory_levels where store_id = (select store_id from inventory_integrity_context) and product_id = (select composite_product_id from inventory_integrity_context)), 1000::bigint, 'production assigns output cost from consumed components');
+select is(
+  (
+    select valuation.average_cost_minor
+    from public.get_inventory_valuation((select organization_id from inventory_integrity_context)) valuation
+    where valuation.store_id = (select store_id from inventory_integrity_context)
+      and valuation.product_id = (select composite_product_id from inventory_integrity_context)
+  ),
+  1000::bigint,
+  'production assigns output cost through the authorized valuation read path'
+);
 select is((select count(*) from public.production_runs), 1::bigint, 'production run is retained');
 select is((select count(*) from public.get_inventory_valuation((select organization_id from inventory_integrity_context))), 4::bigint, 'valuation returns every initialized projection in the organization');
 

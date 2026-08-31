@@ -92,11 +92,11 @@ export function CustomerDirectory({ customers }: { customers: Customer[] }) {
       )}
 
       {filteredCustomers.length > PAGE_SIZE ? (
-        <div className="flex items-center justify-between gap-3 border-t pt-4 text-sm text-muted-foreground">
+        <div className="flex flex-col gap-3 border-t pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>Page {currentPage} of {totalPages} · {filteredCustomers.length} customers</span>
-          <div className="flex gap-2">
-            <Button disabled={currentPage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} size="sm" type="button" variant="outline"><ChevronLeft /> Previous</Button>
-            <Button disabled={currentPage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} size="sm" type="button" variant="outline">Next <ChevronRight /></Button>
+          <div className="grid grid-cols-2 gap-2 sm:flex">
+            <Button className="w-full sm:w-auto" disabled={currentPage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} size="sm" type="button" variant="outline"><ChevronLeft /> Previous</Button>
+            <Button className="w-full sm:w-auto" disabled={currentPage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} size="sm" type="button" variant="outline">Next <ChevronRight /></Button>
           </div>
         </div>
       ) : null}

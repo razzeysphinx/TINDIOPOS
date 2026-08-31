@@ -6025,6 +6025,16 @@ export type Database = {
         }
         Returns: number
       }
+      set_catalog_product_store_configuration: {
+        Args: {
+          target_low_stock_level: number
+          target_organization_id: string
+          target_price_override_minor: number
+          target_product_id: string
+          target_store_id: string
+        }
+        Returns: undefined
+      }
       create_custom_role: {
         Args: {
           permission_codes: string[]

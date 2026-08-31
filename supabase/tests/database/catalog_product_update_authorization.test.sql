@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(18);
+select plan(29);
 
 insert into auth.users (id, email, raw_user_meta_data)
 values
@@ -146,6 +146,125 @@ select ok(
   'anonymous callers cannot invoke the store-availability routine'
 );
 
+select ok(
+  to_regprocedure('public.set_catalog_product_store_configuration(uuid,uuid,uuid,bigint,numeric)') is not null,
+  'the catalog store-configuration routine exists'
+);
+
+select ok(
+  has_function_privilege(
+    'authenticated',
+    'public.set_catalog_product_store_configuration(uuid,uuid,uuid,bigint,numeric)',
+    'EXECUTE'
+  ),
+  'authenticated callers can invoke the guarded store-configuration routine'
+);
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.set_catalog_product_store_configuration(uuid,uuid,uuid,bigint,numeric)',
+    'EXECUTE'
+  ),
+  'anonymous callers cannot invoke the guarded store-configuration routine'
+);
+
+select is(
+  (
+    select count(*)
+    from public.permissions permission
+    where not exists (
+      select 1
+      from public.roles role
+      join public.role_permissions role_permission
+        on role_permission.organization_id = role.organization_id
+       and role_permission.role_id = role.id
+       and role_permission.permission_code = permission.code
+      where role.organization_id = (select organization_id from catalog_update_context)
+        and role.is_system
+        and role.code = 'owner'
+    )
+  ),
+  0::bigint,
+  'the predefined Owner bundle includes every registered capability'
+);
+
+reset role;
+
+insert into public.permissions (code, category, name, description)
+values (
+  'test.catalog_owner_permission_sync',
+  'Test',
+  'Owner permission synchronization',
+  'Temporary database test capability.'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.roles role
+    join public.role_permissions role_permission
+      on role_permission.organization_id = role.organization_id
+     and role_permission.role_id = role.id
+     and role_permission.permission_code = 'test.catalog_owner_permission_sync'
+    where role.organization_id = (select organization_id from catalog_update_context)
+      and role.is_system
+      and role.code = 'owner'
+  ),
+  'a newly registered capability is synchronized to existing Owner bundles'
+);
+
+set local role authenticated;
+set local request.jwt.claim.sub = '28282828-2828-4828-8828-282828282828';
+
+select ok(
+  has_column_privilege('authenticated', 'public.product_store_settings', 'price_override_minor', 'INSERT')
+    and has_column_privilege('authenticated', 'public.product_store_settings', 'low_stock_level', 'INSERT'),
+  'the product-store configuration columns are insertable for capability-checked upserts'
+);
+
+select throws_ok(
+  format(
+    $$insert into public.product_store_settings (
+      organization_id, product_id, store_id, is_available, price_override_minor, low_stock_level
+    ) values (%L, %L, %L, true, 12500, 3)
+    on conflict (store_id, product_id) do update
+    set organization_id = excluded.organization_id,
+        product_id = excluded.product_id,
+        store_id = excluded.store_id,
+        is_available = excluded.is_available,
+        price_override_minor = excluded.price_override_minor,
+        low_stock_level = excluded.low_stock_level$$,
+    (select organization_id from catalog_update_context),
+    (select product_id from catalog_update_context),
+    (select store_id from catalog_update_context)
+  ),
+  '42501',
+  'permission denied for table product_store_settings',
+  'a raw PostgREST-style full-row merge upsert remains denied by identifier-column grants'
+);
+
+select lives_ok(
+  format(
+    $$select public.set_catalog_product_store_configuration(%L, %L, %L, 12500, 3)$$,
+    (select organization_id from catalog_update_context),
+    (select product_id from catalog_update_context),
+    (select store_id from catalog_update_context)
+  ),
+  'an Owner can save store price and low-stock settings through the guarded configuration routine'
+);
+
+select is(
+  (
+    select low_stock_level
+    from public.product_store_settings
+    where product_id = (select product_id from catalog_update_context)
+      and store_id = (select store_id from catalog_update_context)
+  ),
+  3::numeric,
+  'the Owner store configuration upsert persists the low-stock setting'
+);
+
 select is(
   public.set_catalog_product_store_availability(
     (select organization_id from catalog_update_context),
@@ -210,6 +329,27 @@ select is(
   ),
   'simple',
   'an authorized owner can update product details through the guarded routine'
+);
+
+select throws_ok(
+  format(
+    $$select public.update_catalog_product_v2(%L, %L, 'Updated catalog product', 'Updated through the guarded routine', null, 'CATALOG-UPDATE-2', '480000002829', 125, 50, true, 'box', 'https://example.test/catalog-update.png', false, false)$$,
+    (select organization_id from catalog_update_context),
+    (select product_id from catalog_update_context)
+  ),
+  '23514',
+  'The base unit is fixed after product creation to protect inventory and conversion history. Create a new product to use a different unit.',
+  'a product base unit cannot be changed after creation'
+);
+
+select is(
+  (
+    select unit
+    from public.products
+    where id = (select product_id from catalog_update_context)
+  ),
+  'each',
+  'a rejected base-unit change leaves the canonical unit unchanged'
 );
 
 reset role;

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { LogOut } from "lucide-react";
+import { LogOut, MonitorSmartphone } from "lucide-react";
 import Link from "next/link";
 import { connection } from "next/server";
 
@@ -48,10 +48,19 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
         <header className="fixed inset-x-0 top-0 z-20 border-b border-border bg-background/95 backdrop-blur print:hidden">
           <div className="flex h-14 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
             <BackOfficeHeaderControls />
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
               {canUsePos ? (
-                <Button nativeButton={false} render={<Link href="/pos" />} size="sm" variant="outline">
-                  Open POS
+                <Button
+                  aria-label="Open POS"
+                  className="size-8 px-0 sm:h-7 sm:w-auto sm:px-2.5"
+                  nativeButton={false}
+                  render={<Link href="/pos" />}
+                  size="sm"
+                  title="Open POS"
+                  variant="outline"
+                >
+                  <MonitorSmartphone aria-hidden="true" />
+                  <span className="hidden sm:inline">Open POS</span>
                 </Button>
               ) : null}
               <OrganizationSwitcher
@@ -62,16 +71,14 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
                 {context.organization.currency_code}
               </Badge>
               <form action={signOutAction}>
-                <Button size="sm" type="submit" variant="ghost">
+                <Button aria-label="Sign out" className="size-8 px-0 sm:h-7 sm:w-auto sm:px-2.5" size="sm" title="Sign out" type="submit" variant="ghost">
                   <LogOut aria-hidden="true" />
-                  Sign out
+                  <span className="hidden sm:inline">Sign out</span>
                 </Button>
               </form>
             </div>
           </div>
-          <div className="lg:hidden">
-            <BackOfficeMobileNavigation navigationAccess={navigationAccess} />
-          </div>
+          <BackOfficeMobileNavigation navigationAccess={navigationAccess} />
         </header>
       )}
       navigationAccess={navigationAccess}

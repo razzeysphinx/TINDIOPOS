@@ -1,7 +1,7 @@
 "use client";
 
 import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import {
   CheckCircle2,
   ClipboardCheck,
@@ -114,7 +114,7 @@ export function SupplyChainWorkflows({
   defaultStoreId?: string | null;
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [pendingActions, setPendingActions] = useState<Set<string>>(() => new Set());
   const firstStoreId = stores.find((store) => store.id === defaultStoreId)?.id ?? stores[0]?.id ?? "";
   const firstItem = items[0];
   const [warehouseStoreId, setWarehouseStoreId] = useState(firstStoreId);
@@ -141,6 +141,20 @@ export function SupplyChainWorkflows({
   const [workflowResults, setWorkflowResults] = useState<Record<string, Result>>({});
   const [receiptNotes, setReceiptNotes] = useState<Record<string, string>>({});
   const [receiptDrafts, setReceiptDrafts] = useState<Record<string, Record<string, ReceiptDraft>>>({});
+
+  const isActionPending = (action: string) => pendingActions.has(action);
+  const runAction = async (action: string, work: () => Promise<void>) => {
+    setPendingActions((current) => new Set(current).add(action));
+    try {
+      await work();
+    } finally {
+      setPendingActions((current) => {
+        const next = new Set(current);
+        next.delete(action);
+        return next;
+      });
+    }
+  };
 
   const ruleItems = useMemo(
     () => items.filter((item) => item.storeIds.includes(ruleStoreId)),
@@ -216,7 +230,7 @@ export function SupplyChainWorkflows({
 
   function submitWarehouse(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    startTransition(async () => {
+    void runAction("warehouse", async () => {
       const result = await createSupplyChainWarehouseAction({ storeId: warehouseStoreId, code: warehouseCode, name: warehouseName, notes: warehouseNotes });
       finish(result, setWarehouseResult);
       if (result.ok) {
@@ -229,12 +243,12 @@ export function SupplyChainWorkflows({
 
   function submitSupplierLeadTime(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    startTransition(async () => finish(await updateSupplierLeadTimeAction({ supplierId, leadTimeDays }), setSupplierResult));
+    void runAction("supplier", async () => finish(await updateSupplierLeadTimeAction({ supplierId, leadTimeDays }), setSupplierResult));
   }
 
   function submitRule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    startTransition(async () => finish(await upsertReplenishmentRuleAction({
+    void runAction("rule", async () => finish(await upsertReplenishmentRuleAction({
       storeId: ruleStoreId,
       productId: ruleProductId,
       variantId: ruleVariantId,
@@ -246,7 +260,7 @@ export function SupplyChainWorkflows({
 
   function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    startTransition(async () => {
+    void runAction("request", async () => {
       const result = await createStockRequestAction({
         requestingStoreId: requestStoreId,
         sourceWarehouseId: requestWarehouseId,
@@ -262,18 +276,18 @@ export function SupplyChainWorkflows({
   }
 
   function approveRequest(request: SupplyChainRequest) {
-    startTransition(async () => finishWorkflow(request.id, await approveStockRequestAction({
+    void runAction(`workflow:${request.id}`, async () => finishWorkflow(request.id, await approveStockRequestAction({
       stockRequestId: request.id,
       lines: request.lines.map((line) => ({ stockRequestLineId: line.id, approvedQuantity: String(line.requestedQuantity) })),
     })));
   }
 
   function startPicking(request: SupplyChainRequest) {
-    startTransition(async () => finishWorkflow(request.id, await startStockRequestPickingAction({ stockRequestId: request.id })));
+    void runAction(`workflow:${request.id}`, async () => finishWorkflow(request.id, await startStockRequestPickingAction({ stockRequestId: request.id })));
   }
 
   function dispatchRequest(request: SupplyChainRequest) {
-    startTransition(async () => finishWorkflow(request.id, await dispatchStockRequestAction({
+    void runAction(`workflow:${request.id}`, async () => finishWorkflow(request.id, await dispatchStockRequestAction({
       stockRequestId: request.id,
       note: dispatchNotes[request.id] ?? "",
     })));
@@ -292,7 +306,7 @@ export function SupplyChainWorkflows({
         };
       })
       .filter((line) => Number(line.receivedQuantity) + Number(line.shortQuantity) > 0);
-    startTransition(async () => finishWorkflow(request.id, await receiveStockRequestAction({
+    void runAction(`workflow:${request.id}`, async () => finishWorkflow(request.id, await receiveStockRequestAction({
       stockRequestId: request.id,
       note: receiptNotes[request.id] ?? "",
       lines,
@@ -302,8 +316,8 @@ export function SupplyChainWorkflows({
   return (
     <section className="space-y-6" aria-labelledby="replenishment-workflows-title">
       <div>
-        <h2 className="text-lg font-semibold" id="replenishment-workflows-title">Supply chain and replenishment</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Requests are approved, picked, dispatched, and received as accountable stock movements.</p>
+        <h2 className="text-lg font-semibold" id="replenishment-workflows-title">Restocking and store transfers</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Follow each request from approval to delivery so you always know where stock is and what happens next.</p>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -313,7 +327,7 @@ export function SupplyChainWorkflows({
             <Field label="Warehouse code"><Input value={warehouseCode} onChange={(event) => setWarehouseCode(event.target.value.toUpperCase())} placeholder="CENTRAL" /></Field>
             <Field label="Warehouse name"><Input value={warehouseName} onChange={(event) => setWarehouseName(event.target.value)} placeholder="Central warehouse" /></Field>
             <Field label="Notes"><Input value={warehouseNotes} onChange={(event) => setWarehouseNotes(event.target.value)} placeholder="Optional dispatch note" /></Field>
-            <div className="sm:col-span-2"><SubmitRow pending={isPending} result={warehouseResult} label="Create warehouse" icon={<Warehouse />} /></div>
+            <div className="sm:col-span-2"><SubmitRow pending={isActionPending("warehouse")} result={warehouseResult} label="Create warehouse" icon={<Warehouse />} /></div>
           </form> : <Empty message="Create a store before designating a warehouse location." />}
           {warehouses.length ? <div className="mt-4 flex flex-wrap gap-2">{warehouses.map((warehouse) => <Badge key={warehouse.id} variant="secondary">{warehouse.code} · {warehouse.name}</Badge>)}</div> : null}
         </WorkflowCard>
@@ -322,7 +336,7 @@ export function SupplyChainWorkflows({
           {suppliers.length ? <form className="grid gap-3 sm:grid-cols-[1fr_8rem]" onSubmit={submitSupplierLeadTime} noValidate>
             <Field label="Supplier"><select className={selectClassName} value={supplierId} onChange={(event) => selectSupplier(event.target.value)}>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></Field>
             <Field label="Lead time (days)"><Input inputMode="numeric" value={leadTimeDays} onChange={(event) => setLeadTimeDays(event.target.value)} /></Field>
-            <div className="sm:col-span-2"><SubmitRow pending={isPending} result={supplierResult} label="Save lead time" icon={<Truck />} /></div>
+            <div className="sm:col-span-2"><SubmitRow pending={isActionPending("supplier")} result={supplierResult} label="Save lead time" icon={<Truck />} /></div>
           </form> : <Empty message="Add a supplier in Inventory before setting supplier lead time." />}
         </WorkflowCard>
 
@@ -333,7 +347,7 @@ export function SupplyChainWorkflows({
             <Field label="Preferred warehouse"><select className={selectClassName} value={ruleWarehouseId} onChange={(event) => setRuleWarehouseId(event.target.value)}><option value="">No preference</option>{eligibleRuleWarehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.code} · {warehouse.name}</option>)}</select></Field>
             <Field label="Reorder point"><Input inputMode="decimal" value={reorderPoint} onChange={(event) => setReorderPoint(event.target.value)} /></Field>
             <Field label="Target stock"><Input inputMode="decimal" value={targetStock} onChange={(event) => setTargetStock(event.target.value)} /></Field>
-            <div className="flex items-end"><Button disabled={isPending} type="submit">{isPending ? <LoaderCircle className="animate-spin" /> : <SlidersHorizontal />} Save rule</Button></div>
+            <div className="flex items-end"><Button disabled={isActionPending("rule")} type="submit">{isActionPending("rule") ? <LoaderCircle className="animate-spin" /> : <SlidersHorizontal />} Save rule</Button></div>
             <div className="sm:col-span-2"><ResultMessage result={ruleResult} /></div>
           </form> : <Empty message="Create a tracked item assigned to a store before setting reorder rules." />}
         </WorkflowCard>
@@ -346,7 +360,7 @@ export function SupplyChainWorkflows({
             </div>
             <DraftRequestLines lines={requestLines} items={requestItems} onAdd={() => setRequestLines((lines) => [...lines, emptyRequestLine(requestItems[0])])} onChange={setRequestLines} onSelect={selectRequestItem} />
             <Field label="Request note"><Input value={requestNote} onChange={(event) => setRequestNote(event.target.value)} placeholder="Optional reason or delivery note" /></Field>
-            <SubmitRow pending={isPending} result={requestResult} label="Submit for approval" icon={<Send />} />
+            <SubmitRow pending={isActionPending("request")} result={requestResult} label="Submit for approval" icon={<Send />} />
           </form> : <Empty message="You need two stock locations, a designated warehouse, and a tracked item at the requesting store." />}
         </WorkflowCard>
       </div>
@@ -368,7 +382,7 @@ export function SupplyChainWorkflows({
 
       <section className="space-y-3" aria-labelledby="request-workflow-title">
         <div><h3 className="font-semibold" id="request-workflow-title">Stock request workflow</h3><p className="mt-1 text-sm text-muted-foreground">Approval and picking do not move stock. Dispatch moves it out; receiving adds only the quantities actually received.</p></div>
-        {requests.length ? <div className="grid gap-4">{requests.map((request) => <StockRequestCard key={request.id} request={request} isPending={isPending} dispatchNote={dispatchNotes[request.id] ?? ""} receiptNote={receiptNotes[request.id] ?? ""} result={workflowResults[request.id] ?? null} onDispatchNote={(note) => setDispatchNotes((current) => ({ ...current, [request.id]: note }))} onReceiptNote={(note) => setReceiptNotes((current) => ({ ...current, [request.id]: note }))} receiptValue={receiptValue} onReceiptChange={updateReceiptValue} onApprove={() => approveRequest(request)} onStartPicking={() => startPicking(request)} onDispatch={() => dispatchRequest(request)} onReceive={() => receiveRequest(request)} />)}</div> : <Empty message="Submitted stock requests will appear here as they move through approval, picking, dispatch, and receiving." />}
+        {requests.length ? <div className="grid gap-4">{requests.map((request) => <StockRequestCard key={request.id} request={request} isPending={isActionPending(`workflow:${request.id}`)} dispatchNote={dispatchNotes[request.id] ?? ""} receiptNote={receiptNotes[request.id] ?? ""} result={workflowResults[request.id] ?? null} onDispatchNote={(note) => setDispatchNotes((current) => ({ ...current, [request.id]: note }))} onReceiptNote={(note) => setReceiptNotes((current) => ({ ...current, [request.id]: note }))} receiptValue={receiptValue} onReceiptChange={updateReceiptValue} onApprove={() => approveRequest(request)} onStartPicking={() => startPicking(request)} onDispatch={() => dispatchRequest(request)} onReceive={() => receiveRequest(request)} />)}</div> : <Empty message="Submitted stock requests will appear here as they move through approval, picking, dispatch, and receiving." />}
       </section>
     </section>
   );
@@ -384,9 +398,9 @@ function ReplenishmentRecommendations({
   return (
     <section className="space-y-3" aria-labelledby="replenishment-recommendations-title">
       <div>
-        <h3 className="font-semibold" id="replenishment-recommendations-title">Replenishment watch</h3>
+        <h3 className="font-semibold" id="replenishment-recommendations-title">Restock suggestions</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Suggestions are rule-driven. They identify the store, quantity, and source action, but never create a transfer or purchase order automatically.
+          Suggestions use the stock levels you set. They identify the store, quantity, and next step, but never create a transfer or purchase order automatically.
         </p>
       </div>
       {rules.length ? <div className="grid gap-3 lg:grid-cols-2">{rules.map((rule) => {

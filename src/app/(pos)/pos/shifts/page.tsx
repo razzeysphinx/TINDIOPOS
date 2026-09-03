@@ -33,7 +33,7 @@ export default async function PosShiftsPage() {
         title="Shift"
       />
       <div className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
-        <ShiftWorkspacePage mode="operations" />
+        <ShiftWorkspacePage mode="operations" operationalWorkspace="pos" />
       </div>
     </main>
   );

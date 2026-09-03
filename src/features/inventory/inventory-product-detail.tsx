@@ -19,6 +19,7 @@ import {
   inventoryStockConditionLabels,
   type InventoryStockCondition,
 } from "@/features/inventory/inventory-stock-status";
+import { inventoryActivityLabel } from "@/features/inventory/inventory-activity-copy";
 
 export type InventoryProductDetailData = {
   activity: Array<{
@@ -114,6 +115,7 @@ export function InventoryProductDetail({ detail }: { detail: InventoryProductDet
 function ActivityEntry({ activity }: { activity: InventoryProductDetailData["activity"][number] }) {
   const added = activity.quantityDelta > 0;
   const DeltaIcon = added ? ArrowUp : ArrowDown;
+  activity = { ...activity, movementType: inventoryActivityLabel(activity.movementType) };
 
   return <article className="grid grid-cols-[auto_1fr] gap-3 rounded-xl border p-3"><span className={cn("grid size-8 place-items-center rounded-full", added ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive")}><DeltaIcon className="size-4" aria-hidden="true" /></span><div className="min-w-0"><div className="flex flex-wrap items-start justify-between gap-2"><p className="font-medium">{activity.movementType.replaceAll("_", " ")}</p><p className={cn("text-sm font-semibold", added ? "text-primary" : "text-destructive")}>{added ? "+" : ""}{formatQuantity(activity.quantityDelta)}</p></div><p className="mt-1 text-xs text-muted-foreground">{formatQuantity(activity.quantityBefore)} → {formatQuantity(activity.quantityAfter)} · {formatDate(activity.createdAt)}</p><p className="mt-2 text-sm text-muted-foreground">{activity.reason}</p><div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"><span className="inline-flex items-center gap-1"><Store className="size-3" aria-hidden="true" />{activity.storeName}</span>{activity.actorName ? <span className="inline-flex items-center gap-1"><UserRound className="size-3" aria-hidden="true" />{activity.actorName}</span> : null}{activity.referenceHref && activity.referenceLabel ? <Link className="inline-flex items-center gap-1 text-primary hover:underline" href={activity.referenceHref}><ReceiptText className="size-3" aria-hidden="true" />{activity.referenceLabel}</Link> : activity.referenceLabel ? <span>{activity.referenceLabel}</span> : null}</div></div></article>;
 }

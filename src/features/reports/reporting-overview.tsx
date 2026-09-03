@@ -23,8 +23,10 @@ import {
   Warehouse,
 } from "lucide-react";
 
+import { ContextHelp } from "@/components/back-office/context-help";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
+import { inventoryActivityLabel } from "@/features/inventory/inventory-activity-copy";
 import type { ReportSnapshot } from "@/features/reports/reporting";
 
 const chartColors = [
@@ -53,12 +55,14 @@ function MetricCard({
   label,
   value,
   detail,
+  help,
   icon: Icon,
   tone = "default",
 }: {
   label: string;
   value: string;
   detail: string;
+  help?: string;
   icon: typeof ChartColumnBig;
   tone?: "default" | "positive" | "negative";
 }) {
@@ -72,7 +76,10 @@ function MetricCard({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between">
-        <p className="text-sm text-muted-foreground">{label}</p>
+        <p className="flex items-center gap-1 text-sm text-muted-foreground">
+          {label}
+          {help ? <ContextHelp label={`What is ${label}?`}>{help}</ContextHelp> : null}
+        </p>
         <span className={`grid size-9 place-items-center rounded-lg ${toneClassName}`}>
           <Icon aria-hidden="true" className="size-4" />
         </span>
@@ -102,16 +109,144 @@ function SectionTitle({ title, description }: { title: string; description: stri
   );
 }
 
+type ReportPrintContext = {
+  organizationName: string;
+  storeName: string;
+  startDate: string;
+  endDate: string;
+  timezone: string;
+};
+
+function formatPrintDate(value: string, timezone: string) {
+  return new Intl.DateTimeFormat("en-PH", {
+    dateStyle: "medium",
+    timeZone: timezone,
+  }).format(new Date(`${value}T00:00:00.000Z`));
+}
+
+function ReportPrintTable({
+  columns,
+  rows,
+}: {
+  columns: string[];
+  rows: string[][];
+}) {
+  return (
+    <table data-report-print-table>
+      <thead>
+        <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
+      </thead>
+      <tbody>
+        {rows.map((row, index) => (
+          <tr key={`${row[0]}-${index}`}>
+            {row.map((value, valueIndex) => <td key={`${value}-${valueIndex}`}>{value}</td>)}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function ReportPrintDocument({
+  context,
+  currencyCode,
+  snapshot,
+}: {
+  context: ReportPrintContext;
+  currencyCode: string;
+  snapshot: ReportSnapshot;
+}) {
+  const { summary } = snapshot;
+  const dateRange = `${formatPrintDate(context.startDate, context.timezone)} – ${formatPrintDate(context.endDate, context.timezone)}`;
+  const paymentRows = snapshot.payments.map((payment) => [
+    payment.name,
+    payment.type,
+    formatQuantity(payment.payment_count),
+    formatMinorMoney(payment.amount_minor, currencyCode),
+  ]);
+  const storeRows = snapshot.sales_by_store.map((store) => [
+    store.name,
+    formatQuantity(store.transaction_count),
+    formatMinorMoney(store.sales_minor, currencyCode),
+  ]);
+  const productRows = snapshot.top_products.slice(0, 12).map((product) => [
+    product.name,
+    formatQuantity(product.quantity_sold),
+    formatMinorMoney(product.net_sales_minor, currencyCode),
+  ]);
+  const employeeRows = snapshot.sales_by_employee.slice(0, 12).map((employee) => [
+    employee.name,
+    formatQuantity(employee.transaction_count),
+    formatMinorMoney(employee.sales_minor, currencyCode),
+  ]);
+
+  return (
+    <article className="hidden" data-report-print-document>
+      <header data-report-print-header>
+        <p>TINDIO</p>
+        <h1>Business summary</h1>
+        <dl>
+          <div><dt>Business</dt><dd>{context.organizationName}</dd></div>
+          <div><dt>Store scope</dt><dd>{context.storeName}</dd></div>
+          <div><dt>Date range</dt><dd>{dateRange}</dd></div>
+        </dl>
+      </header>
+
+      <section data-report-print-section>
+        <h2>Sales summary</h2>
+        <dl data-report-print-totals>
+          <div><dt>Gross sales</dt><dd>{formatMinorMoney(summary.gross_sales_minor, currencyCode)}</dd></div>
+          <div><dt>Completed sales</dt><dd>{formatMinorMoney(summary.sales_total_minor, currencyCode)}</dd></div>
+          <div><dt>Refunds</dt><dd>{formatMinorMoney(summary.refunds_minor, currencyCode)}</dd></div>
+          <div><dt>Discounts</dt><dd>{formatMinorMoney(summary.discounts_minor, currencyCode)}</dd></div>
+          <div><dt>Net sales</dt><dd>{formatMinorMoney(summary.net_sales_minor, currencyCode)}</dd></div>
+          <div><dt>Transactions</dt><dd>{formatQuantity(summary.transaction_count)}</dd></div>
+        </dl>
+      </section>
+
+      <section data-report-print-section>
+        <h2>Payment summary</h2>
+        {paymentRows.length > 0 ? <ReportPrintTable columns={["Method", "Type", "Payments", "Amount"]} rows={paymentRows} /> : <p>No captured payments in this period.</p>}
+      </section>
+
+      <section data-report-print-section>
+        <h2>Store performance</h2>
+        {storeRows.length > 0 ? <ReportPrintTable columns={["Store", "Transactions", "Sales"]} rows={storeRows} /> : <p>No completed sales in this period.</p>}
+      </section>
+
+      <section data-report-print-section>
+        <h2>Top products</h2>
+        {productRows.length > 0 ? <ReportPrintTable columns={["Product", "Units sold", "Net sales"]} rows={productRows} /> : <p>No products were sold in this period.</p>}
+      </section>
+
+      <section data-report-print-section>
+        <h2>Employee performance</h2>
+        {employeeRows.length > 0 ? <ReportPrintTable columns={["Employee", "Transactions", "Sales"]} rows={employeeRows} /> : <p>No employee sales in this period.</p>}
+      </section>
+
+      <section data-report-print-section>
+        <h2>Inventory health</h2>
+        <dl data-report-print-totals>
+          <div><dt>Tracked stock positions</dt><dd>{formatQuantity(snapshot.inventory.stock_item_count)}</dd></div>
+          <div><dt>Units on hand</dt><dd>{formatQuantity(snapshot.inventory.on_hand_quantity)}</dd></div>
+          <div><dt>Low stock</dt><dd>{formatQuantity(snapshot.inventory.low_stock_count)}</dd></div>
+          <div><dt>Out of stock</dt><dd>{formatQuantity(snapshot.inventory.out_of_stock_count)}</dd></div>
+        </dl>
+      </section>
+    </article>
+  );
+}
+
 export function ReportingOverview({
   snapshot,
   currencyCode,
-  inventoryEnabled = true,
   mode,
+  printContext,
 }: {
   snapshot: ReportSnapshot;
   currencyCode: string;
-  inventoryEnabled?: boolean;
   mode: "dashboard" | "reports";
+  printContext?: ReportPrintContext;
 }) {
   const { summary } = snapshot;
   const salesByDay = snapshot.sales_by_day.map((day) => ({
@@ -129,32 +264,13 @@ export function ReportingOverview({
     net: product.net_sales_minor / 100,
   }));
   const unitName = currencyCode.toUpperCase();
-  const inventoryAlerts = [
-    {
-      detail: "At or below their configured threshold",
-      icon: TrendingDown,
-      label: "Low stock",
-      value: snapshot.inventory.low_stock_count,
-    },
-    {
-      detail: "Tracked positions with no units",
-      icon: Warehouse,
-      label: "Out of stock",
-      value: snapshot.inventory.out_of_stock_count,
-    },
-    {
-      detail: "Positions below zero need attention",
-      icon: TrendingDown,
-      label: "Negative stock",
-      value: snapshot.inventory.negative_stock_count,
-    },
-  ].filter((alert) => alert.value > 0);
-
   return (
-    <div className="space-y-8">
+    <>
+    <div className="space-y-8" data-report-screen>
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Report summary">
         <MetricCard
           detail={`${summary.transaction_count} completed transaction${summary.transaction_count === 1 ? "" : "s"}`}
+          help="Completed sales minus recorded refunds for the selected date range."
           icon={TrendingUp}
           label="Net sales"
           tone="positive"
@@ -162,12 +278,14 @@ export function ReportingOverview({
         />
         <MetricCard
           detail={`${formatMinorMoney(summary.discounts_minor, currencyCode)} in discounts`}
+          help="The total before refunds for completed transactions in this period."
           icon={CircleDollarSign}
           label="Completed sales"
           value={formatMinorMoney(summary.sales_total_minor, currencyCode)}
         />
         <MetricCard
           detail="Recorded returns in this period"
+          help="Money returned to customers from completed sales."
           icon={TrendingDown}
           label="Refunds"
           tone="negative"
@@ -175,6 +293,7 @@ export function ReportingOverview({
         />
         <MetricCard
           detail={`${formatMinorMoney(summary.taxes_minor, currencyCode)} taxes included`}
+          help="The average completed sale amount in the selected period."
           icon={ReceiptText}
           label="Average order"
           value={formatMinorMoney(summary.average_order_minor, currencyCode)}
@@ -184,13 +303,15 @@ export function ReportingOverview({
       {summary.cost_access ? (
         <section className="grid gap-4 sm:grid-cols-3" aria-label="Profit summary">
           <MetricCard
-            detail="Immutable cost recorded with sold items"
+            detail="Recorded cost of the products sold"
+            help="Product cost, also called cost of goods sold (COGS), is the cost recorded when products are sold."
             icon={Warehouse}
-            label="COGS"
+            label="Product cost (COGS)"
             value={formatMinorMoney(summary.cogs_minor ?? 0, currencyCode)}
           />
           <MetricCard
-            detail="Net sales less recorded COGS"
+            detail="Net sales less recorded product cost"
+            help="The sales amount left after subtracting the recorded cost of products sold."
             icon={TrendingUp}
             label="Gross profit"
             tone={(summary.gross_profit_minor ?? 0) < 0 ? "negative" : "positive"}
@@ -198,33 +319,11 @@ export function ReportingOverview({
           />
           <MetricCard
             detail="Gross profit as a share of net sales"
+            help="The percentage of net sales left after product cost is subtracted."
             icon={ChartColumnBig}
             label="Gross margin"
             value={summary.gross_margin_bps === null ? "—" : formatPercentage(summary.gross_margin_bps)}
           />
-        </section>
-      ) : null}
-
-      {mode === "dashboard" && inventoryEnabled && inventoryAlerts.length > 0 ? (
-        <section aria-labelledby="dashboard-inventory-alerts" className="space-y-3">
-          <div>
-            <h2 className="font-heading text-lg font-medium" id="dashboard-inventory-alerts">Inventory alerts</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Current stock positions requiring operational attention within your authorized reporting scope.
-            </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {inventoryAlerts.map((alert) => (
-              <MetricCard
-                detail={alert.detail}
-                icon={alert.icon}
-                key={alert.label}
-                label={alert.label}
-                tone="negative"
-                value={formatQuantity(alert.value)}
-              />
-            ))}
-          </div>
         </section>
       ) : null}
 
@@ -405,7 +504,7 @@ export function ReportingOverview({
               </div>
             ) : (
               <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
-                Ask an owner for <span className="font-mono text-xs">products.view_cost</span> to see product cost, profit, and inventory valuation.
+                Ask an owner to give you access to product costs if you need to review profit and inventory value. You can still review sales and stock quantities.
               </div>
             )}
           </CardContent>
@@ -415,7 +514,7 @@ export function ReportingOverview({
       {mode === "reports" ? (
         <section className="space-y-5">
           <SectionTitle
-            description={`Compare the teams, stores, categories, and inventory activity behind the headline figures. Values are in minor currency units only in CSV exports; this screen uses ${unitName}.`}
+            description={`Compare the teams, stores, categories, and stock activity behind the headline figures. This screen uses ${unitName}.`}
             title="Operational breakdown"
           />
           <div className="grid gap-4 xl:grid-cols-2">
@@ -480,10 +579,10 @@ export function ReportingOverview({
               title="Sales by hour"
             />
             <BreakdownCard
-              columns={["Movement", "Records", "Quantity change"]}
+              columns={["Stock activity", "Records", "Quantity change"]}
               empty="No inventory movements in this period."
               rows={snapshot.inventory.movement_by_type.map((movement) => [
-                movement.movement_type.replaceAll("_", " "),
+                inventoryActivityLabel(movement.movement_type),
                 formatQuantity(movement.movement_count),
                 formatQuantity(movement.quantity_delta),
               ])}
@@ -549,6 +648,8 @@ export function ReportingOverview({
         </section>
       ) : null}
     </div>
+    {printContext ? <ReportPrintDocument context={printContext} currencyCode={currencyCode} snapshot={snapshot} /> : null}
+    </>
   );
 }
 

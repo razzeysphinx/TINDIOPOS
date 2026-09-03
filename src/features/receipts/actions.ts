@@ -82,7 +82,10 @@ export async function refundSaleAction(input: unknown): Promise<RefundSaleAction
   }
 
   revalidatePath("/back-office/receipts");
+  revalidatePath("/back-office/receipts/[receiptId]", "page");
   revalidatePath("/back-office/inventory");
+  revalidatePath("/pos/receipts");
+  revalidatePath("/pos/receipts/[receiptId]", "page");
 
   return {
     ok: true,

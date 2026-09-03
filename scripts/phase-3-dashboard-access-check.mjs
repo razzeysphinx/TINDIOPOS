@@ -41,7 +41,9 @@ test("business dashboard keeps its server route gate and embeds the reusable act
 });
 
 test("inventory dashboard reuses the action grid behind its inventory permission gate", () => {
-  assert.match(inventoryPage, /requireBackOfficePermission\("inventory\.manage"\)/);
+  // View-only inventory users retain the Stock and Activity tabs; management
+  // operations remain separately gated by inventory.manage.
+  assert.match(inventoryPage, /requireBackOfficePermission\(\["inventory\.view", "inventory\.manage"\]\)/);
   assert.match(inventoryPage, /<DashboardActionGrid/);
   assert.match(inventoryPage, /permissions=\{context\.permissions\}/);
   assert.match(inventoryPage, /surface="inventory"/);

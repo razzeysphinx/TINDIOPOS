@@ -64,7 +64,7 @@ export default async function OfflineSyncPage({
       <PageHeader
         eyebrow="POS resilience"
         title="Offline sync center"
-        description="Review every server-observed offline POS synchronization result by store, register, device, and cashier. Fix an issue first, then retry the original temporary receipt from its POS device."
+        description="Check sales that were recorded while offline. If one needs attention, fix the device issue first, then retry it from the same POS device."
         action={<Badge variant="secondary"><CloudUpload /> Device manager</Badge>}
       />
       <GlobalFilterBar action="/back-office/offline-sync" namePrefix="offline-sync-filter" showDateRange={false} storeId={scope.selectedStoreId} stores={stores} />

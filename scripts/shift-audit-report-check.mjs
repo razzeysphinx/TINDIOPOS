@@ -4,9 +4,10 @@ import { readFile } from "node:fs/promises";
 const root = new URL("..", import.meta.url);
 const source = (path) => readFile(new URL(path, root), "utf8");
 
-const [workspace, manager, detailPage, detailData, migration, historyMigration] = await Promise.all([
+const [workspace, manager, quickViewAction, detailPage, detailData, migration, historyMigration] = await Promise.all([
   source("src/app/(back-office)/back-office/shifts/page.tsx"),
   source("src/features/shifts/shift-manager.tsx"),
+  source("src/features/shifts/quick-view/actions.ts"),
   source("src/app/(back-office)/back-office/shifts/[shiftId]/page.tsx"),
   source("src/features/shifts/data.ts"),
   source("supabase/migrations/20260828082731_shift_audit_report_details.sql"),
@@ -18,9 +19,23 @@ assert.match(workspace, /canViewClosedShiftAudit=\{canViewClosedShiftAudit\}/, "
 assert.match(workspace, /get_shift_audit_history/, "Audit users must load closed shifts through the history-scoped RPC");
 assert.match(workspace, /isOperationsMode\s*\?\s*supabase/, "Report mode must not depend on operational-shift reads");
 assert.match(workspace, /requireBackOfficePermission\(\["dashboard\.view", "reports\.view", "shifts\.view_history", "settings\.manage"\]\)/, "Back Office audit users must be able to reach the Shift Reports route");
-assert.match(manager, /role=\{canViewClosedShiftAudit \? "link" : undefined\}/, "Authorized closed-shift rows must be keyboard-accessible links");
-assert.match(manager, /router\.push\(reportHref\)/, "Authorized closed-shift rows must navigate to their report");
+assert.match(workspace, /<ShiftManager\s+auditFilters=\{!isOperationsMode/, "Report filters must be provided to the Shift Manager rather than rendered as a separate page card");
+assert.match(workspace, /<GlobalFilterBar[\s\S]*?embedded/, "Shift reports must reuse the shared filter form in embedded mode");
+assert.match(manager, /<ShiftAuditDrawer/, "The audit trail must reuse a shared right-side shift-report drawer");
+assert.match(manager, /<ClosedShiftHistory\s+auditFilters=\{auditFilters\}/, "The existing filter form must be placed in the audit-trail workflow");
+assert.match(manager, /<CardContent className="space-y-4">\s*\{auditFilters\}/, "Filters must render directly above the closed-shift results");
+assert.match(manager, /side="right"/, "The selected report must open from the right");
+assert.match(manager, /className="flex h-dvh max-h-none max-w-none flex-col rounded-none sm:max-w-\[38rem\]"/, "The shift-report drawer must fill the available height without resizing the page");
+assert.match(manager, /role=\{canViewClosedShiftAudit \? "button" : undefined\}/, "Authorized closed-shift rows must be keyboard-accessible controls");
+assert.match(manager, /onKeyDown=\{\(event\) =>/, "Rows must support keyboard activation");
+assert.match(manager, /id=\{`shift-report-open-\$\{shift\.id\}`\}/, "Drawer focus must return to the selected row after close");
+assert.match(manager, /loadShiftQuickViewAction\(\{ shiftId \}\)/, "Shift details must load only after the user selects a shift");
+assert.doesNotMatch(manager, /router\.push\(reportHref\)/, "The normal audit-table view must not navigate away to inspect a report");
 assert.match(manager, /event\.stopPropagation\(\)/, "Print must remain usable without opening the audit report");
+assert.match(manager, /Starting cash \+ cash sales − cash refunds \+ paid in − paid out/, "Expected cash must explain the authoritative formula");
+assert.match(manager, /showLabel/, "The existing print control must be reusable as a labelled drawer action");
+assert.match(quickViewAction, /requireBackOfficePermission\(\["shifts\.view_history", "settings\.manage"\]\)/, "Quick view must enforce the existing server-side permission boundary");
+assert.match(quickViewAction, /loadShiftAuditReport\(context, parsed\.data\.shiftId\)/, "Quick view must reuse the canonical detail loader");
 assert.match(detailPage, /requireBackOfficePermission\(\["shifts\.view_history", "settings\.manage"\]\)/, "Direct report routes must require an existing Back Office permission");
 assert.match(detailData, /get_shift_audit_report/, "Report page must use the guarded report RPC");
 

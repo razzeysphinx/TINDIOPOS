@@ -22,9 +22,11 @@ export const receiptSettingsSchema = z.object({
   showPaymentDetails: z.boolean(),
 });
 
+export const receiptDeliveryRecipientSchema = z.string().trim().email().max(320);
+
 export const receiptDeliverySchema = z.object({
   receiptId: z.uuid(),
-  recipient: z.string().trim().email().max(320),
+  recipient: receiptDeliveryRecipientSchema,
   idempotencyKey: z.uuid(),
 });
 

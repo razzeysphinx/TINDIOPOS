@@ -83,7 +83,12 @@ export function InventoryIntegrityWorkflows({
   sections?: readonly InventoryIntegritySection[];
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [isPolicyPending, startPolicyTransition] = useTransition();
+  const [isReasonPending, startReasonTransition] = useTransition();
+  const [isAdjustmentPending, startAdjustmentTransition] = useTransition();
+  const [isTransferPending, startTransferTransition] = useTransition();
+  const [isSupplierReturnPending, startSupplierReturnTransition] = useTransition();
+  const [isProductionPending, startProductionTransition] = useTransition();
   const firstStoreId = stores[0]?.id ?? "";
   const firstItem = items[0];
   const [policyStoreId, setPolicyStoreId] = useState(firstStoreId);
@@ -175,12 +180,12 @@ export function InventoryIntegrityWorkflows({
 
   function submitPolicy(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    startTransition(async () => complete(await updateInventoryPolicyAction({ storeId: policyStoreId, negativeStockPolicy: policy }), setPolicyResult));
+    startPolicyTransition(async () => complete(await updateInventoryPolicyAction({ storeId: policyStoreId, negativeStockPolicy: policy }), setPolicyResult));
   }
 
   function submitReason(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    startTransition(async () => {
+    startReasonTransition(async () => {
       const result = await createAdjustmentReasonAction({ code: reasonCode, name: reasonName, movementType: reasonType });
       complete(result, setReasonResult);
       if (result.ok) {
@@ -221,7 +226,7 @@ export function InventoryIntegrityWorkflows({
 
   function postReviewedAdjustment() {
     if (!adjustmentReview) return;
-    startTransition(async () => {
+    startAdjustmentTransition(async () => {
       const result = await recordInventoryAdjustmentV2Action({
         storeId: adjustmentReview.storeId,
         reasonCode: adjustmentReview.reasonCode,
@@ -241,7 +246,7 @@ export function InventoryIntegrityWorkflows({
   function submitTransferReceipt(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedTransfer) return;
-    startTransition(async () => {
+    startTransferTransition(async () => {
       const result = await receiveStockTransferAction({
         stockTransferId: selectedTransfer.id,
         note: transferNote,
@@ -256,7 +261,7 @@ export function InventoryIntegrityWorkflows({
 
   function submitSupplierReturn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    startTransition(async () => {
+    startSupplierReturnTransition(async () => {
       const result = await returnToSupplierAction({
         storeId: returnStoreId,
         supplierId: returnSupplierId,
@@ -270,7 +275,7 @@ export function InventoryIntegrityWorkflows({
 
   function submitProduction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    startTransition(async () => {
+    startProductionTransition(async () => {
       const result = await produceCompositeAction({ storeId: productionStoreId, productId: compositeId, quantity: productionQuantity, note: productionNote });
       complete(result, setProductionResult);
       if (result.ok) setProductionNote("");
@@ -288,7 +293,7 @@ export function InventoryIntegrityWorkflows({
           {stores.length ? <form className="space-y-3" onSubmit={submitPolicy} noValidate>
             <Field label="Store"><select className={selectClassName} value={policyStoreId} onChange={(event) => choosePolicyStore(event.target.value)}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></Field>
             <Field label="When stock would become negative"><select className={selectClassName} value={policy} onChange={(event) => setPolicy(event.target.value as typeof policy)}><option value="block">Block the movement</option><option value="warn">Allow with warning policy</option><option value="allow">Allow</option></select></Field>
-            <SubmitRow pending={isPending} result={policyResult} label="Save safeguard" icon={<Settings2 />} />
+            <SubmitRow pending={isPolicyPending} pendingLabel="Saving safeguard..." result={policyResult} label="Save safeguard" icon={<Settings2 />} />
           </form> : <Empty message="Create a store before setting stock safeguards." />}
         </WorkflowCard> : null}
 
@@ -298,7 +303,7 @@ export function InventoryIntegrityWorkflows({
               <Field label="Code"><Input value={reasonCode} onChange={(event) => setReasonCode(event.target.value.toUpperCase())} placeholder="DAMAGE" /></Field>
               <Field label="Name"><Input value={reasonName} onChange={(event) => setReasonName(event.target.value)} placeholder="Damaged goods" /></Field>
               <Field label="Movement type"><select className={selectClassName} value={reasonType} onChange={(event) => setReasonType(event.target.value as typeof reasonType)}><option value="ADJUSTMENT">Adjustment</option><option value="DAMAGE">Damage</option><option value="LOSS">Loss</option></select></Field>
-              <div className="flex items-end"><Button disabled={isPending} type="submit">{isPending ? <LoaderCircle className="animate-spin" /> : <Settings2 />} Add reason</Button></div>
+              <div className="flex items-end"><Button disabled={isReasonPending} type="submit">{isReasonPending ? <><LoaderCircle className="animate-spin" />Adding reason...</> : <><Settings2 />Add reason</>}</Button></div>
               <div className="sm:col-span-2"><ResultMessage result={reasonResult} /></div>
             </form>
             {adjustmentReasons.length && adjustmentItems.length ? <><form className="grid gap-3 sm:grid-cols-2" onSubmit={reviewAdjustment} noValidate>
@@ -307,9 +312,9 @@ export function InventoryIntegrityWorkflows({
               <ItemSelect label="Item" items={adjustmentItems} productId={adjustmentProductId} variantId={adjustmentVariantId} onChange={(value) => { chooseItem(value, setAdjustmentProductId, setAdjustmentVariantId); setAdjustmentReview(null); }} />
               <Field label="Quantity change"><Input inputMode="decimal" value={adjustmentQuantity} onChange={(event) => { setAdjustmentQuantity(event.target.value); setAdjustmentReview(null); }} placeholder="Use - for a reduction" /></Field>
               <Field className="sm:col-span-2" label="Reason / notes"><Input value={adjustmentNote} onChange={(event) => { setAdjustmentNote(event.target.value); setAdjustmentReview(null); }} placeholder="Optional supporting note" /></Field>
-              <div className="sm:col-span-2"><Button disabled={isPending} type="submit"><AlertTriangle /> Review adjustment</Button></div>
+              <div className="sm:col-span-2"><Button disabled={isAdjustmentPending} type="submit"><AlertTriangle /> Review adjustment</Button></div>
             </form>
-            {adjustmentReview ? <AdjustmentReviewCard policy={policies[adjustmentReview.storeId] ?? "block"} pending={isPending} review={adjustmentReview} onBack={() => setAdjustmentReview(null)} onPost={postReviewedAdjustment} /> : null}
+            {adjustmentReview ? <AdjustmentReviewCard policy={policies[adjustmentReview.storeId] ?? "block"} pending={isAdjustmentPending} review={adjustmentReview} onBack={() => setAdjustmentReview(null)} onPost={postReviewedAdjustment} /> : null}
             <ResultMessage result={adjustmentResult} /></> : <Empty message="Create a reason and make a tracked item available in a store to post controlled adjustments." />}
           </div>
         </WorkflowCard> : null}
@@ -319,7 +324,7 @@ export function InventoryIntegrityWorkflows({
             <Field label="Transfer"><select className={selectClassName} value={transferId} onChange={(event) => chooseTransfer(event.target.value)}>{inTransitTransfers.map((transfer) => <option key={transfer.id} value={transfer.id}>{transfer.sourceStoreName} → {transfer.destinationStoreName} ({transfer.status.replace("_", " ")})</option>)}</select></Field>
             {selectedTransfer?.lines.map((line) => <div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_9rem] sm:items-end" key={line.id}><div><p className="font-medium">{line.label}</p><p className="mt-1 text-xs text-muted-foreground">{formatQuantity(line.quantity - line.receivedQuantity)} {line.unit} remaining</p></div><Field label="Receive now"><Input inputMode="decimal" value={transferQuantities[line.id] ?? ""} onChange={(event) => setTransferQuantities({ ...transferQuantities, [line.id]: event.target.value })} /></Field></div>)}
             <Field label="Receipt note"><Input value={transferNote} onChange={(event) => setTransferNote(event.target.value)} placeholder="Optional receiving note" /></Field>
-            <SubmitRow pending={isPending} result={transferResult} label="Receive transfer" icon={<RotateCcw />} />
+            <SubmitRow pending={isTransferPending} result={transferResult} label="Receive transfer" icon={<RotateCcw />} />
           </form> : <Empty message="Shipped transfers will appear here for partial or complete receiving." />}
         </WorkflowCard> : null}
 
@@ -330,7 +335,7 @@ export function InventoryIntegrityWorkflows({
             <ItemSelect label="Returned item" items={returnItems} productId={returnProductId} variantId={returnVariantId} onChange={(value) => chooseItem(value, setReturnProductId, setReturnVariantId)} />
             <Field label="Quantity"><Input inputMode="decimal" value={returnQuantity} onChange={(event) => setReturnQuantity(event.target.value)} /></Field>
             <Field className="sm:col-span-2" label="Return note"><Input value={returnNote} onChange={(event) => setReturnNote(event.target.value)} placeholder="Optional supplier reference" /></Field>
-            <div className="sm:col-span-2"><SubmitRow pending={isPending} result={returnResult} label="Post supplier return" icon={<PackageMinus />} /></div>
+            <div className="sm:col-span-2"><SubmitRow pending={isSupplierReturnPending} result={returnResult} label="Post supplier return" icon={<PackageMinus />} /></div>
           </form> : <Empty message="An active supplier, store, and tracked item are required for a supplier return." />}
         </WorkflowCard> : null}
 
@@ -340,7 +345,7 @@ export function InventoryIntegrityWorkflows({
             <Field label="Composite output"><select className={selectClassName} value={compositeId} onChange={(event) => setCompositeId(event.target.value)}>{availableComposites.map((composite) => <option key={composite.id} value={composite.id}>{composite.name}</option>)}</select></Field>
             <Field label="Quantity to produce"><Input inputMode="decimal" value={productionQuantity} onChange={(event) => setProductionQuantity(event.target.value)} /></Field>
             <Field label="Production note"><Input value={productionNote} onChange={(event) => setProductionNote(event.target.value)} placeholder="Optional batch note" /></Field>
-            <div className="sm:col-span-2"><SubmitRow pending={isPending} result={productionResult} label="Post production" icon={<Factory />} /></div>
+            <div className="sm:col-span-2"><SubmitRow pending={isProductionPending} result={productionResult} label="Post production" icon={<Factory />} /></div>
           </form> : <Empty message="Create a composite product with a recipe and make it available in a store before producing it." />}
         </WorkflowCard> : null}
       </div>
@@ -391,8 +396,8 @@ function ItemSelect({ label, items, productId, variantId, onChange }: { label: s
   return <Field label={label}><select className={selectClassName} value={`${productId}|${variantId}`} onChange={(event) => onChange(event.target.value)}>{items.map((item) => <option key={`${item.productId}|${item.variantId ?? ""}`} value={`${item.productId}|${item.variantId ?? ""}`}>{item.label}</option>)}</select></Field>;
 }
 
-function SubmitRow({ pending, result, label, icon }: { pending: boolean; result: Result | null; label: string; icon: ReactNode }) {
-  return <div className="flex items-center justify-between gap-3"><ResultMessage result={result} /><Button disabled={pending} type="submit">{pending ? <LoaderCircle className="animate-spin" /> : icon}{label}</Button></div>;
+function SubmitRow({ pending, result, label, pendingLabel = label, icon }: { pending: boolean; pendingLabel?: string; result: Result | null; label: string; icon: ReactNode }) {
+  return <div className="flex items-center justify-between gap-3"><ResultMessage result={result} /><Button disabled={pending} type="submit">{pending ? <LoaderCircle className="animate-spin" /> : icon}{pending ? pendingLabel : label}</Button></div>;
 }
 
 function ResultMessage({ result }: { result: Result | null }) {

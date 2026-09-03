@@ -42,15 +42,8 @@ export default async function CategoriesPage() {
       <PageHeader
         eyebrow="Catalog setup"
         title="Categories"
-        description="Keep the product grid quick to scan with ordered, color-coded categories."
-        action={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Badge variant={canManage ? "secondary" : "outline"}>
-              {canManage ? "Management access" : "View access"}
-            </Badge>
-            {canManage ? <CreateCategoryForm /> : null}
-          </div>
-        }
+        description="Group products so your team can find them quickly while selling."
+        action={canManage ? <CreateCategoryForm /> : undefined}
       />
 
       {categories.length > 0 ? (
@@ -111,6 +104,7 @@ export default async function CategoriesPage() {
         </section>
       ) : (
         <BackOfficeStateCard
+          action={canManage ? <CreateCategoryForm /> : null}
           description="Add the first category when the organization is ready."
           icon={
             <Archive className="size-8 text-muted-foreground" aria-hidden="true" />

@@ -56,6 +56,9 @@ export default async function ReportsPage({
     getReportingSnapshot(context, filter, "reports"),
     loadReportStores(context),
   ]);
+  const selectedStoreName = filter.storeId
+    ? stores.find((store) => store.id === filter.storeId)?.name ?? "Selected store"
+    : "All authorized stores";
 
   return (
     <div className="space-y-8">
@@ -74,7 +77,18 @@ export default async function ReportsPage({
         showExports
         stores={stores}
       />
-      <ReportingOverview currencyCode={context.organization.currency_code} mode="reports" snapshot={snapshot} />
+      <ReportingOverview
+        currencyCode={context.organization.currency_code}
+        mode="reports"
+        printContext={{
+          endDate: filter.endDate,
+          organizationName: context.organization.name,
+          startDate: filter.startDate,
+          storeName: selectedStoreName,
+          timezone: context.organization.timezone,
+        }}
+        snapshot={snapshot}
+      />
     </div>
   );
 }

@@ -18,6 +18,7 @@ import {
 } from "@/features/customers/customer-schema";
 import { createLoyaltyCardCode, createLoyaltyCardVerificationToken } from "@/features/customers/loyalty-card-token";
 import type { CustomerActionResult, LoyaltyCardCredential } from "@/features/customers/customer-types";
+import type { PosCustomer } from "@/features/pos/pos-types";
 import type { BusinessContext } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
@@ -33,25 +34,41 @@ export async function createCustomer({
 }: {
   context: BusinessContext;
   input: unknown;
-}): Promise<CustomerActionResult> {
+}): Promise<CustomerActionResult<PosCustomer>> {
   const parsed = createCustomerSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Check the customer details and try again." };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("customers").insert({
-    organization_id: context.organization.id,
-    full_name: parsed.data.fullName,
-    email: parsed.data.email || null,
-    phone: parsed.data.phone || null,
-    address: parsed.data.address || null,
-    birthday: parsed.data.birthday || null,
-    notes: parsed.data.notes || null,
-    loyalty_card_code: parsed.data.loyaltyCardCode || undefined,
-  });
+  const { data, error } = await supabase
+    .from("customers")
+    .insert({
+      organization_id: context.organization.id,
+      full_name: parsed.data.fullName,
+      email: parsed.data.email || null,
+      phone: parsed.data.phone || null,
+      address: parsed.data.address || null,
+      birthday: parsed.data.birthday || null,
+      notes: parsed.data.notes || null,
+      loyalty_card_code: parsed.data.loyaltyCardCode || undefined,
+    })
+    .select("id, customer_number, loyalty_card_code, full_name, email, phone")
+    .single();
 
-  if (error) return { ok: false, message: customerDatabaseMessage(error.message) };
+  if (error || !data) return { ok: false, message: customerDatabaseMessage(error?.message) };
 
-  return { ok: true, message: "Customer created." };
+  return {
+    ok: true,
+    message: "Customer created.",
+    data: {
+      id: data.id,
+      customerNumber: data.customer_number,
+      loyaltyCardCode: data.loyalty_card_code,
+      fullName: data.full_name,
+      email: data.email,
+      phone: data.phone,
+      loyaltyPoints: 0,
+    },
+  };
 }
 
 export async function importCustomersCsv({

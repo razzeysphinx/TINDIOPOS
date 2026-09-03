@@ -1,10 +1,21 @@
 "use client";
 
 import { LoaderCircle, Search, Star, UserRound, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { createCustomerAction } from "@/features/customers/actions";
+import { createCustomerSchema } from "@/features/customers/customer-schema";
 import type { PosCustomer } from "@/features/pos/pos-types";
 
 type CustomerSearchResponse =
@@ -14,11 +25,13 @@ type CustomerSearchResponse =
 export function PosCustomerPicker({
   disabled,
   onChange,
+  showLoyalty,
   storeId,
   value,
 }: {
   disabled: boolean;
   onChange: (customer: PosCustomer | null) => void;
+  showLoyalty: boolean;
   storeId: string;
   value: PosCustomer | null;
 }) {
@@ -73,22 +86,38 @@ export function PosCustomerPicker({
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-[0.12em] text-primary">Customer</p>
             <p className="mt-1 truncate text-sm font-semibold">{value.fullName}</p>
-            <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-              <Star className="size-3 text-primary" aria-hidden="true" />
-              {value.loyaltyPoints.toLocaleString()} loyalty points
-            </p>
+            {showLoyalty ? (
+              <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                <Star className="size-3 text-primary" aria-hidden="true" />
+                {value.loyaltyPoints.toLocaleString()} loyalty points
+              </p>
+            ) : null}
             <p className="mt-1 text-xs text-muted-foreground">#{value.customerNumber.toLocaleString()} · {value.loyaltyCardCode}</p>
           </div>
-          <Button
-            aria-label="Remove selected customer"
-            disabled={disabled}
-            onClick={() => onChange(null)}
-            size="icon-xs"
-            type="button"
-            variant="ghost"
-          >
-            <X aria-hidden="true" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              disabled={disabled}
+              onClick={() => {
+                onChange(null);
+                setIsOpen(true);
+              }}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              Change
+            </Button>
+            <Button
+              aria-label="Remove selected customer"
+              disabled={disabled}
+              onClick={() => onChange(null)}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -168,5 +197,142 @@ export function PosCustomerPicker({
         </div>
       ) : null}
     </div>
+  );
+}
+
+type PosCustomerCreateDraft = {
+  fullName: string;
+  email: string;
+  phone: string;
+};
+
+const emptyCustomerDraft: PosCustomerCreateDraft = {
+  fullName: "",
+  email: "",
+  phone: "",
+};
+
+/**
+ * A compact POS entry point for the existing customer creation action. It
+ * intentionally uses the same schema and server authorization as Back Office.
+ */
+export function PosCustomerCreateDialog({
+  onCreated,
+  onOpenChange,
+  open,
+}: {
+  onCreated: (customer: PosCustomer) => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
+  const [draft, setDraft] = useState<PosCustomerCreateDraft>(emptyCustomerDraft);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof PosCustomerCreateDraft, string>>>({});
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const close = () => {
+    setDraft(emptyCustomerDraft);
+    setFieldErrors({});
+    setMessage(null);
+    onOpenChange(false);
+  };
+
+  const updateField = (field: keyof PosCustomerCreateDraft, value: string) => {
+    setDraft((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => ({ ...current, [field]: undefined }));
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const input = {
+      ...draft,
+      address: "",
+      birthday: "",
+      notes: "",
+      loyaltyCardCode: "",
+    };
+    const parsed = createCustomerSchema.safeParse(input);
+
+    if (!parsed.success) {
+      const errors = parsed.error.flatten().fieldErrors;
+      setFieldErrors({
+        fullName: errors.fullName?.[0],
+        email: errors.email?.[0],
+        phone: errors.phone?.[0],
+      });
+      return;
+    }
+
+    setMessage(null);
+    startTransition(async () => {
+      const result = await createCustomerAction(parsed.data);
+      if (!result.ok || !result.data) {
+        setMessage(result.message);
+        return;
+      }
+
+      onCreated(result.data);
+      close();
+    });
+  };
+
+  return (
+    <Dialog.Root onOpenChange={(nextOpen) => (nextOpen ? onOpenChange(true) : close())} open={open}>
+      <DialogContent className="w-full max-w-md" closeLabel="Close new customer form">
+        <DialogHeader>
+          <DialogTitle>New customer</DialogTitle>
+          <DialogDescription>Add a customer, then attach them to this sale immediately.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit}>
+          <DialogBody className="grid gap-4">
+            <label className="grid gap-1.5 text-sm font-medium">
+              Full name
+              <Input
+                aria-describedby={fieldErrors.fullName ? "pos-customer-name-error" : undefined}
+                aria-invalid={Boolean(fieldErrors.fullName)}
+                autoComplete="name"
+                autoFocus
+                onChange={(event) => updateField("fullName", event.target.value)}
+                placeholder="Customer name"
+                value={draft.fullName}
+              />
+              {fieldErrors.fullName ? <span className="text-xs font-normal text-destructive" id="pos-customer-name-error">{fieldErrors.fullName}</span> : null}
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium">
+              Phone <span className="font-normal text-muted-foreground">(optional)</span>
+              <Input
+                aria-describedby={fieldErrors.phone ? "pos-customer-phone-error" : undefined}
+                aria-invalid={Boolean(fieldErrors.phone)}
+                autoComplete="tel"
+                inputMode="tel"
+                onChange={(event) => updateField("phone", event.target.value)}
+                placeholder="Mobile number"
+                value={draft.phone}
+              />
+              {fieldErrors.phone ? <span className="text-xs font-normal text-destructive" id="pos-customer-phone-error">{fieldErrors.phone}</span> : null}
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium">
+              Email <span className="font-normal text-muted-foreground">(optional)</span>
+              <Input
+                aria-describedby={fieldErrors.email ? "pos-customer-email-error" : undefined}
+                aria-invalid={Boolean(fieldErrors.email)}
+                autoComplete="email"
+                inputMode="email"
+                onChange={(event) => updateField("email", event.target.value)}
+                placeholder="customer@example.com"
+                type="email"
+                value={draft.email}
+              />
+              {fieldErrors.email ? <span className="text-xs font-normal text-destructive" id="pos-customer-email-error">{fieldErrors.email}</span> : null}
+            </label>
+            {message ? <p aria-live="polite" className="text-sm text-destructive">{message}</p> : null}
+          </DialogBody>
+          <DialogFooter className="border-t px-4 py-4 sm:px-6">
+            <Button disabled={isPending} onClick={close} type="button" variant="outline">Cancel</Button>
+            <Button disabled={isPending} type="submit">{isPending ? "Creating…" : "Create customer"}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog.Root>
   );
 }

@@ -26,7 +26,7 @@ export default async function CustomersPage() {
           title="Customers"
         />
         <BackOfficeStateCard
-          description="Ask an owner to assign the customers.manage permission to your role."
+          description="Ask an owner or authorized administrator to give your role customer-management access."
           icon={<UsersRound className="size-5" aria-hidden="true" />}
           title="Customer management permission required"
         />
@@ -46,7 +46,7 @@ export default async function CustomersPage() {
             <CreateCustomerForm />
           </div>
         }
-        description="Build customer profiles, review loyalty balances, and trace each customer’s completed purchases."
+        description="Keep customer details in one place, manage loyalty, and review completed purchases."
         eyebrow="CRM"
         title="Customers & loyalty"
       />
@@ -61,6 +61,7 @@ export default async function CustomersPage() {
         <CustomerDirectory customers={customers} />
       ) : (
         <BackOfficeStateCard
+          action={<CreateCustomerForm />}
           description="Add a customer here, then select them from the POS cart before checkout."
           icon={<UsersRound className="size-5" aria-hidden="true" />}
           title="No customers yet"

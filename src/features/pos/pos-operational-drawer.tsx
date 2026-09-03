@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ExternalLink,
   PackageSearch,
   ReceiptText,
   Settings2,
@@ -54,6 +55,8 @@ export type PosOperationalNavigationProps = {
   stores: PosStore[];
   timeClockEntry: TimeClockEntry | null;
   timezone: string;
+  /** A Back Office link belongs in the account drawer, never the sales header. */
+  canAccessBackOffice?: boolean;
 };
 
 const navigationItems = [
@@ -65,6 +68,7 @@ const navigationItems = [
 ] as const;
 
 function PosOperationalNavigationContent({
+  canAccessBackOffice = false,
   canCreateSales,
   canUseTimeClock,
   canUseShiftControls,
@@ -73,7 +77,7 @@ function PosOperationalNavigationContent({
   stores,
   timeClockEntry,
   timezone,
-}: Pick<PosOperationalNavigationProps, "canCreateSales" | "canUseShiftControls" | "canUseTimeClock" | "canViewReceipts" | "stores" | "timeClockEntry" | "timezone"> & {
+}: Pick<PosOperationalNavigationProps, "canAccessBackOffice" | "canCreateSales" | "canUseShiftControls" | "canUseTimeClock" | "canViewReceipts" | "stores" | "timeClockEntry" | "timezone"> & {
   onNavigate: () => void;
 }) {
   const pathname = usePathname();
@@ -122,11 +126,23 @@ function PosOperationalNavigationContent({
           </div>
         </section>
       ) : null}
+
+      {canAccessBackOffice ? (
+        <Link
+          className={cn(buttonVariants({ variant: "outline" }), "w-full justify-start")}
+          href="/back-office"
+          onClick={onNavigate}
+        >
+          <ExternalLink aria-hidden="true" />
+          Back Office
+        </Link>
+      ) : null}
     </div>
   );
 }
 
 export function PosOperationalDrawer({
+  canAccessBackOffice,
   employeeName,
   organizationName,
   ...navigationProps
@@ -163,7 +179,7 @@ export function PosOperationalDrawer({
           </Button>
         </DialogHeader>
         <DialogBody className="max-h-none flex-1 overflow-y-auto p-5">
-          <PosOperationalNavigationContent {...navigationProps} onNavigate={closeNavigation} />
+          <PosOperationalNavigationContent canAccessBackOffice={canAccessBackOffice} {...navigationProps} onNavigate={closeNavigation} />
         </DialogBody>
         <DialogFooter className="border-t p-5">
           <form action={signOutAction} className="w-full" onSubmit={closeNavigation}>

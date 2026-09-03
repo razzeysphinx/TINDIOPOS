@@ -3,10 +3,11 @@
 import {
   ArrowLeft,
   Barcode,
+  Check,
   CircleMinus,
   CirclePlus,
+  ChevronDown,
   Eraser,
-  History,
   ImageIcon,
   Keyboard,
   LockKeyhole,
@@ -27,6 +28,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -36,7 +38,8 @@ import {
 } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
 import { PaymentScreen } from "@/features/checkout/payment-screen";
@@ -47,6 +50,8 @@ import { OfflineQueueStatus } from "@/features/offline/offline-queue-status";
 import { focusCustomerPicker, PosOperationalDrawer } from "@/features/pos/pos-operational-drawer";
 import { readPosWorkspacePreferences } from "@/features/pos/pos-preferences";
 import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
+import type { PosCapabilities } from "@/features/pos/pos-capabilities";
+import { useCompactPosPresentation } from "@/features/pos/pos-responsive";
 import {
   cachePosCatalog,
   cachePosRuntimeSnapshot,
@@ -56,7 +61,7 @@ import {
   type CustomerDisplayState,
   type PosCustomerDisplaySession,
 } from "@/features/customer-display/customer-display-types";
-import { PosCustomerPicker } from "@/features/customers/pos-customer-picker";
+import { PosCustomerCreateDialog, PosCustomerPicker } from "@/features/customers/pos-customer-picker";
 import { signOutAction } from "@/features/auth/actions";
 import { closeShiftAction, openShiftAction } from "@/features/shifts/actions";
 import type { TimeClockEntry } from "@/features/time-clock/time-clock-types";
@@ -84,18 +89,27 @@ import { cn } from "@/lib/utils";
 import { customerDisplayChannel, getRealtimeClient } from "@/lib/supabase/realtime-client";
 import { cancelOpenTicketAction, saveOpenTicketAction } from "@/features/advanced-sales/ticket-actions";
 import { TicketOperationsDialog, TicketSaveDialog } from "@/features/advanced-sales/ticket-workspace-dialogs";
+import { Popover } from "@base-ui/react/popover";
 
 type ModifierGroup = { id: string; name: string; minSelections: number; maxSelections: number; options: Array<{ id: string; name: string; priceMinor: number }> };
 
 const PAGE_SIZE = 24;
 const CUSTOMER_DISPLAY_DEBOUNCE_MS = 125;
-
 type CompletedCustomerDisplaySale = {
   saleId: string;
   receiptNumber: number;
   totalMinor: number;
   changeMinor: number;
   payments: CheckoutPaymentSummary[];
+};
+
+type PosCartSummary = {
+  discountMinor: number;
+  itemCount: number;
+  subtotalMinor: number;
+  taxInclusive: boolean;
+  taxMinor: number;
+  totalMinor: number;
 };
 
 const selectClassName =
@@ -126,6 +140,7 @@ export function PosTerminal({
   canAcceptPayments,
   canApplyDiscounts,
   canAssignTickets,
+  canCreateCustomers,
   canUseDining,
   canUseCustomerLoyalty,
   canUseOpenTickets,
@@ -163,20 +178,7 @@ export function PosTerminal({
 }: {
   activeShift: PosActiveShift | null;
   canAccessBackOffice: boolean;
-  canAcceptPayments: boolean;
-  canApplyDiscounts: boolean;
-  canAssignTickets: boolean;
-  canUseDining: boolean;
-  canUseCustomerLoyalty: boolean;
-  canUseOpenTickets: boolean;
-  canUseShiftControls: boolean;
-  canUseTimeClock: boolean;
-  canViewReceipts: boolean;
-  canCloseShift: boolean;
-  canEditQuantity: boolean;
-  canOpenShift: boolean;
-  canManageTiles: boolean;
-  canRemoveItems: boolean;
+} & PosCapabilities & {
   categories: PosCategory[];
   customerDisplaySessions: PosCustomerDisplaySession[];
   deviceManagementEnabled: boolean;
@@ -213,14 +215,16 @@ export function PosTerminal({
   const [search, setSearch] = useState("");
   const [items, setItems] = useState(initialItems);
   const [favoriteItems, setFavoriteItems] = useState(initialFavoriteItems);
-  const [recentItems, setRecentItems] = useState(initialRecentItems);
-  const [catalogView, setCatalogView] = useState<"all" | "favorites" | "recent">("all");
+  const [, setRecentItems] = useState(initialRecentItems);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [hasMore, setHasMore] = useState(initialItems.length === PAGE_SIZE);
   const [isLoading, setIsLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [cart, setCart] = useState<PosCartLine[]>([]);
+  const [isCartReviewOpen, setIsCartReviewOpen] = useState(false);
   const [itemLayout, setItemLayout] = useState<"grid" | "list">("grid");
   const [selectedCustomer, setSelectedCustomer] = useState<PosCustomer | null>(null);
+  const [isCustomerCreateOpen, setIsCustomerCreateOpen] = useState(false);
   const [discountId, setDiscountId] = useState<string | null>(null);
   const [taxRateId, setTaxRateId] = useState<string | null>(() => taxRates.find((rate) => rate.isDefault)?.id ?? null);
   const [diningOptionId, setDiningOptionId] = useState<string | null>(() => diningOptions.find((option) => option.isDefault)?.id ?? null);
@@ -273,12 +277,24 @@ export function PosTerminal({
     () => new Set(favoriteItems.map((item) => posItemKey(item))),
     [favoriteItems],
   );
-  const displayedItems = catalogView === "favorites"
-    ? favoriteItems
-    : catalogView === "recent"
-      ? recentItems
-      : items;
-  const cartSummary = useMemo(() => {
+  // Recent items remain available in the local runtime state for now, but the
+  // sales surface intentionally has only All items and Favorites. Favorites is
+  // deliberately a filter dimension, separate from the selected category.
+  const displayedItems = useMemo(() => {
+    if (!favoritesOnly) return items;
+
+    const normalizedSearch = search.trim().toLocaleLowerCase();
+    return favoriteItems.filter((item) => {
+      if (selectedCategoryId && item.categoryId !== selectedCategoryId) return false;
+      if (!normalizedSearch) return true;
+
+      return [item.productName, item.variantName, item.sku, item.barcode]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLocaleLowerCase().includes(normalizedSearch));
+    });
+  }, [favoriteItems, favoritesOnly, items, search, selectedCategoryId]);
+  const isCompactCartPresentation = useCompactPosPresentation();
+  const cartSummary = useMemo<PosCartSummary>(() => {
       const subtotalMinor = cart.reduce(
         (total, line) => total + lineTotalMinor(line.priceMinor, line.quantity),
         0,
@@ -767,6 +783,7 @@ export function PosTerminal({
     }
 
     setNotice(null);
+    setIsCartReviewOpen(false);
     setIsPaymentScreenOpen(true);
   };
 
@@ -851,6 +868,135 @@ export function PosTerminal({
     router.refresh();
   };
 
+  const chargeGuidance = !selectedRegister
+    ? "Choose an active register before charging a sale."
+    : !hasOpenShift
+      ? "Open a shift for this register before charging a sale."
+      : availablePaymentMethods.length === 0
+        ? "No payment method is enabled for this store."
+        : "Choose a payment method on the next screen. Prices, payments, receipt, and tracked stock changes are committed together.";
+
+  const cartSupportingControls = (
+    <>
+      <PosCustomerPicker
+        disabled={isPaymentScreenOpen}
+        onChange={(customer) => {
+          setSelectedCustomer(customer);
+          setCheckoutKey(createCheckoutKey());
+        }}
+        showLoyalty={canUseCustomerLoyalty}
+        storeId={selectedStoreId}
+        value={selectedCustomer}
+      />
+      {canUseOpenTickets ? (
+        <div className="border-b px-4 py-3 sm:px-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              disabled={cart.length === 0 || isPaymentScreenOpen || isTicketPending}
+              onClick={() => setIsTicketEditorOpen(true)}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {isTicketPending ? "Saving…" : activeTicketId ? "Update ticket" : "Hold ticket"}
+            </Button>
+            {openTickets.length > 1 ? (
+              <Button
+                disabled={isPaymentScreenOpen || isTicketPending}
+                onClick={() => setIsTicketWorkspaceOpen(true)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                Manage tickets
+              </Button>
+            ) : null}
+            {openTickets.map((ticket) => (
+              <span className="inline-flex items-center gap-1" key={ticket.id}>
+                <Button
+                  disabled={isPaymentScreenOpen}
+                  onClick={() => {
+                    setCart(ticket.cart);
+                    setSelectedCustomer(ticket.customer);
+                    setDiningOptionId(ticket.diningOptionId);
+                    setActiveTicketId(ticket.id);
+                    setCheckoutKey(createCheckoutKey());
+                    setNotice(ticket.label + " loaded.");
+                  }}
+                  size="sm"
+                  type="button"
+                  variant={ticket.id === activeTicketId ? "secondary" : "ghost"}
+                >
+                  {ticket.label}
+                </Button>
+                <button
+                  aria-label={"Cancel " + ticket.label}
+                  className="text-xs text-muted-foreground hover:text-destructive"
+                  disabled={isTicketPending}
+                  onClick={() => startTicketTransition(async () => {
+                    const result = await cancelOpenTicketAction({ ticketId: ticket.id, device: deviceCredential });
+                    setNotice(result.message);
+                    if (result.ok) {
+                      setOpenTickets((current) => current.filter((item) => item.id !== ticket.id));
+                      if (activeTicketId === ticket.id) setActiveTicketId(null);
+                      router.refresh();
+                    }
+                  })}
+                  type="button"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {canUseDining ? (
+        <div className="border-b px-4 py-3 sm:px-5">
+          <label className="grid max-w-xs gap-1 text-xs font-medium text-muted-foreground">
+            Dining
+            <select
+              className={selectClassName}
+              disabled={isPaymentScreenOpen}
+              onChange={(event) => {
+                setDiningOptionId(event.target.value || null);
+                setCheckoutKey(createCheckoutKey());
+              }}
+              value={diningOptionId ?? ""}
+            >
+              <option value="">No dining option</option>
+              {diningOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+            </select>
+          </label>
+        </div>
+      ) : null}
+      {notice ? (
+        <p aria-live="polite" className="border-b bg-secondary/60 px-4 py-2 text-xs text-secondary-foreground sm:px-5">
+          {notice}
+        </p>
+      ) : null}
+    </>
+  );
+
+  const renderCartPanel = (presentation: "desktop" | "review") => (
+    <CartPanel
+      canEditQuantity={canEditQuantity}
+      canRemoveItems={canRemoveItems}
+      canStartPayment={canStartPayment}
+      cart={cart}
+      currencyCode={currencyCode}
+      disabled={!isOperational || isPaymentScreenOpen}
+      onCharge={openPaymentScreen}
+      onClear={clearCart}
+      onEditNote={editLineNote}
+      onQuantityChange={setLineQuantity}
+      presentation={presentation}
+      summary={cartSummary}
+      supportingControls={cartSupportingControls}
+      unavailableMessage={chargeGuidance}
+    />
+  );
+
   if (deviceManagementEnabled && posDevice.state !== "ready") {
     return <PosDeviceConfigurationState canAccessBackOffice={canAccessBackOffice} employeeName={employeeName} organizationName={organizationName} state={posDevice} />;
   }
@@ -889,16 +1035,14 @@ export function PosTerminal({
         <div className="grid min-h-svh grid-rows-[auto_1fr] lg:h-svh">
         <PosWorkspaceHeader
           canAccessBackOffice={canAccessBackOffice}
-          canCloseShift={canCloseShift}
           canCreateSales
           canUseShiftControls={canUseShiftControls}
           canUseTimeClock={canUseTimeClock}
           canViewReceipts={canViewReceipts}
-          closeShiftDisabled={cart.length > 0 || isPaymentScreenOpen}
           employeeName={employeeName}
           itemCount={cartSummary.itemCount}
-          onCloseShift={() => setIsShiftCloseOpen(true)}
-          onSelectCustomer={canUseCustomerLoyalty && !isPaymentScreenOpen ? focusCustomerPicker : undefined}
+          onCreateCustomer={canCreateCustomers && !isPaymentScreenOpen ? () => setIsCustomerCreateOpen(true) : undefined}
+          onViewCart={() => setIsCartReviewOpen(true)}
           organizationName={organizationName}
           scope={offlineScope}
           stores={stores}
@@ -906,6 +1050,8 @@ export function PosTerminal({
           timezone={timezone}
           title="Ticket"
         />
+        {/* CANDIDATE_FOR_REMOVAL: this pre-redesign header is intentionally
+            non-rendering while the shared PosWorkspaceHeader owns the live UI. */}
         <header className="hidden flex-col gap-3 border-b bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="order-1 self-start">
             <PosOperationalDrawer
@@ -965,9 +1111,9 @@ export function PosTerminal({
         </header>
 
         {stores.length > 0 ? (
-          <div className="grid min-h-0 lg:grid-cols-[minmax(0,1fr)_23rem] xl:grid-cols-[minmax(0,1fr)_26rem]">
+          <div className="grid min-h-0 lg:h-full lg:grid-cols-[minmax(0,1fr)_23rem] xl:grid-cols-[minmax(0,1fr)_26rem]">
             <section className="min-h-0 border-b lg:overflow-y-auto lg:border-r lg:border-b-0" aria-labelledby="pos-catalog-title">
-              <div className="border-b bg-card px-4 py-4 sm:px-5 lg:sticky lg:top-0 lg:z-10">
+              <div className="bg-card px-4 py-4 sm:px-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h1 className="text-xl font-semibold tracking-[-0.025em]" id="pos-catalog-title">
@@ -997,10 +1143,7 @@ export function PosTerminal({
                       autoFocus
                       className="h-11 pr-11 pl-10 text-base"
                       id="pos-search"
-                      onChange={(event) => {
-                        setSearch(event.target.value);
-                        setCatalogView("all");
-                      }}
+                      onChange={(event) => setSearch(event.target.value)}
                       onKeyDown={handleSearchKeyDown}
                       placeholder="Search products, SKU, or scan barcode"
                       ref={searchRef}
@@ -1013,59 +1156,39 @@ export function PosTerminal({
                   </div>
                 </form>
 
-                <div className="mt-3 flex gap-2 overflow-x-auto overscroll-x-contain pb-1" role="tablist" aria-label="POS workspace views">
-                  <CategoryButton
-                    active={catalogView === "all"}
-                    label="Catalogue"
-                    onClick={() => setCatalogView("all")}
-                  />
-                  <CategoryButton
-                    active={catalogView === "favorites"}
-                    label={`Favorites${favoriteItems.length ? ` (${favoriteItems.length})` : ""}`}
-                    onClick={() => {
-                      setCatalogView("favorites");
-                      setSearch("");
-                      setSelectedCategoryId(null);
-                    }}
-                  />
-                  <CategoryButton
-                    active={catalogView === "recent"}
-                    label={`Recent${recentItems.length ? ` (${recentItems.length})` : ""}`}
-                    onClick={() => {
-                      setCatalogView("recent");
-                      setSearch("");
-                      setSelectedCategoryId(null);
-                    }}
-                  />
-                </div>
-
-                {categories.length > 0 ? (
-                  <div className="mt-3 flex gap-2 overflow-x-auto overscroll-x-contain pb-1" role="tablist" aria-label="Categories">
-                    <CategoryButton
-                      active={catalogView === "all" && selectedCategoryId === null}
-                      label="All items"
-                      onClick={() => {
-                        setCatalogView("all");
-                        setSelectedCategoryId(null);
-                      }}
-                    />
-                    {categories.map((category) => (
-                      <CategoryButton
-                        active={catalogView === "all" && selectedCategoryId === category.id}
-                        color={category.color}
-                        key={category.id}
-                        label={category.name}
-                        onClick={() => {
-                          setCatalogView("all");
-                          setSelectedCategoryId(category.id);
-                        }}
-                      />
-                    ))}
-                  </div>
-                ) : null}
               </div>
 
-              <div className="min-h-0 p-4 sm:p-5">
+              <div className="border-y bg-card px-4 py-3 sm:px-5">
+                <div className="flex flex-wrap items-center gap-2" aria-label="Catalogue filters">
+                  <CatalogCategoryPicker
+                    categories={categories}
+                    onSelect={setSelectedCategoryId}
+                    selectedCategoryId={selectedCategoryId}
+                  />
+                  <Button
+                    aria-label={favoritesOnly ? "Show all items" : "Show favorite items"}
+                    aria-pressed={favoritesOnly}
+                    className={cn(
+                      favoritesOnly && "border-primary bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
+                    )}
+                    onClick={() => setFavoritesOnly((current) => !current)}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <Star aria-hidden="true" className={cn(favoritesOnly && "fill-current")} />
+                    Favorites
+                  </Button>
+                </div>
+              </div>
+
+              {notice ? (
+                <p aria-live="polite" className="border-b bg-secondary/60 px-4 py-2 text-xs text-secondary-foreground lg:hidden sm:px-5">
+                  {notice}
+                </p>
+              ) : null}
+
+              <div className="min-h-0 px-4 pt-4 pb-[calc(9rem+env(safe-area-inset-bottom))] sm:px-5 lg:pb-5">
                 {catalogError ? (
                   <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-sm text-destructive">
                     {catalogError}
@@ -1076,7 +1199,7 @@ export function PosTerminal({
                     <div className={cn(
                       "grid gap-3",
                       itemLayout === "grid"
-                        ? "min-[420px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+                        ? "grid-cols-2 min-[480px]:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
                         : "grid-cols-1",
                     )}>
                       {displayedItems.map((item, index) => (
@@ -1085,6 +1208,7 @@ export function PosTerminal({
                           currencyCode={currencyCode}
                           disabled={!isOperational || isPaymentScreenOpen}
                           item={item}
+                          itemLayout={itemLayout}
                           key={posItemKey(item)}
                           isFavorite={favoriteItemKeys.has(posItemKey(item))}
                           isFavoritePending={isFavoritePending}
@@ -1094,7 +1218,7 @@ export function PosTerminal({
                         />
                       ))}
                     </div>
-                    {catalogView === "all" && hasMore ? (
+                    {!favoritesOnly && hasMore ? (
                       <div className="mt-5 flex justify-center">
                         <Button
                           disabled={!isOperational || isLoading}
@@ -1109,7 +1233,7 @@ export function PosTerminal({
                       </div>
                     ) : null}
                   </>
-                ) : catalogView === "all" && isLoading ? (
+                ) : !favoritesOnly && isLoading ? (
                   <div className="grid min-h-64 place-items-center text-sm text-muted-foreground">
                     <span className="flex items-center gap-2">
                       <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
@@ -1117,135 +1241,20 @@ export function PosTerminal({
                     </span>
                   </div>
                 ) : (
-                  <EmptyCatalogue search={search} view={catalogView} />
+                  <EmptyCatalogue
+                    favoritesOnly={favoritesOnly}
+                    onShowAllItems={() => setFavoritesOnly(false)}
+                    search={search}
+                  />
                 )}
               </div>
             </section>
 
-            <aside className="flex min-h-0 flex-col bg-card" aria-labelledby="cart-title">
-              <div className="flex items-center justify-between border-b px-4 py-4 sm:px-5">
-                <div>
-                  <h2 className="text-lg font-semibold" id="cart-title">
-                    Current cart
-                  </h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {cartSummary.itemCount} {cartSummary.itemCount === 1 ? "item" : "items"}
-                  </p>
-                </div>
-                {cart.length > 0 ? (
-                  <Button
-                    disabled={isPaymentScreenOpen}
-                    onClick={clearCart}
-                    size="sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    <Eraser aria-hidden="true" />
-                    Clear
-                  </Button>
-                ) : null}
-              </div>
-
-              <PosCustomerPicker
-                disabled={isPaymentScreenOpen}
-                onChange={(customer) => {
-                  setSelectedCustomer(customer);
-                  setCheckoutKey(createCheckoutKey());
-                }}
-                storeId={selectedStoreId}
-                value={selectedCustomer}
-              />
-              <div className="border-b px-4 py-3 sm:px-5"><div className="flex flex-wrap items-center gap-2"><Button disabled={cart.length === 0 || isPaymentScreenOpen || isTicketPending} onClick={() => setIsTicketEditorOpen(true)} size="sm" type="button" variant="outline">{isTicketPending ? "Saving…" : activeTicketId ? "Update ticket" : "Hold ticket"}</Button>{openTickets.length > 1 ? <Button disabled={isPaymentScreenOpen || isTicketPending} onClick={() => setIsTicketWorkspaceOpen(true)} size="sm" type="button" variant="ghost">Manage tickets</Button> : null}{openTickets.map((ticket) => <span className="inline-flex items-center gap-1" key={ticket.id}><Button disabled={isPaymentScreenOpen} onClick={() => { setCart(ticket.cart); setSelectedCustomer(ticket.customer); setDiningOptionId(ticket.diningOptionId); setActiveTicketId(ticket.id); setCheckoutKey(createCheckoutKey()); setNotice(`${ticket.label} loaded.`); }} size="sm" type="button" variant={ticket.id === activeTicketId ? "secondary" : "ghost"}>{ticket.label}</Button><button aria-label={`Cancel ${ticket.label}`} className="text-xs text-muted-foreground hover:text-destructive" disabled={isTicketPending} onClick={() => startTicketTransition(async () => { const result = await cancelOpenTicketAction({ ticketId: ticket.id, device: deviceCredential }); setNotice(result.message); if (result.ok) { setOpenTickets((current) => current.filter((item) => item.id !== ticket.id)); if (activeTicketId === ticket.id) setActiveTicketId(null); router.refresh(); } })} type="button">×</button></span>)}</div></div>
-
-              <div className="grid gap-2 border-b px-4 py-3 sm:grid-cols-3 sm:px-5">
-                {canApplyDiscounts ? <label className="grid gap-1 text-xs font-medium text-muted-foreground">Discount
-                  <select className={selectClassName} disabled={isPaymentScreenOpen} onChange={(event) => { setDiscountId(event.target.value || null); setCheckoutKey(createCheckoutKey()); }} value={discountId ?? ""}>
-                    <option value="">No discount</option>{discounts.map((discount) => <option key={discount.id} value={discount.id}>{discount.name}</option>)}
-                  </select>
-                </label> : null}
-                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Tax
-                  <select className={selectClassName} disabled={isPaymentScreenOpen} onChange={(event) => { setTaxRateId(event.target.value || null); setCheckoutKey(createCheckoutKey()); }} value={taxRateId ?? ""}>
-                    <option value="">No tax</option>{taxRates.map((tax) => <option key={tax.id} value={tax.id}>{tax.name}{tax.isInclusive ? " (inclusive)" : ""}</option>)}
-                  </select>
-                </label>
-                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Dining
-                  <select className={selectClassName} disabled={isPaymentScreenOpen || !canUseDining} onChange={(event) => { setDiningOptionId(event.target.value || null); setCheckoutKey(createCheckoutKey()); }} value={diningOptionId ?? ""}>
-                    <option value="">No dining option</option>{diningOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-                  </select>
-                </label>
-              </div>
-
-              {notice ? (
-                <p aria-live="polite" className="border-b bg-secondary/60 px-4 py-2 text-xs text-secondary-foreground sm:px-5">
-                  {notice}
-                </p>
-              ) : null}
-
-              <div className="min-h-48 flex-1 overflow-y-auto">
-                {cart.length > 0 ? (
-                  <ul className="divide-y">
-                    {cart.map((line) => (
-                      <CartLine
-                        currencyCode={currencyCode}
-                        canEditQuantity={canEditQuantity}
-                        canRemoveItems={canRemoveItems}
-                        disabled={!isOperational || isPaymentScreenOpen}
-                        key={posItemKey(line)}
-                        line={line}
-                        onEditNote={() => editLineNote(posItemKey(line), line.itemNote)}
-                        onQuantityChange={(quantity) =>
-                          setLineQuantity(posItemKey(line), quantity)
-                        }
-                      />
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="grid min-h-48 place-items-center px-8 text-center">
-                    <div>
-                      <span className="mx-auto grid size-11 place-items-center rounded-full bg-muted text-muted-foreground">
-                        <ShoppingBag className="size-5" aria-hidden="true" />
-                      </span>
-                      <p className="mt-3 text-sm font-medium">Cart is ready</p>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        Add products from the catalogue or use a barcode scanner.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t bg-muted/35 p-4 sm:p-5">
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>Subtotal</span>
-                  <span>{formatMinorMoney(cartSummary.subtotalMinor, currencyCode)}</span>
-                </div>
-                {cartSummary.discountMinor > 0 ? <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground"><span>Discount</span><span>-{formatMinorMoney(cartSummary.discountMinor, currencyCode)}</span></div> : null}
-                {cartSummary.taxMinor > 0 ? <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground"><span>{cartSummary.taxInclusive ? "Included tax" : "Tax"}</span><span>{formatMinorMoney(cartSummary.taxMinor, currencyCode)}</span></div> : null}
-                <div className="mt-2 flex items-end justify-between gap-4">
-                  <span className="text-base font-semibold">Total</span>
-                  <span className="text-2xl font-semibold tracking-[-0.03em]">
-                    {formatMinorMoney(cartSummary.totalMinor, currencyCode)}
-                  </span>
-                </div>
-                <Button
-                  className="mt-4 h-11 w-full"
-                  disabled={!canStartPayment}
-                  onClick={openPaymentScreen}
-                  type="button"
-                >
-                  Charge
-                </Button>
-                <p className="mt-2 text-center text-xs leading-5 text-muted-foreground">
-                  {!selectedRegister
-                    ? "Choose an active register before charging a sale."
-                    : !hasOpenShift
-                      ? "Open a shift for this register before charging a sale."
-                    : availablePaymentMethods.length === 0
-                      ? "No payment method is enabled for this store."
-                      : "Choose a payment method on the next screen. Prices, payments, receipt, and tracked stock changes are committed together."}
-                </p>
-              </div>
-            </aside>
+            {!isCompactCartPresentation ? (
+              <aside className="hidden min-h-0 flex-col bg-card lg:flex" aria-labelledby="cart-title">
+                {renderCartPanel("desktop")}
+              </aside>
+            ) : null}
           </div>
         ) : (
           <div className="grid min-h-96 place-items-center p-6 text-center">
@@ -1267,18 +1276,58 @@ export function PosTerminal({
         )}
         </div>
       </main>
+      {isCompactCartPresentation && cart.length > 0 ? (
+        <MobileCartSummary
+          canStartPayment={canStartPayment}
+          currencyCode={currencyCode}
+          itemCount={cartSummary.itemCount}
+          onCharge={openPaymentScreen}
+          onViewCart={() => setIsCartReviewOpen(true)}
+          totalMinor={cartSummary.totalMinor}
+          unavailableMessage={chargeGuidance}
+        />
+      ) : null}
+      {isCompactCartPresentation ? (
+        <Dialog.Root onOpenChange={setIsCartReviewOpen} open={isCartReviewOpen}>
+          <DialogContent
+            aria-labelledby="cart-review-title"
+            className="flex h-svh max-h-none max-w-none flex-col rounded-none sm:max-w-xl"
+            closeLabel="Close cart review"
+            side="right"
+          >
+            {renderCartPanel("review")}
+          </DialogContent>
+        </Dialog.Root>
+      ) : null}
+      {canCreateCustomers ? (
+        <PosCustomerCreateDialog
+          onCreated={(customer) => {
+            setSelectedCustomer(customer);
+            setCheckoutKey(createCheckoutKey());
+            setNotice(`${customer.fullName} was added to this sale.`);
+          }}
+          onOpenChange={setIsCustomerCreateOpen}
+          open={isCustomerCreateOpen}
+        />
+      ) : null}
       {isPaymentScreenOpen && selectedRegister && activeShift ? (
         <PaymentScreen
           activeShift={activeShift}
+          canApplyDiscounts={canApplyDiscounts}
           cart={cart}
           currencyCode={currencyCode}
           device={deviceCredential}
           deviceScope={organizationId}
+          discounts={discounts}
           idempotencyKey={checkoutKey}
           customer={selectedCustomer}
           loyaltyProgram={loyaltyProgram}
           offlineScope={offlineScope}
           onCancel={() => setIsPaymentScreenOpen(false)}
+          onDiscountChange={(nextDiscountId) => {
+            setDiscountId(nextDiscountId);
+            setCheckoutKey(createCheckoutKey());
+          }}
           onComplete={(checkout) => {
             setCompletedDisplaySale({
               saleId: checkout.saleId,
@@ -1362,6 +1411,8 @@ export function PosTerminal({
   );
 }
 
+// CANDIDATE_FOR_REMOVAL: closing is now intentionally launched from the
+// dedicated Shift workspace. Retained until a separate cleanup review.
 function PosCloseShiftDialog({
   currencyCode,
   onCancel,
@@ -1489,6 +1540,8 @@ function PosShiftGate({
   const [isPending, startTransition] = useTransition();
   const selectedStore = stores.find((store) => store.id === storeId);
   const selectedRegister = registers.find((register) => register.id === registerId);
+  const hasFixedStore = stores.length === 1;
+  const hasFixedRegister = availableRegisters.length === 1;
 
   const changeStore = (nextStoreId: string) => {
     const nextRegisters = registers.filter((register) => register.storeId === nextStoreId);
@@ -1574,20 +1627,28 @@ function PosShiftGate({
             </div>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-1.5 text-sm font-medium">
-                Store
-                <select className={selectClassName} disabled={isPending} onChange={(event) => changeStore(event.target.value)} value={storeId}>
-                  <option value="">Choose a store</option>
-                  {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
-                </select>
-              </label>
-              <label className="grid gap-1.5 text-sm font-medium">
-                Register
-                <select className={selectClassName} disabled={isPending || !storeId} onChange={(event) => setRegisterId(event.target.value)} value={registerId}>
-                  <option value="">Choose a register</option>
-                  {availableRegisters.map((register) => <option key={register.id} value={register.id}>{register.name} ({register.code})</option>)}
-                </select>
-              </label>
+              {hasFixedStore ? (
+                <PosShiftContextField label="Store" value={stores[0]?.name ?? "Assigned store"} />
+              ) : (
+                <label className="grid gap-1.5 text-sm font-medium">
+                  Store
+                  <select className={selectClassName} disabled={isPending} onChange={(event) => changeStore(event.target.value)} value={storeId}>
+                    <option value="">Choose a store</option>
+                    {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
+                  </select>
+                </label>
+              )}
+              {hasFixedRegister ? (
+                <PosShiftContextField label="Register" value={`${availableRegisters[0]?.name ?? "Register"} (${availableRegisters[0]?.code ?? ""})`} />
+              ) : (
+                <label className="grid gap-1.5 text-sm font-medium">
+                  Register
+                  <select className={selectClassName} disabled={isPending || !storeId} onChange={(event) => setRegisterId(event.target.value)} value={registerId}>
+                    <option value="">Choose a register</option>
+                    {availableRegisters.map((register) => <option key={register.id} value={register.id}>{register.name} ({register.code})</option>)}
+                  </select>
+                </label>
+              )}
               <label className="grid gap-1.5 text-sm font-medium">
                 Cashier
                 <Input disabled value={employeeName} />
@@ -1613,6 +1674,15 @@ function PosShiftGate({
         </div>
       ) : null}
     </main>
+  );
+}
+
+function PosShiftContextField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1.5 text-sm font-medium">
+      <span>{label}</span>
+      <p className="flex h-10 items-center rounded-lg border bg-muted/35 px-3 text-sm font-normal">{value}</p>
+    </div>
   );
 }
 
@@ -1702,6 +1772,111 @@ function formatShiftOpenedAt(value: string) {
   return new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
 }
 
+function CatalogCategoryPicker({
+  categories,
+  onSelect,
+  selectedCategoryId,
+}: {
+  categories: PosCategory[];
+  onSelect: (categoryId: string | null) => void;
+  selectedCategoryId: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
+  const shouldShowSearch = categories.length > 8;
+  const matchingCategories = categories.filter((category) =>
+    category.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
+  );
+
+  const select = (categoryId: string | null) => {
+    onSelect(categoryId);
+    setOpen(false);
+    setQuery("");
+  };
+
+  return (
+    <Popover.Root
+      modal={false}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setQuery("");
+      }}
+      open={open}
+    >
+      <Popover.Trigger
+        aria-label="Filter products by category"
+        className={buttonVariants({ size: "sm", variant: "outline" })}
+      >
+        {selectedCategory?.name ?? "All items"}
+        <ChevronDown aria-hidden="true" />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner align="start" side="bottom" sideOffset={6}>
+          <Popover.Popup className="z-50 w-64 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border bg-popover p-1 shadow-lg outline-none">
+            {shouldShowSearch ? (
+              <div className="p-2">
+                <label className="sr-only" htmlFor="pos-category-search">Search categories</label>
+                <Input
+                  autoFocus
+                  className="h-9"
+                  id="pos-category-search"
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search categories"
+                  value={query}
+                />
+              </div>
+            ) : null}
+            <div className="max-h-72 overflow-y-auto">
+              <CategoryPopoverOption active={selectedCategoryId === null} onClick={() => select(null)}>All items</CategoryPopoverOption>
+              <div className="my-1 border-t" />
+              {matchingCategories.map((category) => (
+                <CategoryPopoverOption
+                  active={selectedCategoryId === category.id}
+                  color={category.color}
+                  key={category.id}
+                  onClick={() => select(category.id)}
+                >
+                  {category.name}
+                </CategoryPopoverOption>
+              ))}
+              {matchingCategories.length === 0 ? <p className="px-3 py-5 text-sm text-muted-foreground">No matching categories.</p> : null}
+            </div>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+function CategoryPopoverOption({
+  active,
+  children,
+  color,
+  onClick,
+}: {
+  active: boolean;
+  children: ReactNode;
+  color?: string | null;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={cn(
+        "flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        active && "bg-primary/10 text-primary",
+      )}
+      onClick={onClick}
+      type="button"
+    >
+      {color ? <span aria-hidden="true" className="size-2 shrink-0 rounded-full ring-1 ring-black/10" style={{ backgroundColor: color }} /> : <span className="size-2" />}
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {active ? <Check aria-hidden="true" className="size-4 shrink-0" /> : null}
+    </button>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- retained while the legacy category control is a CANDIDATE_FOR_REMOVAL.
 function CategoryButton({
   active,
   color,
@@ -1741,6 +1916,7 @@ function ProductButton({
   currencyCode,
   disabled,
   item,
+  itemLayout,
   isFavorite,
   isFavoritePending,
   onClick,
@@ -1751,6 +1927,7 @@ function ProductButton({
   currencyCode: string;
   disabled: boolean;
   item: PosCatalogItem;
+  itemLayout: "grid" | "list";
   isFavorite: boolean;
   isFavoritePending: boolean;
   onClick: () => void;
@@ -1758,48 +1935,67 @@ function ProductButton({
   onToggleFavorite: () => void;
 }) {
   return (
-    <div className="relative">
+    <div className={cn("relative", itemLayout === "list" && "group")}>
       <button
-        className="flex min-h-34 w-full flex-col rounded-xl border bg-card p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/45 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-0"
+        className={cn(
+          "flex w-full rounded-xl border bg-card text-left shadow-sm transition hover:border-primary/45 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          itemLayout === "grid"
+            ? "min-h-34 flex-col p-3"
+            : "min-h-14 items-center justify-between gap-3 px-3 py-2.5",
+        )}
         data-pos-catalog-product
         disabled={disabled}
         onClick={onClick}
         onKeyDown={onKeyDown}
         type="button"
       >
-        {item.imageUrl ? (
-          // Catalogue image URLs are business-provided and can come from many
-          // hosts, so a plain lazy image is safer than an unconfigured image optimizer.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            alt=""
-            className="size-11 rounded-lg border bg-muted object-cover"
-            loading="lazy"
-            src={item.imageUrl}
-          />
+        {itemLayout === "grid" ? (
+          <>
+            {item.imageUrl ? (
+              // Catalogue image URLs are business-provided and can come from many
+              // hosts, so a plain lazy image is safer than an unconfigured image optimizer.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                alt=""
+                className="size-11 rounded-lg border bg-muted object-cover"
+                loading="lazy"
+                src={item.imageUrl}
+              />
+            ) : (
+              <span className="grid size-11 place-items-center rounded-lg bg-secondary text-primary">
+                <ImageIcon className="size-5" aria-hidden="true" />
+              </span>
+            )}
+            <span className="mt-3 line-clamp-2 pr-7 font-medium leading-5">{item.productName}</span>
+            {item.variantName ? (
+              <span className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+                {item.variantName}
+              </span>
+            ) : (
+              <span className="mt-1 text-xs text-muted-foreground">{item.unit}</span>
+            )}
+            {item.hasModifiers ? <span className="mt-1 text-xs text-primary">Customize available</span> : null}
+            {item.isVariablePrice ? <span className="mt-1 text-xs text-primary">Enter price at sale</span> : null}
+            <span className="mt-auto flex w-full items-end justify-between gap-2 pt-4">
+              <span className="truncate font-mono text-[0.65rem] text-muted-foreground">
+                {item.sku || item.barcode || "No code"}
+              </span>
+              <span className="shrink-0 font-semibold">
+                {item.isVariablePrice ? "Manual price" : formatMinorMoney(item.priceMinor, currencyCode)}
+              </span>
+            </span>
+          </>
         ) : (
-          <span className="grid size-11 place-items-center rounded-lg bg-secondary text-primary">
-            <ImageIcon className="size-5" aria-hidden="true" />
-          </span>
+          <>
+            <span className="min-w-0">
+              <span className="block truncate font-medium">{item.productName}</span>
+              {item.variantName ? <span className="mt-0.5 block truncate text-xs text-muted-foreground">{item.variantName}</span> : null}
+            </span>
+            <span className="shrink-0 pr-7 font-semibold">
+              {item.isVariablePrice ? "Manual price" : formatMinorMoney(item.priceMinor, currencyCode)}
+            </span>
+          </>
         )}
-        <span className="mt-3 line-clamp-2 pr-7 font-medium leading-5">{item.productName}</span>
-        {item.variantName ? (
-          <span className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-            {item.variantName}
-          </span>
-        ) : (
-          <span className="mt-1 text-xs text-muted-foreground">{item.unit}</span>
-        )}
-        {item.hasModifiers ? <span className="mt-1 text-xs text-primary">Customize available</span> : null}
-        {item.isVariablePrice ? <span className="mt-1 text-xs text-primary">Enter price at sale</span> : null}
-        <span className="mt-auto flex w-full items-end justify-between gap-2 pt-4">
-          <span className="truncate font-mono text-[0.65rem] text-muted-foreground">
-            {item.sku || item.barcode || "No code"}
-          </span>
-          <span className="shrink-0 font-semibold">
-            {item.isVariablePrice ? "Manual price" : formatMinorMoney(item.priceMinor, currencyCode)}
-          </span>
-        </span>
       </button>
       {canManageTiles ? (
         <button
@@ -1879,6 +2075,176 @@ function ModifierPicker({ currencyCode, groups, item, onCancel, onConfirm }: { c
   return <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4"><section aria-modal="true" className="max-h-[calc(100svh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border bg-background p-4 shadow-xl sm:p-5" role="dialog"><h2 className="break-words text-lg font-semibold">Customize {item.productName}</h2><p className="mt-1 text-sm text-muted-foreground">Choose options before adding this item.</p><div className="mt-5 grid gap-5">{groups.map((group) => <fieldset key={group.id}><legend className="break-words font-medium">{group.name} <span className="text-xs font-normal text-muted-foreground">({group.minSelections === group.maxSelections ? `choose ${group.minSelections}` : `${group.minSelections}–${group.maxSelections}`})</span></legend><div className="mt-2 grid gap-2">{group.options.map((option) => <label className="flex min-w-0 items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm" key={option.id}><span className="min-w-0 break-words"><input checked={selected.includes(option.id)} className="mr-2 accent-primary" onChange={() => toggle(group, option.id)} type="checkbox"/>{option.name}</span><span className="shrink-0">{option.priceMinor ? `+${formatMinorMoney(option.priceMinor, currencyCode)}` : "Included"}</span></label>)}</div></fieldset>)}</div><div className="mt-6 flex flex-wrap justify-end gap-2"><Button onClick={onCancel} type="button" variant="outline">Cancel</Button><Button disabled={!valid} onClick={() => onConfirm(selectedOptions)} type="button">Add to cart</Button></div></section></div>;
 }
 
+function CartPanel({
+  canEditQuantity,
+  canRemoveItems,
+  canStartPayment,
+  cart,
+  currencyCode,
+  disabled,
+  onCharge,
+  onClear,
+  onEditNote,
+  onQuantityChange,
+  presentation,
+  summary,
+  supportingControls,
+  unavailableMessage,
+}: {
+  canEditQuantity: boolean;
+  canRemoveItems: boolean;
+  canStartPayment: boolean;
+  cart: PosCartLine[];
+  currencyCode: string;
+  disabled: boolean;
+  onCharge: () => void;
+  onClear: () => void;
+  onEditNote: (itemKey: string, currentNote: string | null | undefined) => void;
+  onQuantityChange: (itemKey: string, quantity: number) => void;
+  presentation: "desktop" | "review";
+  summary: PosCartSummary;
+  supportingControls: ReactNode;
+  unavailableMessage: string;
+}) {
+  const titleId = presentation === "desktop" ? "cart-title" : "cart-review-title";
+  const chargeLabel = presentation === "review" && cart.length > 0
+    ? "Charge " + formatMinorMoney(summary.totalMinor, currencyCode)
+    : "Charge";
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center justify-between border-b px-4 py-4 sm:px-5">
+        <div>
+          <h2 className="text-lg font-semibold" id={titleId}>
+            {presentation === "desktop" ? "Current cart" : "Your cart"}
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {summary.itemCount} {summary.itemCount === 1 ? "item" : "items"}
+          </p>
+        </div>
+        {cart.length > 0 ? (
+          <Button className="h-10" disabled={disabled} onClick={onClear} size="sm" type="button" variant="ghost">
+            <Eraser aria-hidden="true" />
+            Clear
+          </Button>
+        ) : null}
+      </div>
+
+      {supportingControls}
+
+      <div className="min-h-48 flex-1 overflow-y-auto overscroll-contain">
+        {cart.length > 0 ? (
+          <ul className="divide-y">
+            {cart.map((line) => (
+              <CartLine
+                canEditQuantity={canEditQuantity}
+                canRemoveItems={canRemoveItems}
+                currencyCode={currencyCode}
+                disabled={disabled}
+                key={posItemKey(line)}
+                line={line}
+                onEditNote={() => onEditNote(posItemKey(line), line.itemNote)}
+                onQuantityChange={(quantity) => onQuantityChange(posItemKey(line), quantity)}
+              />
+            ))}
+          </ul>
+        ) : (
+          <div className="grid min-h-48 place-items-center px-8 text-center">
+            <div>
+              <span className="mx-auto grid size-11 place-items-center rounded-full bg-muted text-muted-foreground">
+                <ShoppingBag className="size-5" aria-hidden="true" />
+              </span>
+              <p className="mt-3 text-sm font-medium">Cart is ready</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Add products from the catalogue or use a barcode scanner.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="shrink-0 border-t bg-muted/35 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-5">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>Subtotal</span>
+          <span>{formatMinorMoney(summary.subtotalMinor, currencyCode)}</span>
+        </div>
+        {summary.discountMinor > 0 ? (
+          <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
+            <span>Discount</span>
+            <span>-{formatMinorMoney(summary.discountMinor, currencyCode)}</span>
+          </div>
+        ) : null}
+        {summary.taxMinor > 0 ? (
+          <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
+            <span>{summary.taxInclusive ? "Included tax" : "Tax"}</span>
+            <span>{formatMinorMoney(summary.taxMinor, currencyCode)}</span>
+          </div>
+        ) : null}
+        <div className="mt-2 flex items-end justify-between gap-4">
+          <span className="text-base font-semibold">Total</span>
+          <span className="text-2xl font-semibold tracking-[-0.03em]">
+            {formatMinorMoney(summary.totalMinor, currencyCode)}
+          </span>
+        </div>
+        <Button className="mt-4 h-11 w-full" disabled={!canStartPayment} onClick={onCharge} type="button">
+          {chargeLabel}
+        </Button>
+        <p className="mt-2 text-center text-xs leading-5 text-muted-foreground">
+          {canStartPayment
+            ? "Choose a payment method on the next screen. Prices, payments, receipt, and tracked stock changes are committed together."
+            : unavailableMessage}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function MobileCartSummary({
+  canStartPayment,
+  currencyCode,
+  itemCount,
+  onCharge,
+  onViewCart,
+  totalMinor,
+  unavailableMessage,
+}: {
+  canStartPayment: boolean;
+  currencyCode: string;
+  itemCount: number;
+  onCharge: () => void;
+  onViewCart: () => void;
+  totalMinor: number;
+  unavailableMessage: string;
+}) {
+  return (
+    <section
+      aria-label="Cart summary"
+      className="fixed inset-x-0 bottom-0 z-30 border-t bg-card/98 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgb(0_0_0_/_0.08)] backdrop-blur lg:hidden"
+    >
+      <div className="mx-auto max-w-2xl">
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="flex min-w-0 items-center gap-2 font-medium">
+            <ShoppingBag className="size-4 shrink-0 text-primary" aria-hidden="true" />
+            <span className="truncate">{itemCount} {itemCount === 1 ? "item" : "items"}</span>
+          </span>
+          <span className="shrink-0 text-lg font-semibold tabular-nums">
+            {formatMinorMoney(totalMinor, currencyCode)}
+          </span>
+        </div>
+        <div className="mt-3 grid gap-2 min-[380px]:grid-cols-2">
+          <Button className="h-11" onClick={onViewCart} type="button" variant="outline">
+            View cart
+          </Button>
+          <Button className="h-11 min-w-0 truncate" disabled={!canStartPayment} onClick={onCharge} type="button">
+            Charge {formatMinorMoney(totalMinor, currencyCode)}
+          </Button>
+        </div>
+        {!canStartPayment ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{unavailableMessage}</p> : null}
+      </div>
+    </section>
+  );
+}
+
 function CartLine({
   canEditQuantity,
   canRemoveItems,
@@ -1908,6 +2274,7 @@ function CartLine({
         <Button
           aria-label={`Remove ${line.productName}`}
           disabled={disabled || !canRemoveItems}
+          className="size-9"
           onClick={() => onQuantityChange(0)}
           size="icon-xs"
           type="button"
@@ -1916,13 +2283,13 @@ function CartLine({
           <Trash2 aria-hidden="true" />
         </Button>
       </div>
-      <div className="mt-2 flex items-center gap-2"><Button disabled={disabled} onClick={onEditNote} size="sm" type="button" variant="ghost">{line.itemNote ? "Edit item note" : "Add item note"}</Button>{line.itemNote ? <span className="truncate text-xs text-muted-foreground">{line.itemNote}</span> : null}</div>
+      <div className="mt-2 flex items-center gap-2"><Button className="h-10" disabled={disabled} onClick={onEditNote} size="sm" type="button" variant="ghost">{line.itemNote ? "Edit item note" : "Add item note"}</Button>{line.itemNote ? <span className="truncate text-xs text-muted-foreground">{line.itemNote}</span> : null}</div>
       <div className="mt-3 flex items-center justify-between gap-3">
         {line.allowFractionalQuantity ? (
           <label className="grid gap-1 text-xs font-medium text-muted-foreground">
             Quantity ({line.unit})
             <Input
-              className="h-8 w-28 text-sm"
+              className="h-10 w-28 text-sm"
               disabled={disabled || !canEditQuantity}
               inputMode="decimal"
               min="0.001"
@@ -1939,6 +2306,7 @@ function CartLine({
           <div className="flex items-center rounded-lg border bg-background p-0.5">
             <Button
               aria-label={`Decrease ${line.productName} quantity`}
+              className="size-9"
               disabled={disabled || !canEditQuantity || (line.quantity <= 1 && !canRemoveItems)}
               onClick={() => onQuantityChange(line.quantity - 1)}
               size="icon-xs"
@@ -1950,6 +2318,7 @@ function CartLine({
             <span className="min-w-8 text-center text-sm font-semibold">{line.quantity}</span>
             <Button
               aria-label={`Increase ${line.productName} quantity`}
+              className="size-9"
               disabled={disabled || !canEditQuantity}
               onClick={() => onQuantityChange(line.quantity + 1)}
               size="icon-xs"
@@ -1975,43 +2344,41 @@ function CartLine({
 }
 
 function EmptyCatalogue({
+  favoritesOnly,
+  onShowAllItems,
   search,
-  view,
 }: {
+  favoritesOnly: boolean;
+  onShowAllItems: () => void;
   search: string;
-  view: "all" | "favorites" | "recent";
 }) {
-  const isFavorites = view === "favorites";
-  const isRecent = view === "recent";
-
   return (
     <div className="grid min-h-64 place-items-center text-center">
       <div className="max-w-xs">
-        {isRecent ? (
-          <History className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-        ) : isFavorites ? (
+        {favoritesOnly ? (
           <Star className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
         ) : (
           <PackageOpen className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
         )}
         <p className="mt-4 font-medium">
-          {isFavorites
-            ? "No favorite tiles yet"
-            : isRecent
-              ? "No recent items yet"
-              : search.trim()
-                ? "No matching products"
-                : "No saleable products yet"}
+          {favoritesOnly
+            ? "No favorites in this category"
+            : search.trim()
+              ? "No matching products"
+              : "No saleable products yet"}
         </p>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          {isFavorites
-            ? "A manager can pin up to 24 saleable items using the star on a catalogue tile."
-            : isRecent
-              ? "Completed sales at this store will appear here as quick-add tiles."
-              : search.trim()
-                ? "Try a product name, SKU, or barcode."
-                : "Create and enable products for this store in the Back Office catalog."}
+          {favoritesOnly
+            ? "Products you mark as favorites will appear here."
+            : search.trim()
+              ? "Try a product name, SKU, or barcode."
+              : "Create and enable products for this store in the Back Office catalog."}
         </p>
+        {favoritesOnly ? (
+          <Button className="mt-4" onClick={onShowAllItems} size="sm" type="button" variant="outline">
+            Show all items
+          </Button>
+        ) : null}
       </div>
     </div>
   );

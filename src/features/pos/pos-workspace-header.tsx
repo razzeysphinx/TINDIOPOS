@@ -1,48 +1,31 @@
 "use client";
 
-import { Ellipsis, ExternalLink, LockKeyhole, LogOut, UserRound } from "lucide-react";
-import Link from "next/link";
-import { useState } from "react";
+import { ShoppingCart, UserPlus } from "lucide-react";
 
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { signOutAction } from "@/features/auth/actions";
+import { Button } from "@/components/ui/button";
 import { OfflineQueueStatus } from "@/features/offline/offline-queue-status";
 import { PosOperationalDrawer, type PosOperationalNavigationProps } from "@/features/pos/pos-operational-drawer";
-import { cn } from "@/lib/utils";
 
 type PosWorkspaceHeaderProps = PosOperationalNavigationProps & {
   canAccessBackOffice: boolean;
-  canCloseShift?: boolean;
-  closeShiftDisabled?: boolean;
   itemCount?: number;
-  onCloseShift?: () => void;
-  onSelectCustomer?: () => void;
+  onCreateCustomer?: () => void;
+  onViewCart?: () => void;
   scope: string;
   title: string;
 };
 
 export function PosWorkspaceHeader({
   canAccessBackOffice,
-  canCloseShift = false,
-  closeShiftDisabled = false,
   employeeName,
   itemCount,
-  onCloseShift,
-  onSelectCustomer,
+  onCreateCustomer,
+  onViewCart,
   organizationName,
   scope,
   title,
   ...navigationProps
 }: PosWorkspaceHeaderProps) {
-  const [isUtilitiesOpen, setIsUtilitiesOpen] = useState(false);
   const ticketLabel = typeof itemCount === "number"
     ? `${title} · ${itemCount} ${itemCount === 1 ? "item" : "items"}`
     : title;
@@ -51,6 +34,7 @@ export function PosWorkspaceHeader({
     <header className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b bg-card px-3 py-2.5 sm:gap-3 sm:px-5">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         <PosOperationalDrawer
+          canAccessBackOffice={canAccessBackOffice}
           employeeName={employeeName}
           organizationName={organizationName}
           {...navigationProps}
@@ -62,74 +46,34 @@ export function PosWorkspaceHeader({
       </div>
 
       <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
-        {onSelectCustomer ? (
-          <Button className="hidden sm:inline-flex" onClick={onSelectCustomer} size="sm" type="button" variant="outline">
-            <UserRound aria-hidden="true" />
-            Customer
+        {onViewCart ? (
+          <Button
+            aria-label={"View cart" + (itemCount ? ", " + itemCount + " " + (itemCount === 1 ? "item" : "items") : "")}
+            className="relative lg:hidden"
+            onClick={onViewCart}
+            size="icon"
+            type="button"
+            variant="outline"
+          >
+            <ShoppingCart aria-hidden="true" />
+            {itemCount ? (
+              <span
+                aria-hidden="true"
+                className="absolute -top-1.5 -right-1.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground"
+              >
+                {itemCount > 99 ? "99+" : itemCount}
+              </span>
+            ) : null}
+          </Button>
+        ) : null}
+        {onCreateCustomer ? (
+          <Button onClick={onCreateCustomer} size="sm" type="button" variant="outline">
+            <UserPlus aria-hidden="true" />
+            <span className="hidden sm:inline">New customer</span>
+            <span className="sm:hidden">Customer</span>
           </Button>
         ) : null}
         <OfflineQueueStatus scope={scope} />
-        <Dialog.Root onOpenChange={setIsUtilitiesOpen} open={isUtilitiesOpen}>
-          <DialogTrigger
-            aria-label="Open POS utilities"
-            className={cn(buttonVariants({ size: "icon", variant: "outline" }), "shrink-0")}
-            title="POS utilities"
-          >
-            <Ellipsis aria-hidden="true" />
-          </DialogTrigger>
-          <DialogContent className="w-full max-w-sm" side="right">
-            <DialogHeader>
-              <DialogTitle>POS utilities</DialogTitle>
-            </DialogHeader>
-            <DialogBody className="grid gap-2 p-5">
-              {onSelectCustomer ? (
-                <Button
-                  className="justify-start sm:hidden"
-                  onClick={() => {
-                    setIsUtilitiesOpen(false);
-                    onSelectCustomer();
-                  }}
-                  type="button"
-                  variant="outline"
-                >
-                  <UserRound aria-hidden="true" />
-                  Customer / loyalty
-                </Button>
-              ) : null}
-              {canCloseShift && onCloseShift ? (
-                <Button
-                  className="justify-start"
-                  disabled={closeShiftDisabled}
-                  onClick={() => {
-                    setIsUtilitiesOpen(false);
-                    onCloseShift();
-                  }}
-                  type="button"
-                  variant="outline"
-                >
-                  <LockKeyhole aria-hidden="true" />
-                  Close shift
-                </Button>
-              ) : null}
-              {canAccessBackOffice ? (
-                <Link
-                  className={cn(buttonVariants({ variant: "outline" }), "justify-start")}
-                  href="/back-office"
-                  onClick={() => setIsUtilitiesOpen(false)}
-                >
-                  <ExternalLink aria-hidden="true" />
-                  Back Office
-                </Link>
-              ) : null}
-              <form action={signOutAction} onSubmit={() => setIsUtilitiesOpen(false)}>
-                <Button className="w-full justify-start" type="submit" variant="outline">
-                  <LogOut aria-hidden="true" />
-                  Sign out
-                </Button>
-              </form>
-            </DialogBody>
-          </DialogContent>
-        </Dialog.Root>
       </div>
     </header>
   );

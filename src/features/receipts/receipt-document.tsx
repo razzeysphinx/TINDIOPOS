@@ -1,4 +1,5 @@
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
+import { cn } from "@/lib/utils";
 
 export type ReceiptSaleLine = {
   id: string;
@@ -111,6 +112,7 @@ function formatReceiptDate(value: string, timezone: string) {
 }
 
 export function ReceiptDocument({
+  className,
   layout,
   timezone,
   receiptNumber,
@@ -126,6 +128,7 @@ export function ReceiptDocument({
   payments,
   refunds,
 }: {
+  className?: string;
   layout: ReceiptLayout;
   timezone: string;
   receiptNumber: number;
@@ -151,7 +154,11 @@ export function ReceiptDocument({
 
   return (
     <article
-      className={`mx-auto w-full max-w-xl rounded-xl border bg-card p-5 shadow-sm sm:p-7 print:rounded-none print:border-0 print:p-2 print:shadow-none ${layout.paperWidthMm === 58 ? "print:max-w-[58mm]" : "print:max-w-[80mm]"}`}
+      className={cn(
+        "mx-auto w-full max-w-xl rounded-xl border bg-card p-5 shadow-sm sm:p-7 print:rounded-none print:border-0 print:p-2 print:shadow-none",
+        layout.paperWidthMm === 58 ? "print:max-w-[58mm]" : "print:max-w-[80mm]",
+        className,
+      )}
       data-receipt-document
     >
       <header className="border-b border-dashed pb-4 text-center">

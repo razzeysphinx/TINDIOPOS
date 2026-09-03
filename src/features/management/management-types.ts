@@ -39,6 +39,88 @@ export type ManagementRegistersWorkspace = {
   displaySessions: ManagementDisplaySessionRow[];
 };
 
+export type ManagementStoreRegisterOverviewRow = {
+  id: string;
+  name: string;
+  code: string;
+  address: string | null;
+  phone: string | null;
+  isActive: boolean;
+  registerCount: number;
+  openShiftCount: number | null;
+  activeDeviceCount: number | null;
+  syncIssueCount: number | null;
+};
+
+/**
+ * Deliberately small, on-demand payload for the Stores & Registers drawer.
+ * Shift, cash, and device diagnostics are loaded by their later operational
+ * drawers instead of being bundled into every store selection.
+ */
+export type ManagementStoreDrawerData = {
+  store: {
+    id: string;
+    name: string;
+    code: string;
+    address: string | null;
+    phone: string | null;
+    isActive: boolean;
+  };
+  registers: Array<{
+    id: string;
+    name: string;
+    code: string;
+    isActive: boolean;
+  }>;
+};
+
+/**
+ * Level 3 register identity and configuration context. Operational shift,
+ * cash, device, and sync state deliberately belong to later drawer slices.
+ */
+export type ManagementRegisterDrawerData = {
+  register: {
+    id: string;
+    name: string;
+    code: string;
+    isActive: boolean;
+  };
+  store: {
+    id: string;
+    name: string;
+    code: string;
+  };
+};
+
+export type ManagementRegisterOperationalDrawerData = ManagementRegisterDrawerData & {
+  /** False means the role is not allowed to inspect a current register shift. */
+  canViewCurrentShift: boolean;
+  currentShift: {
+    id: string;
+    number: string;
+    openedBy: string;
+    openedAt: string;
+    cash: {
+      startingCashMinor: number | null;
+      cashSalesMinor: number | null;
+      cashRefundsMinor: number | null;
+      paidInMinor: number | null;
+      paidOutMinor: number | null;
+      expectedCashMinor: number | null;
+    };
+  } | null;
+  /** Device/sync evidence is available only to device managers. */
+  deviceContext: {
+    activeDevice: {
+      name: string;
+      appVersion: string;
+      lastSeenAt: string | null;
+    } | null;
+    recordedPendingSyncCount: number;
+    syncIssueCount: number;
+  } | null;
+};
+
 export type ManagementRoleRow = {
   id: string;
   name: string;

@@ -21,9 +21,9 @@ export function InventoryTransferWorkspace({
             <Truck aria-hidden="true" />
           </span>
           <div className="space-y-1">
-            <CardTitle id="inventory-transfer-workspace-title">Transfer lifecycle</CardTitle>
+            <CardTitle id="inventory-transfer-workspace-title">Move stock between stores</CardTitle>
             <CardDescription>
-              Create and manage store-to-store requests in Replenishment. Stock leaves the source only when dispatched and reaches the destination only when received.
+              Create and manage store-to-store requests in Restock items. Stock leaves the source only when it is sent and reaches the destination only when it is received.
             </CardDescription>
           </div>
         </CardHeader>
@@ -36,9 +36,9 @@ export function InventoryTransferWorkspace({
           </ol>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3">
             <p className="text-sm text-muted-foreground">
-              Replenishment suggestions only prepare a request; they never create a transfer or move stock automatically.
+              Restock suggestions only prepare a request. They never create a transfer or move stock automatically.
             </p>
-            <Link className={buttonVariants()} href={replenishmentHref}>Open replenishment <ArrowRight /></Link>
+            <Link className={buttonVariants()} href={replenishmentHref}>Open restock items <ArrowRight /></Link>
           </div>
         </CardContent>
       </Card>

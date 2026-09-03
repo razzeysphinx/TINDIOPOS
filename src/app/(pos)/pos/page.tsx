@@ -3,11 +3,10 @@ import { redirect } from "next/navigation";
 
 import { loadPosWorkspace } from "@/features/pos/data";
 import { PosTerminal } from "@/features/pos/pos-terminal";
+import { getPosCapabilities } from "@/features/pos/pos-capabilities";
 import {
   canAccessBackOffice,
-  getPosNavigationCapabilities,
   getWorkspaceHome,
-  hasAnyPermission,
   hasPermission,
   requireBusinessContext,
 } from "@/lib/auth/dal";
@@ -22,59 +21,42 @@ export default async function PosPage() {
     redirect(getWorkspaceHome(context));
   }
 
-  const features = context.features;
   const workspace = await loadPosWorkspace(context);
-  const canAssignTickets = hasPermission(context, "employees.manage");
-  const navigationCapabilities = getPosNavigationCapabilities(context);
+  const capabilities = getPosCapabilities({
+    businessType: context.organization.business_type,
+    features: context.features,
+    permissions: context.permissions,
+  });
   const activeShift = workspace.activeShift;
 
   return (
     <PosTerminal
       activeShift={activeShift}
       canAccessBackOffice={canAccessBackOffice(context)}
-      canAcceptPayments={hasPermission(context, "payments.accept")}
-      canApplyDiscounts={hasPermission(context, "discounts.apply")}
-      canCloseShift={hasPermission(context, "shifts.close")}
-      canEditQuantity={hasPermission(context, "pos.edit_quantity")}
-      canOpenShift={hasPermission(context, "shifts.open")}
-      canUseShiftControls={hasAnyPermission(context, [
-        "shifts.open",
-        "shifts.close",
-        "cash.pay_in",
-        "cash.pay_out",
-        "settings.manage",
-      ])}
-      canViewReceipts={navigationCapabilities.canViewReceipts}
-      canManageTiles={hasPermission(context, "products.manage")}
-      canRemoveItems={hasPermission(context, "pos.remove_item")}
-      canAssignTickets={canAssignTickets}
-      canUseCustomerLoyalty={features.loyalty}
-      canUseDining={features.dining}
-      canUseOpenTickets={features.open_tickets && hasPermission(context, "tickets.manage")}
-      canUseTimeClock={features.time_clock}
+      {...capabilities}
       categories={workspace.categories}
-      customerDisplaySessions={features.customer_display ? workspace.customerDisplaySessions : []}
+      customerDisplaySessions={context.features.customer_display ? workspace.customerDisplaySessions : []}
       deviceManagementEnabled={context.organization.device_management_enabled}
-      diningOptions={features.dining ? workspace.diningOptions : []}
-      discounts={hasPermission(context, "discounts.apply") ? workspace.discounts : []}
+      diningOptions={capabilities.canUseDining ? workspace.diningOptions : []}
+      discounts={capabilities.canApplyDiscounts ? workspace.discounts : []}
       currencyCode={context.organization.currency_code}
       employeeName={context.profile.full_name || context.profile.email || "Cashier"}
       initialItems={workspace.initialItems}
       initialFavoriteItems={workspace.initialFavoriteItems}
       initialRecentItems={workspace.initialRecentItems}
       key={`${activeShift?.id ?? "shift-closed"}:${workspace.openTickets.map((ticket) => `${ticket.id}:${ticket.updatedAt}`).join(",")}`}
-      loyaltyProgram={features.loyalty ? workspace.loyaltyProgram : null}
+      loyaltyProgram={capabilities.canUseCustomerLoyalty ? workspace.loyaltyProgram : null}
       organizationName={context.organization.name}
-      openTickets={features.open_tickets ? workspace.openTickets : []}
+      openTickets={capabilities.canUseOpenTickets ? workspace.openTickets : []}
       offlineScope={`${context.organization.id}:${context.user.id}`}
       organizationId={context.organization.id}
       paymentMethods={workspace.paymentMethods}
       registers={workspace.registers}
       stores={workspace.stores}
       taxRates={workspace.taxRates}
-      ticketAssignees={features.open_tickets ? workspace.ticketAssignees : []}
-      ticketTemplates={features.open_tickets ? workspace.ticketTemplates : []}
-      timeClockEntry={features.time_clock ? workspace.timeClockEntry : null}
+      ticketAssignees={capabilities.canUseOpenTickets ? workspace.ticketAssignees : []}
+      ticketTemplates={capabilities.canUseOpenTickets ? workspace.ticketTemplates : []}
+      timeClockEntry={capabilities.canUseTimeClock ? workspace.timeClockEntry : null}
       timezone={context.organization.timezone}
     />
   );

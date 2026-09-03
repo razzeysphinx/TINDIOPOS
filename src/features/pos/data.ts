@@ -56,6 +56,8 @@ export type PosReceiptSummary = {
   total_minor: number;
   currency_code: string;
   refund_total_minor: number;
+  refund_count: number;
+  has_refundable_quantity: boolean;
 };
 
 export type PosReceiptDetail = {

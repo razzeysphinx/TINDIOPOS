@@ -60,11 +60,12 @@ export function TenantReadinessManager({
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [usage, setUsage] = useState<OrganizationUsageSnapshot | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isLifecyclePending, startLifecycleTransition] = useTransition();
+  const [isUsagePending, startUsageTransition] = useTransition();
 
   const runLifecycleAction = (action: "SUSPEND" | "RESUME" | "REQUEST_ARCHIVE" | "CANCEL_ARCHIVE" | "ARCHIVE") => {
     setMessage(null);
-    startTransition(async () => {
+    startLifecycleTransition(async () => {
       const result = await manageOrganizationLifecycleAction({
         organizationId,
         action,
@@ -84,7 +85,7 @@ export function TenantReadinessManager({
 
   const refreshUsage = () => {
     setMessage(null);
-    startTransition(async () => {
+    startUsageTransition(async () => {
       const result = await getOrganizationUsageAction(organizationId);
       if (result.ok) {
         setUsage(result.usage);
@@ -119,8 +120,8 @@ export function TenantReadinessManager({
           {canViewUsage ? (
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
-                <Button disabled={isPending} onClick={refreshUsage} type="button" variant="outline">
-                  {isPending ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+                <Button disabled={isUsagePending} onClick={refreshUsage} type="button" variant="outline">
+                  {isUsagePending ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
                   Refresh usage
                 </Button>
                 <a className={buttonVariants({ variant: "outline" })} href="/api/organization-export">
@@ -166,7 +167,7 @@ export function TenantReadinessManager({
                   Reason for suspension or archive request
                   <textarea
                     className="min-h-20 rounded-lg border border-input bg-background p-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    disabled={isPending}
+                    disabled={isLifecyclePending}
                     id="organization-lifecycle-reason"
                     maxLength={500}
                     onChange={(event) => setReason(event.target.value)}
@@ -178,26 +179,26 @@ export function TenantReadinessManager({
 
               <div className="flex flex-wrap gap-2">
                 {status === "active" && !archiveRequestedAt ? (
-                  <Button disabled={isPending} onClick={() => runLifecycleAction("SUSPEND")} type="button" variant="outline">
+                  <Button disabled={isLifecyclePending} onClick={() => runLifecycleAction("SUSPEND")} type="button" variant="outline">
                     <PauseCircle />Suspend operations
                   </Button>
                 ) : null}
                 {status === "suspended" ? (
-                  <Button disabled={isPending} onClick={() => runLifecycleAction("RESUME")} type="button">
+                  <Button disabled={isLifecyclePending} onClick={() => runLifecycleAction("RESUME")} type="button">
                     <PlayCircle />Resume operations
                   </Button>
                 ) : null}
                 {status !== "archived" && !archiveRequestedAt ? (
-                  <Button disabled={isPending} onClick={() => runLifecycleAction("REQUEST_ARCHIVE")} type="button" variant="outline">
+                  <Button disabled={isLifecyclePending} onClick={() => runLifecycleAction("REQUEST_ARCHIVE")} type="button" variant="outline">
                     <Archive />Request archive
                   </Button>
                 ) : null}
                 {status !== "archived" && archiveRequestedAt ? (
                   <>
-                    <Button disabled={isPending} onClick={() => runLifecycleAction("CANCEL_ARCHIVE")} type="button" variant="outline">
+                    <Button disabled={isLifecyclePending} onClick={() => runLifecycleAction("CANCEL_ARCHIVE")} type="button" variant="outline">
                       Cancel archive
                     </Button>
-                    <Button disabled={isPending} onClick={() => runLifecycleAction("ARCHIVE")} type="button" variant="destructive">
+                    <Button disabled={isLifecyclePending} onClick={() => runLifecycleAction("ARCHIVE")} type="button" variant="destructive">
                       <Archive />Archive safely
                     </Button>
                   </>

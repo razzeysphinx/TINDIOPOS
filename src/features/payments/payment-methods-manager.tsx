@@ -477,17 +477,19 @@ function PaymentMethodEditor({
   const [offlinePolicy, setOfflinePolicy] = useState(method.offlinePolicy);
   const [sortOrder, setSortOrder] = useState(String(method.sortOrder));
   const [message, setMessage] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isSaving, setIsSaving] = useState(false);
+  const [pendingAvailabilityStoreId, setPendingAvailabilityStoreId] = useState<string | null>(null);
   const availability = new Map(method.availability.map((item) => [item.storeId, item.isEnabled]));
 
-  const save = () => {
+  const save = async () => {
     const parsedSortOrder = Number(sortOrder);
     if (!Number.isInteger(parsedSortOrder)) {
       setMessage("Sort order must be a whole number.");
       return;
     }
 
-    startTransition(async () => {
+    setIsSaving(true);
+    try {
       const result = await updatePaymentMethodAction({
         paymentMethodId: method.id,
         name,
@@ -505,18 +507,23 @@ function PaymentMethodEditor({
         offlinePolicy,
       });
       setMessage(policyResult.message);
-    });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const toggleAvailability = (storeId: string, enabled: boolean) => {
-    startTransition(async () => {
+  const toggleAvailability = async (storeId: string, enabled: boolean) => {
+    setPendingAvailabilityStoreId(storeId);
+    try {
       const result = await setStorePaymentMethodAvailabilityAction({
         paymentMethodId: method.id,
         storeId,
         isEnabled: enabled,
       });
       setMessage(result.message);
-    });
+    } finally {
+      setPendingAvailabilityStoreId(null);
+    }
   };
 
   return (
@@ -561,7 +568,7 @@ function PaymentMethodEditor({
               Offline policy
               <select
                 className="h-9 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                disabled={isPending}
+                disabled={isSaving}
                 onChange={(event) => setOfflinePolicy(event.target.value as PaymentMethodRecord["offlinePolicy"])}
                 value={offlinePolicy}
               >
@@ -579,7 +586,7 @@ function PaymentMethodEditor({
                     <input
                       checked={availability.get(store.id) ?? false}
                       className="size-4 accent-primary"
-                      disabled={!store.isActive || isPending}
+                      disabled={!store.isActive || pendingAvailabilityStoreId === store.id}
                       onChange={(event) => toggleAvailability(store.id, event.target.checked)}
                       type="checkbox"
                     />
@@ -590,8 +597,8 @@ function PaymentMethodEditor({
               </div>
             </div>
             <DialogFooter>
-              <Button disabled={isPending} onClick={save} size="sm" type="button">
-                {isPending ? <LoaderCircle className="animate-spin" /> : <Check />}
+              <Button disabled={isSaving} onClick={save} size="sm" type="button">
+                {isSaving ? <LoaderCircle className="animate-spin" /> : <Check />}
                 Save changes
               </Button>
               {message ? <p aria-live="polite" className="text-sm text-muted-foreground">{message}</p> : null}

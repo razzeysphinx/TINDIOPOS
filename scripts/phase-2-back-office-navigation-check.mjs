@@ -69,7 +69,11 @@ test("navigation remains permission-aware and inventory stays internally tabbed"
   assert.match(inventory, /href=\{`\/back-office\/inventory\?tab=\$\{tab\.id\}\$\{storeId \? `&store=\$\{storeId\}` : ""\}`\}/);
   assert.match(inventory, /sections=\{\["counts"\]\}/);
   assert.match(inventory, /sections=\{\["purchasing"\]\}/);
-  assert.match(inventory, /sections=\{\["transfers"\]\}/);
+  // Transfers use the approval-aware request/receipt path. Do not require the
+  // older immediate-transfer form, which remains only as a marked candidate
+  // for removal while historical QA is completed.
+  assert.match(inventory, /InventoryTransferWorkspace/);
+  assert.match(inventory, /sections=\{\["transfer-receipt"\]\}/);
   assert.match(advancedWorkflows, /export type AdvancedInventorySection = "purchasing" \| "counts" \| "transfers";/);
   assert.match(integrityWorkflows, /export type InventoryIntegritySection =/);
 });

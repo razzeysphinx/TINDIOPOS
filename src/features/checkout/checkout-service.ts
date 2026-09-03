@@ -277,7 +277,7 @@ export async function completeCheckout(
 
   const result = checkout?.[0];
   if (error || !result) {
-    console.error("TINDIO checkout RPC rejected", {
+    const checkoutDiagnostic = {
       code: error?.code ?? "NO_RESULT",
       details: error?.details ?? null,
       hint: error?.hint ?? null,
@@ -285,7 +285,13 @@ export async function completeCheckout(
       organizationId: context.organization.id,
       registerId: data.registerId,
       storeId: data.storeId,
-    });
+      payments: data.payments.map((payment) => ({
+        paymentMethodId: payment.paymentMethodId,
+        appliedMinor: payment.amount ? moneyInputToMinor(payment.amount) : null,
+        tenderedMinor: payment.tenderedAmount ? moneyInputToMinor(payment.tenderedAmount) : null,
+      })),
+    };
+    console.error("TINDIO checkout RPC rejected", JSON.stringify(checkoutDiagnostic));
     return {
       ok: false,
       message: checkoutDatabaseMessage(error?.code, error?.message),

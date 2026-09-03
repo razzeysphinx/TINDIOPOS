@@ -1,26 +1,29 @@
 "use client";
 
 import {
+  ArrowLeft,
   ArrowDownToLine,
-  ArrowUpRight,
   ArrowUpFromLine,
   Calculator,
   CheckCircle2,
   CircleDollarSign,
   Eye,
   EyeOff,
+  History,
   LoaderCircle,
   LogIn,
   LockKeyhole,
   Printer,
   ReceiptText,
 } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ContextHelp } from "@/components/back-office/context-help";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { formatMinorMoney, moneyInputToMinor } from "@/features/catalog/catalog-money";
 import { ManagerApprovalDialog } from "@/features/approvals/manager-approval-dialog";
@@ -31,6 +34,8 @@ import {
   recordCashMovementAction,
   updateShiftCashCloseSettingAction,
 } from "@/features/shifts/actions";
+import type { ShiftAuditReport } from "@/features/shifts/data";
+import { loadShiftQuickViewAction } from "@/features/shifts/quick-view/actions";
 
 type StoreOption = { id: string; name: string };
 type RegisterOption = { id: string; storeId: string; name: string; code: string };
@@ -69,6 +74,12 @@ type CashMovement = {
   amountMinor: number;
   reason: string;
   createdAt: string;
+};
+
+type ShiftHistoryEntry = {
+  shift: ShiftRecord;
+  storeName: string;
+  registerName: string;
 };
 
 export type ShiftOperationalSummary = {
@@ -112,6 +123,7 @@ function formatShiftTime(value: string, timezone: string) {
 }
 
 export function ShiftManager({
+  auditFilters,
   canClose,
   canManageSettings,
   canOpen,
@@ -120,15 +132,19 @@ export function ShiftManager({
   canViewClosedShiftAudit,
   cashMovements,
   currencyCode,
+  hasAccessibleOpenShift,
   openShifts,
   recentClosedShifts,
   registers,
   stores,
   summaries,
   operationalSummaries,
+  historyPresentation = "audit-card",
   showExpectedCashBeforeClose,
+  simplifyOpenShiftContext = false,
   timezone,
 }: {
+  auditFilters?: ReactNode;
   canClose: boolean;
   canManageSettings: boolean;
   canOpen: boolean;
@@ -137,13 +153,16 @@ export function ShiftManager({
   canViewClosedShiftAudit: boolean;
   cashMovements: CashMovement[];
   currencyCode: string;
+  hasAccessibleOpenShift?: boolean;
   openShifts: ShiftRecord[];
   recentClosedShifts: ShiftRecord[];
   registers: RegisterOption[];
   stores: StoreOption[];
   summaries: CashSummary[];
   operationalSummaries: ShiftOperationalSummary[];
+  historyPresentation?: "audit-card" | "drawer-action";
   showExpectedCashBeforeClose: boolean;
+  simplifyOpenShiftContext?: boolean;
   timezone: string;
 }) {
   const [lastCloseSummary, setLastCloseSummary] = useState<{
@@ -152,6 +171,7 @@ export function ShiftManager({
     differenceMinor: number;
   } | null>(null);
   const summaryByShiftId = new Map(summaries.map((summary) => [summary.shiftId, summary]));
+  const hasOpenShift = hasAccessibleOpenShift ?? openShifts.length > 0;
   const operationalSummaryByShiftId = new Map(operationalSummaries.map((summary) => [summary.shift.id, summary]));
   const movementsByShiftId = new Map<string, CashMovement[]>();
   for (const movement of cashMovements) {
@@ -169,7 +189,9 @@ export function ShiftManager({
       {lastCloseSummary ? (
         <CashCloseRecordedNotice currencyCode={currencyCode} summary={lastCloseSummary} />
       ) : null}
-      {canOpen ? <OpenShiftForm registers={registers} stores={stores} /> : null}
+      {canOpen && !hasOpenShift ? (
+        <OpenShiftForm registers={registers} simplifyContext={simplifyOpenShiftContext} stores={stores} />
+      ) : null}
 
       {openShifts.length > 0 ? (
         <section className="grid gap-4 xl:grid-cols-2">
@@ -186,11 +208,22 @@ export function ShiftManager({
               shift={shift}
               store={stores.find((item) => item.id === shift.storeId)}
               summary={summaryByShiftId.get(shift.id)}
+              showExpectedCashBeforeClose={showExpectedCashBeforeClose}
               operationalSummary={operationalSummaryByShiftId.get(shift.id)}
               timezone={timezone}
             />
           ))}
         </section>
+      ) : hasOpenShift ? (
+        <Card>
+          <CardHeader className="items-center py-10 text-center">
+            <CircleDollarSign className="size-9 text-muted-foreground" aria-hidden="true" />
+            <CardTitle>A register shift is already open</CardTitle>
+            <p className="max-w-md text-sm leading-6 text-muted-foreground">
+              A current shift is already using an assigned register. It must be reviewed or closed before another shift can be opened.
+            </p>
+          </CardHeader>
+        </Card>
       ) : (
         <Card>
           <CardHeader className="items-center py-10 text-center">
@@ -204,10 +237,12 @@ export function ShiftManager({
       )}
 
       <ClosedShiftHistory
+        auditFilters={auditFilters}
         canViewClosedShiftAudit={canViewClosedShiftAudit}
         currencyCode={currencyCode}
         registers={registers}
         operationalSummaryByShiftId={operationalSummaryByShiftId}
+        presentation={historyPresentation}
         shifts={recentClosedShifts}
         stores={stores}
         timezone={timezone}
@@ -218,9 +253,11 @@ export function ShiftManager({
 
 function OpenShiftForm({
   registers,
+  simplifyContext,
   stores,
 }: {
   registers: RegisterOption[];
+  simplifyContext: boolean;
   stores: StoreOption[];
 }) {
   const router = useRouter();
@@ -236,6 +273,8 @@ function OpenShiftForm({
   const [openingNote, setOpeningNote] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const hasFixedStore = simplifyContext && stores.length === 1;
+  const hasFixedRegister = simplifyContext && availableRegisters.length === 1;
 
   const changeStore = (nextStoreId: string) => {
     setStoreId(nextStoreId);
@@ -265,18 +304,26 @@ function OpenShiftForm({
       </CardHeader>
       <CardContent className="grid gap-4">
         <div className="grid gap-4 sm:grid-cols-3">
-          <label className="grid gap-1.5 text-sm font-medium">
-            Store
-            <select className={selectClassName} disabled={isPending || stores.length === 0} onChange={(event) => changeStore(event.target.value)} value={storeId}>
-              {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
-            </select>
-          </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            Register
-            <select className={selectClassName} disabled={isPending || availableRegisters.length === 0} onChange={(event) => setRegisterId(event.target.value)} value={registerId}>
-              {availableRegisters.map((register) => <option key={register.id} value={register.id}>{register.name} ({register.code})</option>)}
-            </select>
-          </label>
+          {hasFixedStore ? (
+            <ShiftContextField label="Store" value={stores[0]?.name ?? "Assigned store"} />
+          ) : (
+            <label className="grid gap-1.5 text-sm font-medium">
+              Store
+              <select className={selectClassName} disabled={isPending || stores.length === 0} onChange={(event) => changeStore(event.target.value)} value={storeId}>
+                {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
+              </select>
+            </label>
+          )}
+          {hasFixedRegister ? (
+            <ShiftContextField label="Register" value={`${availableRegisters[0]?.name ?? "Register"} (${availableRegisters[0]?.code ?? ""})`} />
+          ) : (
+            <label className="grid gap-1.5 text-sm font-medium">
+              Register
+              <select className={selectClassName} disabled={isPending || availableRegisters.length === 0} onChange={(event) => setRegisterId(event.target.value)} value={registerId}>
+                {availableRegisters.map((register) => <option key={register.id} value={register.id}>{register.name} ({register.code})</option>)}
+              </select>
+            </label>
+          )}
           <label className="grid gap-1.5 text-sm font-medium">
             Opening cash
             <Input disabled={isPending} inputMode="decimal" min="0" onChange={(event) => setOpeningCash(event.target.value)} step="0.01" type="number" value={openingCash} />
@@ -298,6 +345,15 @@ function OpenShiftForm({
   );
 }
 
+function ShiftContextField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1.5 text-sm font-medium">
+      <span>{label}</span>
+      <p className="flex h-10 items-center rounded-lg border bg-muted/35 px-3 text-sm font-normal">{value}</p>
+    </div>
+  );
+}
+
 function OpenShiftCard({
   canClose,
   canPayIn,
@@ -310,6 +366,7 @@ function OpenShiftCard({
   store,
   summary,
   operationalSummary,
+  showExpectedCashBeforeClose,
   timezone,
 }: {
   canClose: boolean;
@@ -323,8 +380,12 @@ function OpenShiftCard({
   store: StoreOption | undefined;
   summary: CashSummary | undefined;
   operationalSummary: ShiftOperationalSummary | undefined;
+  showExpectedCashBeforeClose: boolean;
   timezone: string;
 }) {
+  const [isCashManagementOpen, setIsCashManagementOpen] = useState(false);
+  const [isCloseReviewOpen, setIsCloseReviewOpen] = useState(false);
+
   return (
     <Card>
       <CardHeader className="flex-row items-start justify-between gap-3">
@@ -345,12 +406,20 @@ function OpenShiftCard({
         )}
         {shift.openingNote ? <p className="rounded-lg bg-muted/45 px-3 py-2 text-sm text-muted-foreground">Opening note: {shift.openingNote}</p> : null}
 
-        {canPayIn || canPayOut ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {canPayIn ? <CashMovementForm currencyCode={currencyCode} movementType="PAY_IN" shiftId={shift.id} /> : null}
-            {canPayOut ? <CashMovementForm currencyCode={currencyCode} movementType="PAY_OUT" shiftId={shift.id} /> : null}
-          </div>
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {canPayIn || canPayOut ? (
+            <Button onClick={() => setIsCashManagementOpen(true)} type="button" variant="outline">
+              <CircleDollarSign aria-hidden="true" />
+              Cash management
+            </Button>
+          ) : null}
+          {canClose ? (
+            <Button onClick={() => setIsCloseReviewOpen(true)} type="button">
+              <LockKeyhole aria-hidden="true" />
+              Close shift
+            </Button>
+          ) : null}
+        </div>
 
         {movements.length > 0 ? (
           <div>
@@ -371,14 +440,43 @@ function OpenShiftCard({
           </div>
         ) : null}
 
-        {canClose ? (
-          <CloseShiftForm
-            currencyCode={currencyCode}
-            expectedCashMinor={summary?.expectedCashMinor ?? null}
-            onClosed={onClosed}
-            shiftId={shift.id}
-          />
-        ) : null}
+        <Dialog.Root onOpenChange={setIsCashManagementOpen} open={isCashManagementOpen}>
+          <DialogContent className="w-full max-w-2xl" closeLabel="Close cash management">
+            <DialogHeader>
+              <DialogTitle>Cash management</DialogTitle>
+              <DialogDescription>Record a pay in or pay out against this open shift. Every entry is retained in the cash audit trail.</DialogDescription>
+            </DialogHeader>
+            <DialogBody className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {canPayIn ? <CashMovementForm currencyCode={currencyCode} movementType="PAY_IN" shiftId={shift.id} /> : null}
+                {canPayOut ? <CashMovementForm currencyCode={currencyCode} movementType="PAY_OUT" shiftId={shift.id} /> : null}
+              </div>
+              <CashMovementActivity currencyCode={currencyCode} movements={movements} timezone={timezone} />
+            </DialogBody>
+          </DialogContent>
+        </Dialog.Root>
+
+        <Dialog.Root onOpenChange={setIsCloseReviewOpen} open={isCloseReviewOpen}>
+          <DialogContent className="w-full max-w-xl" closeLabel="Close shift review">
+            <DialogHeader>
+              <DialogTitle>Shift closing review</DialogTitle>
+              <DialogDescription>Count the drawer before finalizing this historical shift record.</DialogDescription>
+            </DialogHeader>
+            <DialogBody>
+              <CloseShiftForm
+                currencyCode={currencyCode}
+                expectedCashMinor={summary?.expectedCashMinor ?? null}
+                onClosed={(closeSummary) => {
+                  setIsCloseReviewOpen(false);
+                  onClosed(closeSummary);
+                }}
+                operationalSummary={operationalSummary}
+                showExpectedCashBeforeClose={showExpectedCashBeforeClose}
+                shiftId={shift.id}
+              />
+            </DialogBody>
+          </DialogContent>
+        </Dialog.Root>
       </CardContent>
     </Card>
   );
@@ -490,6 +588,42 @@ function BlindCashNotice() {
   );
 }
 
+function CashMovementActivity({
+  currencyCode,
+  movements,
+  timezone,
+}: {
+  currencyCode: string;
+  movements: CashMovement[];
+  timezone: string;
+}) {
+  return (
+    <section aria-labelledby="cash-management-activity">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium" id="cash-management-activity">Activity</p>
+        <p className="text-xs text-muted-foreground">Newest first</p>
+      </div>
+      {movements.length > 0 ? (
+        <div className="mt-2 divide-y overflow-hidden rounded-lg border">
+          {movements.map((movement) => (
+            <div className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm" key={movement.id}>
+              <div className="min-w-0">
+                <p className="truncate font-medium">{movement.reason}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{formatShiftTime(movement.createdAt, timezone)}</p>
+              </div>
+              <span className={movement.movementType === "PAY_IN" ? "shrink-0 font-semibold text-emerald-700 dark:text-emerald-400" : "shrink-0 font-semibold text-destructive"}>
+                {movement.movementType === "PAY_IN" ? "+" : "−"}{formatMinorMoney(movement.amountMinor, currencyCode)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground">No pay-in or pay-out has been recorded for this shift.</p>
+      )}
+    </section>
+  );
+}
+
 function CashMovementForm({
   currencyCode,
   movementType,
@@ -593,26 +727,33 @@ function CloseShiftForm({
   currencyCode,
   expectedCashMinor,
   onClosed,
+  operationalSummary,
+  showExpectedCashBeforeClose,
   shiftId,
 }: {
   currencyCode: string;
   expectedCashMinor: number | null;
   onClosed: (summary: { expectedCashMinor: number; countedCashMinor: number; differenceMinor: number }) => void;
+  operationalSummary: ShiftOperationalSummary | undefined;
+  showExpectedCashBeforeClose: boolean;
   shiftId: string;
 }) {
   const router = useRouter();
   const [countedCash, setCountedCash] = useState("");
   const [closingNote, setClosingNote] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const countedCashMinor = moneyInputToMinor(countedCash);
+  const expectedDifferenceMinor = expectedCashMinor === null ? null : countedCashMinor - expectedCashMinor;
 
   const submit = () => {
-    if (!window.confirm("Close this shift? The expected cash and any drawer difference will be permanently recorded.")) return;
     startTransition(async () => {
       const result = await closeShiftAction({ shiftId, countedCash, closingNote });
       setMessage(result.message);
       if (result.ok) {
         if (result.closeSummary) onClosed(result.closeSummary);
+        setConfirmOpen(false);
         router.refresh();
       }
     });
@@ -630,15 +771,90 @@ function CloseShiftForm({
           </p>
         </div>
       </div>
+      {showExpectedCashBeforeClose && operationalSummary ? (
+        <ShiftCloseReviewTotals currencyCode={currencyCode} summary={operationalSummary} />
+      ) : null}
       <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto]">
         <Input aria-label="Counted cash" disabled={isPending} inputMode="decimal" min="0" onChange={(event) => setCountedCash(event.target.value)} placeholder="Counted cash" step="0.01" type="number" value={countedCash} />
         <Input disabled={isPending} maxLength={500} onChange={(event) => setClosingNote(event.target.value)} placeholder="Closing note (optional)" value={closingNote} />
-        <Button disabled={isPending || !countedCash} onClick={submit} type="button">
+        <Button disabled={isPending || !countedCash} onClick={() => setConfirmOpen(true)} type="button">
           {isPending ? <LoaderCircle className="animate-spin" /> : <LockKeyhole />}
           Close shift
         </Button>
       </div>
+      {countedCash && expectedDifferenceMinor !== null ? (
+        <p className="mt-3 text-sm">
+          <span className="text-muted-foreground">Difference</span>
+          <span className={expectedDifferenceMinor === 0 ? "ml-2 font-semibold" : expectedDifferenceMinor > 0 ? "ml-2 font-semibold text-emerald-700 dark:text-emerald-400" : "ml-2 font-semibold text-destructive"}>
+            {expectedDifferenceMinor > 0 ? "+" : ""}{formatMinorMoney(expectedDifferenceMinor, currencyCode)}
+          </span>
+        </p>
+      ) : null}
       {message ? <p aria-live="polite" className="mt-2 text-xs text-muted-foreground">{message}</p> : null}
+      <Dialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Record this shift close?</DialogTitle>
+            <DialogDescription>
+              This records the cash count and any difference in shift history. Completed sales and payments are not changed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <div className="grid gap-2 rounded-lg border bg-muted/30 p-3 text-sm sm:grid-cols-3">
+              {expectedCashMinor === null ? <p><span className="block text-xs text-muted-foreground">Expected cash</span>Shown after blind close</p> : <p><span className="block text-xs text-muted-foreground">Expected cash</span>{formatMinorMoney(expectedCashMinor, currencyCode)}</p>}
+              <p><span className="block text-xs text-muted-foreground">Counted cash</span>{formatMinorMoney(countedCashMinor, currencyCode)}</p>
+              {expectedDifferenceMinor === null ? null : <p><span className="block text-xs text-muted-foreground">Difference</span>{expectedDifferenceMinor > 0 ? "+" : ""}{formatMinorMoney(expectedDifferenceMinor, currencyCode)}</p>}
+            </div>
+            {closingNote ? <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Closing note:</span> {closingNote}</p> : null}
+          </DialogBody>
+          <DialogFooter>
+            <Button disabled={isPending} onClick={() => setConfirmOpen(false)} type="button" variant="outline">Cancel</Button>
+            <Button disabled={isPending} onClick={submit} type="button">
+              {isPending ? <LoaderCircle className="animate-spin" /> : <LockKeyhole />}
+              Record close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog.Root>
+    </div>
+  );
+}
+
+function ShiftCloseReviewTotals({
+  currencyCode,
+  summary,
+}: {
+  currencyCode: string;
+  summary: ShiftOperationalSummary;
+}) {
+  const rows = [
+    ["Gross sales", summary.sales.grossSalesMinor],
+    ["Refunds", -summary.sales.refundsMinor],
+    ["Discounts", -summary.sales.discountsMinor],
+    ["Net sales", summary.sales.netSalesMinor],
+    ["Starting cash", summary.shift.startingCashMinor],
+    ["Cash sales", summary.cash.cashPaymentsMinor],
+    ["Cash refunds", -(summary.cash.cashRefundsMinor ?? 0)],
+    ["Paid in", summary.cash.paidInMinor],
+    ["Paid out", -(summary.cash.paidOutMinor ?? 0)],
+    ["Expected cash", summary.cash.expectedCashMinor],
+  ] as const;
+
+  return (
+    <div className="mt-4 rounded-lg border bg-background/70 p-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Closing review</p>
+      <div className="mt-3 grid gap-x-5 gap-y-1.5 text-xs sm:grid-cols-2">
+        {rows.map(([label, amount]) => (
+          <p className="flex justify-between gap-3" key={label}>
+            <span className="text-muted-foreground">{label}</span>
+            <span className="font-medium">
+              {amount === null
+                ? "—"
+                : `${amount < 0 ? "−" : ""}${formatMinorMoney(Math.abs(amount), currencyCode)}`}
+            </span>
+          </p>
+        ))}
+      </div>
     </div>
   );
 }
@@ -708,26 +924,81 @@ function CashCloseVisibilitySetting({ initialValue }: { initialValue: boolean })
 }
 
 function ClosedShiftHistory({
+  auditFilters,
   canViewClosedShiftAudit,
   currencyCode,
   operationalSummaryByShiftId,
+  presentation,
   registers,
   shifts,
   stores,
   timezone,
 }: {
+  auditFilters?: ReactNode;
   canViewClosedShiftAudit: boolean;
   currencyCode: string;
   operationalSummaryByShiftId: Map<string, ShiftOperationalSummary>;
+  presentation: "audit-card" | "drawer-action";
   registers: RegisterOption[];
   shifts: ShiftRecord[];
   stores: StoreOption[];
   timezone: string;
 }) {
-  const router = useRouter();
+  const [detail, setDetail] = useState<ShiftAuditReport | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isLoading, startLoadingTransition] = useTransition();
+  const [loadError, setLoadError] = useState(false);
+  const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null);
+  const requestId = useRef(0);
+  const lastFocusedShiftId = useRef<string | null>(null);
+
+  const openShiftReport = (shiftId: string) => {
+    if (!canViewClosedShiftAudit) return;
+    const currentRequest = requestId.current + 1;
+    requestId.current = currentRequest;
+    lastFocusedShiftId.current = shiftId;
+    setSelectedShiftId(shiftId);
+    setDetail(null);
+    setLoadError(false);
+    setIsDrawerOpen(true);
+
+    startLoadingTransition(async () => {
+      const result = await loadShiftQuickViewAction({ shiftId });
+      if (requestId.current !== currentRequest) return;
+      if (!result.ok || !result.data) {
+        setLoadError(true);
+        return;
+      }
+      setDetail(result.data);
+    });
+  };
+
+  const closeDrawer = () => {
+    requestId.current += 1;
+    setIsDrawerOpen(false);
+    setLoadError(false);
+    setDetail(null);
+    const shiftId = lastFocusedShiftId.current;
+    if (shiftId) {
+      window.requestAnimationFrame(() => document.getElementById(`shift-report-open-${shiftId}`)?.focus());
+    }
+  };
+  const openHistory = () => {
+    requestId.current += 1;
+    setSelectedShiftId(null);
+    setDetail(null);
+    setLoadError(false);
+    setIsDrawerOpen(true);
+  };
+  const historyEntries = shifts.map((shift) => ({
+    shift,
+    registerName: registers.find((item) => item.id === shift.registerId)?.name ?? "Register",
+    storeName: stores.find((item) => item.id === shift.storeId)?.name ?? "Store",
+  }));
 
   return (
-    <Card>
+    <>
+    {presentation === "audit-card" ? <Card>
       <CardHeader className="flex-row items-start gap-3">
         <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><ReceiptText className="size-5" /></span>
         <div>
@@ -735,7 +1006,8 @@ function ClosedShiftHistory({
           <p className="mt-1 text-sm text-muted-foreground">Stored expected cash, drawer count, and difference for the latest 25 closed shifts.{canViewClosedShiftAudit ? " Select a row to inspect its full reconciliation report." : ""}</p>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {auditFilters}
         {shifts.length > 0 ? (
           <div className="overflow-x-auto overscroll-x-contain rounded-lg border">
             <table className="w-full min-w-220 text-left text-sm">
@@ -745,25 +1017,26 @@ function ClosedShiftHistory({
                   const difference = shift.differenceMinor ?? 0;
                   const registerName = registers.find((item) => item.id === shift.registerId)?.name ?? "Register";
                   const storeName = stores.find((item) => item.id === shift.storeId)?.name ?? "Store";
-                  const reportHref = `/back-office/shifts/${shift.id}`;
-                  const navigateToReport = () => {
-                    if (canViewClosedShiftAudit) router.push(reportHref);
-                  };
+                  const isSelected = selectedShiftId === shift.id && isDrawerOpen;
+                  const openLabel = `View shift report for ${registerName}, closed ${shift.closedAt ? formatShiftTime(shift.closedAt, timezone) : "recently"}`;
+                  const openReport = () => openShiftReport(shift.id);
                   return <tr
-                    aria-label={canViewClosedShiftAudit ? `View audit report for ${registerName}` : undefined}
-                    className={canViewClosedShiftAudit ? "group cursor-pointer transition-colors hover:bg-muted/50 focus-visible:bg-muted/50" : undefined}
+                    aria-busy={isSelected && isLoading ? true : undefined}
+                    aria-label={canViewClosedShiftAudit ? openLabel : undefined}
+                    className={canViewClosedShiftAudit ? `cursor-pointer transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 ${isSelected ? "bg-primary/10 hover:bg-primary/10" : ""}` : undefined}
+                    id={`shift-report-open-${shift.id}`}
                     key={shift.id}
-                    onClick={navigateToReport}
+                    onClick={openReport}
                     onKeyDown={(event) => {
                       if (!canViewClosedShiftAudit || event.currentTarget !== event.target || (event.key !== "Enter" && event.key !== " ")) return;
                       event.preventDefault();
-                      navigateToReport();
+                      openReport();
                     }}
-                    role={canViewClosedShiftAudit ? "link" : undefined}
+                    role={canViewClosedShiftAudit ? "button" : undefined}
                     tabIndex={canViewClosedShiftAudit ? 0 : undefined}
                   >
                     <td className="px-3 py-3 font-medium">{storeName}</td>
-                    <td className="px-3 py-3"><p className="flex items-center gap-1.5 font-medium">{registerName}{canViewClosedShiftAudit ? <ArrowUpRight aria-hidden="true" className="size-3.5 text-muted-foreground transition-colors group-hover:text-primary" /> : null}</p></td>
+                    <td className="px-3 py-3 font-medium">{registerName}</td>
                     <td className="px-3 py-3 text-muted-foreground">{shift.openedByName}</td>
                     <td className="px-3 py-3 text-muted-foreground">{shift.closedAt ? formatShiftTime(shift.closedAt, timezone) : "—"}</td>
                     <td className="px-3 py-3 text-right">{formatMinorMoney(shift.expectedCashMinor ?? 0, currencyCode)}</td>
@@ -793,8 +1066,282 @@ function ClosedShiftHistory({
           </div>
         ) : <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No shifts have been closed yet.</p>}
       </CardContent>
-    </Card>
+    </Card> : canViewClosedShiftAudit ? (
+      <div className="flex justify-end">
+        <Button onClick={openHistory} type="button" variant="outline">
+          <History aria-hidden="true" />
+          Shift history
+        </Button>
+      </div>
+    ) : null}
+      <ShiftAuditDrawer
+        currencyCode={currencyCode}
+        detail={detail}
+        historyEntries={historyEntries}
+        isLoading={isLoading}
+        loadError={loadError}
+        onOpenShiftReport={openShiftReport}
+        onShowHistory={openHistory}
+        onClose={closeDrawer}
+        onRetry={() => selectedShiftId && openShiftReport(selectedShiftId)}
+        open={isDrawerOpen}
+        timezone={timezone}
+      />
+    </>
   );
+}
+
+function ShiftAuditDrawer({
+  currencyCode,
+  detail,
+  historyEntries,
+  isLoading,
+  loadError,
+  onClose,
+  onOpenShiftReport,
+  onRetry,
+  onShowHistory,
+  open,
+  timezone,
+}: {
+  currencyCode: string;
+  detail: ShiftAuditReport | null;
+  historyEntries: ShiftHistoryEntry[];
+  isLoading: boolean;
+  loadError: boolean;
+  onClose: () => void;
+  onOpenShiftReport: (shiftId: string) => void;
+  onRetry: () => void;
+  onShowHistory: () => void;
+  open: boolean;
+  timezone: string;
+}) {
+  const [activityExpandedForShiftId, setActivityExpandedForShiftId] = useState<string | null>(null);
+  const showAllActivity = activityExpandedForShiftId === detail?.shift.id;
+  const difference = detail?.shift.differenceMinor ?? 0;
+  const differenceLabel = difference === 0 ? "Balanced" : difference > 0 ? "Over by" : "Short by";
+  const cashActivity = showAllActivity ? detail?.cashMovements ?? [] : detail?.cashMovements.slice(0, 4) ?? [];
+
+  return (
+    <Dialog.Root onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }} open={open}>
+      <DialogContent
+        className="flex h-dvh max-h-none max-w-none flex-col rounded-none sm:max-w-[38rem]"
+        closeLabel="Close shift report"
+        side="right"
+      >
+        <DialogHeader className="shrink-0">
+          <DialogTitle>{detail ? `Shift report · ${detail.shift.number}` : "Shift history"}</DialogTitle>
+          <DialogDescription>{detail ? `${detail.shift.store} · ${detail.shift.register}` : "Select a closed shift to inspect its recorded reconciliation."}</DialogDescription>
+        </DialogHeader>
+        <DialogBody className="min-h-0 max-h-none flex-1 space-y-4">
+          {detail ? (
+            <Button onClick={onShowHistory} size="sm" type="button" variant="ghost">
+              <ArrowLeft aria-hidden="true" />
+              All closed shifts
+            </Button>
+          ) : null}
+          {isLoading && !detail ? <ShiftReportSkeleton /> : null}
+          {loadError ? (
+            <section className="rounded-xl border border-dashed p-5 text-center">
+              <p className="font-medium">We couldn&apos;t load this shift report.</p>
+              <p className="mt-1 text-sm text-muted-foreground">The shift list is still available. Please try again.</p>
+              <Button className="mt-4" onClick={onRetry} type="button" variant="outline">Try again</Button>
+            </section>
+          ) : null}
+          {!detail && !isLoading && !loadError ? (
+            <ShiftHistoryList currencyCode={currencyCode} entries={historyEntries} onOpenShiftReport={onOpenShiftReport} timezone={timezone} />
+          ) : null}
+          {detail ? <ShiftAuditDetail
+            cashActivity={cashActivity}
+            currencyCode={currencyCode}
+            detail={detail}
+            difference={difference}
+            differenceLabel={differenceLabel}
+            onToggleActivity={() => setActivityExpandedForShiftId((current) => current === detail.shift.id ? null : detail.shift.id)}
+            showAllActivity={showAllActivity}
+            timezone={timezone}
+          /> : null}
+        </DialogBody>
+        {detail ? <DialogFooter className="shrink-0 justify-end border-t px-4 py-3 sm:px-6">
+          <ShiftClosePrintButton
+            closedAt={detail.shift.closedAt}
+            countedCashMinor={detail.shift.countedCashMinor}
+            currencyCode={currencyCode}
+            differenceMinor={detail.shift.differenceMinor}
+            expectedCashMinor={detail.shift.expectedCashMinor}
+            openedAt={detail.shift.openedAt}
+            operationalSummary={toShiftOperationalSummary(detail)}
+            registerName={detail.shift.register}
+            shiftId={detail.shift.id}
+            showLabel
+            storeName={detail.shift.store}
+            timezone={timezone}
+          />
+        </DialogFooter> : null}
+      </DialogContent>
+    </Dialog.Root>
+  );
+}
+
+function ShiftHistoryList({
+  currencyCode,
+  entries,
+  onOpenShiftReport,
+  timezone,
+}: {
+  currencyCode: string;
+  entries: ShiftHistoryEntry[];
+  onOpenShiftReport: (shiftId: string) => void;
+  timezone: string;
+}) {
+  return (
+    <section aria-label="Closed shifts">
+      <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">Closed shifts</p>
+      {entries.length > 0 ? (
+        <div className="mt-3 divide-y overflow-hidden rounded-xl border">
+          {entries.map(({ registerName, shift, storeName }) => {
+            const difference = shift.differenceMinor ?? 0;
+            return (
+              <button
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                key={shift.id}
+                onClick={() => onOpenShiftReport(shift.id)}
+                type="button"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold">{storeName} · {registerName}</span>
+                  <span className="mt-1 block truncate text-xs text-muted-foreground">
+                    {shift.closedAt ? formatShiftTime(shift.closedAt, timezone) : "Recently closed"}
+                  </span>
+                </span>
+                <span className="shrink-0 text-right text-sm">
+                  <span className="block font-medium">{difference === 0 ? "Balanced" : difference > 0 ? "Over" : "Short"}</span>
+                  <span className={difference === 0 ? "text-xs text-muted-foreground" : difference > 0 ? "text-xs text-emerald-700 dark:text-emerald-400" : "text-xs text-destructive"}>
+                    {difference > 0 ? "+" : ""}{formatMinorMoney(Math.abs(difference), currencyCode)}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No shifts have been closed yet.</p>
+      )}
+    </section>
+  );
+}
+
+function ShiftAuditDetail({
+  cashActivity,
+  currencyCode,
+  detail,
+  difference,
+  differenceLabel,
+  onToggleActivity,
+  showAllActivity,
+  timezone,
+}: {
+  cashActivity: ShiftAuditReport["cashMovements"];
+  currencyCode: string;
+  detail: ShiftAuditReport;
+  difference: number;
+  differenceLabel: string;
+  onToggleActivity: () => void;
+  showAllActivity: boolean;
+  timezone: string;
+}) {
+  return <>
+    <section className="rounded-xl border bg-muted/20 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div><p className="text-sm font-semibold">{detail.shift.store} · {detail.shift.register}</p><p className="mt-1 text-sm text-muted-foreground">Closed {formatShiftTime(detail.shift.closedAt, timezone)}</p></div>
+        <Badge variant={difference === 0 ? "secondary" : difference > 0 ? "default" : "destructive"}>{differenceLabel}{difference === 0 ? "" : ` ${formatMinorMoney(Math.abs(difference), currencyCode)}`}</Badge>
+      </div>
+    </section>
+
+    <ShiftReportSection title="Overview">
+      <ShiftReportRow label="Store" value={detail.shift.store} />
+      <ShiftReportRow label="Register" value={detail.shift.register} />
+      <ShiftReportRow label="Opened by" value={detail.shift.openedBy} />
+      <ShiftReportRow label="Opened" value={formatShiftTime(detail.shift.openedAt, timezone)} />
+      <ShiftReportRow label="Closed by" value={detail.shift.closedBy} />
+      <ShiftReportRow label="Closed" value={formatShiftTime(detail.shift.closedAt, timezone)} />
+      <ShiftReportRow label="Duration" value={formatShiftDuration(detail.shift.openedAt, detail.shift.closedAt)} />
+    </ShiftReportSection>
+
+    <ShiftReportSection title="Cash reconciliation">
+      <ShiftReportRow label="Starting cash" value={formatMinorMoney(detail.shift.openingCashMinor, currencyCode)} />
+      <ShiftReportRow label="Cash sales" value={formatMinorMoney(detail.cash.cashPaymentsMinor, currencyCode)} />
+      <ShiftReportRow label="Cash refunds" value={`−${formatMinorMoney(detail.cash.cashRefundsMinor, currencyCode)}`} />
+      <ShiftReportRow label="Paid in" value={formatMinorMoney(detail.cash.paidInMinor, currencyCode)} />
+      <ShiftReportRow label="Paid out" value={`−${formatMinorMoney(detail.cash.paidOutMinor, currencyCode)}`} />
+      <ShiftReportRow label={<span className="inline-flex items-center gap-1.5">Expected cash <ContextHelp label="How expected cash is calculated">Starting cash + cash sales − cash refunds + paid in − paid out. This comes from recorded payments and cash movements.</ContextHelp></span>} value={formatMinorMoney(detail.shift.expectedCashMinor, currencyCode)} />
+      <ShiftReportRow label="Counted cash" value={formatMinorMoney(detail.shift.countedCashMinor, currencyCode)} />
+      <ShiftReportRow emphasized label="Difference" value={`${difference > 0 ? "+" : ""}${formatMinorMoney(difference, currencyCode)} · ${differenceLabel}`} />
+    </ShiftReportSection>
+
+    <ShiftReportSection title="Sales summary">
+      <ShiftReportRow label={`Gross sales (${detail.sales.saleCount})`} value={formatMinorMoney(detail.sales.grossSalesMinor, currencyCode)} />
+      <ShiftReportRow label={`Refunds (${detail.sales.refundCount})`} value={`−${formatMinorMoney(detail.sales.refundsMinor, currencyCode)}`} />
+      <ShiftReportRow label="Discounts" value={`−${formatMinorMoney(detail.sales.discountsMinor, currencyCode)}`} />
+      <ShiftReportRow label="Tax" value={formatMinorMoney(detail.sales.taxMinor, currencyCode)} />
+      <ShiftReportRow emphasized label="Net sales" value={formatMinorMoney(detail.sales.netSalesMinor, currencyCode)} />
+    </ShiftReportSection>
+
+    <ShiftReportSection title="Payments">
+      {detail.paymentBreakdown.length > 0 ? detail.paymentBreakdown.map((payment) => <div className="border-b py-2.5 last:border-b-0" key={`${payment.type}-${payment.name}`}>
+        <div className="flex items-baseline justify-between gap-3"><span className="font-medium">{payment.name}</span><span className="font-medium tabular-nums">{formatMinorMoney(payment.netMinor, currencyCode)}</span></div>
+        <p className="mt-1 text-xs text-muted-foreground">{payment.type} · {payment.salePaymentCount} payment{payment.salePaymentCount === 1 ? "" : "s"}{payment.refundPaymentCount > 0 ? ` · ${payment.refundPaymentCount} refund${payment.refundPaymentCount === 1 ? "" : "s"}` : ""}</p>
+      </div>) : <p className="text-sm text-muted-foreground">No recorded payment breakdown is available.</p>}
+    </ShiftReportSection>
+
+    <ShiftReportSection title="Cash activity">
+      {cashActivity.length > 0 ? <>
+        {cashActivity.map((movement) => <div className="border-b py-2.5 last:border-b-0" key={movement.id}>
+          <div className="flex items-baseline justify-between gap-3"><span className="font-medium">{movement.type === "PAY_IN" ? "Pay in" : "Pay out"}</span><span className="font-medium tabular-nums">{movement.type === "PAY_IN" ? "+" : "−"}{formatMinorMoney(movement.amountMinor, currencyCode)}</span></div>
+          <p className="mt-1 text-xs text-muted-foreground">{movement.reason} · {movement.employee} · {formatShiftTime(movement.createdAt, timezone)}</p>
+        </div>)}
+        {detail.cashMovements.length > 4 ? <Button className="mt-3" onClick={onToggleActivity} size="sm" type="button" variant="ghost">{showAllActivity ? "Show recent activity" : `View all ${detail.cashMovements.length} movements`}</Button> : null}
+      </> : <p className="text-sm text-muted-foreground">No pay-ins or pay-outs were recorded for this shift.</p>}
+    </ShiftReportSection>
+
+    {detail.shift.closingNote || detail.shift.openingNote ? <ShiftReportSection title="Shift notes">
+      {detail.shift.openingNote ? <ShiftReportRow label="Opening note" value={detail.shift.openingNote} /> : null}
+      {detail.shift.closingNote ? <ShiftReportRow label="Closing note" value={detail.shift.closingNote} /> : null}
+    </ShiftReportSection> : null}
+
+    {detail.audit.available && detail.audit.events.length > 0 ? <ShiftReportSection title="Audit history">
+      {detail.audit.events.slice(0, 5).map((event) => <div className="border-b py-2.5 last:border-b-0" key={event.id}><p className="font-medium">{event.eventType.replaceAll("_", " ")}</p><p className="mt-1 text-xs text-muted-foreground">{event.actor} · {formatShiftTime(event.createdAt, timezone)}{event.reason ? ` · ${event.reason}` : ""}</p></div>)}
+    </ShiftReportSection> : null}
+  </>;
+}
+
+function ShiftReportSection({ children, title }: { children: ReactNode; title: string }) {
+  return <section className="rounded-xl border p-4"><h3 className="text-sm font-semibold">{title}</h3><div className="mt-2 divide-y">{children}</div></section>;
+}
+
+function ShiftReportRow({ emphasized = false, label, value }: { emphasized?: boolean; label: ReactNode; value: ReactNode }) {
+  return <div className={`flex items-start justify-between gap-4 py-2 text-sm ${emphasized ? "font-semibold" : ""}`}><span className="text-muted-foreground">{label}</span><span className="text-right tabular-nums">{value}</span></div>;
+}
+
+function ShiftReportSkeleton() {
+  return <div aria-label="Loading shift report" className="space-y-4" role="status"><div className="h-20 animate-pulse rounded-xl bg-muted" /><div className="h-64 animate-pulse rounded-xl bg-muted" /><div className="h-40 animate-pulse rounded-xl bg-muted" /><span className="sr-only">Loading shift report</span></div>;
+}
+
+function formatShiftDuration(openedAt: string, closedAt: string) {
+  const milliseconds = new Date(closedAt).getTime() - new Date(openedAt).getTime();
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return "—";
+  const totalMinutes = Math.floor(milliseconds / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
+function toShiftOperationalSummary(detail: ShiftAuditReport): ShiftOperationalSummary {
+  return {
+    shift: { id: detail.shift.id, number: detail.shift.number, status: "closed", openedBy: detail.shift.openedBy, openedAt: detail.shift.openedAt, closedAt: detail.shift.closedAt, store: detail.shift.store, register: detail.shift.register, startingCashMinor: detail.shift.openingCashMinor, actualCashMinor: detail.shift.countedCashMinor, differenceMinor: detail.shift.differenceMinor },
+    cash: { cashPaymentsMinor: detail.cash.cashPaymentsMinor, cashRefundsMinor: detail.cash.cashRefundsMinor, paidInMinor: detail.cash.paidInMinor, paidOutMinor: detail.cash.paidOutMinor, expectedCashMinor: detail.shift.expectedCashMinor },
+    sales: { grossSalesMinor: detail.sales.grossSalesMinor, refundsMinor: detail.sales.refundsMinor, discountsMinor: detail.sales.discountsMinor, netSalesMinor: detail.sales.netSalesMinor },
+  };
 }
 
 function escapePrintHtml(value: string) {
@@ -817,6 +1364,7 @@ export function ShiftClosePrintButton({
   operationalSummary,
   registerName,
   shiftId,
+  showLabel = false,
   storeName,
   timezone,
 }: {
@@ -829,6 +1377,7 @@ export function ShiftClosePrintButton({
   operationalSummary: ShiftOperationalSummary | undefined;
   registerName: string;
   shiftId: string;
+  showLabel?: boolean;
   storeName: string;
   timezone: string;
 }) {
@@ -874,9 +1423,9 @@ export function ShiftClosePrintButton({
   };
 
   return (
-    <Button aria-label={`Print shift close for ${registerName}`} onClick={print} size="sm" title="Print shift close" type="button" variant="ghost">
+    <Button aria-label={`Print shift close for ${registerName}`} onClick={print} size={showLabel ? "default" : "sm"} title="Print shift close" type="button" variant={showLabel ? "outline" : "ghost"}>
       <Printer aria-hidden="true" />
-      <span className="sr-only">Print shift close</span>
+      <span className={showLabel ? undefined : "sr-only"}>{showLabel ? "Print shift report" : "Print shift close"}</span>
     </Button>
   );
 }

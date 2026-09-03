@@ -59,8 +59,11 @@ export function DeviceManager({
   const [storeId, setStoreId] = useState(stores[0]?.id ?? "");
   const [registerId, setRegisterId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
-  const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [pendingRebindingDeviceId, setPendingRebindingDeviceId] = useState<string | null>(null);
+  const [pendingRevokingDeviceId, setPendingRevokingDeviceId] = useState<string | null>(null);
+  const [isRegisteringPending, startRegisteringTransition] = useTransition();
+  const [isRebindingPending, startRebindingTransition] = useTransition();
+  const [isRevokingPending, startRevokingTransition] = useTransition();
   const registersForNewDevice = useMemo(
     () => registers.filter((register) => register.storeId === storeId),
     [registers, storeId],
@@ -78,7 +81,7 @@ export function DeviceManager({
     }
 
     const identity = createIdentity();
-    startTransition(async () => {
+    startRegisteringTransition(async () => {
       setMessage(null);
       const result = await registerPosDeviceAction({
         ...identity,
@@ -108,26 +111,26 @@ export function DeviceManager({
 
   const rebind = (deviceId: string, nextStoreId: string, nextRegisterId: string) => {
     if (!nextStoreId || !nextRegisterId) return;
-    setPendingDeviceId(deviceId);
-    startTransition(async () => {
+    setPendingRebindingDeviceId(deviceId);
+    startRebindingTransition(async () => {
       const result = await changePosDeviceRegisterAction({
         deviceId,
         storeId: nextStoreId,
         registerId: nextRegisterId,
       });
       setMessage(result.message);
-      setPendingDeviceId(null);
+      setPendingRebindingDeviceId(null);
       if (result.ok) router.refresh();
     });
   };
 
   const revoke = (deviceId: string, deviceName: string) => {
     if (!window.confirm(`Revoke ${deviceName}? This browser will no longer be able to use TINDIO POS.`)) return;
-    setPendingDeviceId(deviceId);
-    startTransition(async () => {
+    setPendingRevokingDeviceId(deviceId);
+    startRevokingTransition(async () => {
       const result = await revokePosDeviceAction({ deviceId, reason: "Device revoked by a manager." });
       setMessage(result.message);
-      setPendingDeviceId(null);
+      setPendingRevokingDeviceId(null);
       if (result.ok) router.refresh();
     });
   };
@@ -143,28 +146,29 @@ export function DeviceManager({
           </div>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-3">
-          <label className="grid gap-1.5 text-sm font-medium">Device name<Input disabled={isPending} maxLength={80} onChange={(event) => setName(event.target.value)} value={name} /></label>
-          <label className="grid gap-1.5 text-sm font-medium">Store<select className="h-10 rounded-lg border border-input bg-background px-3 text-sm" disabled={isPending} onChange={(event) => changeNewStore(event.target.value)} value={storeId}><option value="">Choose a store</option>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label>
-          <label className="grid gap-1.5 text-sm font-medium">Register<select className="h-10 rounded-lg border border-input bg-background px-3 text-sm" disabled={isPending || !storeId} onChange={(event) => setRegisterId(event.target.value)} value={registerId}><option value="">Choose a register</option>{registersForNewDevice.map((register) => <option key={register.id} value={register.id}>{register.name} ({register.code})</option>)}</select></label>
+          <label className="grid gap-1.5 text-sm font-medium">Device name<Input disabled={isRegisteringPending} maxLength={80} onChange={(event) => setName(event.target.value)} value={name} /></label>
+          <label className="grid gap-1.5 text-sm font-medium">Store<select className="h-10 rounded-lg border border-input bg-background px-3 text-sm" disabled={isRegisteringPending} onChange={(event) => changeNewStore(event.target.value)} value={storeId}><option value="">Choose a store</option>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label>
+          <label className="grid gap-1.5 text-sm font-medium">Register<select className="h-10 rounded-lg border border-input bg-background px-3 text-sm" disabled={isRegisteringPending || !storeId} onChange={(event) => setRegisterId(event.target.value)} value={registerId}><option value="">Choose a register</option>{registersForNewDevice.map((register) => <option key={register.id} value={register.id}>{register.name} ({register.code})</option>)}</select></label>
         </div>
-        <div className="mt-5 flex flex-wrap items-center gap-3"><Button disabled={isPending || !storeId || !registerId || name.trim().length < 2} onClick={registerThisBrowser} type="button">{isPending ? <LoaderCircle className="animate-spin" /> : <Laptop />} Register this browser</Button><p className="text-xs text-muted-foreground">Registering the first device activates device enforcement for this organization.</p></div>
+        <div className="mt-5 flex flex-wrap items-center gap-3"><Button disabled={isRegisteringPending || !storeId || !registerId || name.trim().length < 2} onClick={registerThisBrowser} type="button">{isRegisteringPending ? <LoaderCircle className="animate-spin" /> : <Laptop />} Register this browser</Button><p className="text-xs text-muted-foreground">Registering the first device activates device enforcement for this organization.</p></div>
       </section>
 
       {message ? <p aria-live="polite" className="rounded-xl border bg-muted/35 px-4 py-3 text-sm text-muted-foreground">{message}</p> : null}
 
       <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="border-b px-5 py-4 sm:px-6"><h2 className="font-semibold">Registered devices</h2><p className="mt-1 text-sm text-muted-foreground">Rebind an active device to another register or revoke it immediately.</p></div>
-        {devices.length ? <ul className="divide-y">{devices.map((device) => <DeviceRow device={device} isPending={isPending && pendingDeviceId === device.id} key={device.id} onRebind={rebind} onRevoke={revoke} registers={registers} stores={stores} />)}</ul> : <p className="px-5 py-10 text-sm text-muted-foreground">No browser or POS application is registered yet.</p>}
+        {devices.length ? <ul className="divide-y">{devices.map((device) => <DeviceRow device={device} isRebinding={isRebindingPending && pendingRebindingDeviceId === device.id} isRevoking={isRevokingPending && pendingRevokingDeviceId === device.id} key={device.id} onRebind={rebind} onRevoke={revoke} registers={registers} stores={stores} />)}</ul> : <p className="px-5 py-10 text-sm text-muted-foreground">No browser or POS application is registered yet.</p>}
       </section>
     </div>
   );
 }
 
-function DeviceRow({ device, isPending, onRebind, onRevoke, registers, stores }: { device: Device; isPending: boolean; onRebind: (deviceId: string, storeId: string, registerId: string) => void; onRevoke: (deviceId: string, name: string) => void; registers: Register[]; stores: Store[] }) {
+function DeviceRow({ device, isRebinding, isRevoking, onRebind, onRevoke, registers, stores }: { device: Device; isRebinding: boolean; isRevoking: boolean; onRebind: (deviceId: string, storeId: string, registerId: string) => void; onRevoke: (deviceId: string, name: string) => void; registers: Register[]; stores: Store[] }) {
   const [storeId, setStoreId] = useState(device.storeId);
   const [registerId, setRegisterId] = useState(device.registerId);
   const availableRegisters = registers.filter((register) => register.storeId === storeId);
   const changeStore = (nextStoreId: string) => { setStoreId(nextStoreId); setRegisterId(""); };
+  const isBusy = isRebinding || isRevoking;
 
-  return <li className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_12rem_12rem_auto]"><div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{device.name}</p><span className={device.status === "active" ? "rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary" : "rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"}>{device.status === "active" ? "Active" : "Revoked"}</span></div><p className="mt-1 font-mono text-xs text-muted-foreground">{device.id}</p><p className="mt-2 text-xs text-muted-foreground">Last seen: {deviceDate(device.lastSeenAt)} · {device.appVersion}</p></div><label className="grid gap-1 text-xs font-medium text-muted-foreground">Store<select className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-foreground" disabled={device.status !== "active" || isPending} onChange={(event) => changeStore(event.target.value)} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label><label className="grid gap-1 text-xs font-medium text-muted-foreground">Register<select className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-foreground" disabled={device.status !== "active" || isPending} onChange={(event) => setRegisterId(event.target.value)} value={registerId}>{availableRegisters.map((register) => <option key={register.id} value={register.id}>{register.name}</option>)}</select></label>{device.status === "active" ? <div className="flex items-end gap-2"><Button aria-label={`Save ${device.name} binding`} disabled={isPending || !registerId || (storeId === device.storeId && registerId === device.registerId)} onClick={() => onRebind(device.id, storeId, registerId)} size="icon" type="button" variant="outline">{isPending ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}</Button><Button aria-label={`Revoke ${device.name}`} disabled={isPending} onClick={() => onRevoke(device.id, device.name)} size="icon" type="button" variant="destructive"><ShieldBan /></Button></div> : <p className="self-end text-xs text-muted-foreground">Revoked {deviceDate(device.revokedAt)}</p>}</li>;
+  return <li className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_12rem_12rem_auto]"><div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{device.name}</p><span className={device.status === "active" ? "rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary" : "rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"}>{device.status === "active" ? "Active" : "Revoked"}</span></div><p className="mt-1 font-mono text-xs text-muted-foreground">{device.id}</p><p className="mt-2 text-xs text-muted-foreground">Last seen: {deviceDate(device.lastSeenAt)} · {device.appVersion}</p></div><label className="grid gap-1 text-xs font-medium text-muted-foreground">Store<select className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-foreground" disabled={device.status !== "active" || isBusy} onChange={(event) => changeStore(event.target.value)} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label><label className="grid gap-1 text-xs font-medium text-muted-foreground">Register<select className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-foreground" disabled={device.status !== "active" || isBusy} onChange={(event) => setRegisterId(event.target.value)} value={registerId}>{availableRegisters.map((register) => <option key={register.id} value={register.id}>{register.name}</option>)}</select></label>{device.status === "active" ? <div className="flex items-end gap-2"><Button aria-label={`Save ${device.name} binding`} disabled={isBusy || !registerId || (storeId === device.storeId && registerId === device.registerId)} onClick={() => onRebind(device.id, storeId, registerId)} size="icon" type="button" variant="outline">{isRebinding ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}</Button><Button aria-label={`Revoke ${device.name}`} disabled={isBusy} onClick={() => onRevoke(device.id, device.name)} size="icon" type="button" variant="destructive">{isRevoking ? <LoaderCircle className="animate-spin" /> : <ShieldBan />}</Button></div> : <p className="self-end text-xs text-muted-foreground">Revoked {deviceDate(device.revokedAt)}</p>}</li>;
 }

@@ -16,24 +16,26 @@ import {
 import { ReceiptPrintButton } from "@/features/receipts/receipt-print-button";
 import { loadPosReceiptDetail, loadPosWorkspace } from "@/features/pos/data";
 import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
-import { canAccessBackOffice, getPosNavigationCapabilities, getWorkspaceHome, hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { canAccessBackOffice, getPosNavigationCapabilities, getWorkspaceHome, hasPermission, hasStoreAccess, requireBusinessContext } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "POS receipt" };
 
 export default async function PosReceiptDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ receiptId: string }>;
+  searchParams: Promise<{ refund?: string }>;
 }) {
   await connection();
-  const { receiptId } = await params;
+  const [{ receiptId }, parameters] = await Promise.all([params, searchParams]);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(receiptId)) {
     notFound();
   }
 
   const context = await requireBusinessContext();
-  if (!hasPermission(context, "pos.access") || !hasPermission(context, "receipts.view")) redirect(getWorkspaceHome(context));
+  if (!hasPermission(context, "pos.access") || !hasPermission(context, "sales.create") || !hasPermission(context, "receipts.view")) redirect(getWorkspaceHome(context));
   const [workspace, detail] = await Promise.all([
     loadPosWorkspace(context),
     loadPosReceiptDetail(context, receiptId),
@@ -79,7 +81,7 @@ export default async function PosReceiptDetailPage({
       );
     }
   }
-  const canRefund = hasPermission(context, "sales.refund") && context.storeIds.includes(detail.sale.storeId);
+  const canRefund = hasPermission(context, "sales.refund") && hasStoreAccess(context, detail.sale.storeId);
   const canReprint = hasPermission(context, "receipts.reprint");
   const refundPaymentMethods = workspace.paymentMethods
     .filter((method) => method.storeId === detail.sale.storeId)
@@ -132,6 +134,7 @@ export default async function PosReceiptDetailPage({
 
         {canRefund ? (
           <RefundForm
+            autoFocus={parameters.refund === "1"}
             currencyCode={detail.sale.currencyCode}
             items={detail.items.map((item) => ({
               saleItemId: item.id,
@@ -142,7 +145,9 @@ export default async function PosReceiptDetailPage({
               unit: item.unit,
               unitPriceMinor: item.unitPriceMinor,
             }))}
+            originalTotalMinor={detail.sale.totalMinor}
             paymentMethods={refundPaymentMethods}
+            receiptNumber={detail.receipt.number}
             saleId={detail.sale.id}
           />
         ) : (

@@ -19,9 +19,11 @@ const SHIFT_PERMISSIONS = ["shifts.open", "shifts.close", "cash.pay_in", "cash.p
 
 export async function ShiftWorkspacePage({
   mode,
+  operationalWorkspace = "back-office",
   searchParams = {},
 }: {
   mode: "operations" | "reports";
+  operationalWorkspace?: "back-office" | "pos";
   searchParams?: { employee?: string; end?: string; register?: string; start?: string; store?: string };
 }) {
   const context = await requireBusinessContext();
@@ -182,10 +184,13 @@ export async function ShiftWorkspacePage({
   // A shift closer must be able to recover a register when the original
   // cashier is unavailable. Report viewers see the same context but receive
   // no operational controls through the false permission props below.
+  const shiftsForOperationalWorkspace = operationalWorkspace === "pos"
+    ? accessibleOpenShifts.filter((shift) => shift.openedByEmployeeId === context.employee.id)
+    : accessibleOpenShifts;
   const openShifts =
     !isOperationsMode || canClose
-      ? accessibleOpenShifts
-      : accessibleOpenShifts.filter((shift) => shift.openedByEmployeeId === context.employee.id);
+      ? shiftsForOperationalWorkspace
+      : shiftsForOperationalWorkspace.filter((shift) => shift.openedByEmployeeId === context.employee.id);
   const recentClosedShifts = shifts.filter((shift) => shift.status === "closed").slice(0, 25);
   const openShiftIds = openShifts.map((shift) => shift.id);
   const visibleShiftIds = [...new Set([...openShiftIds, ...recentClosedShifts.map((shift) => shift.id)])];
@@ -263,18 +268,19 @@ export async function ShiftWorkspacePage({
         }
         action={<Badge variant="secondary"><CircleDollarSign aria-hidden="true" />{openShifts.length} open</Badge>}
       />
-      {!isOperationsMode ? (
-        <GlobalFilterBar
-          action="/back-office/shifts"
-          additionalFields={<><label className="grid min-w-36 gap-1.5 text-sm font-medium">Register<select className="h-8 min-w-36 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" defaultValue={registerFilter ?? ""} name="register"><option value="">All registers</option>{(registersResult.data ?? []).map((register) => <option key={register.id} value={register.id}>{register.name} ({register.code})</option>)}</select></label><label className="grid min-w-36 gap-1.5 text-sm font-medium">Employee<select className="h-8 min-w-36 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" defaultValue={employeeFilter ?? ""} name="employee"><option value="">All employees</option>{Array.from(new Map(allShifts.map((shift) => [shift.openedByEmployeeId, shift.openedByName])).entries()).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label></>}
-          fromDate={searchParams.start}
-          namePrefix="shift-report-filter"
-          storeId={storeScope.selectedStoreId}
-          stores={await loadAuthorizedBackOfficeStores(context)}
-          toDate={searchParams.end}
-        />
-      ) : null}
       <ShiftManager
+        auditFilters={!isOperationsMode ? (
+          <GlobalFilterBar
+            action="/back-office/shifts"
+            additionalFields={<><label className="grid min-w-36 gap-1.5 text-sm font-medium">Register<select className="h-8 min-w-36 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" defaultValue={registerFilter ?? ""} name="register"><option value="">All registers</option>{(registersResult.data ?? []).map((register) => <option key={register.id} value={register.id}>{register.name} ({register.code})</option>)}</select></label><label className="grid min-w-36 gap-1.5 text-sm font-medium">Employee<select className="h-8 min-w-36 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" defaultValue={employeeFilter ?? ""} name="employee"><option value="">All employees</option>{Array.from(new Map(allShifts.map((shift) => [shift.openedByEmployeeId, shift.openedByName])).entries()).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label></>}
+            embedded
+            fromDate={searchParams.start}
+            namePrefix="shift-report-filter"
+            storeId={storeScope.selectedStoreId}
+            stores={await loadAuthorizedBackOfficeStores(context)}
+            toDate={searchParams.end}
+          />
+        ) : null}
         canClose={canClose}
         canManageSettings={canManageSettings}
         canOpen={canOpen}
@@ -283,6 +289,7 @@ export async function ShiftWorkspacePage({
         cashMovements={cashMovements}
         canViewClosedShiftAudit={canViewClosedShiftAudit}
         currencyCode={context.organization.currency_code}
+        hasAccessibleOpenShift={accessibleOpenShifts.length > 0}
         openShifts={openShifts}
         recentClosedShifts={recentClosedShifts}
         registers={(registersResult.data ?? []).map((register) => ({
@@ -294,7 +301,9 @@ export async function ShiftWorkspacePage({
         stores={storesResult.data ?? []}
         summaries={summaries}
         operationalSummaries={operationalSummaries}
+        historyPresentation={isOperationsMode ? "drawer-action" : "audit-card"}
         showExpectedCashBeforeClose={cashCloseSettingResult.data?.show_expected_cash_before_close ?? true}
+        simplifyOpenShiftContext={operationalWorkspace === "pos"}
         timezone={context.organization.timezone}
       />
     </div>

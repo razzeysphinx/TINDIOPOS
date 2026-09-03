@@ -66,7 +66,7 @@ export default async function PaymentMethodsPage() {
       <PageHeader
         eyebrow="Settings"
         title="Payment methods"
-        description="Configure the payment methods shown in the POS and choose the stores that accept each one. Payment categories and codes remain stable for reporting and cash control."
+        description="Choose how customers can pay in the POS, then select the stores that accept each method. Past sales and reports stay unchanged."
         action={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Badge variant={canManage ? "secondary" : "outline"}>

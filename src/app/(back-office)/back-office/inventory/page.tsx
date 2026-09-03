@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
+import { ContextHelp } from "@/components/back-office/context-help";
 import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -827,7 +828,7 @@ export default async function InventoryPage({
       <PageHeader
         eyebrow="Stock control"
         title="Inventory"
-        description="Understand what you have, what needs attention, and the accountable activity behind every stock change."
+        description="See what you have, what needs restocking, and why your stock quantity changed."
         action={
           <Badge variant={canManage ? "secondary" : "outline"}>
             {canManage ? "Stock management" : "Level view"}
@@ -850,7 +851,7 @@ export default async function InventoryPage({
       {activeTab === "overview" ? (
         <section className="space-y-4" aria-labelledby="inventory-health-title">
           <div>
-            <h2 className="text-lg font-semibold" id="inventory-health-title">Inventory health</h2>
+            <h2 className="flex items-center gap-2 text-lg font-semibold" id="inventory-health-title">Your stock <ContextHelp label="What is stock health?">A quick view of the items that need action, before you open detailed stock records.</ContextHelp></h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Start with the items and operational work that need attention now.
             </p>
@@ -891,7 +892,7 @@ export default async function InventoryPage({
             <CardContent className="flex flex-wrap gap-2">
               <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("stock")}>View stock</Link>
               <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("activity")}>View activity</Link>
-              <Link className="text-sm font-medium text-primary hover:underline" href="/back-office/replenishment">Open replenishment</Link>
+              <Link className="text-sm font-medium text-primary hover:underline" href="/back-office/replenishment">Restock items</Link>
             </CardContent>
           </Card>
         </section>
@@ -968,7 +969,7 @@ export default async function InventoryPage({
         <Card>
           <CardHeader>
             <CardTitle>Recent count records</CardTitle>
-            <CardDescription>Completed counts preserve their expected and counted quantities; any variance is posted through the immutable inventory ledger.</CardDescription>
+            <CardDescription>A completed count keeps both the expected and counted quantities. If they differ, TINDIO records the correction in stock activity.</CardDescription>
           </CardHeader>
           <CardContent>
             {inventoryCounts.length ? <div className="divide-y rounded-xl border">{inventoryCounts.map((count) => <article className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4" key={count.id}><div><p className="font-medium">{storeNames.get(count.store_id) ?? "Inactive store"}</p><p className="mt-1 text-xs text-muted-foreground">{count.note || "No count note"}</p></div><div className="text-sm text-muted-foreground"><p className="capitalize">{count.status}</p><p className="mt-1 text-xs">{formatDate(count.completed_at ?? count.started_at)}</p></div></article>)}</div> : <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">No completed inventory counts are available in this store scope yet.</p>}

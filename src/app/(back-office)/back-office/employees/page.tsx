@@ -64,17 +64,10 @@ export default async function EmployeesPage({
       <PageHeader
         eyebrow="Team"
         title="Employees"
-        description="Employee records connect verified identities to organization roles and explicit store assignments."
-        action={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Badge variant={canManage ? "secondary" : "outline"}>
-              {canManage ? "Management access" : "Your record only"}
-            </Badge>
-            {canManage && grantableRoles.length > 0 && activeStores.length > 0 ? (
-              <CreateInvitationForm roles={grantableRoles} stores={activeStores} />
-            ) : null}
-          </div>
-        }
+        description="Invite your team, choose what they can do, and select the stores where they can work."
+        action={canManage && grantableRoles.length > 0 && activeStores.length > 0 ? (
+          <CreateInvitationForm roles={grantableRoles} stores={activeStores} />
+        ) : undefined}
       />
       <GlobalFilterBar action="/back-office/employees" namePrefix="employee-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={authorizedStores} />
 
@@ -214,6 +207,7 @@ export default async function EmployeesPage({
         </section>
       ) : (
         <BackOfficeStateCard
+          action={canManage && grantableRoles.length > 0 && activeStores.length > 0 ? <CreateInvitationForm roles={grantableRoles} stores={activeStores} /> : null}
           description="Invite a team member once the appropriate role and active store are available."
           icon={<UserRound className="size-5" aria-hidden="true" />}
           title="No employees yet"

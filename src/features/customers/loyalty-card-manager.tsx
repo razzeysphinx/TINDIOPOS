@@ -37,6 +37,7 @@ type CustomerSale = {
 };
 
 type Message = { ok: boolean; text: string } | null;
+type LoyaltyCardMutation = "issue" | "rotate" | "replace" | "revoke" | "stamp" | "claim";
 
 export function LoyaltyCardManager({
   cards,
@@ -53,6 +54,7 @@ export function LoyaltyCardManager({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [pendingMutation, setPendingMutation] = useState<{ cardId: string | null; type: LoyaltyCardMutation } | null>(null);
   const [message, setMessage] = useState<Message>(null);
   const [credential, setCredential] = useState<LoyaltyCardCredential | null>(null);
   const activeCard = useMemo(() => cards.find((card) => card.status === "active") ?? null, [cards]);
@@ -62,9 +64,25 @@ export function LoyaltyCardManager({
     if (result.ok) router.refresh();
   };
 
+  const runMutation = (type: LoyaltyCardMutation, cardId: string | null, mutation: () => Promise<void>) => {
+    setPendingMutation({ cardId, type });
+    startTransition(async () => {
+      try {
+        await mutation();
+      } finally {
+        setPendingMutation(null);
+      }
+    });
+  };
+
+  const isMutationPending = (type: LoyaltyCardMutation, cardId: string | null) =>
+    isPending && pendingMutation?.type === type && pendingMutation.cardId === cardId;
+
+  const isCardPending = (cardId: string) => isPending && pendingMutation?.cardId === cardId;
+
   const issueCard = (replacesCardId?: string, reason?: string) => {
     setMessage(null);
-    startTransition(async () => {
+    runMutation(replacesCardId ? "replace" : "issue", replacesCardId ?? null, async () => {
       const result = await issueLoyaltyCardAction({ customerId, replacesCardId, reason: reason ?? "" });
       setMessage({ ok: result.ok, text: result.message });
       if (result.ok && result.data) setCredential(result.data);
@@ -74,7 +92,7 @@ export function LoyaltyCardManager({
 
   const rotateQr = (cardId: string, reason: string) => {
     setMessage(null);
-    startTransition(async () => {
+    runMutation("rotate", cardId, async () => {
       const result = await rotateLoyaltyCardQrAction({ customerId, cardId, reason });
       setMessage({ ok: result.ok, text: result.message });
       if (result.ok && result.data) setCredential(result.data);
@@ -92,8 +110,8 @@ export function LoyaltyCardManager({
           </CardDescription>
         </div>
         {!activeCard ? (
-          <Button disabled={isPending} onClick={() => issueCard()} type="button">
-            {isPending ? <LoaderCircle className="animate-spin" /> : <QrCode />}
+          <Button disabled={isMutationPending("issue", null)} onClick={() => issueCard()} type="button">
+            {isMutationPending("issue", null) ? <LoaderCircle className="animate-spin" /> : <QrCode />}
             Issue QR card
           </Button>
         ) : null}
@@ -110,13 +128,13 @@ export function LoyaltyCardManager({
             {cards.map((card) => (
               <LoyaltyCardRow
                 card={card}
-                isPending={isPending}
+                isPending={isCardPending(card.id)}
                 key={card.id}
-                onClaim={(reason, saleId) => startTransition(async () => handleResult(await claimLoyaltyCardRewardAction({ customerId, cardId: card.id, reason, saleId })))}
+                onClaim={(reason, saleId) => runMutation("claim", card.id, async () => handleResult(await claimLoyaltyCardRewardAction({ customerId, cardId: card.id, reason, saleId })))}
                 onReplace={(reason) => issueCard(card.id, reason)}
-                onRevoke={(reason) => startTransition(async () => handleResult(await revokeLoyaltyCardAction({ customerId, cardId: card.id, reason })))}
+                onRevoke={(reason) => runMutation("revoke", card.id, async () => handleResult(await revokeLoyaltyCardAction({ customerId, cardId: card.id, reason })))}
                 onRotate={(reason) => rotateQr(card.id, reason)}
-                onStamp={(reason, saleId) => startTransition(async () => handleResult(await addLoyaltyCardStampAction({ customerId, cardId: card.id, reason, saleId })))}
+                onStamp={(reason, saleId) => runMutation("stamp", card.id, async () => handleResult(await addLoyaltyCardStampAction({ customerId, cardId: card.id, reason, saleId })))}
                 sales={sales}
               />
             ))}

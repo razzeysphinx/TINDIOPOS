@@ -29,7 +29,7 @@ export default async function BusinessProfilePage() {
     <div className="space-y-8">
       <PageHeader
         action={<Badge variant={canManage ? "secondary" : "outline"}><Settings2 aria-hidden="true" />{canManage ? "Settings access" : "View access"}</Badge>}
-        description="Choose the TINDIO workflows that fit this business without deleting any existing operational or historical data."
+        description="Review your business type and optional tools. Changes affect future use only; your existing records stay intact."
         eyebrow="Organization settings"
         title="Business profile & features"
       />
@@ -38,23 +38,28 @@ export default async function BusinessProfilePage() {
         initialBusinessType={context.organization.business_type}
         initialFeatures={context.features}
       />
-      <TenantReadinessManager
-        archiveRequestedAt={context.organization.archive_requested_at}
-        canManageLifecycle={context.tenantReadiness.canManageLifecycle}
-        canViewUsage={context.tenantReadiness.canExport}
-        currencyCode={context.organization.currency_code}
-        organizationId={context.organization.id}
-        organizationName={context.organization.name}
-        status={context.organization.status as "active" | "suspended" | "archived"}
-        suspensionReason={context.organization.suspension_reason}
-      />
-      <BackupRecoveryManager
-        canExport={context.tenantReadiness.canExport}
-        canManageRecovery={context.tenantReadiness.canManageRecovery}
-        canViewRecovery={context.tenantReadiness.canViewRecovery}
-        initialSnapshot={recoverySnapshot}
-        organizationId={context.organization.id}
-      />
+      {(context.tenantReadiness.canManageLifecycle || context.tenantReadiness.canExport || context.tenantReadiness.canViewRecovery) ? <details className="group rounded-xl border bg-card">
+        <summary className="cursor-pointer list-none px-5 py-4 font-medium marker:hidden">Advanced organization controls <span className="ml-2 text-sm font-normal text-muted-foreground">Lifecycle, exports, and recovery</span></summary>
+        <div className="space-y-6 border-t p-5">
+          <TenantReadinessManager
+            archiveRequestedAt={context.organization.archive_requested_at}
+            canManageLifecycle={context.tenantReadiness.canManageLifecycle}
+            canViewUsage={context.tenantReadiness.canExport}
+            currencyCode={context.organization.currency_code}
+            organizationId={context.organization.id}
+            organizationName={context.organization.name}
+            status={context.organization.status as "active" | "suspended" | "archived"}
+            suspensionReason={context.organization.suspension_reason}
+          />
+          <BackupRecoveryManager
+            canExport={context.tenantReadiness.canExport}
+            canManageRecovery={context.tenantReadiness.canManageRecovery}
+            canViewRecovery={context.tenantReadiness.canViewRecovery}
+            initialSnapshot={recoverySnapshot}
+            organizationId={context.organization.id}
+          />
+        </div>
+      </details> : null}
     </div>
   );
 }

@@ -25,7 +25,7 @@ export default async function SmartMenuPage() {
         <Card>
           <CardHeader>
             <CardTitle>Smart Menu access is required</CardTitle>
-            <CardDescription>Ask an owner to grant the settings.manage permission.</CardDescription>
+            <CardDescription>Ask an owner or authorized administrator to update this customer menu.</CardDescription>
           </CardHeader>
         </Card>
       </div>

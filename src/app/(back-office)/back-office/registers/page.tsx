@@ -46,15 +46,8 @@ export default async function RegistersPage({
       <PageHeader
         eyebrow="Management"
         title="Registers"
-        description="Every physical or virtual checkout station belongs to one store and carries its own stable code."
-        action={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Badge variant={canManage ? "secondary" : "outline"}>
-              {canManage ? "Management access" : "View access"}
-            </Badge>
-            {canManage && activeStores.length > 0 ? <CreateRegisterForm stores={activeStores} /> : null}
-          </div>
-        }
+        description="Set up each selling station your team uses. A register belongs to one store and is used to open shifts and record sales."
+        action={canManage && activeStores.length > 0 ? <CreateRegisterForm stores={activeStores} /> : undefined}
       />
       <GlobalFilterBar action="/back-office/registers" namePrefix="register-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={authorizedStores} />
 
@@ -114,6 +107,7 @@ export default async function RegistersPage({
         </section>
       ) : (
         <BackOfficeStateCard
+          action={canManage && activeStores.length > 0 ? <CreateRegisterForm stores={activeStores} /> : null}
           description="Create a register in an active store before employees can open a shift and use the POS."
           icon={<MonitorSmartphone className="size-5" aria-hidden="true" />}
           title="No registers yet"

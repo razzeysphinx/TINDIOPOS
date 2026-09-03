@@ -19,7 +19,7 @@ import {
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata = { title: "Replenishment" };
+export const metadata = { title: "Restock items" };
 
 export default async function ReplenishmentPage({
   searchParams,
@@ -32,11 +32,11 @@ export default async function ReplenishmentPage({
   if (storeScope.invalidSelection) notFound();
 
   if (!context.features.inventory) {
-    return <FeatureState title="Replenishment is disabled" description="An owner or administrator can enable Inventory in Business profile & features." />;
+    return <FeatureState title="Restock items is unavailable" description="An owner or administrator can enable Inventory in Business profile & features." />;
   }
 
   if (!hasPermission(context, "inventory.manage")) {
-    return <FeatureState title="Replenishment access required" description="Your role needs Inventory management permission to manage warehouses and stock requests." />;
+    return <FeatureState title="Restock items access required" description="Your role needs inventory-management access to manage warehouses and stock requests." />;
   }
 
   const supabase = await createClient();
@@ -197,9 +197,9 @@ export default async function ReplenishmentPage({
     remainingQuantity: (purchaseLinesByOrder.get(order.id) ?? []).reduce((total, line) => total + Number(line.ordered_quantity) - Number(line.received_quantity), 0),
   }));
 
-  return <div className="space-y-8"><PageHeader eyebrow="Inventory flow" title="Replenishment" description="Coordinate warehouse stock requests, approval, picking, dispatch, receiving, and shortages without teleporting inventory." action={<Badge variant="secondary">Inventory management</Badge>} /><GlobalFilterBar action="/back-office/replenishment" namePrefix="replenishment-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={await loadAuthorizedBackOfficeStores(context)} /><SupplyChainWorkflows defaultStoreId={storeScope.selectedStoreId} stores={stores} warehouses={warehouses.map((warehouse) => ({ id: warehouse.id, storeId: warehouse.store_id, code: warehouse.code, name: warehouse.name }))} suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, leadTimeDays: supplier.lead_time_days }))} items={saleableItems} rules={replenishmentRules} requests={supplyChainRequests} inboundPurchaseOrders={inboundPurchaseOrders} /></div>;
+  return <div className="space-y-8"><PageHeader eyebrow="Inventory flow" title="Restock items" description="Plan stock requests, approve them, send stock, and receive it at the destination. Stock changes only when each step is completed." action={<Badge variant="secondary">Inventory management</Badge>} /><GlobalFilterBar action="/back-office/replenishment" namePrefix="replenishment-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={await loadAuthorizedBackOfficeStores(context)} /><SupplyChainWorkflows defaultStoreId={storeScope.selectedStoreId} stores={stores} warehouses={warehouses.map((warehouse) => ({ id: warehouse.id, storeId: warehouse.store_id, code: warehouse.code, name: warehouse.name }))} suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, leadTimeDays: supplier.lead_time_days }))} items={saleableItems} rules={replenishmentRules} requests={supplyChainRequests} inboundPurchaseOrders={inboundPurchaseOrders} /></div>;
 }
 
 function FeatureState({ title, description }: { title: string; description: string }) {
-  return <div className="space-y-8"><PageHeader eyebrow="Inventory flow" title="Replenishment" description={description} action={<Badge variant="outline">Unavailable</Badge>} /><Card><CardHeader className="items-center py-10 text-center"><PackageSearch className="size-8 text-muted-foreground" aria-hidden="true" /><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader></Card></div>;
+  return <div className="space-y-8"><PageHeader eyebrow="Inventory flow" title="Restock items" description={description} action={<Badge variant="outline">Unavailable</Badge>} /><Card><CardHeader className="items-center py-10 text-center"><PackageSearch className="size-8 text-muted-foreground" aria-hidden="true" /><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader></Card></div>;
 }

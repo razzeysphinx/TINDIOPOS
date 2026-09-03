@@ -142,7 +142,7 @@ const navigationGroups: NavigationGroup[] = [
       },
       {
         href: "/back-office/replenishment",
-        label: "Replenishment",
+        label: "Restock items",
         icon: Truck,
         isVisible: (access) => access.canUseInventory === true,
       },
@@ -184,8 +184,12 @@ const navigationGroups: NavigationGroup[] = [
     icon: Store,
     label: "Management",
     items: [
-      { href: "/back-office/stores", label: "Stores", icon: Store, isVisible: (access) => access.canManageStores === true },
-      { href: "/back-office/registers", label: "Registers", icon: MonitorSmartphone, isVisible: (access) => access.canManageRegisters === true },
+      {
+        href: "/back-office/stores-registers",
+        label: "Stores & Registers",
+        icon: Store,
+        isVisible: (access) => access.canManageStores === true || access.canManageRegisters === true,
+      },
       {
         href: "/back-office/devices",
         label: "POS devices",

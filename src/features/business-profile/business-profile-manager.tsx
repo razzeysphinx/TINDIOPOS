@@ -48,7 +48,7 @@ export function BusinessProfileManager({
         <CardHeader>
           <CardTitle>Business type</CardTitle>
           <CardDescription>
-            This sets starting recommendations only. You can freely change it and customize every feature.
+            This provides a sensible starting point. You can review and change optional tools whenever your business needs them.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -75,12 +75,15 @@ export function BusinessProfileManager({
 
       <Card>
         <CardHeader>
-          <CardTitle>Feature availability</CardTitle>
+          <CardTitle>Optional tools</CardTitle>
           <CardDescription>
-            Disabled features are unavailable from their related TINDIO workflows. Existing records remain intact and can be enabled again later.
+            Turn on only the parts of TINDIO your business is ready to use. Existing records stay intact when a tool is turned off.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent>
+          <details className="group" open={false}>
+            <summary className="cursor-pointer list-none rounded-lg border px-3 py-3 text-sm font-medium marker:hidden hover:bg-muted/50">Review optional tools <span className="ml-1 font-normal text-muted-foreground">Advanced selling and operations</span></summary>
+            <div className="mt-3 space-y-3">
           {featureDefinitions.map((feature) => (
             <label className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border p-3" key={feature.key}>
               <span>
@@ -107,10 +110,12 @@ export function BusinessProfileManager({
             </Button>
           ) : (
             <p className="rounded-lg border border-dashed bg-muted/30 p-3 text-sm text-muted-foreground">
-              An owner or an administrator with <span className="font-mono text-xs">settings.manage</span> can change this profile.
+              Ask an owner or authorized administrator to change this business profile.
             </p>
           )}
           {message ? <p aria-live="polite" className="text-sm text-muted-foreground">{message}</p> : null}
+            </div>
+          </details>
         </CardContent>
       </Card>
     </div>

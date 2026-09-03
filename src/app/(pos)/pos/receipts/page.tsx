@@ -3,25 +3,16 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ReceiptText, Search } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { formatMinorMoney } from "@/features/catalog/catalog-money";
 import { loadPosReceiptHistory, loadPosWorkspace } from "@/features/pos/data";
+import { PosReceiptHistory } from "@/features/pos/pos-receipt-history";
 import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
-import { canAccessBackOffice, getPosNavigationCapabilities, getWorkspaceHome, hasPermission, requireBusinessContext } from "@/lib/auth/dal";
+import { canAccessBackOffice, getPosNavigationCapabilities, getWorkspaceHome, hasPermission, hasStoreAccess, requireBusinessContext } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "POS receipts" };
-
-function formatDate(value: string, timezone: string) {
-  return new Intl.DateTimeFormat("en-PH", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: timezone,
-  }).format(new Date(value));
-}
 
 export default async function PosReceiptsPage({
   searchParams,
@@ -30,7 +21,7 @@ export default async function PosReceiptsPage({
 }) {
   await connection();
   const context = await requireBusinessContext();
-  if (!hasPermission(context, "pos.access") || !hasPermission(context, "receipts.view")) redirect(getWorkspaceHome(context));
+  if (!hasPermission(context, "pos.access") || !hasPermission(context, "sales.create") || !hasPermission(context, "receipts.view")) redirect(getWorkspaceHome(context));
 
   const parameters = await searchParams;
   const query = parameters.q?.trim().slice(0, 100) ?? "";
@@ -43,6 +34,8 @@ export default async function PosReceiptsPage({
     loadPosReceiptHistory(context, { beforeReceiptNumber, query }),
   ]);
   const hasMore = receipts.length === 25;
+  const canIssueRefund = hasPermission(context, "sales.refund");
+  const canReprintReceipts = hasPermission(context, "receipts.reprint");
   const nextBefore = hasMore ? receipts.at(-1)?.receipt_number : undefined;
   const pageQuery = new URLSearchParams();
   if (query) pageQuery.set("q", query);
@@ -81,29 +74,14 @@ export default async function PosReceiptsPage({
         </form>
 
         {receipts.length > 0 ? (
-          <Card>
-            <CardContent className="p-0">
-              <div className="divide-y">
-                {receipts.map((receipt) => (
-                  <Link
-                    className="grid gap-2 px-4 py-4 transition-colors hover:bg-muted/40 sm:grid-cols-[7rem_minmax(0,1fr)_auto] sm:items-center sm:px-5"
-                    href={`/pos/receipts/${receipt.receipt_id}`}
-                    key={receipt.receipt_id}
-                  >
-                    <span className="font-semibold">#{receipt.receipt_number}</span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">{receipt.store_name} · {receipt.register_name}</span>
-                      <span className="mt-1 block truncate text-xs text-muted-foreground">{receipt.cashier_name} · {formatDate(receipt.issued_at, context.organization.timezone)}</span>
-                    </span>
-                    <span className="flex items-center gap-2 sm:justify-end">
-                      {receipt.refund_total_minor > 0 ? <Badge variant="outline">Refunded</Badge> : null}
-                      <span className="font-semibold">{formatMinorMoney(receipt.total_minor, receipt.currency_code)}</span>
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <PosReceiptHistory
+            receipts={receipts.map((receipt) => ({
+              ...receipt,
+              canReprint: canReprintReceipts,
+              canRefund: canIssueRefund && hasStoreAccess(context, receipt.store_id),
+            }))}
+            timezone={context.organization.timezone}
+          />
         ) : (
           <Card>
             <CardContent className="grid min-h-48 place-items-center p-6 text-center">

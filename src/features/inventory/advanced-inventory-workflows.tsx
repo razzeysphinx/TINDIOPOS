@@ -159,7 +159,7 @@ export function AdvancedInventoryWorkflows({
   sections?: readonly AdvancedInventorySection[];
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [pendingActions, setPendingActions] = useState<Set<string>>(() => new Set());
   const [supplier, setSupplier] = useState<SupplierDraft>({
     name: "",
     contactName: "",
@@ -220,6 +220,20 @@ export function AdvancedInventoryWorkflows({
   const [transferNote, setTransferNote] = useState("");
   const [transferLines, setTransferLines] = useState<SaleableDraft[]>([emptyTransferLine()]);
 
+  const isActionPending = (action: string) => pendingActions.has(action);
+  const runAction = async (action: string, work: () => Promise<void>) => {
+    setPendingActions((current) => new Set(current).add(action));
+    try {
+      await work();
+    } finally {
+      setPendingActions((current) => {
+        const next = new Set(current);
+        next.delete(action);
+        return next;
+      });
+    }
+  };
+
   const activeSuppliers = suppliers.filter((supplierOption) => supplierOption.isActive);
   const purchasableItems = useMemo(
     () => items.filter((item) => item.storeIds.includes(purchaseStoreId)),
@@ -248,9 +262,9 @@ export function AdvancedInventoryWorkflows({
     ? sections[0] === "purchasing"
       ? "Manage suppliers, purchase orders, and receiving without mixing them into stock levels."
       : sections[0] === "counts"
-        ? "Record physical counts and post only the verified variance."
-        : "Prepare accountable stock transfers between stores."
-    : "Order from suppliers, receive goods, reconcile stock, and transfer items between stores.";
+        ? "Count what you physically have, review the difference, then record the verified correction."
+        : "Prepare stock transfers between stores and review the details before sending them."
+    : "Order from suppliers, receive goods, count stock, and move items between stores.";
 
   function finish(result: WorkflowResult, setResult: (value: WorkflowResult) => void) {
     setResult(result);
@@ -260,7 +274,7 @@ export function AdvancedInventoryWorkflows({
   function submitSupplier(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSupplierResult(null);
-    startTransition(async () => {
+    void runAction("supplier", async () => {
       const result = await createSupplierAction(supplier);
       finish(result, setSupplierResult);
       if (result.ok) {
@@ -273,7 +287,7 @@ export function AdvancedInventoryWorkflows({
   function submitPurchaseOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPurchaseResult(null);
-    startTransition(async () => {
+    void runAction("purchase", async () => {
       const result = await createPurchaseOrderAction({
         storeId: purchaseStoreId,
         supplierId: purchaseSupplierId,
@@ -300,7 +314,7 @@ export function AdvancedInventoryWorkflows({
     event.preventDefault();
     if (!selectedReceiptOrder) return;
     setReceiptResult(null);
-    startTransition(async () => {
+    void runAction("receipt", async () => {
       const result = await receivePurchaseOrderAction({
         purchaseOrderId: selectedReceiptOrder.id,
         note: receiptNote,
@@ -355,7 +369,7 @@ export function AdvancedInventoryWorkflows({
 
   function submitReviewedCount() {
     if (!countReview) return;
-    startTransition(async () => {
+    void runAction("count", async () => {
       const result = await completeInventoryCountAction({
         storeId: countReview.storeId,
         note: countReview.note,
@@ -377,7 +391,7 @@ export function AdvancedInventoryWorkflows({
   function submitTransfer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setTransferResult(null);
-    startTransition(async () => {
+    void runAction("transfer", async () => {
       const result = await transferStockAction({
         sourceStoreId,
         destinationStoreId,
@@ -474,8 +488,8 @@ export function AdvancedInventoryWorkflows({
             </Field>
             <DialogFooter className="sm:col-span-2">
               <ResultMessage result={supplierResult} />
-              <Button disabled={isPending} type="submit">
-                {isPending ? <LoaderCircle className="animate-spin" /> : <UserPlus />}
+              <Button disabled={isActionPending("supplier")} type="submit">
+                {isActionPending("supplier") ? <LoaderCircle className="animate-spin" /> : <UserPlus />}
                 Save supplier
               </Button>
             </DialogFooter>
@@ -527,7 +541,7 @@ export function AdvancedInventoryWorkflows({
         />
         <WorkflowCard
           title="Create purchase order"
-          description="Commit expected items and unit cost before goods arrive."
+          description="1. Choose the supplier and store. 2. Add expected items. 3. Review, then create the order."
           icon={<Truck aria-hidden="true" />}
         >
           {canViewCosts && activeSuppliers.length > 0 && stores.length > 0 && items.length > 0 ? (
@@ -569,8 +583,8 @@ export function AdvancedInventoryWorkflows({
               </Field>
               <div className="flex items-center justify-between gap-3">
                 <ResultMessage result={purchaseResult} />
-                <Button disabled={isPending || purchasableItems.length === 0} type="submit">
-                  {isPending ? <LoaderCircle className="animate-spin" /> : <Truck />}
+                <Button disabled={isActionPending("purchase") || purchasableItems.length === 0} type="submit">
+                  {isActionPending("purchase") ? <LoaderCircle className="animate-spin" /> : <Truck />}
                   Create order
                 </Button>
               </div>
@@ -587,7 +601,7 @@ export function AdvancedInventoryWorkflows({
         {showPurchasing && purchasingSection === "receiving" ? <>
         <WorkflowCard
           title="Receive purchase order"
-          description="Received quantities post receipt movements and update stock immediately."
+          description="1. Choose the open order. 2. Enter what arrived. 3. Review the quantities, then record the receipt."
           icon={<PackageCheck aria-hidden="true" />}
         >
           {receivableOrders.length > 0 ? (
@@ -630,8 +644,8 @@ export function AdvancedInventoryWorkflows({
               </Field>
               <div className="flex items-center justify-between gap-3">
                 <ResultMessage result={receiptResult} />
-                <Button disabled={isPending} type="submit">
-                  {isPending ? <LoaderCircle className="animate-spin" /> : <PackageCheck />}
+                <Button disabled={isActionPending("receipt")} type="submit">
+                  {isActionPending("receipt") ? <LoaderCircle className="animate-spin" /> : <PackageCheck />}
                   Receive goods
                 </Button>
               </div>
@@ -645,7 +659,7 @@ export function AdvancedInventoryWorkflows({
 
         {showCounts ? <WorkflowCard
           title="Complete inventory count"
-          description="Enter the physical quantity; a count movement posts only the variance."
+          description="1. Choose a store. 2. Enter what you physically counted. 3. Review the difference before recording it."
           icon={<ClipboardCheck aria-hidden="true" />}
         >
           {stores.length > 0 && items.length > 0 ? (
@@ -668,13 +682,13 @@ export function AdvancedInventoryWorkflows({
               </Field>
               <div className="flex items-center justify-between gap-3">
                 <ResultMessage result={countResult} />
-                <Button disabled={isPending || countableItems.length === 0} type="submit">
-                  {isPending ? <LoaderCircle className="animate-spin" /> : <ClipboardCheck />}
+                <Button disabled={isActionPending("count") || countableItems.length === 0} type="submit">
+                  {isActionPending("count") ? <LoaderCircle className="animate-spin" /> : <ClipboardCheck />}
                   Review count
                 </Button>
               </div>
             </form>
-            {countReview ? <CountReviewCard pending={isPending} review={countReview} onBack={() => setCountReview(null)} onPost={submitReviewedCount} /> : null}
+            {countReview ? <CountReviewCard pending={isActionPending("count")} review={countReview} onBack={() => setCountReview(null)} onPost={submitReviewedCount} /> : null}
             </>
           ) : (
             <EmptyWorkflow message="Create a tracked item in a store before counting inventory." />
@@ -684,7 +698,7 @@ export function AdvancedInventoryWorkflows({
         {/* CANDIDATE_FOR_REMOVAL: this immediate-shipment form is retained for source compatibility only. New transfer creation is routed through the approval-aware Replenishment workflow. */}
         {showTransfers ? <WorkflowCard
           title="Transfer stock"
-          description="TINDIO records an equal transfer-out and transfer-in, preserving stock accountability."
+          description="Choose the source and destination, add items, then review the transfer before it is recorded."
           icon={<SendHorizontal aria-hidden="true" />}
         >
           {stores.length > 1 && items.length > 0 ? (
@@ -713,8 +727,8 @@ export function AdvancedInventoryWorkflows({
               </Field>
               <div className="flex items-center justify-between gap-3">
                 <ResultMessage result={transferResult} />
-                <Button disabled={isPending || transferableItems.length === 0} type="submit">
-                  {isPending ? <LoaderCircle className="animate-spin" /> : <SendHorizontal />}
+                <Button disabled={isActionPending("transfer") || transferableItems.length === 0} type="submit">
+                  {isActionPending("transfer") ? <LoaderCircle className="animate-spin" /> : <SendHorizontal />}
                   Transfer stock
                 </Button>
               </div>
@@ -786,7 +800,7 @@ function InventoryCsvTools({
     });
   }
 
-  return <Card><CardHeader><CardTitle>Inventory CSV</CardTitle><CardDescription>Preview and confirm one controlled inventory operation. This never writes stock projections directly.</CardDescription></CardHeader><CardContent className="space-y-3"><div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-sm font-medium">Operation<select className={selectClassName} onChange={(event) => { setKind(event.target.value as InventoryCsvKind); setRows([]); setErrors([]); setFilename(""); }} value={kind}><option value="count">Complete inventory count</option><option value="purchase">Create purchase order</option><option value="adjustment">Post stock adjustments</option></select></label><label className="grid gap-1 text-sm font-medium">Store<select className={selectClassName} onChange={(event) => setStoreId(event.target.value)} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label></div>{kind === "purchase" ? <div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-sm font-medium">Supplier<select className={selectClassName} onChange={(event) => setSupplierId(event.target.value)} value={supplierId}>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label><label className="grid gap-1 text-sm font-medium">Expected date<Input onChange={(event) => setExpectedAt(event.target.value)} type="date" value={expectedAt} /></label></div> : null}{kind === "adjustment" ? <label className="grid gap-1 text-sm font-medium">Adjustment reason<select className={selectClassName} onChange={(event) => setReasonCode(event.target.value)} value={reasonCode}>{adjustmentReasons.map((reason) => <option key={reason.code} value={reason.code}>{reason.name}</option>)}</select></label> : null}{kind !== "adjustment" ? <Input onChange={(event) => setNote(event.target.value)} placeholder={kind === "count" ? "Optional count note" : "Optional purchase order note"} value={note} /> : null}<div className="flex flex-wrap items-end gap-3"><div className="grid min-w-56 flex-1 gap-1"><Label htmlFor="inventory-csv-file">Import file</Label><Input accept=".csv,text/csv" id="inventory-csv-file" onChange={(event) => void chooseFile(event.target.files?.[0])} type="file" /></div><Button onClick={downloadTemplate} type="button" variant="outline"><Download /> Template</Button></div>{errors.length ? <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><p className="font-medium">Fix the CSV before importing.</p><ul className="mt-1 list-disc pl-5">{errors.slice(0, 4).map((error) => <li key={error}>{error}</li>)}</ul></div> : null}{rows.length ? <div className="overflow-hidden rounded-lg border"><div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 text-sm"><span>{filename}: {rows.length} valid row{rows.length === 1 ? "" : "s"}</span><Button disabled={isPending || (kind === "purchase" && !supplierId) || (kind === "adjustment" && !reasonCode)} onClick={confirmImport} size="sm" type="button">{isPending ? <LoaderCircle className="animate-spin" /> : <Upload />} Confirm import</Button></div><div className="max-h-48 overflow-auto"><table className="w-full text-left text-sm"><thead className="sticky top-0 bg-background text-muted-foreground"><tr><th className="px-3 py-2">Row</th><th className="px-3 py-2">Item code</th><th className="px-3 py-2">Quantity</th></tr></thead><tbody>{rows.slice(0, 20).map((row) => <tr className="border-t" key={row.rowNumber}><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2">{row.itemCode}</td><td className="px-3 py-2">{row.quantity}</td></tr>)}</tbody></table></div></div> : null}{result ? <p aria-live="polite" className="text-sm text-muted-foreground">{result}</p> : null}</CardContent></Card>;
+  return <Card><CardHeader><CardTitle>Inventory CSV</CardTitle><CardDescription>Preview and confirm one controlled inventory operation. This never writes stock projections directly.</CardDescription></CardHeader><CardContent className="space-y-3"><div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-sm font-medium">Operation<select className={selectClassName} onChange={(event) => { setKind(event.target.value as InventoryCsvKind); setRows([]); setErrors([]); setFilename(""); }} value={kind}><option value="count">Complete inventory count</option><option value="purchase">Create purchase order</option><option value="adjustment">Post stock adjustments</option></select></label><label className="grid gap-1 text-sm font-medium">Store<select className={selectClassName} onChange={(event) => setStoreId(event.target.value)} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label></div>{kind === "purchase" ? <div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-sm font-medium">Supplier<select className={selectClassName} onChange={(event) => setSupplierId(event.target.value)} value={supplierId}>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label><label className="grid gap-1 text-sm font-medium">Expected date<Input onChange={(event) => setExpectedAt(event.target.value)} type="date" value={expectedAt} /></label></div> : null}{kind === "adjustment" ? <label className="grid gap-1 text-sm font-medium">Adjustment reason<select className={selectClassName} onChange={(event) => setReasonCode(event.target.value)} value={reasonCode}>{adjustmentReasons.map((reason) => <option key={reason.code} value={reason.code}>{reason.name}</option>)}</select></label> : null}{kind !== "adjustment" ? <Input onChange={(event) => setNote(event.target.value)} placeholder={kind === "count" ? "Optional count note" : "Optional purchase order note"} value={note} /> : null}<div className="flex flex-wrap items-end gap-3"><div className="grid min-w-0 flex-1 gap-1 sm:min-w-56"><Label htmlFor="inventory-csv-file">Import file</Label><Input accept=".csv,text/csv" id="inventory-csv-file" onChange={(event) => void chooseFile(event.target.files?.[0])} type="file" /></div><Button onClick={downloadTemplate} type="button" variant="outline"><Download /> Template</Button></div>{errors.length ? <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><p className="font-medium">Fix the CSV before importing.</p><ul className="mt-1 list-disc pl-5">{errors.slice(0, 4).map((error) => <li key={error}>{error}</li>)}</ul></div> : null}{rows.length ? <div className="overflow-hidden rounded-lg border"><div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 text-sm"><span>{filename}: {rows.length} valid row{rows.length === 1 ? "" : "s"}</span><Button disabled={isPending || (kind === "purchase" && !supplierId) || (kind === "adjustment" && !reasonCode)} onClick={confirmImport} size="sm" type="button">{isPending ? <LoaderCircle className="animate-spin" /> : <Upload />} Confirm import</Button></div><div className="max-h-48 overflow-auto"><table className="w-full text-left text-sm"><thead className="sticky top-0 bg-background text-muted-foreground"><tr><th className="px-3 py-2">Row</th><th className="px-3 py-2">Item code</th><th className="px-3 py-2">Quantity</th></tr></thead><tbody>{rows.slice(0, 20).map((row) => <tr className="border-t" key={row.rowNumber}><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2">{row.itemCode}</td><td className="px-3 py-2">{row.quantity}</td></tr>)}</tbody></table></div></div> : null}{result ? <p aria-live="polite" className="text-sm text-muted-foreground">{result}</p> : null}</CardContent></Card>;
 }
 
 function DraftPurchaseLines({

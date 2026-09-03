@@ -1,10 +1,13 @@
-import { ChartColumnBig } from "lucide-react";
+import { ChartColumnBig, CircleDollarSign, PackageSearch, ShieldCheck, Warehouse } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardActionGrid } from "@/features/dashboard/dashboard-action-grid";
+import { BeginnerSetupGuide } from "@/features/dashboard/beginner-setup-guide";
+import { loadBeginnerSetupItems } from "@/features/dashboard/data";
+import { NeedsAttention, type NeedsAttentionItem } from "@/features/dashboard/needs-attention";
 import { ReportFilterForm } from "@/features/reports/report-filter-form";
 import { loadReportStores } from "@/features/reports/data";
 import {
@@ -15,7 +18,7 @@ import {
   resolveScopedReportFilter,
 } from "@/features/reports/reporting";
 import { ReportingOverview } from "@/features/reports/reporting-overview";
-import { requireBackOfficePermission } from "@/lib/auth/dal";
+import { hasAnyPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Back Office" };
 
@@ -53,10 +56,60 @@ export default async function BackOfficePage({
   }
 
   const filter = resolveScopedReportFilter(context, parameters);
-  const [snapshot, stores] = await Promise.all([
+  const [snapshot, stores, setupItems] = await Promise.all([
     getReportingSnapshot(context, filter, "dashboard"),
     loadReportStores(context),
+    loadBeginnerSetupItems(context),
   ]);
+  const attentionItems: NeedsAttentionItem[] = [];
+  const canUseInventory = context.features.inventory
+    && hasAnyPermission(context, ["inventory.view", "inventory.manage"]);
+
+  if (canUseInventory && snapshot.inventory.low_stock_count > 0) {
+    attentionItems.push({
+      description: "Recorded stock is at or below its warning level.",
+      href: "/back-office/inventory?tab=stock&status=low",
+      icon: PackageSearch,
+      label: "Items low on stock",
+      value: String(snapshot.inventory.low_stock_count),
+    });
+  }
+  if (canUseInventory && snapshot.inventory.out_of_stock_count > 0) {
+    attentionItems.push({
+      description: "These tracked items have no recorded quantity available.",
+      href: "/back-office/inventory?tab=stock&status=out_of_stock",
+      icon: Warehouse,
+      label: "Items out of stock",
+      value: String(snapshot.inventory.out_of_stock_count),
+    });
+  }
+  if (canUseInventory && snapshot.inventory.negative_stock_count > 0) {
+    attentionItems.push({
+      description: "More stock left than TINDIO recorded as available.",
+      href: "/back-office/inventory?tab=stock&status=negative",
+      icon: Warehouse,
+      label: "Negative stock records",
+      value: String(snapshot.inventory.negative_stock_count),
+    });
+  }
+  if (snapshot.security.cash_discrepancy_count > 0) {
+    attentionItems.push({
+      description: "Closed shifts with a counted cash difference in this period.",
+      href: "/back-office/shifts",
+      icon: CircleDollarSign,
+      label: "Shifts with cash differences",
+      value: String(snapshot.security.cash_discrepancy_count),
+    });
+  }
+  if (hasAnyPermission(context, ["approvals.manage", "audit.view"]) && snapshot.security.manager_approval_count > 0) {
+    attentionItems.push({
+      description: "Approval-related actions recorded in this period.",
+      href: "/back-office/security",
+      icon: ShieldCheck,
+      label: "Approval activity to review",
+      value: String(snapshot.security.manager_approval_count),
+    });
+  }
 
   return (
     <div className="space-y-8">
@@ -74,6 +127,8 @@ export default async function BackOfficePage({
         filter={filter}
         stores={stores}
       />
+      {setupItems ? <BeginnerSetupGuide items={setupItems} /> : null}
+      <NeedsAttention items={attentionItems} />
       <DashboardActionGrid
         inventoryEnabled={context.features.inventory}
         permissions={context.permissions}
@@ -81,7 +136,6 @@ export default async function BackOfficePage({
       />
       <ReportingOverview
         currencyCode={context.organization.currency_code}
-        inventoryEnabled={context.features.inventory}
         mode="dashboard"
         snapshot={snapshot}
       />

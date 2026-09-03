@@ -53,27 +53,19 @@ export default async function CatalogPage() {
       <PageHeader
         eyebrow="Products"
         title="Catalog"
-        description="Manage sellable products, variants, identifiers, pricing, and per-store availability."
-        action={
-          <div className="flex flex-wrap justify-end gap-2">
-            <Badge variant={canManage ? "secondary" : "outline"}>
-              {canManage ? "Management access" : "View access"}
-            </Badge>
-            {canViewCost ? <Badge variant="outline">Cost visible</Badge> : null}
-            {canManage && activeStores.length > 0 ? (
-              <CreateProductForm
-                canViewCost={canViewCost}
-                canTrackInventory={context.features.inventory}
-                canUseWeightedProducts={context.features.weighted_products}
-                categories={categories
-                  .filter((category) => !category.is_archived)
-                  .map(({ id, name }) => ({ id, name }))}
-                stores={activeStores.map(({ id, name }) => ({ id, name }))}
-                unitOptions={unitOptions}
-              />
-            ) : null}
-          </div>
-        }
+        description="Add the products you sell, set their prices, and choose which stores can sell them."
+        action={canManage && activeStores.length > 0 ? (
+          <CreateProductForm
+            canViewCost={canViewCost}
+            canTrackInventory={context.features.inventory}
+            canUseWeightedProducts={context.features.weighted_products}
+            categories={categories
+              .filter((category) => !category.is_archived)
+              .map(({ id, name }) => ({ id, name }))}
+            stores={activeStores.map(({ id, name }) => ({ id, name }))}
+            unitOptions={unitOptions}
+          />
+        ) : undefined}
       />
 
       {canManage && activeStores.length > 0 ? (
@@ -292,6 +284,7 @@ export default async function CatalogPage() {
         </section>
       ) : (
         <BackOfficeStateCard
+          action={canManage && activeStores.length > 0 ? <CreateProductForm canTrackInventory={context.features.inventory} canUseWeightedProducts={context.features.weighted_products} canViewCost={canViewCost} categories={categories.filter((category) => !category.is_archived).map(({ id, name }) => ({ id, name }))} stores={activeStores.map(({ id, name }) => ({ id, name }))} unitOptions={unitOptions} /> : null}
           description="Create the first product after account and organization setup."
           icon={<PackageOpen className="size-5" aria-hidden="true" />}
           title="No products yet"

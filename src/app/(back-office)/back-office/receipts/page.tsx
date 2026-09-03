@@ -1,4 +1,4 @@
-import { ChevronRight, ReceiptText, RotateCcw } from "lucide-react";
+import { ChevronRight, ReceiptText } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -8,12 +8,12 @@ import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { formatMinorMoney } from "@/features/catalog/catalog-money";
+import { ReceiptListQuickView } from "@/features/receipts/receipt-list-quick-view";
 import {
   loadAuthorizedBackOfficeStores,
   resolveBackOfficeStoreScope,
 } from "@/lib/server/back-office-store-scope";
-import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
+import { hasPermission, hasStoreAccess, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Receipts" };
@@ -38,16 +38,14 @@ type ReceiptRow = {
   } | null;
 };
 
+type SaleItemQuantity = {
+  id: string;
+  sale_id: string;
+  quantity: number;
+};
+
 function firstString(value: string | string[] | undefined) {
   return typeof value === "string" ? value : undefined;
-}
-
-function formatReceiptDate(value: string, timezone: string) {
-  return new Intl.DateTimeFormat("en-PH", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: timezone,
-  }).format(new Date(value));
 }
 
 export default async function ReceiptsPage({
@@ -130,7 +128,7 @@ export default async function ReceiptsPage({
   const hasMore = receiptRows.length > PAGE_SIZE;
   const initialReceipts = receiptRows.slice(0, PAGE_SIZE);
   const saleIds = initialReceipts.map((receipt) => receipt.sale_id);
-  const [refundsResult, paymentsResult] = saleIds.length > 0
+  const [refundsResult, paymentsResult, saleItemsResult] = saleIds.length > 0
     ? await Promise.all([
         supabase
           .from("refunds")
@@ -142,11 +140,30 @@ export default async function ReceiptsPage({
           .select("sale_id, payment_method_name_snapshot")
           .eq("organization_id", context.organization.id)
           .in("sale_id", saleIds),
+        supabase
+          .from("sale_items")
+          .select("id, sale_id, quantity")
+          .eq("organization_id", context.organization.id)
+          .in("sale_id", saleIds),
       ])
-    : [{ data: [], error: null }, { data: [], error: null }];
+    : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }];
 
-  if (refundsResult.error || paymentsResult.error) {
-    throw new Error(`Unable to load receipt summaries: ${refundsResult.error?.message ?? paymentsResult.error?.message}`);
+  if (refundsResult.error || paymentsResult.error || saleItemsResult.error) {
+    throw new Error(`Unable to load receipt summaries: ${refundsResult.error?.message ?? paymentsResult.error?.message ?? saleItemsResult.error?.message}`);
+  }
+
+  const saleItems = (saleItemsResult.data ?? []) as SaleItemQuantity[];
+  const saleItemIds = saleItems.map((item) => item.id);
+  const { data: refundItemData, error: refundItemsError } = saleItemIds.length > 0
+    ? await supabase
+        .from("refund_items")
+        .select("sale_item_id, quantity")
+        .eq("organization_id", context.organization.id)
+        .in("sale_item_id", saleItemIds)
+    : { data: [], error: null };
+
+  if (refundItemsError) {
+    throw new Error(`Unable to load refundable receipt quantities: ${refundItemsError.message}`);
   }
 
   const refundTotalBySale = new Map<string, number>();
@@ -156,6 +173,21 @@ export default async function ReceiptsPage({
   const paymentNamesBySale = new Map<string, string[]>();
   for (const item of paymentsResult.data ?? []) {
     paymentNamesBySale.set(item.sale_id, [...(paymentNamesBySale.get(item.sale_id) ?? []), item.payment_method_name_snapshot]);
+  }
+  const refundedQuantityBySaleItem = new Map<string, number>();
+  for (const item of refundItemData ?? []) {
+    refundedQuantityBySaleItem.set(
+      item.sale_item_id,
+      (refundedQuantityBySaleItem.get(item.sale_item_id) ?? 0) + item.quantity,
+    );
+  }
+  const hasRefundableQuantityBySale = new Map<string, boolean>();
+  for (const item of saleItems) {
+    if (item.quantity > (refundedQuantityBySaleItem.get(item.id) ?? 0)) {
+      hasRefundableQuantityBySale.set(item.sale_id, true);
+    } else if (!hasRefundableQuantityBySale.has(item.sale_id)) {
+      hasRefundableQuantityBySale.set(item.sale_id, false);
+    }
   }
 
   const receipts = initialReceipts
@@ -175,11 +207,41 @@ export default async function ReceiptsPage({
       return result;
     }, new Map<string, ReceiptRow[]>()).entries())
     : [["", receipts] as [string, ReceiptRow[]]];
+  const quickViewGroups = groups.map(([storeName, rows]) => ({
+    storeName: groupedByStore ? storeName : null,
+    items: rows.map((receipt) => {
+      const sale = receipt.sales;
+      const refundedMinor = refundTotalBySale.get(receipt.sale_id) ?? 0;
+      const hasRefundableQuantity = hasRefundableQuantityBySale.get(receipt.sale_id) ?? false;
+      const fullyRefunded = refundedMinor > 0 && !hasRefundableQuantity;
+      return {
+        canRefund: sale !== null && hasPermission(context, "sales.refund") && hasStoreAccess(context, sale.store_id),
+        cashierName: sale?.cashier_name_snapshot ?? "Cashier unavailable",
+        currencyCode: sale?.currency_code ?? context.organization.currency_code,
+        fullReceiptHref: `/back-office/receipts/${receipt.id}`,
+        id: receipt.id,
+        issuedAt: receipt.issued_at,
+        number: receipt.receipt_number,
+        paymentNames: paymentNamesBySale.get(receipt.sale_id) ?? [],
+        refundStatus: fullyRefunded ? "refunded" as const : refundedMinor > 0 ? "partially-refunded" as const : "available" as const,
+        registerName: sale?.register_name_snapshot ?? "—",
+        storeName: sale?.store_name_snapshot ?? "Unavailable store",
+        totalMinor: sale?.total_minor ?? null,
+      };
+    }),
+  }));
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(parameters)) {
     if (value && key !== "before") query.set(key, value);
   }
   const querySuffix = query.size ? `&${query.toString()}` : "";
+  const activeAdditionalFilterCount = [
+    cashier,
+    register,
+    payment,
+    parameters.receipt?.trim(),
+    groupedByStore ? "group" : undefined,
+  ].filter(Boolean).length;
 
   return (
     <div className="space-y-8">
@@ -190,62 +252,48 @@ export default async function ReceiptsPage({
         action={<Badge variant="secondary">Receipt access</Badge>}
       />
 
+      <Card>
+        <CardContent className="space-y-4">
       <GlobalFilterBar
         action="/back-office/receipts"
+        activeAdditionalFilterCount={activeAdditionalFilterCount}
         additionalFields={(
           <>
             <label className="grid min-w-36 gap-1.5 text-sm font-medium">Register<Input defaultValue={register} name="register" placeholder="Register" /></label>
             <label className="grid min-w-36 gap-1.5 text-sm font-medium">Cashier<Input defaultValue={cashier} name="cashier" placeholder="Cashier" /></label>
             <label className="grid min-w-36 gap-1.5 text-sm font-medium">Payment method<Input defaultValue={payment} name="payment" placeholder="Cash, card…" /></label>
             <label className="grid min-w-36 gap-1.5 text-sm font-medium">Receipt number<Input defaultValue={parameters.receipt} inputMode="numeric" name="receipt" placeholder="000421" /></label>
-            <label className="grid min-w-36 gap-1.5 text-sm font-medium">Sort<select className={selectClassName} defaultValue={sort} name="sort"><option value="newest">Date: newest</option><option value="store">Store: A–Z</option><option value="receipt">Receipt: newest</option></select></label>
             {!scope.selectedStoreId ? <label className="grid min-w-36 gap-1.5 text-sm font-medium">Grouping<select className={selectClassName} defaultValue={groupedByStore ? "store" : "none"} name="group"><option value="none">No grouping</option><option value="store">Group by store</option></select></label> : null}
           </>
         )}
         allowAllStores
+        collapsibleAdditionalFields
+        embedded
         fromDate={parameters.start}
         namePrefix="receipt-filter"
+        primaryAdditionalFields={<label className="grid min-w-36 gap-1.5 text-sm font-medium">Sort<select className={selectClassName} defaultValue={sort} name="sort"><option value="newest">Date: newest</option><option value="store">Store: A–Z</option><option value="receipt">Receipt: newest</option></select></label>}
         storeId={scope.selectedStoreId}
-        stores={stores}
-        toDate={parameters.end}
-      />
+            stores={stores}
+            toDate={parameters.end}
+            showEmbeddedDividers={false}
+          />
 
       {receipts.length > 0 ? (
-        <Card>
-          <CardContent className="overflow-x-auto overscroll-x-contain p-0">
-            <table className="w-full min-w-225 text-left text-sm">
-              <thead className="border-b bg-muted/50 text-xs text-muted-foreground"><tr><th className="px-4 py-3 font-medium">Receipt</th>{!scope.selectedStoreId ? <th className="px-4 py-3 font-medium">Store</th> : null}<th className="px-4 py-3 font-medium">Register</th><th className="px-4 py-3 font-medium">Cashier</th><th className="px-4 py-3 font-medium">Date</th><th className="px-4 py-3 font-medium">Payment</th><th className="px-4 py-3 text-right font-medium">Total</th><th className="px-4 py-3" aria-label="Open receipt" /></tr></thead>
-              {groups.map(([storeName, rows]) => (
-                <tbody className="divide-y" key={storeName || "all"}>
-                  {groupedByStore ? <tr className="bg-muted/20"><th className="px-4 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase" colSpan={scope.selectedStoreId ? 7 : 8}>{storeName}</th></tr> : null}
-                  {rows.map((receipt) => {
-                    const sale = receipt.sales;
-                    const refundedMinor = refundTotalBySale.get(receipt.sale_id) ?? 0;
-                    const fullyRefunded = sale ? refundedMinor >= sale.total_minor : false;
-                    return <tr className="transition-colors hover:bg-muted/40" key={receipt.id}>
-                      <td className="px-4 py-3"><Link className="font-mono font-semibold text-primary hover:underline" href={`/back-office/receipts/${receipt.id}`}>#{receipt.receipt_number}</Link>{refundedMinor > 0 ? <Badge className="mt-1" variant={fullyRefunded ? "outline" : "secondary"}><RotateCcw aria-hidden="true" />{fullyRefunded ? "Refunded" : "Partial"}</Badge> : null}</td>
-                      {!scope.selectedStoreId ? <td className="px-4 py-3 font-medium">{sale?.store_name_snapshot ?? "Unavailable store"}</td> : null}
-                      <td className="px-4 py-3 text-muted-foreground">{sale?.register_name_snapshot ?? "—"}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{sale?.cashier_name_snapshot ?? "Cashier unavailable"}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{formatReceiptDate(receipt.issued_at, context.organization.timezone)}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{(paymentNamesBySale.get(receipt.sale_id) ?? []).join(", ") || "—"}</td>
-                      <td className="px-4 py-3 text-right font-semibold">{sale ? formatMinorMoney(sale.total_minor, sale.currency_code) : "—"}</td>
-                      <td className="px-4 py-3 text-right"><Link aria-label={`Open receipt ${receipt.receipt_number}`} className="inline-flex text-muted-foreground hover:text-primary" href={`/back-office/receipts/${receipt.id}`}><ChevronRight className="size-4" aria-hidden="true" /></Link></td>
-                    </tr>;
-                  })}
-                </tbody>
-              ))}
-            </table>
-          </CardContent>
-        </Card>
+        <ReceiptListQuickView groups={quickViewGroups} timezone={context.organization.timezone} />
       ) : (
-        <BackOfficeStateCard description="Completed POS sales matching these authorized branch filters will appear here." icon={<ReceiptText className="size-5" aria-hidden="true" />} title="No receipts found" />
+        <div className="rounded-lg border border-dashed p-6 text-center">
+          <ReceiptText className="mx-auto size-5 text-muted-foreground" aria-hidden="true" />
+          <p className="mt-3 font-medium">No receipts found</p>
+          <p className="mt-1 text-sm text-muted-foreground">Completed POS sales matching these authorized branch filters will appear here.</p>
+        </div>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         {beforeReceiptNumber !== null ? <Link className="text-sm font-medium text-primary hover:underline" href={`/back-office/receipts?${query.toString()}`}>Show newest receipts</Link> : <span />}
         {nextBefore ? <Link className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline" href={`/back-office/receipts?before=${nextBefore}${querySuffix}`}>Load older receipts<ChevronRight className="size-4" aria-hidden="true" /></Link> : null}
       </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -195,8 +195,10 @@ export function CreateRegisterForm({
 }
 
 export function EditStoreButton({
+  onSaved,
   store,
 }: {
+  onSaved?: (updated: { address: string; isActive: boolean; name: string; phone: string }) => void;
   store: {
     id: string;
     name: string;
@@ -229,6 +231,12 @@ export function EditStoreButton({
       if (nextResult.ok) {
         setOpen(false);
         router.refresh();
+        onSaved?.({
+          name: values.name,
+          address: values.address,
+          phone: values.phone,
+          isActive: values.isActive,
+        });
       }
     });
   });
@@ -282,6 +290,7 @@ export function EditStoreButton({
 
 export function EditRegisterButton({
   register,
+  onSaved,
 }: {
   register: {
     id: string;
@@ -290,6 +299,7 @@ export function EditRegisterButton({
     storeName: string;
     isActive: boolean;
   };
+  onSaved?: (updated: { isActive: boolean; name: string }) => void;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -312,6 +322,7 @@ export function EditRegisterButton({
       if (nextResult.ok) {
         setOpen(false);
         router.refresh();
+        onSaved?.({ name: values.name, isActive: values.isActive });
       }
     });
   });
@@ -392,7 +403,7 @@ export function CreateRoleForm({
       <DialogContent size="large">
         <DialogHeader>
           <DialogTitle>Create custom role</DialogTitle>
-          <DialogDescription>A role can contain only permissions you currently hold.</DialogDescription>
+          <DialogDescription>Create a custom access bundle only when a ready-made role does not fit. You can include only access you already have.</DialogDescription>
         </DialogHeader>
         <DialogBody>
           <form className="space-y-5" onSubmit={submit} noValidate>
@@ -412,7 +423,8 @@ export function CreateRoleForm({
         </div>
 
         <fieldset>
-          <legend className="text-sm font-medium">Permissions</legend>
+          <legend className="text-sm font-medium">Choose the access this role includes</legend>
+          <p className="mt-1 text-xs text-muted-foreground">These detailed choices are optional. Start with a ready-made role for most employees.</p>
           {form.formState.errors.permissionCodes?.message ? (
             <p className="mt-1 text-sm text-destructive">
               {form.formState.errors.permissionCodes.message}
@@ -510,7 +522,7 @@ export function EditRoleButton({
         <DialogHeader>
           <DialogTitle>Edit {role.name}</DialogTitle>
           <DialogDescription>
-            Role code {role.code} remains stable. You can only grant permissions you currently hold.
+            This role&apos;s identifier remains stable. You can include only access you currently have.
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
@@ -529,7 +541,7 @@ export function EditRoleButton({
               </div>
             </div>
             <fieldset>
-              <legend className="text-sm font-medium">Permissions</legend>
+              <legend className="text-sm font-medium">Choose the access this role includes</legend>
               {form.formState.errors.permissionCodes?.message ? (
                 <p className="mt-1 text-sm text-destructive">{form.formState.errors.permissionCodes.message}</p>
               ) : null}
@@ -634,7 +646,7 @@ export function EditEmployeeButton({
         <DialogHeader>
           <DialogTitle>Edit employee</DialogTitle>
           <DialogDescription>
-            Assignment changes are applied atomically, checked against your permissions, and recorded in the security audit trail.
+            Choose the person&apos;s role and stores, then review the summary before saving. The change is recorded for accountability.
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
@@ -652,7 +664,8 @@ export function EditEmployeeButton({
               </FormField>
             </div>
             <fieldset>
-              <legend className="text-sm font-medium">Roles</legend>
+              <legend className="text-sm font-medium">What this person mainly does</legend>
+              <p className="mt-1 text-xs text-muted-foreground">Start with the role that best matches their daily work. Custom roles are supported when needed.</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {roles.map((role) => (
                   <label className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm" key={role.id}>
@@ -670,7 +683,7 @@ export function EditEmployeeButton({
               {form.formState.errors.roleIds?.message ? <p className="mt-2 text-xs text-destructive">{form.formState.errors.roleIds.message}</p> : null}
             </fieldset>
             <fieldset>
-              <legend className="text-sm font-medium">Active stores</legend>
+              <legend className="text-sm font-medium">Stores they can work in</legend>
               {organizationWideStoreAccess ? (
                 <p className="mt-1 text-xs text-muted-foreground">
                   Organization managers are automatically assigned to every active store. Store access updates when stores are added or activated.
@@ -692,6 +705,14 @@ export function EditEmployeeButton({
               </div>
               {form.formState.errors.storeIds?.message ? <p className="mt-2 text-xs text-destructive">{form.formState.errors.storeIds.message}</p> : null}
             </fieldset>
+            <section aria-label="Access review" className="rounded-xl border bg-muted/20 p-4">
+              <p className="text-sm font-medium">Review access</p>
+              <p className="mt-1 text-xs text-muted-foreground">This employee will receive the included access from the selected roles at the selected stores.</p>
+              <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                <div><dt className="text-xs text-muted-foreground">Roles</dt><dd className="mt-1 font-medium">{roles.filter((role) => selectedRoles.includes(role.id)).map((role) => role.name).join(", ") || "No role selected"}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">Stores</dt><dd className="mt-1 font-medium">{organizationWideStoreAccess ? "All active stores" : stores.filter((store) => selectedStores.includes(store.id)).map((store) => store.name).join(", ") || "No store selected"}</dd></div>
+              </dl>
+            </section>
             <DialogFooter>
               <Button disabled={isPending} type="submit">
                 {isPending ? <LoaderCircle className="animate-spin" /> : <Pencil />}

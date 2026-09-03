@@ -432,8 +432,9 @@ export function getBackOfficeHome(context: BusinessContext) {
   if (hasPermission(context, "customers.manage")) return "/back-office/customers";
   if (hasPermission(context, "employees.manage")) return "/back-office/employees";
   if (hasPermission(context, "roles.manage")) return "/back-office/roles";
-  if (hasPermission(context, "stores.manage")) return "/back-office/stores";
-  if (hasPermission(context, "registers.manage")) return "/back-office/registers";
+  if (hasAnyPermission(context, ["stores.manage", "registers.manage"])) {
+    return "/back-office/stores-registers";
+  }
   if (hasPermission(context, "devices.manage")) return "/back-office/devices";
   if (hasAnyPermission(context, ["approvals.manage", "audit.view"])) {
     return "/back-office/security";

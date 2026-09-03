@@ -17,13 +17,13 @@ export default async function ReceiptSettingsPage() {
         <PageHeader
           eyebrow="Settings"
           title="Receipt settings"
-          description="Your role does not include access to change receipt layouts or business information."
+          description="Receipt details can be changed only by people who manage business settings."
           action={<Badge variant="outline">No settings access</Badge>}
         />
         <Card>
           <CardHeader>
             <CardTitle>Receipt settings access is required</CardTitle>
-            <CardDescription>Ask an owner to grant the settings.manage permission.</CardDescription>
+            <CardDescription>Ask an owner or authorized administrator to update these settings.</CardDescription>
           </CardHeader>
         </Card>
       </div>
@@ -47,7 +47,7 @@ export default async function ReceiptSettingsPage() {
       <PageHeader
         eyebrow="Settings"
         title="Receipt settings"
-        description="Control the business details and print layout captured on all newly issued receipts."
+        description="Choose the business details and print layout used on new receipts. Completed receipts keep the information saved at the time of sale."
         action={<Badge variant="secondary">Settings access</Badge>}
       />
       <ReceiptSettingsManager

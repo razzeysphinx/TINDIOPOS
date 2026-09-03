@@ -21,15 +21,8 @@ export default async function StoresPage() {
       <PageHeader
         eyebrow="Management"
         title="Stores"
-        description="Locations are organization-scoped and form the boundary for registers, employees, and future inventory."
-        action={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Badge variant={canManage ? "secondary" : "outline"}>
-              {canManage ? "Management access" : "View access"}
-            </Badge>
-            {canManage && context.features.multi_store ? <CreateStoreForm /> : null}
-          </div>
-        }
+        description="Manage the places where you sell. Each store can have its own registers, team access, and stock."
+        action={canManage && context.features.multi_store ? <CreateStoreForm /> : undefined}
       />
 
       {canManage && !context.features.multi_store ? (
@@ -92,6 +85,7 @@ export default async function StoresPage() {
         </section>
       ) : (
         <BackOfficeStateCard
+          action={canManage && context.features.multi_store ? <CreateStoreForm /> : null}
           description="Create the first active location before adding registers, assigning employees, or selling from the POS."
           icon={<Store className="size-5" aria-hidden="true" />}
           title="No stores yet"

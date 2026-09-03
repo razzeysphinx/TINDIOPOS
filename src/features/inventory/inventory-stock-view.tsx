@@ -1,13 +1,15 @@
 "use client";
 
-import { Grid2X2, List, Search, SlidersHorizontal } from "lucide-react";
+import { Grid2X2, List, LoaderCircle, Printer, Search, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { ContextHelp } from "@/components/back-office/context-help";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { formatMinorMoney } from "@/features/catalog/catalog-money";
 import {
   getInventoryStockCondition,
   inventoryStockConditionLabels,
@@ -205,6 +207,7 @@ export function InventoryStockView({
   const [status, setStatus] = useState<InventoryStockStatus>(initialStatus);
   const [sort, setSort] = useState<InventoryStockSort>("name_asc");
   const [group, setGroup] = useState<InventoryStockGroup>("none");
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const categories = useMemo(
     () => Array.from(
@@ -288,21 +291,52 @@ export function InventoryStockView({
     setSort("name_asc");
     setGroup("none");
   };
+  const printCurrentView = () => {
+    if (isPrinting) return;
+
+    setIsPrinting(true);
+    const cleanup = () => {
+      document.body.removeAttribute("data-print-mode");
+      setIsPrinting(false);
+    };
+
+    try {
+      document.body.dataset.printMode = "inventory";
+      window.addEventListener("afterprint", cleanup, { once: true });
+      window.print();
+      window.setTimeout(cleanup, 1000);
+    } catch {
+      cleanup();
+    }
+  };
+  const printStores = Array.from(new Set(filteredRows.map((row) => row.storeName))).sort();
+  const printScope = printStores.length === 1
+    ? printStores[0]
+    : printStores.length > 1
+      ? `${printStores.length} authorized stores`
+      : "No store records";
 
   return (
-    <section className="space-y-4" aria-labelledby="stock-levels-title">
+    <>
+    <section className="space-y-4" aria-labelledby="stock-levels-title" data-inventory-stock-screen>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold" id="stock-levels-title">{multiStoreCount > 1 ? "Store records" : "Current stock"}</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold" id="stock-levels-title">{multiStoreCount > 1 ? "Store records" : "Current stock"}<ContextHelp label="What is current stock?">The quantity TINDIO currently records at a store. Open an item to see its stock activity and why it changed.</ContextHelp></h2>
           <p className="mt-1 text-sm text-muted-foreground">{multiStoreCount > 1 ? "Individual projected balances remain store-specific. Use the page filter above to change the store scope." : "One projected balance per store and saleable item. Use the page filter above to change the store scope."}</p>
         </div>
-        <div className="flex items-center gap-1 self-start rounded-lg border bg-muted/30 p-1 sm:self-auto" aria-label="Stock layout">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <Button disabled={isPrinting} onClick={printCurrentView} size="sm" type="button" variant="outline">
+            {isPrinting ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Printer aria-hidden="true" />}
+            {isPrinting ? "Opening print dialog…" : "Print current view"}
+          </Button>
+          <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-1" aria-label="Stock layout">
           <Button aria-label="List view" aria-pressed={layout === "list"} onClick={() => updateLayout("list")} size="icon-sm" type="button" variant={layout === "list" ? "secondary" : "ghost"}>
             <List aria-hidden="true" />
           </Button>
           <Button aria-label="Grid view" aria-pressed={layout === "grid"} onClick={() => updateLayout("grid")} size="icon-sm" type="button" variant={layout === "grid" ? "secondary" : "ghost"}>
             <Grid2X2 aria-hidden="true" />
           </Button>
+          </div>
         </div>
       </div>
 
@@ -382,6 +416,59 @@ export function InventoryStockView({
         </div>
       )}
     </section>
+    <InventoryPrintDocument canViewCosts={canViewCosts} currencyCode={currencyCode} rows={sortedRows} scope={printScope} />
+    </>
+  );
+}
+
+function InventoryPrintDocument({
+  canViewCosts,
+  currencyCode,
+  rows,
+  scope,
+}: {
+  canViewCosts: boolean;
+  currencyCode: string;
+  rows: InventoryStockRow[];
+  scope: string;
+}) {
+  return (
+    <article className="hidden" data-inventory-print-document>
+      <header data-inventory-print-header>
+        <p>TINDIO</p>
+        <h1>Inventory summary</h1>
+        <dl>
+          <div><dt>Store scope</dt><dd>{scope}</dd></div>
+          <div><dt>Stock records</dt><dd>{rows.length}</dd></div>
+        </dl>
+      </header>
+      {rows.length > 0 ? (
+        <table data-inventory-print-table>
+          <thead>
+            <tr>
+              <th>Store</th>
+              <th>Product</th>
+              <th>SKU</th>
+              <th>On hand</th>
+              <th>Status</th>
+              {canViewCosts ? <th>Average cost</th> : null}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td>{row.storeName}</td>
+                <td>{rowLabel(row)}<br /><span>{row.unit}</span></td>
+                <td>{row.sku ?? "—"}</td>
+                <td>{formatQuantity(row.quantity)}</td>
+                <td>{inventoryStockConditionLabels[stockCondition(row)]}</td>
+                {canViewCosts ? <td>{row.averageCostMinor === null ? "—" : formatMinorMoney(row.averageCostMinor, currencyCode)}</td> : null}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : <p data-inventory-print-empty>No stock records match the current filters.</p>}
+    </article>
   );
 }
 

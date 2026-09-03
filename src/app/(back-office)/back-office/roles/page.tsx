@@ -32,8 +32,8 @@ export default async function RolesPage() {
     <div className="space-y-8">
       <PageHeader
         eyebrow="Team"
-        title="Roles & permissions"
-        description="Effective access comes from database-backed role assignments. Interface visibility never replaces RLS enforcement."
+        title="Roles & access"
+        description="Choose what each person mainly does, then review the access included with that role. Access is still protected when someone opens a page or performs an action."
         action={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Badge variant={canManage ? "secondary" : "outline"}>
@@ -46,17 +46,17 @@ export default async function RolesPage() {
 
       <RoleGroup
         canManage={canManage}
-        description="TINDIO built-in roles have stable permissions and cannot be changed or deleted. Use them as clear starting points for your team."
+        description="These ready-made roles are safe starting points for your team. Their included access is protected and cannot be changed."
         grantablePermissions={grantablePermissions}
         permissionDetails={permissionDetails}
         rolePermissions={rolePermissions}
         roles={systemRoles}
-        title="TINDIO SYSTEM ROLES"
+        title="READY-MADE ROLES"
       />
       <RoleGroup
         canManage={canManage}
-        description="Create a custom role only when the built-in roles do not match your operating model."
-        emptyMessage="No custom roles yet. Use the + button above to create one."
+        description="Create a custom role only when the ready-made roles do not match how your business works."
+        emptyMessage="No custom roles yet. Use a ready-made role unless your business needs a different combination of access."
         grantablePermissions={grantablePermissions}
         permissionDetails={permissionDetails}
         rolePermissions={rolePermissions}
@@ -121,12 +121,9 @@ function RoleGroup({
                   </span>
                   <div>
                     <CardTitle>{role.name}</CardTitle>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">
-                      {role.code}
-                    </p>
                   </div>
                 </div>
-                {role.is_system ? <Badge variant="outline">System</Badge> : null}
+                {role.is_system ? <Badge variant="outline">TINDIO preset</Badge> : null}
               </CardHeader>
               <CardContent>
                 <p className="min-h-10 text-sm leading-6 text-muted-foreground">
@@ -134,7 +131,7 @@ function RoleGroup({
                 </p>
                 <div className="mt-5 flex items-center gap-2 border-t border-border pt-4 text-sm font-medium">
                   <KeyRound className="size-4 text-primary" aria-hidden="true" />
-                  {rolePermissionDetails.length} permission
+                  Includes {rolePermissionDetails.length} access setting
                   {rolePermissionDetails.length === 1 ? "" : "s"}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1.5">
@@ -164,7 +161,7 @@ function RoleGroup({
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                           {rolePermissionDetails.slice(6).map((permission) => (
-                            <Badge key={permission.code} title={`${permission.category}: ${permission.code}`} variant="secondary">
+                            <Badge key={permission.code} variant="secondary">
                               {permission.name}
                             </Badge>
                           ))}

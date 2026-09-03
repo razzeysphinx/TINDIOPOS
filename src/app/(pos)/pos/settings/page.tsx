@@ -11,7 +11,7 @@ export const metadata = { title: "POS settings" };
 export default async function PosSettingsPage() {
   await connection();
   const context = await requireBusinessContext();
-  if (!hasPermission(context, "pos.access")) redirect(getWorkspaceHome(context));
+  if (!hasPermission(context, "pos.access") || !hasPermission(context, "sales.create")) redirect(getWorkspaceHome(context));
   const workspace = await loadPosWorkspace(context);
 
   return (

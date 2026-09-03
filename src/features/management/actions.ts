@@ -45,6 +45,7 @@ export async function createStoreAction(
 
   if (result.ok) {
     revalidatePath("/back-office/stores");
+    revalidatePath("/back-office/stores-registers");
     revalidatePath("/back-office");
   }
 
@@ -64,6 +65,7 @@ export async function updateStoreAction(
 
   if (result.ok) {
     revalidatePath("/back-office/stores");
+    revalidatePath("/back-office/stores-registers");
     revalidatePath("/back-office/registers");
     revalidatePath("/back-office/employees");
     revalidatePath("/back-office");
@@ -88,6 +90,7 @@ export async function createRegisterAction(
 
   if (result.ok) {
     revalidatePath("/back-office/registers");
+    revalidatePath("/back-office/stores-registers");
     revalidatePath("/back-office");
   }
 
@@ -107,6 +110,7 @@ export async function updateRegisterAction(
 
   if (result.ok) {
     revalidatePath("/back-office/registers");
+    revalidatePath("/back-office/stores-registers");
     revalidatePath("/back-office");
   }
 

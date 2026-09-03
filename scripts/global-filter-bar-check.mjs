@@ -38,7 +38,7 @@ test("reports reuse the global filter bar and retain the established export quer
   assert.match(reportFilter, /fromDate=\{filter\.startDate\}/);
   assert.match(reportFilter, /toDate=\{filter\.endDate\}/);
   assert.match(reportFilter, /storeId=\{filter\.storeId\}/);
-  assert.match(reportFilter, /\/api\/reports\/export\?\$\{exportQuery\}&kind=\$\{kind\}/);
+  assert.match(reportFilter, /<ReportExportActions exportQuery=\{exportQuery\}/);
   assert.doesNotMatch(reportFilter, /<form/);
 });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { LoaderCircle, RotateCcw } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
@@ -34,17 +34,24 @@ const selectClassName =
   "h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export function RefundForm({
+  autoFocus = false,
   saleId,
   currencyCode,
   items,
+  originalTotalMinor,
   paymentMethods,
+  receiptNumber,
 }: {
+  autoFocus?: boolean;
   saleId: string;
   currencyCode: string;
   items: RefundableItem[];
+  originalTotalMinor: number;
   paymentMethods: RefundPaymentMethod[];
+  receiptNumber: number;
 }) {
   const router = useRouter();
+  const refundPanelRef = useRef<HTMLElement>(null);
   const [quantities, setQuantities] = useState<Record<string, string>>(() =>
     Object.fromEntries(items.map((item) => [item.saleItemId, "0"])),
   );
@@ -55,6 +62,15 @@ export function RefundForm({
   const [message, setMessage] = useState<string | null>(null);
   const [approvalRequestId, setApprovalRequestId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const isBusy = isPending || approvalRequestId !== null;
+
+  useEffect(() => {
+    if (!autoFocus) return;
+    const frame = window.requestAnimationFrame(() => {
+      refundPanelRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [autoFocus]);
 
   const selectedItems = useMemo(
     () =>
@@ -154,19 +170,24 @@ export function RefundForm({
   const remainingItems = items.filter((item) => item.quantity > item.refundedQuantity);
 
   return (
+    <section aria-labelledby="refund-title" id="refund" ref={refundPanelRef} tabIndex={-1}>
     <Card>
       <CardHeader className="flex-row items-start gap-3">
         <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-destructive/10 text-destructive">
           <RotateCcw className="size-5" aria-hidden="true" />
         </span>
         <div>
-          <CardTitle>Issue refund</CardTitle>
+          <CardTitle id="refund-title">Issue refund</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
             Return only the quantities received. The original sale and receipt remain unchanged.
           </p>
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
+        <div className="grid gap-2 rounded-lg border bg-muted/30 p-3 text-sm sm:grid-cols-2">
+          <p><span className="text-muted-foreground">Original receipt:</span> <span className="font-mono font-medium">#{receiptNumber}</span></p>
+          <p className="sm:text-right"><span className="text-muted-foreground">Original total:</span> <span className="font-semibold">{formatMinorMoney(originalTotalMinor, currencyCode)}</span></p>
+        </div>
         {remainingItems.length > 0 ? (
           <div className="overflow-hidden rounded-lg border">
             <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground sm:grid-cols-[minmax(0,1fr)_7rem_6rem]">
@@ -193,6 +214,7 @@ export function RefundForm({
                   </span>
                   <Input
                     aria-label={`Refund quantity for ${item.name}`}
+                    disabled={isBusy}
                     inputMode="numeric"
                     max={remainingQuantity}
                     min={0}
@@ -217,7 +239,7 @@ export function RefundForm({
             Refund method
             <select
               className={selectClassName}
-              disabled={isPending || paymentMethods.length === 0}
+              disabled={isBusy || paymentMethods.length === 0}
               onChange={(event) => setPaymentMethodId(event.target.value)}
               value={paymentMethodId}
             >
@@ -231,7 +253,7 @@ export function RefundForm({
           <label className="grid gap-1.5 text-sm font-medium">
             Reference {selectedPaymentMethod?.requiresReference ? "(required)" : "(optional)"}
             <Input
-              disabled={isPending}
+              disabled={isBusy}
               maxLength={120}
               onChange={(event) => setReferenceNumber(event.target.value)}
               value={referenceNumber}
@@ -243,7 +265,7 @@ export function RefundForm({
           Refund reason
           <textarea
             className="min-h-20 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={isPending}
+            disabled={isBusy}
             maxLength={500}
             minLength={2}
             onChange={(event) => setReason(event.target.value)}
@@ -263,7 +285,7 @@ export function RefundForm({
         <div className="flex flex-wrap items-center gap-3">
           <Button
             disabled={
-              isPending ||
+              isBusy ||
               remainingItems.length === 0 ||
               !paymentMethodId ||
               selectedItems.length === 0
@@ -298,5 +320,6 @@ export function RefundForm({
         />
       ) : null}
     </Card>
+    </section>
   );
 }

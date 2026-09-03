@@ -37,8 +37,8 @@ function getBusinessActions(
 
   if (hasPermission(permissions, "reports.view")) {
     actions.push({
-      title: "Business reports",
-      description: "Review sales, payment, and operational trends.",
+      title: "See how your business is doing",
+      description: "Review sales, payments, and business trends.",
       href: "/back-office/reports",
       icon: BookOpenCheck,
     });
@@ -46,8 +46,8 @@ function getBusinessActions(
 
   if (hasPermission(permissions, "inventory.manage") && inventoryEnabled) {
     actions.push({
-      title: "Stock operations",
-      description: "Review stock levels, adjustments, and purchasing work.",
+      title: "Check your stock",
+      description: "See stock levels, restocking work, and recent changes.",
       href: "/back-office/inventory",
       icon: Boxes,
     });
@@ -55,8 +55,8 @@ function getBusinessActions(
 
   if (hasPermission(permissions, "products.manage")) {
     actions.push({
-      title: "Catalog",
-      description: "Maintain products, prices, and store availability.",
+      title: "Manage your products",
+      description: "Add products, prices, categories, and selling options.",
       href: "/back-office/catalog",
       icon: PackageSearch,
     });
@@ -73,8 +73,8 @@ function getBusinessActions(
 
   if (hasAnyPermission(permissions, ["employees.manage", "roles.manage"])) {
     actions.push({
-      title: "Team access",
-      description: "Manage employee assignments and role access.",
+      title: "Manage your team",
+      description: "Invite employees and choose what they can access.",
       href: hasPermission(permissions, "employees.manage")
         ? "/back-office/employees"
         : "/back-office/roles",
@@ -84,8 +84,8 @@ function getBusinessActions(
 
   if (hasAnyPermission(permissions, ["approvals.manage", "audit.view"])) {
     actions.push({
-      title: "Security controls",
-      description: "Review approvals and recorded security activity.",
+      title: "Review approvals & security",
+      description: "Review sensitive actions and approval activity.",
       href: "/back-office/security",
       icon: ShieldCheck,
     });
@@ -100,11 +100,11 @@ function getBusinessActions(
   ])) {
     actions.push({
       title: hasPermission(permissions, "stores.manage")
-        ? "Organization controls"
-        : "Operational settings",
+        ? "Manage stores & operations"
+        : "Manage your operations",
       description: hasPermission(permissions, "stores.manage")
-        ? "Manage store-level business operations and configuration."
-        : "Review the operational settings available to you.",
+        ? "Set up stores, registers, and operational tools."
+        : "Review the business settings available to you.",
       href: hasPermission(permissions, "stores.manage")
         ? "/back-office/stores"
         : hasPermission(permissions, "registers.manage")
@@ -122,7 +122,7 @@ function getBusinessActions(
 function getInventoryActions(): DashboardAction[] {
   return [
     {
-      title: "Overview",
+      title: "Your stock overview",
       description: "Review inventory health and the work needing attention.",
       href: "/back-office/inventory?tab=overview",
       icon: Boxes,
@@ -134,26 +134,26 @@ function getInventoryActions(): DashboardAction[] {
       icon: PackageSearch,
     },
     {
-      title: "Activity",
-      description: "Review the latest accountable stock changes.",
+      title: "Stock activity",
+      description: "See what changed and why it changed.",
       href: "/back-office/inventory?tab=activity",
       icon: ClipboardList,
     },
     {
-      title: "Counts",
-      description: "Record and reconcile physical stock counts.",
+      title: "Count your stock",
+      description: "Compare what you physically have with TINDIO’s record.",
       href: "/back-office/inventory?tab=counts",
       icon: ClipboardList,
     },
     {
-      title: "Purchasing",
-      description: "Manage suppliers, orders, and receiving.",
+      title: "Buy and receive stock",
+      description: "Manage suppliers, purchase orders, and deliveries.",
       href: "/back-office/inventory?tab=purchasing",
       icon: PackageSearch,
     },
     {
-      title: "Transfers",
-      description: "Send stock between stores and receive it safely.",
+      title: "Move stock between stores",
+      description: "Send stock and record when the destination receives it.",
       href: "/back-office/inventory?tab=transfers",
       icon: SlidersHorizontal,
     },
@@ -184,14 +184,14 @@ export function DashboardActionGrid({
     <section aria-labelledby={`${surface}-actions-heading`} className="space-y-3">
       <div>
         <h2 className="font-heading text-lg font-semibold" id={`${surface}-actions-heading`}>
-          {inventory ? "Inventory operations" : "Your available actions"}
+          {inventory ? "What do you need to do?" : "What would you like to do?"}
         </h2>
         <p className="text-sm text-muted-foreground">
           {inventory
-            ? "Use the existing inventory workflows appropriate to your access."
+            ? "Start with the simple view, then open an operation only when you need it."
             : organizationWide
-              ? "Organization-wide actions are shown only where your permissions allow them."
-              : "Actions and reporting remain limited to your assigned store access."}
+              ? "Choose the area you want to manage next."
+              : "These actions and figures are limited to your assigned stores."}
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

@@ -1,7 +1,5 @@
-import Link from "next/link";
-
 import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
-import { buttonVariants } from "@/components/ui/button";
+import { ReportExportActions } from "@/features/reports/report-export-actions";
 import type { ReportFilter } from "@/features/reports/reporting";
 
 export function ReportFilterForm({
@@ -31,25 +29,7 @@ export function ReportFilterForm({
       stores={stores}
       toDate={filter.endDate}
       trailing={showExports ? (
-        <>
-          {[
-            ["sales", "Sales CSV"],
-            ["inventory", "Inventory CSV"],
-            ["employees", "Employees CSV"],
-            ["payments", "Payments CSV"],
-            ["registers", "Registers CSV"],
-            ["customers", "Customers CSV"],
-            ["security", "Security CSV"],
-          ].map(([kind, label]) => (
-            <Link
-              className={buttonVariants({ size: "sm", variant: "outline" })}
-              href={`/api/reports/export?${exportQuery}&kind=${kind}`}
-              key={kind}
-            >
-              {label}
-            </Link>
-          ))}
-        </>
+        <ReportExportActions exportQuery={exportQuery} />
       ) : undefined}
     />
   );

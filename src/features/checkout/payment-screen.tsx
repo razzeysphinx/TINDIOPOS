@@ -5,6 +5,7 @@ import {
   Banknote,
   Building2,
   CheckCircle2,
+  ChevronRight,
   CircleDollarSign,
   CloudOff,
   CreditCard,
@@ -166,8 +167,11 @@ export function PaymentScreen({
   taxMinor,
   subtotalMinor,
   activeShift,
+  canApplyDiscounts,
   selectedDiscount,
   selectedTaxRate,
+  discounts,
+  onDiscountChange,
   onCancel,
   onComplete,
   onNewSale,
@@ -192,15 +196,20 @@ export function PaymentScreen({
   taxMinor: number;
   subtotalMinor: number;
   activeShift: { id: string; openedAt: string; openingCashMinor: number };
+  canApplyDiscounts: boolean;
   selectedDiscount: PosDiscount | null;
   selectedTaxRate: PosTaxRate | null;
+  discounts: PosDiscount[];
+  onDiscountChange: (discountId: string | null) => void;
   onCancel: () => void;
   onComplete: (checkout: CompletedCheckout) => void;
   onNewSale: () => void;
 }) {
-  const [activeMethodId, setActiveMethodId] = useState<string | null>(null);
+  const [activeMethodId, setActiveMethodId] = useState<string | null>(
+    () => paymentMethods.find((method) => method.type === "CASH")?.id ?? null,
+  );
   const [amount, setAmount] = useState("");
-  const [cashTendered, setCashTendered] = useState("");
+  const [cashTendered, setCashTendered] = useState(() => minorToMoneyInput(totalMinor));
   const [referenceNumber, setReferenceNumber] = useState("");
   const [note, setNote] = useState("");
   const [loyaltyPointsInput, setLoyaltyPointsInput] = useState("");
@@ -233,18 +242,22 @@ export function PaymentScreen({
   const loyaltyRedemptionMinor = loyaltyInputIsValid && requestedLoyaltyPoints
     ? requestedLoyaltyPoints * (loyaltyProgram?.redemptionValueMinor ?? 0)
     : 0;
-  const paidMinor = useMemo(
-    () => loyaltyRedemptionMinor + draftPayments.reduce((total, payment) => total + payment.amountMinor, 0),
-    [draftPayments, loyaltyRedemptionMinor],
+  const appliedPaymentMinor = useMemo(
+    () => draftPayments.reduce((total, payment) => total + payment.amountMinor, 0),
+    [draftPayments],
   );
+  const paidMinor = loyaltyRedemptionMinor + appliedPaymentMinor;
   const totalChangeMinor = useMemo(
     () => draftPayments.reduce((total, payment) => total + (payment.changeMinor ?? 0), 0),
     [draftPayments],
   );
   const remainingMinor = Math.max(0, totalMinor - paidMinor);
   const activeMethod = paymentMethods.find((method) => method.id === activeMethodId) ?? null;
+  const cashMethod = paymentMethods.find((method) => method.type === "CASH") ?? null;
+  const nonCashMethods = paymentMethods.filter((method) => method.type !== "CASH");
   const activeCashTenderMinor = moneyInputToMinor(cashTendered);
   const cashSuggestions = cashTenderSuggestions(remainingMinor);
+
   const offlineQueueEligible =
     draftPayments.length === 1 &&
     draftPayments[0]?.method.type === "CASH" &&
@@ -252,6 +265,20 @@ export function PaymentScreen({
     draftPayments[0]?.tenderedMinor !== null &&
     requestedLoyaltyPoints === 0 &&
     openTicketId === null;
+  const completionBlockMessage = isCheckoutPending
+    ? "This sale is already being completed."
+    : remainingMinor !== 0
+      ? "Payments must cover the remaining sale total before completion."
+      : !loyaltyInputIsValid || requestedLoyaltyPoints === null
+        ? "Check the loyalty points before completing the sale."
+        : !isOnline && !offlineQueueEligible
+          ? "Offline selling supports one cash payment only. Reconnect before completing this sale."
+          : null;
+  const canCompleteSale = completionBlockMessage === null;
+  const completionLabel =
+    draftPayments.length === 1 && draftPayments[0]?.method.type === "CASH"
+      ? "Complete cash sale"
+      : "Complete sale";
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -333,7 +360,6 @@ export function PaymentScreen({
     setCashTendered("");
     setReferenceNumber("");
     setNote("");
-    setIsSplitPayment(true);
     setMessage(
       amountMinor < remainingMinor
         ? `${formatMinorMoney(remainingMinor - amountMinor, currencyCode)} remains. Add another payment.`
@@ -349,10 +375,25 @@ export function PaymentScreen({
   };
 
   const completeSale = () => {
-    if (remainingMinor !== 0 || isCheckoutPending) return;
+    if (process.env.NODE_ENV === "development") {
+      console.info("TINDIO checkout completion diagnostic", {
+        saleTotal: totalMinor,
+        displayedPaid: paidMinor,
+        calculatedPaidForValidation: loyaltyRedemptionMinor + appliedPaymentMinor,
+        remaining: remainingMinor,
+        paymentEntries: draftPayments.map((payment) => ({
+          method: payment.method.code,
+          appliedMinor: payment.amountMinor,
+          tenderedMinor: payment.tenderedMinor,
+          changeMinor: payment.changeMinor,
+        })),
+        canCompleteSale,
+        reason: completionBlockMessage,
+      });
+    }
 
-    if (!loyaltyInputIsValid || requestedLoyaltyPoints === null) {
-      setMessage("Check the loyalty points before completing the sale.");
+    if (!canCompleteSale) {
+      setMessage(completionBlockMessage ?? "This sale cannot be completed yet.");
       return;
     }
 
@@ -361,7 +402,7 @@ export function PaymentScreen({
       registerId: register.id,
       idempotencyKey,
       customerId: customer?.id ?? null,
-      loyaltyRedemptionPoints: requestedLoyaltyPoints,
+      loyaltyRedemptionPoints: requestedLoyaltyPoints ?? 0,
       discountId,
       taxRateId,
       diningOptionId,
@@ -527,9 +568,9 @@ export function PaymentScreen({
     return (
       <section
         aria-labelledby="payment-queued-title"
-        className="fixed inset-0 z-50 grid overflow-y-auto bg-background p-4 sm:p-6"
+        className="fixed inset-0 z-50 grid overflow-y-auto bg-background p-0 pb-[env(safe-area-inset-bottom)] sm:p-6"
       >
-        <div className="m-auto w-full max-w-xl rounded-2xl border bg-card p-5 shadow-xl sm:p-8">
+        <div className="m-auto w-full max-w-xl rounded-none border-y bg-card p-5 shadow-xl sm:rounded-2xl sm:border sm:p-8">
           <span className="grid size-12 place-items-center rounded-full bg-secondary text-primary">
             <CloudOff className="size-6" aria-hidden="true" />
           </span>
@@ -563,9 +604,9 @@ export function PaymentScreen({
     return (
       <section
         aria-labelledby="payment-complete-title"
-        className="fixed inset-0 z-50 grid overflow-y-auto bg-background p-4 sm:p-6"
+        className="fixed inset-0 z-50 grid overflow-y-auto bg-background p-0 pb-[env(safe-area-inset-bottom)] sm:p-6"
       >
-        <div className="m-auto w-full max-w-xl rounded-2xl border bg-card p-5 shadow-xl sm:p-8">
+        <div className="m-auto w-full max-w-xl rounded-none border-y bg-card p-5 shadow-xl sm:rounded-2xl sm:border sm:p-8">
           <span className="grid size-12 place-items-center rounded-full bg-primary text-primary-foreground">
             <CheckCircle2 className="size-6" aria-hidden="true" />
           </span>
@@ -632,10 +673,10 @@ export function PaymentScreen({
     <section
       aria-labelledby="payment-title"
       aria-modal="true"
-      className="fixed inset-0 z-50 overflow-y-auto bg-background p-3 sm:p-6"
+      className="fixed inset-0 z-50 flex min-h-[100dvh] flex-col overflow-y-auto bg-background p-0 pb-[env(safe-area-inset-bottom)] sm:p-6"
       role="dialog"
     >
-      <div className="mx-auto min-h-full w-full max-w-5xl rounded-2xl border bg-card shadow-xl">
+      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-1 flex-col rounded-none border-y bg-card shadow-xl sm:rounded-2xl sm:border">
         <header className="flex items-center justify-between gap-4 border-b px-4 py-4 sm:px-6">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.15em] text-primary">TINDIO payment</p>
@@ -647,8 +688,8 @@ export function PaymentScreen({
           </Button>
         </header>
 
-        <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <div>
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 sm:gap-6 sm:p-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="min-w-0">
             <div className="rounded-2xl bg-primary p-5 text-primary-foreground sm:p-6">
               <p className="text-sm font-medium text-primary-foreground/80">Total due</p>
               <p className="mt-2 text-4xl font-semibold tracking-[-0.05em]">
@@ -710,31 +751,131 @@ export function PaymentScreen({
             )}
           </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {paymentMethods.map((method) => {
-                const Icon = paymentIcon(method.type);
-                const isActive = activeMethod?.id === method.id;
-
-                return (
-                  <button
-                    aria-pressed={isActive}
-                    className={cn(
-                      "flex min-h-28 flex-col items-start justify-between rounded-xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                      isActive
-                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                        : "bg-background hover:border-primary/45 hover:bg-muted/50",
-                    )}
-                    disabled={remainingMinor === 0 || isCheckoutPending}
-                    key={method.id}
-                    onClick={() => chooseMethod(method)}
-                    type="button"
+            {canApplyDiscounts && discounts.length > 0 ? (
+              <section className="mt-5 rounded-xl border bg-muted/20 p-4" aria-labelledby="checkout-discount-title">
+                <label className="grid gap-1.5 text-sm font-medium" htmlFor="checkout-discount">
+                  <span id="checkout-discount-title">Discount</span>
+                  <select
+                    className="h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    disabled={draftPayments.length > 0 || isCheckoutPending}
+                    id="checkout-discount"
+                    onChange={(event) => onDiscountChange(event.target.value || null)}
+                    value={selectedDiscount?.id ?? ""}
                   >
-                    <Icon className="size-5" aria-hidden="true" />
-                    <span className="font-semibold">{method.name}</span>
-                  </button>
-                );
-              })}
-            </div>
+                    <option value="">No discount</option>
+                    {discounts.map((discount) => (
+                      <option key={discount.id} value={discount.id}>{discount.name}</option>
+                    ))}
+                  </select>
+                </label>
+                {draftPayments.length > 0 ? (
+                  <p className="mt-2 text-xs text-muted-foreground">Remove recorded payments before changing the discount.</p>
+                ) : null}
+              </section>
+            ) : null}
+
+            {cashMethod ? (
+              <section className="mt-5 rounded-xl border bg-muted/20 p-4 sm:p-5" aria-labelledby="cash-payment-title">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold" id="cash-payment-title">Cash</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Enter the amount received, then apply the cash payment.</p>
+                  </div>
+                  <Button
+                    className="h-11"
+                    disabled={isCheckoutPending || remainingMinor === 0}
+                    onClick={() => chooseMethod(cashMethod)}
+                    size="sm"
+                    type="button"
+                    variant={activeMethod?.id === cashMethod.id ? "secondary" : "outline"}
+                  >
+                    <Banknote aria-hidden="true" />
+                    {activeMethod?.id === cashMethod.id ? "Cash selected" : "Use cash"}
+                  </Button>
+                </div>
+                <label className="mt-4 grid gap-1.5 text-sm font-medium" htmlFor="cash-tendered">
+                  Amount tendered
+                  <Input
+                    className="h-11"
+                    disabled={activeMethod?.id !== cashMethod.id || isCheckoutPending || remainingMinor === 0}
+                    id="cash-tendered"
+                    inputMode="decimal"
+                    onChange={(event) => setCashTendered(event.target.value)}
+                    value={activeMethod?.id === cashMethod.id ? cashTendered : ""}
+                  />
+                </label>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {cashSuggestions.map((suggestion) => (
+                    <Button
+                      className="h-10"
+                      disabled={isCheckoutPending || remainingMinor === 0}
+                      key={suggestion}
+                      onClick={() => {
+                        chooseMethod(cashMethod);
+                        setCashTendered(minorToMoneyInput(suggestion));
+                      }}
+                      size="sm"
+                      type="button"
+                      variant={suggestion === remainingMinor ? "secondary" : "outline"}
+                    >
+                      {suggestion === remainingMinor ? "Exact " : ""}
+                      {formatMinorMoney(suggestion, currencyCode)}
+                    </Button>
+                  ))}
+                </div>
+                <div className="mt-4 flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Change</span>
+                  <span className="font-semibold">
+                    {activeMethod?.id !== cashMethod.id || activeCashTenderMinor === null
+                      ? "Enter cash"
+                      : activeCashTenderMinor >= remainingMinor
+                        ? formatMinorMoney(activeCashTenderMinor - remainingMinor, currencyCode)
+                        : `${formatMinorMoney(remainingMinor - activeCashTenderMinor, currencyCode)} remaining`}
+                  </span>
+                </div>
+                <Button
+                  className="mt-4 h-11 w-full"
+                  disabled={isCheckoutPending || remainingMinor === 0 || activeMethod?.id !== cashMethod.id}
+                  onClick={addPayment}
+                  type="button"
+                >
+                  <Banknote aria-hidden="true" />
+                  Apply cash payment
+                </Button>
+              </section>
+            ) : null}
+
+            {nonCashMethods.length > 0 ? (
+              <section className="mt-5" aria-labelledby="other-payment-methods-title">
+                <p className="text-sm font-semibold" id="other-payment-methods-title">Other payment methods</p>
+                <div className="mt-3 divide-y overflow-hidden rounded-xl border bg-background">
+                  {nonCashMethods.map((method) => {
+                    const Icon = paymentIcon(method.type);
+                    const isActive = activeMethod?.id === method.id;
+
+                    return (
+                      <button
+                        aria-pressed={isActive}
+                        className={cn(
+                          "flex min-h-12 w-full items-center gap-3 px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                          isActive
+                            ? "bg-primary/10 text-primary"
+                            : "hover:bg-muted/50",
+                        )}
+                        disabled={remainingMinor === 0 || isCheckoutPending}
+                        key={method.id}
+                        onClick={() => chooseMethod(method)}
+                        type="button"
+                      >
+                        <Icon className="size-4 shrink-0" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{method.name}</span>
+                        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
 
             {paymentMethods.length === 0 ? (
               <p className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
@@ -743,7 +884,7 @@ export function PaymentScreen({
             ) : null}
 
             <Button
-              className="mt-4 w-full"
+              className="mt-4 h-11 w-full"
               disabled={isCheckoutPending || remainingMinor === 0}
               onClick={() => {
                 setIsSplitPayment(true);
@@ -756,74 +897,28 @@ export function PaymentScreen({
               Split payment
             </Button>
 
-            {activeMethod ? (
+            {activeMethod && activeMethod.type !== "CASH" ? (
               <div className="mt-5 rounded-xl border bg-muted/25 p-4 sm:p-5">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-semibold">{activeMethod.name}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {activeMethod.type === "CASH"
-                        ? "Enter the amount received from the customer."
-                        : "Confirm this manual external payment after processing it outside TINDIO."}
-                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">Confirm this manual external payment after processing it outside TINDIO.</p>
                   </div>
                   <Button onClick={() => setActiveMethodId(null)} size="sm" type="button" variant="ghost">
                     Cancel
                   </Button>
                 </div>
 
-                {activeMethod.type === "CASH" ? (
-                  <>
-                    <label className="mt-5 grid gap-1.5 text-sm font-medium" htmlFor="cash-tendered">
-                      Amount tendered
-                      <Input
-                        autoFocus
-                        id="cash-tendered"
-                        inputMode="decimal"
-                        onChange={(event) => setCashTendered(event.target.value)}
-                        value={cashTendered}
-                      />
-                    </label>
-                    <div className="mt-4">
-                      <p className="text-xs font-medium text-muted-foreground">Quick cash</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {cashSuggestions.map((suggestion) => (
-                          <Button
-                            key={suggestion}
-                            onClick={() => setCashTendered(minorToMoneyInput(suggestion))}
-                            size="sm"
-                            type="button"
-                            variant={suggestion === remainingMinor ? "secondary" : "outline"}
-                          >
-                            {suggestion === remainingMinor ? "Exact " : ""}
-                            {formatMinorMoney(suggestion, currencyCode)}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Change</span>
-                      <span className="font-semibold">
-                        {activeCashTenderMinor === null
-                          ? "Enter cash"
-                          : activeCashTenderMinor >= remainingMinor
-                            ? formatMinorMoney(activeCashTenderMinor - remainingMinor, currencyCode)
-                            : `${formatMinorMoney(remainingMinor - activeCashTenderMinor, currencyCode)} remaining`}
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <label className="mt-5 grid gap-1.5 text-sm font-medium" htmlFor="payment-amount">
-                    Amount
-                    <Input
-                      autoFocus
-                      id="payment-amount"
-                      inputMode="decimal"
-                      onChange={(event) => setAmount(event.target.value)}
-                      value={amount}
-                    />
-                  </label>
-                )}
+                <label className="mt-5 grid gap-1.5 text-sm font-medium" htmlFor="payment-amount">
+                  Amount
+                  <Input
+                    autoFocus
+                    id="payment-amount"
+                    inputMode="decimal"
+                    onChange={(event) => setAmount(event.target.value)}
+                    value={amount}
+                  />
+                </label>
 
                 <label className="mt-4 grid gap-1.5 text-sm font-medium" htmlFor="payment-reference">
                   Reference number {activeMethod.requiresReference ? "(required)" : "(optional)"}
@@ -843,7 +938,7 @@ export function PaymentScreen({
                     value={note}
                   />
                 </label>
-                <Button className="mt-5 w-full" onClick={addPayment} type="button">
+                <Button className="mt-5 h-11 w-full" onClick={addPayment} type="button">
                   <Plus aria-hidden="true" />
                   Add {activeMethod.name} payment
                 </Button>
@@ -851,7 +946,7 @@ export function PaymentScreen({
             ) : null}
           </div>
 
-          <aside className="rounded-xl border bg-muted/20 p-4 sm:p-5">
+          <aside className="rounded-xl border bg-muted/20 p-4 sm:p-5 lg:sticky lg:top-0 lg:self-start">
             <p className="text-sm font-semibold">{isSplitPayment ? "Split payment" : "Payment summary"}</p>
             <div className="mt-4 grid grid-cols-2 gap-y-2 text-sm">
               <span className="text-muted-foreground">Total</span>
@@ -925,12 +1020,12 @@ export function PaymentScreen({
 
             <Button
               className="mt-5 h-11 w-full"
-              disabled={remainingMinor !== 0 || isCheckoutPending || !loyaltyInputIsValid || (!isOnline && !offlineQueueEligible)}
+              disabled={!canCompleteSale}
               onClick={completeSale}
               type="button"
             >
               {isCheckoutPending ? <LoaderCircle className="animate-spin" /> : <CheckCircle2 />}
-              {isCheckoutPending ? "Completing sale…" : "Complete sale"}
+              {isCheckoutPending ? "Completing sale…" : completionLabel}
             </Button>
             <p className="mt-3 text-center text-xs leading-5 text-muted-foreground">
               Payments, receipt, and tracked inventory changes are committed together.

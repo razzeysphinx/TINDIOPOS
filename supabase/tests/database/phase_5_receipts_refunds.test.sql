@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(32);
+select plan(34);
 
 select has_table('public', 'refunds', 'refunds table exists');
 select has_table('public', 'refund_items', 'refund items table exists');
@@ -335,6 +335,20 @@ select is(
   'completed',
   'the original sale remains immutable and completed after a refund'
 );
+select is(
+  (
+    select has_refundable_quantity
+    from public.get_pos_receipt_history(
+      (select organization_id from refund_test_context where label = 'refund'),
+      null,
+      null,
+      25
+    )
+    where sale_id = (select sale_id from refund_test_context where label = 'refund')
+  ),
+  true,
+  'POS receipt history keeps a partially refunded receipt refundable from remaining item quantities'
+);
 
 select ok(
   (
@@ -436,6 +450,20 @@ select is(
   ),
   2::bigint,
   'untracked refund lines do not create inventory movements'
+);
+select is(
+  (
+    select has_refundable_quantity
+    from public.get_pos_receipt_history(
+      (select organization_id from refund_test_context where label = 'refund'),
+      null,
+      null,
+      25
+    )
+    where sale_id = (select sale_id from refund_test_context where label = 'refund')
+  ),
+  false,
+  'POS receipt history marks a fully returned receipt as having no refundable quantity'
 );
 
 create or replace function pg_temp.excess_refund_is_rejected()

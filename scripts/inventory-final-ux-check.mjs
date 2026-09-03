@@ -12,7 +12,7 @@ const [inventoryPage, stockView, productDetail, storeScope] = await Promise.all(
 ]);
 
 test("Phase 10 keeps Inventory understandable, responsive, and keyboard-addressable", () => {
-  assert.match(inventoryPage, /aria-label="Inventory sections" className="overflow-x-auto border-b"/);
+  assert.match(inventoryPage, /aria-label="Inventory sections" className="overflow-x-auto(?: overscroll-x-contain)? border-b"/);
   assert.match(inventoryPage, /Use Stock for current balances, Activity for recent changes/);
   assert.match(inventoryPage, /Needs attention/);
   assert.match(stockView, /aria-label="List view"/);

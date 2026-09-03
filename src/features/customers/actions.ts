@@ -18,9 +18,10 @@ import {
   updateLoyaltyProgram,
 } from "@/features/customers/service";
 import type { CustomerActionResult, LoyaltyCardCredential } from "@/features/customers/customer-types";
+import type { PosCustomer } from "@/features/pos/pos-types";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 
-export async function createCustomerAction(input: unknown): Promise<CustomerActionResult> {
+export async function createCustomerAction(input: unknown): Promise<CustomerActionResult<PosCustomer>> {
   const context = await requireBusinessContext();
   if (!hasPermission(context, "customers.manage")) {
     return { ok: false, message: "You do not have permission to manage customers." };
@@ -29,6 +30,7 @@ export async function createCustomerAction(input: unknown): Promise<CustomerActi
   const result = await createCustomer({ context, input });
   if (result.ok) {
     revalidatePath("/back-office/customers");
+    revalidatePath("/pos");
   }
 
   return result;

@@ -54,11 +54,12 @@ export function BackupRecoveryManager({
   const [recoveryPointAt, setRecoveryPointAt] = useState(defaultRecoveryPoint);
   const [durationMinutes, setDurationMinutes] = useState("10");
   const [notes, setNotes] = useState("");
-  const [isPending, startTransition] = useTransition();
+  const [isRefreshPending, startRefreshTransition] = useTransition();
+  const [isDrillPending, startDrillTransition] = useTransition();
 
   const refreshSnapshot = () => {
     setMessage(null);
-    startTransition(async () => {
+    startRefreshTransition(async () => {
       const result = await refreshOrganizationRecoverySnapshotAction(organizationId);
       setMessage(result.message);
 
@@ -78,7 +79,7 @@ export function BackupRecoveryManager({
     }
 
     setMessage(null);
-    startTransition(async () => {
+    startDrillTransition(async () => {
       const result = await recordOrganizationRecoveryDrillAction({
         organizationId,
         drillType,
@@ -150,8 +151,8 @@ export function BackupRecoveryManager({
                 <Download />Download export
               </a>
             ) : null}
-            <Button disabled={isPending} onClick={refreshSnapshot} type="button" variant="outline">
-              {isPending ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+            <Button disabled={isRefreshPending} onClick={refreshSnapshot} type="button" variant="outline">
+              {isRefreshPending ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
               Refresh status
             </Button>
           </div>
@@ -177,7 +178,7 @@ export function BackupRecoveryManager({
                   Drill type
                   <select
                     className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    disabled={isPending}
+                    disabled={isDrillPending}
                     id="recovery-drill-type"
                     onChange={(event) => setDrillType(event.target.value as RecoveryDrillType)}
                     value={drillType}
@@ -189,7 +190,7 @@ export function BackupRecoveryManager({
                   Outcome
                   <select
                     className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    disabled={isPending}
+                    disabled={isDrillPending}
                     id="recovery-drill-outcome"
                     onChange={(event) => setOutcome(event.target.value as RecoveryDrillOutcome)}
                     value={outcome}
@@ -202,7 +203,7 @@ export function BackupRecoveryManager({
                   Recovery point tested
                   <input
                     className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    disabled={isPending}
+                    disabled={isDrillPending}
                     id="recovery-point-at"
                     max={defaultRecoveryPoint()}
                     onChange={(event) => setRecoveryPointAt(event.target.value)}
@@ -214,7 +215,7 @@ export function BackupRecoveryManager({
                   Duration in minutes
                   <input
                     className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    disabled={isPending}
+                    disabled={isDrillPending}
                     id="recovery-duration"
                     max="10080"
                     min="0"
@@ -229,7 +230,7 @@ export function BackupRecoveryManager({
                 Evidence and result
                 <textarea
                   className="min-h-24 rounded-lg border border-input bg-background p-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                  disabled={isPending}
+                  disabled={isDrillPending}
                   id="recovery-drill-notes"
                   maxLength={1000}
                   minLength={10}
@@ -238,8 +239,8 @@ export function BackupRecoveryManager({
                   value={notes}
                 />
               </label>
-              <Button disabled={isPending} onClick={recordDrill} type="button">
-                {isPending ? <LoaderCircle className="animate-spin" /> : <CheckCircle2 />}
+              <Button disabled={isDrillPending} onClick={recordDrill} type="button">
+                {isDrillPending ? <LoaderCircle className="animate-spin" /> : <CheckCircle2 />}
                 Record recovery drill
               </Button>
             </>

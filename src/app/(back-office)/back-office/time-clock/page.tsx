@@ -41,6 +41,7 @@ export default async function TimeClockPage() {
         action={<Badge variant={workspace.entry ? "secondary" : "outline"}><Clock3 aria-hidden="true" />{workspace.entry ? "Clocked in" : "Clocked out"}</Badge>}
       />
       <TimeClockControl
+        initialEmployees={workspace.employees}
         initialEntry={workspace.entry}
         stores={workspace.stores}
         timezone={context.organization.timezone}

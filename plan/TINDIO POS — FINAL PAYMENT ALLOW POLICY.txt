@@ -1,0 +1,1462 @@
+TINDIO POS — FINAL NEGATIVE-STOCK SAFEGUARD IMPLEMENTATION
+PRE-PAYMENT STOCK WARNING USING THE EXISTING POLICY
+
+IMPORTANT
+
+TINDIO ALREADY HAS AN EXISTING NEGATIVE-STOCK SAFEGUARD.
+
+DO NOT CREATE ANOTHER NEGATIVE-STOCK POLICY SYSTEM.
+
+DO NOT CREATE DUPLICATE SETTINGS.
+
+REUSE the current store-level policy that already has these states:
+
+1. Block the movement
+2. Allow with warning policy
+3. Allow
+
+The goal of this task is to make the POS actually respect those existing policies correctly during the selling workflow.
+
+==================================================
+FINAL LOCKED BUSINESS BEHAVIOR
+==================================================
+
+The policies must behave as follows:
+
+BLOCK THE MOVEMENT
+=
+The cashier cannot continue to payment if the sale would make tracked stock negative.
+
+ALLOW WITH WARNING POLICY
+=
+The cashier may add the item to the cart normally.
+
+The cashier is warned ONLY when they attempt to proceed to PAYMENT.
+
+The warning is INFORMATIONAL.
+
+The cashier chooses:
+
+[ Review cart ]
+or
+[ Proceed anyway ]
+
+Proceed anyway:
+→ continue normally to payment
+→ NO manager PIN
+→ NO approval
+→ NO reason required
+→ NO additional authorization
+
+Review cart:
+→ stay in the current cart
+→ payment does not open
+→ items remain exactly as they were
+→ cashier can inspect/change/remove products
+
+ALLOW
+=
+The cashier proceeds normally to payment without an interruption.
+
+==================================================
+CRITICAL RULE
+==================================================
+
+"ALLOW WITH WARNING" MUST NOT BECOME AN APPROVAL WORKFLOW.
+
+DO NOT add:
+
+- manager approval
+- owner approval
+- admin approval
+- PIN confirmation
+- approval request
+- reason dropdown
+- mandatory notes
+- permission override
+- secondary authorization
+
+The owner already chose a policy that ALLOWS the sale.
+
+TINDIO's responsibility under this policy is only:
+
+"Make sure the cashier notices the inventory discrepancy before payment."
+
+==================================================
+WHY THE WARNING EXISTS
+==================================================
+
+TINDIO's system quantity may show:
+
+0
+
+while the cashier may physically see the item in the store.
+
+Possible real-world causes include:
+
+- receiving has not yet been recorded
+- inventory count is behind
+- transfer has not yet been posted
+- stock was physically found
+- previous count was incorrect
+- other operational mismatch
+
+Therefore TINDIO should warn the cashier without automatically assuming the sale must be blocked.
+
+==================================================
+PHASE 0 — AUDIT THE EXISTING IMPLEMENTATION
+==================================================
+
+Before coding, inspect:
+
+- existing negative-stock safeguard setting
+- database representation
+- enum/value names
+- store-level policy
+- inventory availability calculation
+- product/cart state
+- tracked inventory flag
+- checkout validation
+- payment-opening flow
+- canonical sale completion
+- inventory movement posting
+- offline selling logic
+- current inventory warnings
+- post-payment negative-stock warning
+- current Back Office settings UI
+
+REUSE what already exists.
+
+Do not add duplicate database columns such as:
+
+negative_stock_policy_v2
+pos_stock_warning_mode
+new_negative_policy
+
+unless a genuine schema gap is proven.
+
+==================================================
+1. STOCK CHECK CONDITION
+==================================================
+
+Do NOT warn simply because:
+
+stock === 0
+
+The correct condition is:
+
+WOULD THE CURRENT SALE REQUIRE MORE TRACKED STOCK THAN IS AVAILABLE?
+
+Conceptually:
+
+projectedQuantity =
+availableSystemStock - quantityBeingSold
+
+Warn/block when:
+
+projectedQuantity < 0
+
+Examples:
+
+Available: 5
+Selling: 2
+After: 3
+→ no warning
+
+Available: 1
+Selling: 1
+After: 0
+→ no warning
+
+Available: 0
+Selling: 1
+After: -1
+→ insufficient stock
+
+Available: 1
+Selling: 2
+After: -1
+→ insufficient stock
+
+Available: -2
+Selling: 1
+After: -3
+→ insufficient stock
+
+Use the existing canonical inventory availability calculation.
+
+Do not invent a frontend-only quantity calculation if one already exists.
+
+==================================================
+2. ONLY TRACKED PRODUCTS
+==================================================
+
+Apply this safeguard only where appropriate.
+
+Products not configured for inventory tracking must not suddenly be blocked/warned by this system.
+
+Respect existing:
+
+track inventory
+stock-managed
+inventory-enabled
+
+configuration.
+
+==================================================
+3. ADDING PRODUCT TO CART
+==================================================
+
+For:
+
+ALLOW WITH WARNING
+
+do NOT interrupt the cashier when they click an insufficient-stock product.
+
+The product should still enter the cart normally.
+
+DO NOT show a modal every time an item is tapped.
+
+BAD:
+
+Tap item
+→ warning modal
+
+Tap second item
+→ warning modal
+
+Increase quantity
+→ another warning modal
+
+This creates unnecessary cashier friction.
+
+==================================================
+4. CART VISUAL WARNING
+==================================================
+
+If the cart contains an item whose requested quantity exceeds currently available system stock:
+
+show a subtle warning on that cart line.
+
+Example:
+
+DEADWOOD - STRAW RY4 3MG
+Qty 1                         ₱180.00
+
+⚠ System stock: 0
+
+or:
+
+⚠ Insufficient recorded stock
+
+Keep it concise.
+
+Do not make the entire cart red.
+
+Do not block cart editing.
+
+Cashier must still be able to:
+
+- increase/decrease quantity
+- remove item
+- continue adding products
+- attach customer
+- continue normal POS operation
+
+==================================================
+5. OPTIONAL PRODUCT-BROWSER STATUS
+==================================================
+
+If existing product UI already displays stock state, it may show:
+
+Out of stock
+
+or:
+
+Stock: 0
+
+But do NOT introduce a giant warning card inside every product.
+
+Keep the selling interface fast.
+
+==================================================
+6. FINAL VALIDATION OCCURS WHEN CHARGE IS CLICKED
+==================================================
+
+The primary stock-policy checkpoint happens when the cashier clicks:
+
+Charge
+
+BEFORE opening payment methods.
+
+Flow:
+
+CART
+↓
+Cashier clicks CHARGE
+↓
+Revalidate tracked stock
+↓
+Read CURRENT STORE'S existing negative-stock policy
+↓
+Apply BLOCK / WARN / ALLOW behavior
+↓
+Only then open Payment if permitted
+
+IMPORTANT:
+
+Do not rely only on stock values captured when products were originally added.
+
+Perform a fresh/canonical validation because inventory may have changed while the cart was open.
+
+==================================================
+7. BLOCK POLICY
+==================================================
+
+If the current store policy is:
+
+BLOCK THE MOVEMENT
+
+and one or more items would result in negative stock:
+
+DO NOT open Payment.
+
+Show a focused stock-check message.
+
+Example:
+
+STOCK CHECK
+
+This sale cannot continue because there is not enough recorded stock for 2 items.
+
+DEADWOOD - STRAW RY4 3MG
+
+Available
+0
+
+In cart
+1
+
+After sale
+-1
+
+[ Review cart ]
+
+If multiple products are affected, show all affected items in ONE consolidated interface.
+
+Do not open multiple dialogs.
+
+No Proceed Anyway action for BLOCK.
+
+==================================================
+8. ALLOW WITH WARNING — FINAL LOCKED BEHAVIOR
+==================================================
+
+If policy is:
+
+ALLOW WITH WARNING
+
+and one or more items would result in negative stock:
+
+DO NOT open Payment immediately.
+
+Open ONE consolidated warning.
+
+Example:
+
+STOCK WARNING
+
+1 item has insufficient recorded stock.
+
+DEADWOOD - STRAW RY4 3MG
+
+Available in TINDIO       0
+In cart                   1
+After this sale          -1
+
+The physical quantity may be different from the stock currently recorded in TINDIO.
+
+Please check that this is the correct item before continuing.
+
+[ Review cart ]        [ Proceed anyway ]
+
+==================================================
+9. BUTTON LANGUAGE
+==================================================
+
+Do NOT use vague:
+
+[ No ]
+[ Yes ]
+
+Use explicit actions:
+
+[ Review cart ]
+[ Proceed anyway ]
+
+This is much clearer for beginner cashiers.
+
+==================================================
+10. REVIEW CART BEHAVIOR
+==================================================
+
+If cashier selects:
+
+Review cart
+
+then:
+
+- close the stock warning
+- DO NOT open Payment
+- DO NOT remove any item
+- DO NOT reset quantity
+- DO NOT clear customer
+- DO NOT clear discount
+- DO NOT clear cart
+- DO NOT navigate away
+- DO NOT modify inventory
+
+Return to the EXACT SAME cart state.
+
+The affected products remain subtly flagged.
+
+The cashier can physically inspect the item or modify the cart.
+
+==================================================
+11. PROCEED ANYWAY BEHAVIOR
+==================================================
+
+If cashier selects:
+
+Proceed anyway
+
+then:
+
+- acknowledge the warning for the current cart state
+- immediately continue into the normal Payment workflow
+- do not ask for another confirmation
+- do not ask for PIN
+- do not ask for manager
+- do not require reason
+- do not require approval
+- do not change the product quantity
+- do not automatically modify inventory before payment
+
+Then process the sale using the existing payment system.
+
+==================================================
+12. DO NOT AUTO-CORRECT INVENTORY
+==================================================
+
+If TINDIO says:
+
+Available = 0
+
+and cashier chooses:
+
+Proceed anyway
+
+DO NOT automatically change stock to:
+
+1
+
+just because the cashier physically confirmed the item exists.
+
+That would fabricate inventory history.
+
+Correct behavior:
+
+Before sale:
+0
+
+Sale:
+-1
+
+After sale:
+-1
+
+The normal inventory ledger records the sale.
+
+A future inventory count/adjustment may correct the discrepancy through the proper inventory workflow.
+
+==================================================
+13. WARNING ACKNOWLEDGEMENT SCOPE
+==================================================
+
+The acknowledgement applies ONLY to the exact relevant cart state that was reviewed.
+
+Example:
+
+Available 0
+Cart qty 1
+Cashier chooses Proceed anyway.
+
+If cashier later changes the cart to:
+
+qty 4
+
+the previous acknowledgement is no longer sufficient.
+
+When Charge is clicked again:
+
+revalidate and warn again.
+
+Similarly revalidate if relevant cart changes occur such as:
+
+- affected item quantity changed
+- affected item removed/re-added
+- variant changed
+- store/register context changed
+- inventory availability changed materially
+
+Do not use a permanent:
+
+warningAcknowledged = true
+
+for the entire POS session.
+
+==================================================
+14. DO NOT RE-WARN UNNECESSARILY
+==================================================
+
+After the cashier selects:
+
+Proceed anyway
+
+the next step should be Payment.
+
+Do NOT immediately show the same stock warning again while entering payment if the relevant cart state has not changed.
+
+The workflow should be:
+
+Charge
+↓
+Warning
+↓
+Proceed anyway
+↓
+Payment
+
+not:
+
+Charge
+↓
+Warning
+↓
+Proceed
+↓
+Warning
+↓
+Payment
+
+==================================================
+15. MULTIPLE AFFECTED PRODUCTS
+==================================================
+
+If several products would become negative:
+
+show ONE consolidated warning.
+
+Example:
+
+STOCK WARNING
+
+3 items have insufficient recorded stock.
+
+DEADWOOD - STRAW RY4 3MG
+
+Available        0
+In cart          1
+After sale      -1
+
+GEEKBAR 2
+
+Available        1
+In cart          3
+After sale      -2
+
+JUICE X
+
+Available        0
+In cart          2
+After sale      -2
+
+Please check these items before continuing.
+
+[ Review cart ]        [ Proceed anyway ]
+
+Do not generate three popups.
+
+==================================================
+16. ALLOW POLICY
+==================================================
+
+If policy is:
+
+ALLOW
+
+the cashier should NOT receive the blocking warning.
+
+Flow:
+
+Charge
+↓
+Stock validation
+↓
+Policy = ALLOW
+↓
+Payment
+
+Normal inventory movement can result in negative stock according to existing policy.
+
+Do not introduce approval.
+
+==================================================
+17. THE THREE POLICIES MUST BE DISTINCT
+==================================================
+
+Final required behavior:
+
+BLOCK
+
+Insufficient stock
+↓
+Charge
+↓
+STOP
+↓
+Review Cart only
+
+
+ALLOW WITH WARNING
+
+Insufficient stock
+↓
+Charge
+↓
+Warning
+↓
+Review Cart
+OR
+Proceed Anyway
+↓
+Payment
+
+
+ALLOW
+
+Insufficient stock
+↓
+Charge
+↓
+Payment directly
+
+Do not blur these three behaviors together.
+
+==================================================
+18. STORE-SPECIFIC POLICY
+==================================================
+
+The policy must use the CURRENT STORE.
+
+Example:
+
+V1:
+Warn
+
+V2:
+Block
+
+V3:
+Allow
+
+The same product may behave differently depending on which store/register is selling it.
+
+Do not use one organization-level policy if existing architecture is store-scoped.
+
+Direct manipulation of client state/store IDs must not bypass backend enforcement.
+
+==================================================
+19. BACK OFFICE COPY IMPROVEMENT
+==================================================
+
+Keep the existing policy values/backend if already correct.
+
+Only improve customer-facing labels if safe.
+
+CURRENT TECHNICAL LANGUAGE MAY BE:
+
+Block the movement
+Allow with warning policy
+Allow
+
+Prefer beginner-friendly UI labels:
+
+Block the sale
+
+Warn cashier, but allow sale
+
+Allow sale without warning
+
+Do NOT change database enum values unnecessarily.
+
+This may be presentation mapping only.
+
+==================================================
+20. BEGINNER-FRIENDLY SETTINGS DESCRIPTION
+==================================================
+
+Replace overly technical explanatory copy with:
+
+Negative-stock safeguard
+
+Choose what TINDIO should do when a sale would use more stock than is currently recorded.
+
+Then options:
+
+BLOCK THE SALE
+
+The cashier cannot continue to payment until the cart is corrected.
+
+
+WARN CASHIER, BUT ALLOW SALE
+
+The item can be added normally. Before payment, TINDIO warns the cashier so they can review the item or proceed anyway.
+
+
+ALLOW SALE WITHOUT WARNING
+
+The cashier can continue normally even if recorded stock becomes negative.
+
+==================================================
+21. NO NEW APPROVAL SETTING
+==================================================
+
+For this task DO NOT add:
+
+"Manager approval required"
+
+under Allow with Warning.
+
+That is NOT part of the final locked behavior.
+
+If some existing architecture already supports other approval policies elsewhere, leave it alone.
+
+Do not connect it to this warning.
+
+==================================================
+22. PAYMENT MUST NOT OPEN BEHIND THE WARNING
+==================================================
+
+When Charge is clicked and a warning must be shown:
+
+Payment must NOT render/open underneath or behind the warning.
+
+Required sequence:
+
+validate
+↓
+warning decision
+↓
+payment
+
+not:
+
+open payment
++
+open warning above it
+
+This avoids layered modal bugs.
+
+==================================================
+23. NO PAYMENT STATE SHOULD BE CREATED YET
+==================================================
+
+Before the cashier chooses:
+
+Proceed anyway
+
+do not mutate payment/tender state unnecessarily.
+
+Review Cart should cleanly return to the cart without residual:
+
+- cash tender
+- selected payment method
+- split payment state
+- checkout state
+
+==================================================
+24. PAYMENT SUCCESS WARNING
+==================================================
+
+The Payment Complete screen should NOT be the FIRST time the cashier learns inventory went negative.
+
+Under Warn policy, they already saw the warning before payment.
+
+Therefore after successful sale, any stock message should be secondary confirmation only.
+
+Example:
+
+Inventory attention
+2 items are now below zero.
+
+or, if an existing policy/activity record exists:
+
+2 stock warnings were recorded for this sale.
+
+Do not make this look like a payment failure.
+
+Payment is complete.
+
+==================================================
+25. CART WARNING MUST DISAPPEAR WHEN RESOLVED
+==================================================
+
+Example:
+
+System available: 1
+Cart quantity: 2
+→ warning
+
+Cashier changes quantity to 1
+→ projected stock becomes 0
+→ warning should disappear
+
+Do not leave stale warning indicators.
+
+==================================================
+26. REVALIDATE BEFORE ACTUAL SALE COMPLETION
+==================================================
+
+Important concurrency protection:
+
+Even after the warning is acknowledged, the canonical checkout/backend should still enforce the existing inventory policy correctly at sale completion.
+
+Another register may have sold stock between:
+
+warning
+and
+payment completion.
+
+Do not rely solely on client state.
+
+Reuse existing server/RPC integrity architecture.
+
+==================================================
+27. OFFLINE MODE
+==================================================
+
+Audit how existing offline POS handles stock availability.
+
+Do NOT break offline-first selling.
+
+If the POS is offline and only cached stock is available:
+
+make the wording honest if needed.
+
+Example:
+
+Recorded stock on this device: 0
+
+or use the existing offline inventory semantics.
+
+Do not falsely claim a real-time server quantity when offline.
+
+Preserve:
+
+transaction UUID
+idempotency
+pending sync
+no duplicate inventory movement
+
+==================================================
+28. MOBILE EXPERIENCE
+==================================================
+
+This warning must work well on phones.
+
+Use a bottom sheet / near-full-width confirmation rather than a tiny centered desktop modal if appropriate.
+
+Example:
+
+STOCK WARNING
+
+DEADWOOD RY4 3MG
+Available 0
+In cart 1
+After -1
+
+Please check this item before continuing.
+
+[ Review cart ]
+
+[ Proceed anyway ]
+
+Buttons must be large/touch friendly.
+
+Do not hide the final action below the mobile viewport.
+
+==================================================
+29. TABLET EXPERIENCE
+==================================================
+
+Tablet portrait:
+use an appropriately sized sheet/dialog.
+
+Tablet landscape:
+normal dialog is acceptable if comfortable.
+
+No horizontal overflow.
+
+==================================================
+30. DESKTOP EXPERIENCE
+==================================================
+
+Desktop warning should be compact.
+
+Do NOT make the stock-warning dialog fill the entire monitor.
+
+Focus on:
+
+- affected items
+- available
+- selling
+- projected quantity
+- two choices
+
+==================================================
+31. ACCESSIBILITY
+==================================================
+
+Warning must:
+
+- have semantic heading
+- work by keyboard
+- focus appropriately
+- return focus to Charge or cart after Review
+- not rely only on orange/red color
+- identify affected products in text
+- expose button names clearly
+
+==================================================
+32. LOADING STATE
+==================================================
+
+When Charge is validating stock:
+
+show loading only on Charge/checkout validation.
+
+Do not make:
+
+- Favorites
+- category selector
+- customer
+- entire POS header
+- unrelated buttons
+
+enter loading state.
+
+==================================================
+33. NO UI JUMP
+==================================================
+
+Opening/closing stock warning must not:
+
+- scale the POS
+- resize cart
+- shift product browser
+- alter header height
+- move sticky checkout
+- create duplicate scrollbars
+
+Use stable overlay behavior.
+
+==================================================
+34. USE EXISTING CANONICAL INVENTORY LOGIC
+==================================================
+
+Do not derive stock from random UI labels.
+
+Trace the existing inventory source of truth.
+
+Use the same availability logic used by:
+
+- inventory overview
+- stock safeguards
+- checkout
+- ledger
+- store stock
+
+where appropriate.
+
+==================================================
+35. DO NOT MODIFY COMPLETED HISTORY
+==================================================
+
+If a negative-stock sale completes:
+
+record the sale normally.
+
+Do not retroactively rewrite previous inventory movements.
+
+Do not silently alter historical counts.
+
+Any later count correction must remain a separate inventory event.
+
+==================================================
+36. EXISTING POLICY RECORD / AUDIT
+==================================================
+
+If the current "Allow with warning" architecture already records a visible policy/exception event:
+
+preserve it.
+
+A useful event may include:
+
+- organization
+- store
+- register
+- employee
+- sale/receipt
+- affected products
+- quantity before
+- quantity sold
+- quantity after
+- policy used
+- timestamp
+
+Do NOT require cashier to manually provide a reason.
+
+Do NOT create unnecessary duplicate audit tables if equivalent history already exists.
+
+==================================================
+37. SECURITY
+==================================================
+
+Frontend behavior must not be the only enforcement.
+
+Backend must respect:
+
+BLOCK
+WARN
+ALLOW
+
+according to the current store policy.
+
+A user must not bypass BLOCK by directly calling checkout APIs/server actions.
+
+Under WARN, acknowledgement should be represented safely enough that checkout knows the warning was legitimately handled for the current transaction if backend architecture requires that.
+
+Do not make the security mechanism unnecessarily complex.
+
+==================================================
+38. DO NOT BREAK OTHER INVENTORY FEATURES
+==================================================
+
+Regression-test:
+
+- sales deduction
+- refunds restoring stock where applicable
+- inventory adjustment
+- receiving
+- transfers
+- counts
+- low-stock thresholds
+- negative stock display
+- inventory ledger
+- offline sync
+- multi-store stock
+- reports
+
+==================================================
+39. IMPLEMENTATION ARCHITECTURE
+==================================================
+
+Preserve TINDIO layering:
+
+POS UI
+↓
+checkout/cart validation
+↓
+Server Action / Service
+↓
+Inventory/Checkout service
+↓
+PostgreSQL/RPC
+↓
+Inventory ledger / canonical sale
+
+Do not move business rules into React components.
+
+==================================================
+40. SUGGESTED COMPONENT RESPONSIBILITY
+==================================================
+
+Conceptually reuse/create clean responsibilities such as:
+
+StockStatusIndicator
+→ presentation only
+
+NegativeStockWarning
+→ warning UI
+
+validateCartStock()
+→ canonical validation/service
+
+resolveNegativeStockPolicy()
+→ reads current store policy
+
+completeCheckout()
+→ remains canonical sale completion
+
+Do not create a second checkout function.
+
+==================================================
+MANDATORY TEST MATRIX
+==================================================
+
+TEST A
+
+Policy:
+WARN
+
+Available:
+5
+
+Cart:
+2
+
+Expected:
+No warning.
+Payment opens normally.
+
+
+TEST B
+
+Policy:
+WARN
+
+Available:
+1
+
+Cart:
+1
+
+After:
+0
+
+Expected:
+No warning.
+Payment opens normally.
+
+
+TEST C
+
+Policy:
+WARN
+
+Available:
+0
+
+Cart:
+1
+
+Expected:
+Stock warning.
+Review Cart stays in cart.
+Item remains.
+
+
+TEST D
+
+Same as Test C.
+
+Select:
+Proceed anyway.
+
+Expected:
+Payment opens normally.
+No PIN.
+No approval.
+No reason.
+
+
+TEST E
+
+Policy:
+WARN
+
+Available:
+1
+
+Cart:
+2
+
+Expected:
+Warning shows:
+Available 1
+In cart 2
+After -1.
+
+
+TEST F
+
+Policy:
+WARN
+
+Three insufficient-stock products.
+
+Expected:
+ONE consolidated warning.
+
+
+TEST G
+
+Policy:
+BLOCK
+
+Available:
+0
+
+Cart:
+1
+
+Expected:
+Payment does NOT open.
+No Proceed Anyway.
+
+
+TEST H
+
+Policy:
+ALLOW
+
+Available:
+0
+
+Cart:
+1
+
+Expected:
+No warning.
+Payment opens normally.
+
+
+TEST I
+
+Warn shown for qty 1.
+Cashier reviews cart.
+Changes qty so stock is sufficient.
+
+Expected:
+next Charge does NOT warn.
+
+
+TEST J
+
+Warn shown for qty 1.
+Cashier proceeds.
+Then returns/changes affected cart qty before completion if workflow permits.
+
+Expected:
+warning acknowledgement invalidated appropriately.
+
+
+TEST K
+
+Cashier clicks Review Cart.
+
+Verify:
+
+cart preserved
+customer preserved
+discount preserved
+no payment state leaked
+no item removed
+
+
+TEST L
+
+Cashier clicks Proceed Anyway.
+
+Verify:
+
+normal cash payment
+normal card/non-cash payment
+split payment
+all continue correctly.
+
+
+TEST M
+
+Negative-stock sale completes.
+
+Verify:
+
+inventory ledger correct
+quantity becomes negative
+receipt correct
+sale correct
+no duplicate movement.
+
+
+TEST N
+
+Mobile warning.
+
+Verify:
+buttons visible
+touch targets usable
+no overflow.
+
+
+TEST O
+
+Tablet warning.
+
+Verify:
+no cramped layout.
+
+
+TEST P
+
+Offline behavior.
+
+Verify:
+no duplicate deductions
+correct cached/offline semantics
+sync remains idempotent.
+
+==================================================
+FINAL SETTINGS UI
+==================================================
+
+The Back Office setting should conceptually read:
+
+NEGATIVE-STOCK SAFEGUARD
+
+Store
+[ V1 ▼ ]
+
+When a sale would use more stock than is recorded:
+
+[ Warn cashier, but allow sale ▼ ]
+
+Helper:
+
+The cashier can add the item normally. Before payment, TINDIO will warn them that recorded stock is insufficient. They can review the cart or proceed with the sale.
+
+[ Save safeguard ]
+
+Do not add unnecessary additional settings for this locked behavior.
+
+==================================================
+FINAL POS FLOW — LOCKED
+==================================================
+
+ITEM CLICK
+↓
+ADD TO CART
+↓
+Insufficient stock?
+↓
+YES
+↓
+small cart warning only
+↓
+cashier continues normally
+↓
+CHARGE
+↓
+fresh stock validation
+↓
+read CURRENT STORE POLICY
+↓
+
+BLOCK
+→ stop
+→ Review Cart
+
+WARN
+→ show one Stock Warning
+→ Review Cart OR Proceed Anyway
+
+ALLOW
+→ open Payment directly
+
+
+WARN + REVIEW CART
+→ close warning
+→ remain in same basket
+→ nothing deleted/reset
+
+
+WARN + PROCEED ANYWAY
+→ no PIN
+→ no approval
+→ no reason
+→ open Payment
+→ process normally
+
+==================================================
+FINAL COMPLETION RULE
+==================================================
+
+DO NOT implement another negative-stock policy system.
+
+DO NOT turn Allow With Warning into an approval workflow.
+
+DO NOT warn on every product click.
+
+DO NOT wait until Payment Complete to provide the first warning.
+
+The required workflow is:
+
+ADD
+→ FLAG
+→ CHARGE
+→ VALIDATE
+→ WARN ONCE
+→ REVIEW OR PROCEED
+→ PAYMENT
+
+After implementation:
+
+1. re-audit all three policy behaviors
+2. test cart modifications
+3. test multi-item warning
+4. test desktop/tablet/mobile
+5. test payment flows
+6. test offline behavior
+7. test backend enforcement
+8. run existing relevant tests
+9. run npm run typecheck
+10. run npm run lint
+11. run npm run build
+
+FINAL REPORT:
+
+- Existing policy architecture reused
+- Files changed
+- BLOCK behavior
+- WARN behavior
+- ALLOW behavior
+- Cart indicators
+- Charge validation
+- Warning UI
+- Review Cart behavior
+- Proceed Anyway behavior
+- Acknowledgement invalidation
+- Backend enforcement
+- Offline verification
+- Desktop verification
+- Tablet verification
+- Mobile verification
+- Tests
+- Typecheck
+- Lint
+- Build
+- Remaining risks
+- CANDIDATE_FOR_REMOVAL
+
+THEN STOP.

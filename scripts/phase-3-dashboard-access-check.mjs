@@ -10,6 +10,10 @@ const dashboardPage = await readFile(
   new URL("../src/app/(back-office)/back-office/page.tsx", import.meta.url),
   "utf8",
 );
+const ownerDashboard = await readFile(
+  new URL("../src/features/dashboard/owner-dashboard.tsx", import.meta.url),
+  "utf8",
+);
 const inventoryPage = await readFile(
   new URL("../src/app/(back-office)/back-office/inventory/page.tsx", import.meta.url),
   "utf8",
@@ -33,11 +37,15 @@ test("action widgets are permission-driven rather than role-name-driven", () => 
   assert.doesNotMatch(dashboardActions, /roleNames/);
 });
 
-test("business dashboard keeps its server route gate and embeds the reusable action grid", () => {
+test("business dashboard keeps its server route gate and renders the executive control center", () => {
   assert.match(dashboardPage, /requireBackOfficePermission\("dashboard\.view"\)/);
-  assert.match(dashboardPage, /<DashboardActionGrid/);
-  assert.match(dashboardPage, /permissions=\{context\.permissions\}/);
-  assert.match(dashboardPage, /surface="business"/);
+  assert.match(dashboardPage, /<DashboardFilterForm/);
+  assert.match(dashboardPage, /<OwnerDashboard/);
+  assert.match(dashboardPage, /<Suspense/);
+  assert.doesNotMatch(dashboardPage, /<DashboardActionGrid/);
+  assert.match(ownerDashboard, /title="Executive snapshot"/);
+  assert.match(ownerDashboard, /label="Transactions"/);
+  assert.doesNotMatch(ownerDashboard, /label="Completed sales"/);
 });
 
 test("inventory dashboard reuses the action grid behind its inventory permission gate", () => {

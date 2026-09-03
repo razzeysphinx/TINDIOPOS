@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { requestManagerApprovalSchema } from "@/features/approvals/approval-schema";
 import type {
@@ -10,6 +11,7 @@ import type {
 import {
   approvalDatabaseMessage,
   approveManagerApproval,
+  decideManagerApproval,
   setEmployeePin,
   updateApprovalRule,
 } from "@/features/approvals/service";
@@ -31,6 +33,37 @@ export async function approveManagerApprovalAction(
   const result = await approveManagerApproval(context, input);
   if (result.ok) revalidatePath("/back-office/security");
   return result;
+}
+
+export async function decideManagerApprovalAction(input: unknown): Promise<ApprovalActionResult> {
+  const context = await requireBusinessContext();
+  const result = await decideManagerApproval(context, input);
+  if (result.ok) revalidatePath("/back-office/security");
+  return result;
+}
+
+const approvalStatusSchema = z.object({ approvalRequestId: z.uuid() });
+
+export async function loadManagerApprovalStatusAction(input: unknown): Promise<import("@/features/approvals/approval-types").ApprovalStatusResult> {
+  const parsed = approvalStatusSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "This approval request is invalid." };
+  const context = await requireBusinessContext();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("approval_requests")
+    .select("status, expires_at")
+    .eq("organization_id", context.organization.id)
+    .eq("id", parsed.data.approvalRequestId)
+    .maybeSingle();
+  if (error || !data) return { ok: false, message: "This approval request is no longer available." };
+  const status = data.status === "PENDING" && new Date(data.expires_at).getTime() <= Date.now()
+    ? "EXPIRED"
+    : data.status;
+  return {
+    ok: true,
+    status: status as "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED" | "CONSUMED" | "CANCELLED",
+    expiresAt: data.expires_at,
+  };
 }
 
 export async function updateApprovalRuleAction(input: unknown): Promise<ApprovalActionResult> {

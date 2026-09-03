@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangle,
   ArrowLeft,
   Barcode,
   Check,
@@ -42,8 +43,10 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
+import { validatePosCartStockAction } from "@/features/checkout/actions";
+import { NegativeStockWarning } from "@/features/checkout/negative-stock-warning";
 import { PaymentScreen } from "@/features/checkout/payment-screen";
-import type { CheckoutPaymentSummary } from "@/features/checkout/checkout-types";
+import type { CheckoutPaymentSummary, NegativeStockItem, NegativeStockPolicy } from "@/features/checkout/checkout-types";
 import { usePosDevice, type PosDeviceState } from "@/features/devices/pos-device";
 import type { PosDeviceCredential } from "@/features/devices/device-schema";
 import { OfflineQueueStatus } from "@/features/offline/offline-queue-status";
@@ -134,6 +137,10 @@ function lineTotalMinor(priceMinor: number, quantity: number) {
   return Math.round(priceMinor * quantity);
 }
 
+function stockItemKey(item: Pick<PosCatalogItem, "productId" | "variantId">) {
+  return `${item.productId}:${item.variantId ?? "simple"}`;
+}
+
 export function PosTerminal({
   activeShift: initialActiveShift,
   canAccessBackOffice,
@@ -206,6 +213,7 @@ export function PosTerminal({
   const router = useRouter();
   const searchRef = useRef<HTMLInputElement>(null);
   const requestIdRef = useRef(0);
+  const stockRequestIdRef = useRef(0);
   const displayChannelRef = useRef<RealtimeChannel | null>(null);
   const displayStateRef = useRef<CustomerDisplayState | null>(null);
   const [activeShift, setActiveShift] = useState(initialActiveShift);
@@ -231,6 +239,11 @@ export function PosTerminal({
   const [notice, setNotice] = useState<string | null>(null);
   const [checkoutKey, setCheckoutKey] = useState(createCheckoutKey);
   const [isPaymentScreenOpen, setIsPaymentScreenOpen] = useState(false);
+  const [stockWarnings, setStockWarnings] = useState<NegativeStockItem[]>([]);
+  const [stockDecision, setStockDecision] = useState<{
+    policy: Exclude<NegativeStockPolicy, "allow">;
+    items: NegativeStockItem[];
+  } | null>(null);
   const [isShiftCloseOpen, setIsShiftCloseOpen] = useState(false);
   const [completedDisplaySale, setCompletedDisplaySale] = useState<CompletedCustomerDisplaySale | null>(null);
   const [modifierPicker, setModifierPicker] = useState<{ item: PosCatalogItem; groups: ModifierGroup[]; manualPriceMinor: number | null } | null>(null);
@@ -241,6 +254,7 @@ export function PosTerminal({
   const [isTicketWorkspaceOpen, setIsTicketWorkspaceOpen] = useState(false);
   const [isTicketPending, startTicketTransition] = useTransition();
   const [isFavoritePending, startFavoriteTransition] = useTransition();
+  const [isStockValidationPending, startStockValidationTransition] = useTransition();
   const posDevice = usePosDevice({ organizationId, required: deviceManagementEnabled });
   const deviceCredential: PosDeviceCredential | null = posDevice.state === "ready" ? posDevice.credential : null;
   const deviceBinding = posDevice.state === "ready" ? posDevice.binding : null;
@@ -417,6 +431,31 @@ export function PosTerminal({
     selectedRegister !== undefined &&
     isOperational &&
     availablePaymentMethods.length > 0;
+
+  useEffect(() => {
+    const requestId = ++stockRequestIdRef.current;
+    if (!isOperational || !selectedRegisterId || cart.length === 0 || !navigator.onLine) {
+      const clearTimer = window.setTimeout(() => setStockWarnings([]), 0);
+      return () => window.clearTimeout(clearTimer);
+    }
+
+    const timer = window.setTimeout(() => {
+      void validatePosCartStockAction({
+        storeId: selectedStoreId,
+        registerId: selectedRegisterId,
+        items: cart.map((line) => ({
+          productId: line.productId,
+          variantId: line.variantId,
+          quantity: line.quantity,
+        })),
+      }).then((result) => {
+        if (requestId !== stockRequestIdRef.current) return;
+        setStockWarnings(result.ok ? result.items : []);
+      });
+    }, 180);
+
+    return () => window.clearTimeout(timer);
+  }, [cart, isOperational, selectedRegisterId, selectedStoreId]);
 
   const requestCatalog = useCallback(
     async ({
@@ -771,7 +810,7 @@ export function PosTerminal({
   };
 
   const openPaymentScreen = () => {
-    if (!isOperational) return;
+    if (!isOperational || isStockValidationPending) return;
 
     if (!canStartPayment) {
       if (cart.length > 0 && availablePaymentMethods.length === 0) {
@@ -782,9 +821,39 @@ export function PosTerminal({
       return;
     }
 
-    setNotice(null);
-    setIsCartReviewOpen(false);
-    setIsPaymentScreenOpen(true);
+    if (!selectedRegister || !navigator.onLine) {
+      setNotice(null);
+      setIsCartReviewOpen(false);
+      setIsPaymentScreenOpen(true);
+      return;
+    }
+
+    startStockValidationTransition(async () => {
+      const result = await validatePosCartStockAction({
+        storeId: selectedStoreId,
+        registerId: selectedRegister.id,
+        items: cart.map((line) => ({
+          productId: line.productId,
+          variantId: line.variantId,
+          quantity: line.quantity,
+        })),
+      });
+
+      if (!result.ok) {
+        setNotice(result.message);
+        return;
+      }
+
+      setStockWarnings(result.items);
+      if (result.items.length > 0 && result.policy !== "allow") {
+        setStockDecision({ policy: result.policy, items: result.items });
+        return;
+      }
+
+      setNotice(null);
+      setIsCartReviewOpen(false);
+      setIsPaymentScreenOpen(true);
+    });
   };
 
   const submitTicket = (values: { label: string; note: string; diningOptionId: string | null; assignedEmployeeId: string | null }) => {
@@ -991,7 +1060,9 @@ export function PosTerminal({
       onEditNote={editLineNote}
       onQuantityChange={setLineQuantity}
       presentation={presentation}
+      stockWarnings={stockWarnings}
       summary={cartSummary}
+      isChargePending={isStockValidationPending}
       supportingControls={cartSupportingControls}
       unavailableMessage={chargeGuidance}
     />
@@ -1281,6 +1352,7 @@ export function PosTerminal({
           canStartPayment={canStartPayment}
           currencyCode={currencyCode}
           itemCount={cartSummary.itemCount}
+          isChargePending={isStockValidationPending}
           onCharge={openPaymentScreen}
           onViewCart={() => setIsCartReviewOpen(true)}
           totalMinor={cartSummary.totalMinor}
@@ -1298,6 +1370,26 @@ export function PosTerminal({
             {renderCartPanel("review")}
           </DialogContent>
         </Dialog.Root>
+      ) : null}
+      {stockDecision ? (
+        <NegativeStockWarning
+          items={stockDecision.items}
+          onOpenChange={(open) => {
+            if (!open) setStockDecision(null);
+          }}
+          onProceed={() => {
+            setStockDecision(null);
+            setNotice(null);
+            setIsCartReviewOpen(false);
+            setIsPaymentScreenOpen(true);
+          }}
+          onReview={() => {
+            setStockDecision(null);
+            if (isCompactCartPresentation) setIsCartReviewOpen(true);
+          }}
+          open
+          policy={stockDecision.policy}
+        />
       ) : null}
       {canCreateCustomers ? (
         <PosCustomerCreateDialog
@@ -2087,7 +2179,9 @@ function CartPanel({
   onEditNote,
   onQuantityChange,
   presentation,
+  stockWarnings,
   summary,
+  isChargePending,
   supportingControls,
   unavailableMessage,
 }: {
@@ -2102,14 +2196,19 @@ function CartPanel({
   onEditNote: (itemKey: string, currentNote: string | null | undefined) => void;
   onQuantityChange: (itemKey: string, quantity: number) => void;
   presentation: "desktop" | "review";
+  stockWarnings: NegativeStockItem[];
   summary: PosCartSummary;
+  isChargePending: boolean;
   supportingControls: ReactNode;
   unavailableMessage: string;
 }) {
   const titleId = presentation === "desktop" ? "cart-title" : "cart-review-title";
-  const chargeLabel = presentation === "review" && cart.length > 0
+  const chargeLabel = isChargePending
+    ? "Checking stock…"
+    : presentation === "review" && cart.length > 0
     ? "Charge " + formatMinorMoney(summary.totalMinor, currencyCode)
     : "Charge";
+  const warningsByItem = new Map(stockWarnings.map((item) => [stockItemKey(item), item]));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -2143,6 +2242,7 @@ function CartPanel({
                 disabled={disabled}
                 key={posItemKey(line)}
                 line={line}
+                stockWarning={warningsByItem.get(stockItemKey(line))}
                 onEditNote={() => onEditNote(posItemKey(line), line.itemNote)}
                 onQuantityChange={(quantity) => onQuantityChange(posItemKey(line), quantity)}
               />
@@ -2186,7 +2286,8 @@ function CartPanel({
             {formatMinorMoney(summary.totalMinor, currencyCode)}
           </span>
         </div>
-        <Button className="mt-4 h-11 w-full" disabled={!canStartPayment} onClick={onCharge} type="button">
+        <Button className="mt-4 h-11 w-full" disabled={!canStartPayment || isChargePending} onClick={onCharge} type="button">
+          {isChargePending ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : null}
           {chargeLabel}
         </Button>
         <p className="mt-2 text-center text-xs leading-5 text-muted-foreground">
@@ -2203,6 +2304,7 @@ function MobileCartSummary({
   canStartPayment,
   currencyCode,
   itemCount,
+  isChargePending,
   onCharge,
   onViewCart,
   totalMinor,
@@ -2211,6 +2313,7 @@ function MobileCartSummary({
   canStartPayment: boolean;
   currencyCode: string;
   itemCount: number;
+  isChargePending: boolean;
   onCharge: () => void;
   onViewCart: () => void;
   totalMinor: number;
@@ -2235,8 +2338,9 @@ function MobileCartSummary({
           <Button className="h-11" onClick={onViewCart} type="button" variant="outline">
             View cart
           </Button>
-          <Button className="h-11 min-w-0 truncate" disabled={!canStartPayment} onClick={onCharge} type="button">
-            Charge {formatMinorMoney(totalMinor, currencyCode)}
+          <Button className="h-11 min-w-0 truncate" disabled={!canStartPayment || isChargePending} onClick={onCharge} type="button">
+            {isChargePending ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : null}
+            {isChargePending ? "Checking stock…" : `Charge ${formatMinorMoney(totalMinor, currencyCode)}`}
           </Button>
         </div>
         {!canStartPayment ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{unavailableMessage}</p> : null}
@@ -2251,6 +2355,7 @@ function CartLine({
   currencyCode,
   disabled,
   line,
+  stockWarning,
   onEditNote,
   onQuantityChange,
 }: {
@@ -2259,6 +2364,7 @@ function CartLine({
   currencyCode: string;
   disabled: boolean;
   line: PosCartLine;
+  stockWarning?: NegativeStockItem;
   onEditNote: () => void;
   onQuantityChange: (quantity: number) => void;
 }) {
@@ -2284,6 +2390,12 @@ function CartLine({
         </Button>
       </div>
       <div className="mt-2 flex items-center gap-2"><Button className="h-10" disabled={disabled} onClick={onEditNote} size="sm" type="button" variant="ghost">{line.itemNote ? "Edit item note" : "Add item note"}</Button>{line.itemNote ? <span className="truncate text-xs text-muted-foreground">{line.itemNote}</span> : null}</div>
+      {stockWarning ? (
+        <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+          <AlertTriangle aria-hidden="true" className="size-3.5 shrink-0" />
+          Insufficient recorded stock · {stockWarning.availableQuantity} available
+        </p>
+      ) : null}
       <div className="mt-3 flex items-center justify-between gap-3">
         {line.allowFractionalQuantity ? (
           <label className="grid gap-1 text-xs font-medium text-muted-foreground">

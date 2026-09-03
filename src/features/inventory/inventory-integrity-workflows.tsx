@@ -289,10 +289,17 @@ export function InventoryIntegrityWorkflows({
         <p className="mt-1 text-sm text-muted-foreground">Set stock safeguards and record traceable operations without silently changing balances.</p>
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
-        {showSafeguards ? <WorkflowCard title="Negative-stock safeguard" description="Block is safest. Warn allows the movement but retains a visible policy record." icon={<Settings2 aria-hidden="true" />}>
+        {showSafeguards ? <WorkflowCard title="Negative-stock safeguard" description="Choose what TINDIO should do when a sale would use more stock than is currently recorded." icon={<Settings2 aria-hidden="true" />}>
           {stores.length ? <form className="space-y-3" onSubmit={submitPolicy} noValidate>
             <Field label="Store"><select className={selectClassName} value={policyStoreId} onChange={(event) => choosePolicyStore(event.target.value)}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></Field>
-            <Field label="When stock would become negative"><select className={selectClassName} value={policy} onChange={(event) => setPolicy(event.target.value as typeof policy)}><option value="block">Block the movement</option><option value="warn">Allow with warning policy</option><option value="allow">Allow</option></select></Field>
+            <Field label="When a sale would use more stock than is recorded"><select className={selectClassName} value={policy} onChange={(event) => setPolicy(event.target.value as typeof policy)}><option value="block">Block the sale</option><option value="warn">Warn cashier, but allow sale</option><option value="allow">Allow sale without warning</option></select></Field>
+            <p className="text-sm leading-6 text-muted-foreground">
+              {policy === "block"
+                ? "The cashier cannot continue to payment until the cart is corrected."
+                : policy === "warn"
+                  ? "The item can be added normally. Before payment, TINDIO warns the cashier so they can review the cart or proceed anyway."
+                  : "The cashier can continue normally even if recorded stock becomes negative."}
+            </p>
             <SubmitRow pending={isPolicyPending} pendingLabel="Saving safeguard..." result={policyResult} label="Save safeguard" icon={<Settings2 />} />
           </form> : <Empty message="Create a store before setting stock safeguards." />}
         </WorkflowCard> : null}

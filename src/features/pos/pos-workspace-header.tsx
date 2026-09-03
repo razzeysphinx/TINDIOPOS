@@ -31,7 +31,7 @@ export function PosWorkspaceHeader({
     : title;
 
   return (
-    <header className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b bg-card px-3 py-2.5 sm:gap-3 sm:px-5">
+    <header className="sticky top-0 z-40 flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b bg-card px-3 py-2.5 shadow-[0_1px_2px_rgb(0_0_0_/_0.04)] sm:gap-3 sm:px-5">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         <PosOperationalDrawer
           canAccessBackOffice={canAccessBackOffice}

@@ -7,6 +7,8 @@ import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SecurityApprovalManager } from "@/features/approvals/security-approval-manager";
+import { ApprovalRequestActions } from "@/features/approvals/approval-request-actions";
+import { formatMinorMoney } from "@/features/catalog/catalog-money";
 import { loadSecurityOverview } from "@/features/approvals/data";
 import {
   loadAuthorizedBackOfficeStores,
@@ -37,6 +39,7 @@ export default async function SecurityPage({
 
   const canManageRules = hasPermission(context, "approvals.manage");
   const canViewAudit = hasPermission(context, "audit.view");
+  const canAuthorize = hasPermission(context, "approvals.authorize");
   const [{ rules: rulesData, requests, auditEntries, employees }, stores, registersResult] = await Promise.all([
     loadSecurityOverview(context, { includeAudit: canViewAudit, storeId: storeScope.selectedStoreId }),
     loadAuthorizedBackOfficeStores(context),
@@ -92,9 +95,16 @@ export default async function SecurityPage({
         {requests.length > 0 ? (
           <div className="overflow-x-auto overscroll-x-contain rounded-lg border bg-card">
             <table className="w-full min-w-180 text-left text-sm">
-              <thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th className="px-3 py-2 font-medium">Operation</th><th className="px-3 py-2 font-medium">Requester</th><th className="px-3 py-2 font-medium">Status</th><th className="px-3 py-2 font-medium">Reason</th><th className="px-3 py-2 font-medium">Requested</th></tr></thead>
+              <thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th className="px-3 py-2 font-medium">Operation</th><th className="px-3 py-2 font-medium">Requester</th><th className="px-3 py-2 font-medium">Status</th><th className="px-3 py-2 font-medium">Reason</th><th className="px-3 py-2 font-medium">Requested</th>{canAuthorize ? <th className="px-3 py-2 text-right font-medium">Decision</th> : null}</tr></thead>
               <tbody className="divide-y">
-                {requests.map((request) => <tr key={request.id}><td className="px-3 py-3 font-medium">{operationLabels[request.operation_code as keyof typeof operationLabels] ?? request.operation_code}</td><td className="px-3 py-3">{employeeNumbers.get(request.requested_by_employee_id) ?? "Employee"}</td><td className="px-3 py-3"><Badge variant={request.status === "APPROVED" || request.status === "CONSUMED" ? "secondary" : "outline"}>{request.status}</Badge></td><td className="max-w-xs truncate px-3 py-3 text-muted-foreground" title={request.reason}>{request.reason}</td><td className="px-3 py-3 text-muted-foreground">{formatDate(request.requested_at)}</td></tr>)}
+                {requests.map((request) => {
+                  const payload = request.request_payload;
+                  const receiptNumber = payload !== null && !Array.isArray(payload) && typeof payload === "object" && typeof payload.receipt_number === "number"
+                    ? payload.receipt_number
+                    : null;
+                  const mayDecide = canAuthorize && request.status === "PENDING" && request.requested_by_employee_id !== context.employee.id;
+                  return <tr key={request.id}><td className="px-3 py-3 font-medium">{operationLabels[request.operation_code as keyof typeof operationLabels] ?? request.operation_code}{receiptNumber ? <span className="mt-1 block font-mono text-xs text-primary">Receipt #{receiptNumber}</span> : null}{request.requested_amount_minor !== null ? <span className="mt-1 block text-xs text-muted-foreground">{formatMinorMoney(request.requested_amount_minor, context.organization.currency_code)}</span> : null}</td><td className="px-3 py-3">{employeeNumbers.get(request.requested_by_employee_id) ?? "Employee"}</td><td className="px-3 py-3"><Badge variant={request.status === "APPROVED" || request.status === "CONSUMED" ? "secondary" : "outline"}>{request.status}</Badge></td><td className="max-w-xs truncate px-3 py-3 text-muted-foreground" title={request.reason}>{request.reason}</td><td className="px-3 py-3 text-muted-foreground">{formatDate(request.requested_at)}</td>{canAuthorize ? <td className="px-3 py-3 text-right">{mayDecide ? <ApprovalRequestActions approvalRequestId={request.id} /> : null}</td> : null}</tr>;
+                })}
               </tbody>
             </table>
           </div>

@@ -79,6 +79,7 @@ export default async function ReceiptDetailPage({
           originalTotalMinor={detail.sale.totalMinor}
           paymentMethods={detail.refundPaymentMethods}
           receiptNumber={detail.receipt.number}
+          receiptId={detail.receipt.id}
           saleId={detail.sale.id}
         />
       ) : (

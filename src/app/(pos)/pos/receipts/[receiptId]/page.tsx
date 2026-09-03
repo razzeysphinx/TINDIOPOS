@@ -148,6 +148,7 @@ export default async function PosReceiptDetailPage({
             originalTotalMinor={detail.sale.totalMinor}
             paymentMethods={refundPaymentMethods}
             receiptNumber={detail.receipt.number}
+            receiptId={detail.receipt.id}
             saleId={detail.sale.id}
           />
         ) : (

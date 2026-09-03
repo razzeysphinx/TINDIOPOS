@@ -975,6 +975,7 @@ export type Database = {
       }
       employees: {
         Row: {
+          archived_at: string | null
           created_at: string
           employee_number: string
           id: string
@@ -985,6 +986,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           employee_number: string
           id?: string
@@ -995,6 +997,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           employee_number?: string
           id?: string
@@ -5637,9 +5640,15 @@ export type Database = {
       time_clock_entries: {
         Row: {
           clock_in_note: string | null
+          clock_in_request_id: string | null
+          clock_in_verification_method: string
           clock_out_note: string | null
+          clock_out_request_id: string | null
+          clock_out_verification_method: string | null
           clocked_in_at: string
+          clocked_in_by_employee_id: string
           clocked_out_at: string | null
+          clocked_out_by_employee_id: string | null
           created_at: string
           employee_id: string
           id: string
@@ -5649,9 +5658,15 @@ export type Database = {
         }
         Insert: {
           clock_in_note?: string | null
+          clock_in_request_id?: string | null
+          clock_in_verification_method?: string
           clock_out_note?: string | null
+          clock_out_request_id?: string | null
+          clock_out_verification_method?: string | null
           clocked_in_at?: string
+          clocked_in_by_employee_id: string
           clocked_out_at?: string | null
+          clocked_out_by_employee_id?: string | null
           created_at?: string
           employee_id: string
           id?: string
@@ -5661,9 +5676,15 @@ export type Database = {
         }
         Update: {
           clock_in_note?: string | null
+          clock_in_request_id?: string | null
+          clock_in_verification_method?: string
           clock_out_note?: string | null
+          clock_out_request_id?: string | null
+          clock_out_verification_method?: string | null
           clocked_in_at?: string
+          clocked_in_by_employee_id?: string
           clocked_out_at?: string | null
+          clocked_out_by_employee_id?: string | null
           created_at?: string
           employee_id?: string
           id?: string
@@ -5675,6 +5696,20 @@ export type Database = {
           {
             foreignKeyName: "time_clock_entries_employee_organization_fkey"
             columns: ["employee_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "time_clock_entries_clocked_in_by_organization_fkey"
+            columns: ["clocked_in_by_employee_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "time_clock_entries_clocked_out_by_organization_fkey"
+            columns: ["clocked_out_by_employee_id", "organization_id"]
             isOneToOne: false
             referencedRelation: "employees"
             referencedColumns: ["id", "organization_id"]
@@ -5927,6 +5962,64 @@ export type Database = {
           store_id: string
         }[]
       }
+      clock_in_employee_with_pin: {
+        Args: {
+          target_employee_id: string
+          target_organization_id: string
+          target_pin: string
+          target_request_id: string
+          target_store_id: string
+        }
+        Returns: {
+          clocked_in_at: string | null
+          clocked_out_at: string | null
+          employee_id: string
+          employee_name: string
+          entry_id: string | null
+          message: string
+          register_id: string | null
+          register_name: string | null
+          result_code: string
+          shift_id: string | null
+          shift_opened_at: string | null
+          store_id: string
+          store_name: string
+          was_replayed: boolean
+        }[]
+      }
+      clock_out_employee_with_pin: {
+        Args: {
+          target_employee_id: string
+          target_organization_id: string
+          target_pin: string
+          target_request_id: string
+        }
+        Returns: {
+          clocked_in_at: string | null
+          clocked_out_at: string | null
+          employee_id: string
+          employee_name: string
+          entry_id: string | null
+          message: string
+          register_id: string | null
+          register_name: string | null
+          result_code: string
+          shift_id: string | null
+          shift_opened_at: string | null
+          store_id: string
+          store_name: string
+          was_replayed: boolean
+        }[]
+      }
+      change_employee_lifecycle: {
+        Args: {
+          target_action: string
+          target_employee_id: string
+          target_organization_id: string
+          target_reason: string
+        }
+        Returns: string
+      }
       close_register_shift: {
         Args: {
           target_closing_note: string
@@ -6152,7 +6245,11 @@ export type Database = {
         }[]
       }
       get_checkout_stock_warning: {
-        Args: { target_organization_id: string; target_store_id: string }
+        Args: {
+          target_organization_id: string
+          target_sale_id: string
+          target_store_id: string
+        }
         Returns: number
       }
       get_current_time_clock_entry: {
@@ -6162,6 +6259,23 @@ export type Database = {
           entry_id: string
           store_id: string
         }[]
+      }
+      get_attendance_employees: {
+        Args: { target_organization_id: string; target_store_id: string }
+        Returns: {
+          clocked_in_at: string | null
+          employee_id: string
+          employee_name: string
+          employee_number: string
+          entry_id: string | null
+          entry_store_id: string | null
+          entry_store_name: string | null
+          pin_is_set: boolean
+        }[]
+      }
+      get_employee_management_detail: {
+        Args: { target_employee_id: string; target_organization_id: string }
+        Returns: Json
       }
       get_customer_display_bootstrap: {
         Args: { target_access_token_hash: string }
@@ -6948,6 +7062,15 @@ export type Database = {
         }
         Returns: string
       }
+      validate_pos_cart_stock: {
+        Args: {
+          target_items: Json
+          target_organization_id: string
+          target_register_id: string
+          target_store_id: string
+        }
+        Returns: Json
+      }
       update_approval_rule: {
         Args: {
           target_amount_threshold_minor: number
@@ -6999,6 +7122,23 @@ export type Database = {
           target_role_ids: string[]
           target_status: string
           target_store_ids: string[]
+        }
+        Returns: string
+      }
+      update_employee_profile: {
+        Args: {
+          target_employee_id: string
+          target_full_name: string
+          target_organization_id: string
+          target_phone: string
+        }
+        Returns: undefined
+      }
+      delete_employee_if_eligible: {
+        Args: {
+          target_confirmation_number: string
+          target_employee_id: string
+          target_organization_id: string
         }
         Returns: string
       }
@@ -7279,4 +7419,3 @@ export const Constants = {
 
 // Application convenience alias retained across Supabase CLI type regeneration.
 export type TableRow<TableName extends keyof DefaultSchema["Tables"]> = Tables<TableName>;
-

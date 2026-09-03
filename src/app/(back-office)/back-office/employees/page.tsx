@@ -1,17 +1,18 @@
-import { Building2, Clock3, IdCard, ShieldCheck, UserRound } from "lucide-react";
+import { Building2, Clock3, Eye, IdCard, Search, ShieldCheck, UserRound } from "lucide-react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   CreateInvitationForm,
-  EditEmployeeButton,
   RevokeInvitationButton,
 } from "@/features/management/management-forms";
-import { EmployeePinForm } from "@/features/approvals/employee-pin-form";
 import { loadManagementEmployees } from "@/features/management/data";
 import {
   loadAuthorizedBackOfficeStores,
@@ -24,7 +25,7 @@ export const metadata = { title: "Employees" };
 export default async function EmployeesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ store?: string }>;
+  searchParams: Promise<{ store?: string; q?: string; status?: string }>;
 }) {
   const context = await requireBackOfficePermission("employees.manage");
   const parameters = await searchParams;
@@ -55,9 +56,17 @@ export default async function EmployeesPage({
   const pendingInvitations = invitations.filter(
     (invitation) => !invitation.accepted_at && !invitation.revoked_at,
   );
-  const visibleEmployees = storeScope.selectedStoreId
+  const selectedStatus = ["active", "inactive", "archived"].includes(parameters.status ?? "") ? parameters.status! : "active";
+  const query = parameters.q?.trim().toLocaleLowerCase() ?? "";
+  const scopedEmployees = storeScope.selectedStoreId
     ? employees.filter((employee) => storeLinks.some((link) => link.employee_id === employee.id && link.store_id === storeScope.selectedStoreId))
     : employees;
+  const visibleEmployees = scopedEmployees.filter((employee) => {
+    const statusMatches = selectedStatus === "inactive" ? ["inactive", "suspended"].includes(employee.status) : employee.status === selectedStatus;
+    const profile = profiles.get(employee.profile_id);
+    const searchMatches = !query || `${profile?.full_name ?? ""} ${profile?.email ?? ""} ${employee.employee_number} ${employee.job_title ?? ""}`.toLocaleLowerCase().includes(query);
+    return statusMatches && searchMatches;
+  });
 
   return (
     <div className="space-y-8">
@@ -70,6 +79,13 @@ export default async function EmployeesPage({
         ) : undefined}
       />
       <GlobalFilterBar action="/back-office/employees" namePrefix="employee-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={authorizedStores} />
+      <form action="/back-office/employees" className="flex flex-col gap-3 rounded-xl border bg-card p-3 sm:flex-row">
+        {storeScope.selectedStoreId ? <input name="store" type="hidden" value={storeScope.selectedStoreId} /> : null}
+        <label className="relative flex-1"><span className="sr-only">Search employees</span><Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" /><Input className="pl-9" defaultValue={parameters.q} name="q" placeholder="Search employees..." /></label>
+        <div className="flex gap-2" role="group" aria-label="Employee status">
+          {[{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }, { value: "archived", label: "Archived" }].map((option) => <button className={buttonVariants({ variant: selectedStatus === option.value ? "default" : "outline", size: "sm" })} key={option.value} name="status" type="submit" value={option.value}>{option.label}</button>)}
+        </div>
+      </form>
 
       {canManage && pendingInvitations.length > 0 ? (
         <section className="space-y-3" aria-labelledby="pending-invitations-title">
@@ -126,17 +142,10 @@ export default async function EmployeesPage({
             .filter((link) => link.employee_id === employee.id)
             .map((link) => roles.get(link.role_id))
             .filter((role): role is string => Boolean(role));
-          const employeeRoleIds = roleLinks
-            .filter((link) => link.employee_id === employee.id)
-            .map((link) => link.role_id);
           const employeeStores = storeLinks
             .filter((link) => link.employee_id === employee.id)
             .map((link) => stores.get(link.store_id))
             .filter((store): store is string => Boolean(store));
-          const employeeStoreIds = storeLinks
-            .filter((link) => link.employee_id === employee.id)
-            .map((link) => link.store_id);
-
             return (
             <Card key={employee.id}>
               <CardHeader className="flex-row items-start justify-between">
@@ -175,31 +184,7 @@ export default async function EmployeesPage({
                   <Building2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                   {employeeStores.join(", ") || "No store assignment"}
                 </div>
-                {canManage || employee.id === context.employee.id ? (
-                  <EmployeePinForm
-                    employeeId={employee.id}
-                    employeeName={profile?.full_name || employee.employee_number}
-                  />
-                ) : null}
-                {canManage && (employee.id !== context.employee.id || hasPermission(context, "organization.manage")) ? (
-                  <div className="flex justify-end border-t pt-3">
-                    <EditEmployeeButton
-                      employee={{
-                        id: employee.id,
-                        jobTitle: employee.job_title,
-                        status: employee.status as "active" | "inactive" | "suspended",
-                        roleIds: employeeRoleIds,
-                        storeIds: employeeStoreIds,
-                      }}
-                      roles={grantableRoles.map((role) => ({ id: role.id, name: role.name }))}
-                      stores={activeStores.map((store) => ({ id: store.id, name: store.name }))}
-                      lockOwnRoleAndStatus={employee.id === context.employee.id}
-                      organizationWideStoreAccess={
-                        employee.id === context.employee.id && hasPermission(context, "organization.manage")
-                      }
-                    />
-                  </div>
-                ) : null}
+                <div className="flex justify-end border-t pt-3"><Link className={buttonVariants({ variant: "ghost", size: "sm" })} href={`/back-office/employees/${employee.id}`}><Eye />View</Link></div>
               </CardContent>
             </Card>
             );

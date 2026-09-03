@@ -6,8 +6,8 @@ const dashboardPage = await readFile(
   new URL("../src/app/(back-office)/back-office/page.tsx", import.meta.url),
   "utf8",
 );
-const reportingOverview = await readFile(
-  new URL("../src/features/reports/reporting-overview.tsx", import.meta.url),
+const ownerDashboard = await readFile(
+  new URL("../src/features/dashboard/owner-dashboard.tsx", import.meta.url),
   "utf8",
 );
 const businessProfile = await readFile(
@@ -29,17 +29,17 @@ const inventoryMigration = await readFile(
 
 test("feature settings remain complete, permission-gated, and explicitly preserve records", () => {
   assert.match(businessProfile, /featureDefinitions\.map/);
-  assert.match(businessProfile, /Existing records remain intact/);
+  assert.match(businessProfile, /Existing records stay intact/);
   assert.match(businessProfileService, /update_business_profile_features/);
   assert.match(businessProfileService, /isCompleteFeatureSettings/);
 });
 
-test("dashboard inventory alerts reuse the existing scoped report snapshot", () => {
-  assert.match(dashboardPage, /inventoryEnabled=\{context\.features\.inventory\}/);
-  assert.match(reportingOverview, /mode === "dashboard" && inventoryEnabled/);
-  assert.match(reportingOverview, /Inventory alerts/);
-  assert.match(reportingOverview, /snapshot\.inventory\.low_stock_count/);
-  assert.match(reportingOverview, /snapshot\.inventory\.negative_stock_count/);
+test("dashboard inventory alerts reuse scoped report and operational snapshots", () => {
+  assert.match(dashboardPage, /inventory: context\.features\.inventory/);
+  assert.match(dashboardPage, /loadDashboardOperationalSnapshot/);
+  assert.match(ownerDashboard, /features\.inventory && operations\.access\.inventory/);
+  assert.match(ownerDashboard, /operations\.inventory\.low_stock_count/);
+  assert.match(ownerDashboard, /operations\.inventory\.negative_stock_count/);
 });
 
 test("negative-stock safeguards retain allow, warn, and block policies through the established RPC", () => {
@@ -51,7 +51,7 @@ test("negative-stock safeguards retain allow, warn, and block policies through t
 });
 
 test("Phase 6 does not introduce a migration or a frontend authorization substitute", () => {
-  assert.doesNotMatch(reportingOverview, /roleNames/);
-  assert.doesNotMatch(reportingOverview, /supabase\.from\(/);
+  assert.doesNotMatch(ownerDashboard, /roleNames/);
+  assert.doesNotMatch(ownerDashboard, /supabase\.from\(/);
   assert.match(inventoryActions, /hasPermission\(context, "inventory\.manage"\)/);
 });

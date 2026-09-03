@@ -190,3 +190,28 @@ export type ManagementEmployeesWorkspace = {
   rolePermissions: ManagementRolePermissionRow[];
   invitations: ManagementInvitationRow[];
 };
+
+export type ManagementEmployeeDetail = {
+  id: string;
+  employeeNumber: string;
+  fullName: string;
+  email: string | null;
+  phone: string | null;
+  jobTitle: string | null;
+  status: "active" | "inactive" | "suspended" | "archived";
+  archivedAt: string | null;
+  pinIsSet: boolean;
+  roles: Array<{ id: string; name: string }>;
+  stores: Array<{ id: string; name: string }>;
+  posAccess: boolean;
+  backOfficeAccess: boolean;
+  attendance: {
+    current: { id: string; storeId: string; storeName?: string; clockedInAt: string } | null;
+    lastClockIn: string | null;
+    historyCount: number;
+    history: Array<{ id: string; storeName: string; clockedInAt: string; clockedOutAt: string | null }>;
+  };
+  activity: { receipts: number; registerShifts: number; refunds: number; inventoryMovements: number };
+  openShift: { id: string; storeId: string; storeName: string; registerId: string; registerName: string; openedAt: string } | null;
+  deleteBlockers: string[];
+};

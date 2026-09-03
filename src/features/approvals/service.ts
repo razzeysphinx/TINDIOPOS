@@ -3,6 +3,7 @@ import "server-only";
 import { moneyInputToMinor } from "@/features/catalog/catalog-money";
 import {
   approveManagerApprovalSchema,
+  decideManagerApprovalSchema,
   setEmployeePinSchema,
   updateApprovalRuleSchema,
 } from "@/features/approvals/approval-schema";
@@ -58,6 +59,44 @@ export async function approveManagerApproval(
   }
 
   return { ok: true, message: "Manager approval recorded. Complete the operation now." };
+}
+
+export async function decideManagerApproval(
+  context: BusinessContext,
+  input: unknown,
+): Promise<ApprovalActionResult> {
+  const parsed = decideManagerApprovalSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Choose whether to approve or reject this request." };
+
+  const supabase = await createClient();
+  const database = supabase as unknown as {
+    rpc: (name: string, args: Record<string, unknown>) => Promise<{
+      data: Array<{ decision: string }> | null;
+      error: { code?: string; message?: string } | null;
+    }>;
+  };
+  const { data, error } = await database.rpc("decide_manager_approval", {
+    target_organization_id: context.organization.id,
+    target_approval_request_id: parsed.data.approvalRequestId,
+    target_decision: parsed.data.decision,
+  });
+  if (error || !data?.[0]) {
+    return {
+      ok: false,
+      message: approvalDatabaseMessage(error?.code, error?.message, "TINDIO could not record this approval decision."),
+    };
+  }
+  if (data[0].decision === "EXPIRED") {
+    return { ok: false, message: "This approval request has expired." };
+  }
+  if (data[0].decision !== parsed.data.decision) {
+    return { ok: false, message: "TINDIO could not confirm this approval decision." };
+  }
+
+  return {
+    ok: true,
+    message: parsed.data.decision === "APPROVED" ? "Refund request approved." : "Refund request rejected.",
+  };
 }
 
 export async function setEmployeePin(

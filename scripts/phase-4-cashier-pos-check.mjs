@@ -15,7 +15,7 @@ const posPage = await readFile(
   "utf8",
 );
 
-test("cashier tools use a responsive left hamburger menu without a collapsible POS sidebar or Back Office navigation", () => {
+test("cashier tools use a responsive left hamburger menu with a capability-scoped workspace switch", () => {
   assert.doesNotMatch(drawer, /PosOperationalSidebar/);
   assert.match(drawer, /aria-label="Open POS navigation"/);
   assert.match(drawer, /aria-label="Close POS navigation"/);
@@ -27,7 +27,8 @@ test("cashier tools use a responsive left hamburger menu without a collapsible P
   assert.doesNotMatch(drawer, /POS settings/);
   assert.doesNotMatch(drawer, /requestFullscreen/);
   assert.doesNotMatch(drawer, /Enter full-screen mode/);
-  assert.doesNotMatch(drawer, /href="\/back-office"/);
+  assert.match(drawer, /canAccessBackOffice \? \(/);
+  assert.match(drawer, /href="\/back-office"/);
 });
 
 test("active terminal keeps the existing sync status and adds a customer header shortcut", () => {

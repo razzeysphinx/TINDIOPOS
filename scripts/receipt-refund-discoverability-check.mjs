@@ -4,52 +4,60 @@ import { readFile } from "node:fs/promises";
 const root = new URL("..", import.meta.url);
 const source = (path) => readFile(new URL(path, root), "utf8");
 
-const [backOfficeList, backOfficeDetail, backOfficeQuickView, posList, posDetail, refundForm, refundAction, statusRpc, refundDatabaseTest] = await Promise.all([
-  source("src/app/(back-office)/back-office/receipts/page.tsx"),
-  source("src/app/(back-office)/back-office/receipts/[receiptId]/page.tsx"),
-  source("src/features/receipts/receipt-list-quick-view.tsx"),
+const [posPage, posHistory, posSearch, refundForm, refundAction, approvalDialog, approvalActions, securityPage, receiptMigration, refundDatabaseTest] = await Promise.all([
   source("src/app/(pos)/pos/receipts/page.tsx"),
-  source("src/app/(pos)/pos/receipts/[receiptId]/page.tsx"),
+  source("src/features/pos/pos-receipt-history.tsx"),
+  source("src/features/pos/pos-receipt-search.tsx"),
   source("src/features/receipts/refund-form.tsx"),
   source("src/features/receipts/actions.ts"),
-  source("supabase/migrations/20260831150856_pos_receipt_refund_status.sql"),
+  source("src/features/approvals/manager-approval-dialog.tsx"),
+  source("src/features/approvals/actions.ts"),
+  source("src/app/(back-office)/back-office/security/page.tsx"),
+  source("supabase/migrations/20260903093000_final_pos_receipts_workspace.sql"),
   source("supabase/tests/database/phase_5_receipts_refunds.test.sql"),
 ]);
 
-assert.doesNotMatch(backOfficeList, /ReceiptRefundActions/, "Back Office refund entry must not clutter every receipt row");
-assert.match(backOfficeQuickView, /\?refund=1#refund/, "The Back Office drawer must retain the canonical refund form route");
-assert.match(backOfficeQuickView, /\/back-office\/receipts\/\$\{detail\.receipt\.id\}/, "The Back Office drawer must retain the existing receipt route");
+assert.match(posPage, /<PosReceiptHistory/, "POS receipts use one master/detail workspace");
+assert.match(posHistory, /receiptsByDate/, "history is grouped by date");
+assert.match(posHistory, /paymentLabel\(receipt\.payment_methods\).*formatTime/s, "rows show payment text and time");
+assert.match(posHistory, /aria-label={`View receipt #\$\{receipt\.receipt_number\}`}/, "the whole row is keyboard selectable");
+assert.doesNotMatch(posHistory, />View</, "rows do not include a View button");
+assert.doesNotMatch(posHistory, /transition-all|hover:scale|active:scale/, "selection does not resize rows");
+assert.match(posHistory, /ReceiptDetailSkeleton/, "loading stays in the detail pane");
+assert.match(posHistory, /EllipsisVertical/, "receipt utilities use a vertical overflow icon");
+assert.match(posHistory, />Print receipt</, "the utility menu includes print");
+assert.match(posHistory, />Digital receipt</, "the utility menu includes digital delivery");
+assert.doesNotMatch(posHistory, /Menu\.Item[\s\S]{0,160}>Refund</, "refund remains outside the utility menu");
+assert.match(posHistory, /<ReceiptDocument/, "detail reuses the canonical receipt renderer");
+assert.match(posHistory, /side="right"/, "compact viewports use a right-side receipt sheet");
+assert.match(posHistory, /has_refundable_quantity/, "status uses authoritative remaining quantities");
 
-assert.match(posList, /ReceiptRefundActions/, "POS receipt list must retain its shared receipt actions");
-assert.match(posList, /\?refund=1#refund/, "POS receipt list must open the canonical refund form directly");
-assert.match(posList, /\/pos\/receipts\/\$\{receipt\.receipt_id\}/, "POS receipt list must retain the existing receipt route");
+assert.match(posSearch, /Clear receipt search/, "search has an inline clear control");
+assert.match(posSearch, /if \(!value\) navigate\(""\)/, "manually clearing search restores history");
+assert.match(posPage, /No receipt found/, "no results is distinct from empty history");
+assert.match(posPage, /No receipts yet\./, "empty history has useful copy");
+assert.match(receiptMigration, /normalized_query ~ '\^#\?\[0-9\]\+\$'/, "receipt search accepts hash and zero-padded numbers");
 
-assert.match(backOfficeList, /hasRefundableQuantityBySale/, "Back Office status must use refunded quantities, not totals alone");
-assert.match(backOfficeList, /hasStoreAccess\(context, sale\.store_id\)/, "Back Office refund visibility must honor store scope");
-assert.match(posList, /has_refundable_quantity/, "POS status must use the authoritative RPC quantity result");
-assert.match(posList, /hasStoreAccess\(context, receipt\.store_id\)/, "POS refund visibility must honor store scope");
+assert.match(refundForm, /Purchased · refunded · available/, "refund lines show purchased/refunded/available quantities");
+assert.match(refundForm, /Approve with PIN/, "pending refunds offer nearby PIN approval");
+assert.match(approvalDialog, /Request approval/, "pending refunds can remain for remote approval");
+assert.match(refundForm, /window\.sessionStorage/, "the exact pending draft survives closing and reopening");
+assert.match(refundForm, /loadManagerApprovalStatusAction/, "cashiers observe remote decisions");
+assert.match(refundForm, /Refund approval requires a connection/, "offline refund approval fails clearly");
+assert.match(approvalDialog, /<Dialog\.Root/, "PIN approval uses the focus-managed dialog primitive");
+assert.match(approvalActions, /loadManagerApprovalStatusAction/, "approval status loads through an authorized server action");
+assert.match(securityPage, /<ApprovalRequestActions/, "authorized Back Office users can approve or reject requests");
 
-for (const [label, content] of [["Back Office detail", backOfficeDetail], ["POS detail", posDetail]]) {
-  assert.match(content, /autoFocus=\{parameters\.refund === "1"\}/, `${label} must focus the canonical form after a direct refund action`);
-  assert.match(content, /originalTotalMinor=/, `${label} must pass immutable receipt context to the shared form`);
-}
-assert.match(backOfficeDetail, /loadAuthorizedReceiptDetail\(/, "Back Office detail must use the canonical store-scoped receipt loader");
-assert.match(posDetail, /hasStoreAccess\(/, "POS detail must preserve central store-scope checks");
+assert.match(refundAction, /\.rpc\("refund_sale"/, "refund completion still uses the canonical RPC");
+assert.match(refundAction, /target_idempotency_key/, "refund completion remains idempotent");
+assert.match(receiptMigration, /private\.authorize_sensitive_operation/, "completion reuses scoped approval authorization");
+assert.match(receiptMigration, /private\.validate_refund_approval_payload/, "approval validates the exact receipt and lines");
+assert.match(receiptMigration, /create or replace function public\.decide_manager_approval/, "remote decisions use a server-authorized RPC");
+assert.match(receiptMigration, /'APPROVAL_REJECTED'/, "rejection is audited");
+assert.match(receiptMigration, /private\.has_sale_read_scope/, "digital delivery enforces sale/store scope");
+assert.match(receiptMigration, /revoke all on function public\.get_pos_receipt_history/, "receipt projections remain least privilege");
+assert.doesNotMatch(receiptMigration, /create table/i, "the redesign does not duplicate receipt/refund records");
+assert.match(refundDatabaseTest, /POS receipt history keeps a partially refunded receipt refundable/, "database tests cover partial refunds");
+assert.match(refundDatabaseTest, /POS receipt history marks a fully returned receipt/, "database tests cover full refunds");
 
-assert.match(refundForm, /id="refund"/, "The canonical refund form must remain a direct-link target");
-assert.match(refundForm, /Original receipt:/, "The refund form must identify the original receipt");
-assert.match(refundForm, /Original total:/, "The refund form must identify the original total");
-assert.match(refundForm, /const isBusy = isPending \|\| approvalRequestId !== null/, "Refund inputs must lock while the existing approval workflow is open");
-assert.match(refundAction, /\.rpc\("refund_sale"/, "The direct flow must continue to use the canonical refund RPC");
-assert.match(refundAction, /target_idempotency_key/, "The canonical refund RPC must retain idempotency");
-assert.match(refundAction, /revalidatePath\("\/pos\/receipts"\)/, "A completed refund must refresh the POS list");
-
-assert.match(statusRpc, /private\.has_permission\(target_organization_id, 'sales\.create'\)/, "The POS status RPC must keep its existing capability check");
-assert.match(statusRpc, /public\.employee_stores/, "The POS status RPC must keep store-assignment enforcement");
-assert.match(statusRpc, /has_refundable_quantity/, "The POS status RPC must return an item-quantity status");
-assert.match(statusRpc, /revoke all on function public\.get_pos_receipt_history/, "The POS status RPC must keep least-privilege grants");
-assert.doesNotMatch(statusRpc, /create table/i, "Receipt status must not duplicate refund records");
-assert.match(refundDatabaseTest, /POS receipt history keeps a partially refunded receipt refundable/, "Database tests must cover partial refunds");
-assert.match(refundDatabaseTest, /POS receipt history marks a fully returned receipt/, "Database tests must cover fully refunded receipts");
-
-console.log("Receipt refund discoverability checks passed.");
+console.log("Receipt workspace and refund approval checks passed.");

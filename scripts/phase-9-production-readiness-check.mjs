@@ -49,7 +49,7 @@ test("POS retains the production-critical operating flow", () => {
   assert.match(posTerminal, /PosCustomerPicker/);
   assert.match(posTerminal, /PaymentScreen/);
   assert.match(posTerminal, /createCheckoutKey\(\)/);
-  assert.match(posTerminal, /"favorites" \| "recent"/);
+  assert.match(posTerminal, /const \[favoritesOnly, setFavoritesOnly\] = useState\(false\)/);
   assert.match(posTerminal, /Manage tickets/);
   assert.match(paymentScreen, /window\.print\(\)/);
   assert.match(paymentScreen, /offlinePolicy === "cash"/);

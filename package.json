@@ -23,6 +23,7 @@
     "test:management-create-dialogs": "node scripts/management-create-dialog-state-check.mjs",
     "test:stores-registers-overview": "node --test scripts/stores-registers-overview-check.mjs",
     "test:pos-workspace-navigation": "node scripts/pos-workspace-navigation-check.mjs",
+    "test:pos-negative-stock": "node --test scripts/pos-negative-stock-policy-check.mjs",
     "test:shift-audit-report": "node scripts/shift-audit-report-check.mjs",
     "test:receipt-refund-discoverability": "node scripts/receipt-refund-discoverability-check.mjs",
     "test:receipt-quick-view": "node --test scripts/receipt-quick-view-check.mjs",

@@ -14,6 +14,10 @@ const dashboardPage = await readFile(
   new URL("../src/app/(back-office)/back-office/page.tsx", import.meta.url),
   "utf8",
 );
+const dashboardFilter = await readFile(
+  new URL("../src/features/dashboard/dashboard-filter-form.tsx", import.meta.url),
+  "utf8",
+);
 const reportsPage = await readFile(
   new URL("../src/app/(back-office)/back-office/reports/page.tsx", import.meta.url),
   "utf8",
@@ -42,15 +46,21 @@ test("reports reuse the global filter bar and retain the established export quer
   assert.doesNotMatch(reportFilter, /<form/);
 });
 
-test("dashboard and reports place the shared filter directly after their page header", () => {
+test("dashboard uses compact presets while reports retain the full range filter", () => {
   assert.ok(
-    dashboardPage.indexOf("<ReportFilterForm") > dashboardPage.indexOf("<PageHeader"),
+    dashboardPage.indexOf("<DashboardFilterForm") > dashboardPage.indexOf("<PageHeader"),
     "dashboard filter must follow its page header",
   );
   assert.ok(
-    dashboardPage.indexOf("<ReportFilterForm") < dashboardPage.indexOf("<DashboardActionGrid"),
+    dashboardPage.indexOf("<DashboardFilterForm") < dashboardPage.indexOf("<Suspense"),
     "dashboard filter must precede dashboard content",
   );
+  assert.match(dashboardFilter, /name="period"/);
+  assert.match(dashboardFilter, /value="today"/);
+  assert.match(dashboardFilter, /value="last_7_days"/);
+  assert.match(dashboardFilter, /value="custom"/);
+  assert.match(dashboardFilter, /selectedPeriod === "custom"/);
+  assert.match(dashboardFilter, /name="compare"/);
   assert.ok(
     reportsPage.indexOf("<ReportFilterForm") > reportsPage.indexOf("<PageHeader"),
     "reports filter must follow its page header",

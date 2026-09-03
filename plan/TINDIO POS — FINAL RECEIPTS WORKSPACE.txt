@@ -1,0 +1,1714 @@
+TINDIO POS — FINAL RECEIPTS WORKSPACE REDESIGN
+MASTER/DETAIL + COMPACT HISTORY + CONTROLLED REFUND APPROVAL
+
+OBJECTIVE
+
+Redesign the POS Receipts workspace into a fast, compact, stable cashier experience.
+
+This is a COMPLETE implementation specification.
+
+DO NOT require screenshots or reference images.
+
+Audit the current Receipts implementation first, then implement the specification below using the existing TINDIO architecture and business logic.
+
+This redesign applies specifically to the POS Receipts workspace.
+
+Do NOT unnecessarily redesign the Back Office Receipts/Reports experience.
+
+==================================================
+CORE DESIGN PRINCIPLE
+==================================================
+
+A cashier should be able to answer immediately:
+
+1. Which receipt am I looking at?
+2. When was it created?
+3. How much was the transaction?
+4. How was it paid?
+5. How do I print/send/refund it?
+
+The interface must avoid repeated information and unnecessary buttons.
+
+The final architecture is:
+
+RECEIPT HISTORY
+        +
+SELECTED RECEIPT DETAIL
+        +
+CONTEXTUAL RECEIPT ACTIONS
+
+Desktop:
+master/detail split view.
+
+Tablet:
+adaptive split/drawer behavior.
+
+Mobile:
+receipt list → receipt detail sheet/page.
+
+==================================================
+NON-NEGOTIABLE DATA RULE
+==================================================
+
+This redesign removes redundant information from the POS PRESENTATION only.
+
+DO NOT remove historical context from the database.
+
+Receipts must continue retaining:
+
+- organization
+- store
+- register
+- cashier/employee
+- full timestamp
+- payment methods
+- sale reference
+- line items
+- discounts
+- taxes
+- refund history
+- shift
+- audit context
+
+Even if some of those values are not shown in the compact POS receipt list.
+
+==================================================
+PHASE 0 — AUDIT EXISTING RECEIPT IMPLEMENTATION
+==================================================
+
+Before coding, inspect:
+
+- POS receipts route/page
+- receipt list
+- receipt selection state
+- receipt detail component
+- canonical receipt rendering
+- search
+- date grouping
+- print
+- digital receipt
+- refunds
+- partial refunds
+- manager approvals
+- employee PIN verification
+- permissions
+- store scope
+- offline/sync behavior where relevant
+- mobile receipt presentation
+- loading states
+- animations/transitions
+- route navigation during receipt selection
+
+Identify old UI that must be replaced.
+
+Do not duplicate existing receipt/refund services.
+
+==================================================
+1. DESKTOP MASTER / DETAIL ARCHITECTURE
+==================================================
+
+Desktop must use a stable two-column layout.
+
+Concept:
+
+┌─────────────────────┬──────────────────────────────────────┐
+│ RECEIPT HISTORY     │ SELECTED RECEIPT                     │
+│                     │                                      │
+│ date groups         │ sticky receipt header                │
+│ receipt rows        │                                      │
+│                     │ canonical receipt content            │
+│                     │                                      │
+└─────────────────────┴──────────────────────────────────────┘
+
+Recommended approximate proportion:
+
+Receipt history:
+30–38%
+
+Selected receipt:
+62–70%
+
+Adapt to the existing layout rather than hardcoding one exact percentage.
+
+CRITICAL:
+
+Selecting another receipt must NOT resize either pane.
+
+The left column must stay stable.
+
+The right column must stay stable.
+
+No visual jumping.
+
+==================================================
+2. DATE GROUPING
+==================================================
+
+Receipt history must be grouped by calendar date.
+
+Example:
+
+WEDNESDAY, SEPTEMBER 2, 2026
+────────────────────────────────
+
+receipt
+receipt
+
+
+TUESDAY, SEPTEMBER 1, 2026
+────────────────────────────────
+
+receipt
+
+
+FRIDAY, AUGUST 28, 2026
+────────────────────────────────
+
+receipt
+receipt
+
+Do NOT repeat the full date inside every receipt row.
+
+The date heading already provides that context.
+
+Inside each receipt row show TIME ONLY.
+
+Example:
+
+11:05 AM
+4:04 PM
+1:18 PM
+
+Use the user's/business locale/time formatting where already supported.
+
+==================================================
+3. COMPACT RECEIPT ROW DESIGN
+==================================================
+
+Remove the current verbose row structure.
+
+Do NOT show by default in every POS receipt row:
+
+- repeated full date
+- store
+- register
+- cashier
+- giant metadata blocks
+- View button
+- Print button
+- Digital receipt button
+- Refund button
+
+The entire row itself must be clickable.
+
+Preferred information hierarchy:
+
+LEFT:
+payment method icon(s)
+sale total
+payment summary / time
+
+RIGHT:
+receipt reference
+
+Conceptually:
+
+[Cash icon]  ₱360.00                         #49
+             Cash · 4:04 PM
+
+
+[GCash][Bank][Cash]  ₱1,440.00               #48
+                     Split · 1:18 PM
+
+The exact visual spacing may adapt to the existing TINDIO component system.
+
+==================================================
+4. PAYMENT METHOD REPRESENTATION
+==================================================
+
+Use compact payment method iconography.
+
+Examples:
+
+Cash
+→ cash/money icon
+
+Card
+→ card icon
+
+GCash
+→ appropriate existing wallet/payment icon
+
+Maya
+→ mobile wallet icon
+
+Bank Transfer
+→ bank icon
+
+Custom methods
+→ safe generic payment icon
+
+IMPORTANT:
+
+Do not rely on icon alone.
+
+Include concise accessible text.
+
+Example:
+
+[icon] ₱360
+       Cash · 4:04 PM
+
+For split payment:
+
+show multiple compact icons if practical.
+
+Example:
+
+[GCash][Bank][Cash] ₱1,440
+                    Split · 1:18 PM
+
+Do not show the full payment breakdown in the left receipt list.
+
+The selected receipt detail already contains it.
+
+==================================================
+5. SALE TOTAL TERMINOLOGY
+==================================================
+
+The primary amount shown in the receipt row is the RECEIPT / SALE TOTAL.
+
+Do not incorrectly call it:
+
+"Payment total"
+
+especially for split payments.
+
+Example:
+
+₱1,440.00
+
+is the total transaction amount.
+
+The selected receipt detail can show:
+
+GCash        ₱600
+Bank         ₱240
+Cash         ₱600
+
+==================================================
+6. RECEIPT NUMBER POSITION
+==================================================
+
+Receipt reference should be visually separated from the amount/payment information.
+
+Preferred compact placement:
+
+opposite/right side of the row.
+
+Example:
+
+₱1,440.00                           #48
+Split · 1:18 PM
+
+Receipt reference should remain easy to scan.
+
+Use the human-readable receipt reference.
+
+Do not expose technical UUIDs.
+
+==================================================
+7. STORE / REGISTER / CASHIER REDUNDANCY
+==================================================
+
+For normal cashier POS receipt history:
+
+do not repeat Store and Register in every list row when the POS session is already operating within known store/register context.
+
+However:
+
+DO NOT remove this information from the actual receipt record.
+
+If a privileged POS user can legitimately view receipts from multiple stores/registers within the same workspace, context may be shown selectively when needed.
+
+Use contextual display rather than permanent redundancy.
+
+Same principle for Cashier:
+
+If the POS view is scoped to one cashier/session, do not repeat cashier in every row.
+
+If manager access allows multiple cashier receipts, show employee identity only when useful.
+
+==================================================
+8. SELECTED ROW STATE
+==================================================
+
+Selected receipt should use a subtle persistent background/border.
+
+Do NOT:
+
+- scale the row
+- enlarge the row
+- animate width
+- animate height
+- bounce
+- zoom
+- cause the entire list to move
+
+A selected receipt should feel stable.
+
+==================================================
+9. FIX RECEIPT SELECTION ANIMATION BUGS
+==================================================
+
+Current receipt selection has previously shown visual enlargement/jumping/loading artifacts.
+
+Audit the implementation.
+
+Receipt click must NOT:
+
+- temporarily enlarge
+- shift layout
+- remount the whole workspace
+- navigate through a full page route unnecessarily
+- flash "Loading receipt" under unrelated content
+- move surrounding rows
+- change column widths
+
+Prefer updating only:
+
+selectedReceiptId
+selectedReceiptData
+
+within the existing workspace.
+
+If loading is required:
+
+show a subtle loading state INSIDE the right detail pane.
+
+Do NOT inject "Loading receipt" under the clicked list row.
+
+==================================================
+10. RECEIPT CHANGE ANIMATION
+==================================================
+
+Normal receipt-to-receipt selection should be nearly instant.
+
+Preferred:
+
+no animation
+
+OR at most:
+
+100–150ms subtle opacity transition inside the receipt body.
+
+Do NOT use:
+
+transition-all
+scale
+spring
+layout expansion
+large fade
+slide animation
+
+for switching between receipts.
+
+Cashier workflows prioritize stability over decorative animation.
+
+==================================================
+11. SELECTED RECEIPT STICKY MINI HEADER
+==================================================
+
+Move receipt actions to a compact sticky header at the TOP of the receipt detail pane.
+
+Concept:
+
+Receipt #48 · 1:18 PM         Completed       [ Refund ] [ ⋮ ]
+
+The mini-header remains visible while scrolling a long receipt.
+
+It should contain:
+
+- Receipt number
+- Time
+- Receipt status
+- Refund action
+- Vertical overflow menu
+
+Use VERTICAL ELLIPSIS:
+
+⋮
+
+NOT horizontal:
+
+...
+
+==================================================
+12. REMOVE REDUNDANT DATE FROM MINI HEADER
+==================================================
+
+The left history already groups receipts by date.
+
+The selected receipt mini-header only needs:
+
+Receipt #48
+1:18 PM
+
+The actual receipt document may retain its full printed timestamp.
+
+Do not remove the true timestamp from the canonical receipt.
+
+==================================================
+13. VERTICAL THREE-DOT MENU
+==================================================
+
+Use:
+
+[ ⋮ ]
+
+as the utility menu.
+
+Inside:
+
+Print receipt
+Digital receipt
+
+Concept:
+
+⋮
+├── Print receipt
+└── Digital receipt
+
+DO NOT place Refund inside this overflow menu.
+
+Refund remains visible because it changes financial state.
+
+Print and Digital Receipt are secondary copy/delivery utilities.
+
+==================================================
+14. PRINT RECEIPT
+==================================================
+
+Selecting:
+
+⋮ → Print receipt
+
+must print the CURRENTLY SELECTED receipt.
+
+Do not open another unnecessary receipt preview if the canonical selected receipt is already visible.
+
+Reuse existing print logic.
+
+If printer configuration is required, respect existing POS printer settings.
+
+Do not create a duplicate receipt rendering implementation.
+
+==================================================
+15. DIGITAL RECEIPT
+==================================================
+
+Selecting:
+
+⋮ → Digital receipt
+
+must NOT display another receipt preview.
+
+The user already sees the selected receipt.
+
+Open a lightweight delivery modal/sheet.
+
+Example:
+
+SEND DIGITAL RECEIPT
+
+Email address
+
+[ customer@example.com ]
+
+[ Cancel ] [ Send receipt ]
+
+Only request the information needed for delivery.
+
+If the customer already has an email and existing rules allow it, prefill appropriately.
+
+Do NOT claim email delivery succeeded if no provider is actually connected.
+
+Preserve the existing delivery queue/provider architecture.
+
+==================================================
+16. REFUND REMAINS PRIMARY ACTION
+==================================================
+
+Keep:
+
+[ Refund ]
+
+visible beside:
+
+[ ⋮ ]
+
+Use a subtle destructive/red style.
+
+Do not make it visually dominant like the Charge button.
+
+Refund changes financial history and must remain clearly distinguishable from:
+
+Print
+Digital receipt
+
+==================================================
+17. REFUND PERMISSION ARCHITECTURE
+==================================================
+
+Do NOT hardcode refund authorization to:
+
+role === "Manager"
+
+or:
+
+role === "Admin"
+
+Use permission-based authorization.
+
+Conceptually support:
+
+refund.request
+refund.approve
+refund.execute
+
+Reuse existing permission naming if equivalent permissions already exist.
+
+Role presets may grant those permissions by default.
+
+Example defaults:
+
+Owner:
+approve + execute
+
+Admin:
+approve + execute according to configured access
+
+Manager:
+approve according to store scope/preset
+
+Cashier:
+request refund by default
+
+But BACKEND PERMISSIONS are authoritative.
+
+==================================================
+18. REFUND WORKFLOW
+==================================================
+
+Clicking Refund should open a focused refund workflow.
+
+Example:
+
+REFUND RECEIPT #48
+
+ITEMS
+
+Product A
+Purchased: 8
+Return qty: [ 1 ]
+
+Reason
+[ Select reason ▾ ]
+
+Refund method
+[ original/allowed method according to current rules ]
+
+Refund total
+₱180.00
+
+Then evaluate authorization.
+
+==================================================
+19. TWO REFUND APPROVAL PATHS
+==================================================
+
+Support the strongest practical hybrid workflow.
+
+PATH A:
+APPROVE WITH AUTHORIZED EMPLOYEE PIN
+
+Useful when a manager/supervisor is physically near the register.
+
+PATH B:
+REQUEST APPROVAL
+
+Useful when an authorized manager is elsewhere.
+
+Concept:
+
+Approval required
+
+[ Approve with PIN ]
+[ Request approval ]
+
+Do not show these options if current permission/business rules make one path irrelevant.
+
+==================================================
+20. APPROVE WITH PIN
+==================================================
+
+If:
+
+Approve with PIN
+
+is selected:
+
+open secure PIN verification.
+
+Example:
+
+REFUND APPROVAL
+
+Receipt #48
+Refund amount ₱360
+Requested by Razzy Sphinx
+
+Enter approving employee PIN
+
+[ • ][ • ][ • ][ • ]
+
+[ Cancel ] [ Approve ]
+
+Backend must verify:
+
+- employee exists
+- employee active
+- PIN correct
+- organization scope
+- store scope
+- refund approval permission
+- request still valid
+- receipt refundable
+- refund quantities valid
+
+PIN must be verified server-side.
+
+Do not send PIN secrets/hashes to the browser.
+
+==================================================
+21. REQUEST APPROVAL
+==================================================
+
+If:
+
+Request approval
+
+is selected:
+
+create a real approval request using the existing manager approval architecture where available.
+
+Request should retain:
+
+- organization
+- store
+- register
+- receipt
+- requesting employee
+- requested refund lines/quantities
+- refund total
+- reason
+- timestamp
+- expiration/stale handling where supported
+
+Authorized approvers can:
+
+Approve
+Reject
+
+After approval:
+
+the cashier should be able to continue the SAME pending refund workflow.
+
+Do not require rebuilding the refund from scratch.
+
+==================================================
+22. CURRENT USER ALREADY AUTHORIZED
+==================================================
+
+If the current employee/user already has direct permission to execute the refund according to current TINDIO policy:
+
+do not unnecessarily force another manager approval.
+
+However:
+
+if business policy explicitly requires secondary approval even for that role, preserve that rule.
+
+Authorization must come from backend policy.
+
+==================================================
+23. APPROVAL IS SINGLE-PURPOSE
+==================================================
+
+A successful PIN approval applies ONLY to the specific refund request.
+
+Example:
+
+Receipt #48
+Refund ₱360
+Specific line quantities
+Reason
+
+Do NOT turn one manager PIN entry into a general:
+
+"POS manager unlocked"
+
+state.
+
+Do not let cashier execute unrelated sensitive actions because a PIN was entered previously.
+
+==================================================
+24. REFUND COMPLETION
+==================================================
+
+Refund completion must use existing canonical backend logic.
+
+Preserve:
+
+- receipt history
+- original sale
+- refund transaction
+- inventory adjustments where applicable
+- payments
+- manager approval
+- audit logs
+- idempotency
+
+Do not edit the original completed receipt into a fake new state.
+
+Record the refund as controlled historical activity.
+
+==================================================
+25. PARTIAL REFUNDS
+==================================================
+
+Support existing partial refund rules.
+
+Do not allow already-refunded quantity to be refunded again.
+
+Example:
+
+Purchased: 8
+Already refunded: 2
+Available to refund: 6
+
+Receipt status may become:
+
+Partially refunded
+
+or:
+
+Refunded
+
+depending on the result.
+
+==================================================
+26. REFUNDED RECEIPT HEADER
+==================================================
+
+After refund, update selected receipt status appropriately.
+
+Example:
+
+Receipt #48 · 1:18 PM       Partially refunded    [ Refund ] [ ⋮ ]
+
+or:
+
+Receipt #48 · 1:18 PM       Refunded              [ ⋮ ]
+
+If nothing remains refundable:
+
+hide/disable Refund appropriately.
+
+Do not show a misleading enabled Refund button.
+
+==================================================
+27. SEARCH UX
+==================================================
+
+Keep receipt search compact and forgiving.
+
+Search should support appropriate existing receipt identifiers.
+
+Where safe and already supported, allow matching forms such as:
+
+48
+#48
+000048
+
+Do not expose UUID search to normal cashier workflows unless genuinely useful.
+
+==================================================
+28. SEARCH STATE LOGIC
+==================================================
+
+NORMAL:
+
+show date-grouped receipt history.
+
+SEARCHING:
+
+show matching receipts.
+
+NO RESULTS:
+
+do NOT:
+
+- redirect routes
+- silently reset the query
+- show a blank screen
+- automatically throw the cashier back to all receipts before they understand what happened
+
+Show:
+
+No receipt found
+
+We couldn't find a receipt matching "000999".
+
+[ Clear search ]
+
+==================================================
+29. CLEAR SEARCH
+==================================================
+
+Search input should have a clear control:
+
+[ Search receipts...                  × ]
+
+The × appears when text exists.
+
+Clicking ×:
+
+- clears search query
+- removes no-results state
+- restores normal date-grouped receipt history
+- preserves other applicable filters
+- preserves the previously selected receipt where practical
+
+If the user manually deletes all text:
+
+automatically restore normal receipt history.
+
+No Apply button should be required for clearing search.
+
+==================================================
+30. SEARCH LOADING
+==================================================
+
+If search requires async loading:
+
+show loading within the receipt list area.
+
+Do not create layout shift.
+
+Do not display loading underneath arbitrary receipt rows.
+
+Do not resize the receipt detail pane.
+
+==================================================
+31. EMPTY RECEIPT HISTORY
+==================================================
+
+If there are genuinely no receipts:
+
+show a useful empty state.
+
+Example:
+
+No receipts yet.
+
+Completed sales will appear here.
+
+Do not confuse:
+
+NO RECEIPTS
+
+with:
+
+NO SEARCH RESULTS.
+
+These are different states.
+
+==================================================
+32. SELECTED RECEIPT WHEN SEARCH CHANGES
+==================================================
+
+If selected receipt remains in search results:
+
+keep it selected.
+
+If selected receipt is filtered out:
+
+select the first sensible result OR show a neutral detail state.
+
+Do not leave mismatched detail:
+
+left side shows #297
+right side shows hidden #48
+
+Keep master/detail consistent.
+
+==================================================
+33. RECEIPT DETAIL CONTENT
+==================================================
+
+Reuse the canonical receipt presentation.
+
+Selected receipt should clearly show:
+
+Business
+Receipt number
+timestamp where appropriate in printed receipt body
+items
+quantities
+unit prices
+line totals
+discounts if applicable
+tax if applicable
+subtotal
+total
+payments
+change/tender where appropriate
+footer
+
+Do not invent a second receipt format only for this screen.
+
+==================================================
+34. AVOID REDUNDANCY BETWEEN HEADER AND RECEIPT BODY
+==================================================
+
+The sticky operational mini-header exists for navigation/actions.
+
+The canonical receipt body exists as the receipt.
+
+Some duplication inside the printed receipt itself is acceptable because it represents the actual document.
+
+Do not remove legitimate receipt information solely because the mini-header also references it.
+
+==================================================
+35. SCROLL ARCHITECTURE
+==================================================
+
+Desktop:
+
+Left receipt history should scroll independently when needed.
+
+Right receipt body should scroll independently when needed.
+
+Sticky mini-header stays visible inside right pane.
+
+Avoid making the entire browser page excessively tall just because one receipt has many items.
+
+Concept:
+
+RECEIPT WORKSPACE
+height based on available POS viewport
+
+LEFT
+overflow-y: auto
+
+RIGHT
+header: sticky
+content: overflow-y: auto
+
+Adapt to existing POS shell.
+
+==================================================
+36. GLOBAL POS HEADER
+==================================================
+
+The global POS header must remain visible according to the existing sticky POS-shell rule.
+
+Receipt workspace scrolling must occur BELOW it.
+
+Do not cause the main POS head navigation to disappear.
+
+==================================================
+37. TABLET LANDSCAPE
+==================================================
+
+If enough width exists:
+
+retain master/detail.
+
+Allow a slightly narrower receipt history pane.
+
+Keep touch targets usable.
+
+Do not shrink text excessively.
+
+==================================================
+38. TABLET PORTRAIT
+==================================================
+
+Do not force an unusably narrow split view.
+
+Preferred:
+
+receipt list
+→ tap receipt
+→ right-side Sheet / large detail drawer
+
+depending on available width.
+
+The detail Sheet should include:
+
+Receipt #X
+Time
+Status
+Refund
+⋮
+
+and full receipt content.
+
+==================================================
+39. MOBILE
+==================================================
+
+Phone behavior:
+
+Receipt history is the primary screen.
+
+Use:
+
+date grouping
+compact rows
+payment icon
+total
+time
+receipt number
+
+Tap receipt:
+
+open a near-full-screen/full-screen receipt detail Sheet.
+
+Do NOT force desktop split view.
+
+Mobile detail header:
+
+Receipt #48
+1:18 PM
+
+Completed
+
+[ Refund ] [ ⋮ ]
+
+or a compact equivalent.
+
+Keep vertical ellipsis:
+
+⋮
+
+==================================================
+40. MOBILE RECEIPT DETAIL
+==================================================
+
+On mobile:
+
+header remains sticky.
+
+Receipt content scrolls.
+
+Actions remain reachable.
+
+Do not place Print/Digital/Refund at the end of a potentially very long receipt.
+
+==================================================
+41. MOBILE THREE-DOT MENU
+==================================================
+
+Use:
+
+⋮
+
+with:
+
+Print receipt
+Digital receipt
+
+Refund remains visible if space permits.
+
+If extremely narrow viewport requires wrapping:
+
+place Refund on its own compact line before hiding it in overflow.
+
+Do not silently move the financial action into utility overflow merely for visual convenience unless absolutely necessary.
+
+==================================================
+42. STABLE HEIGHT / WIDTH
+==================================================
+
+Prevent eyestrain-causing layout bugs.
+
+No receipt interaction should unexpectedly:
+
+- grow the page
+- shrink the page
+- change pane width
+- move the toolbar
+- animate the entire receipt
+- jump scroll position
+- re-center the application
+
+Use predictable dimensions.
+
+==================================================
+43. SCROLL POSITION
+==================================================
+
+When selecting another receipt:
+
+receipt detail content may reset to top intentionally.
+
+But:
+
+receipt history list should NOT jump back to top.
+
+Preserve the cashier's position within receipt history.
+
+==================================================
+44. LOADING STATE SCOPING
+==================================================
+
+Loading must be action-specific.
+
+Selecting receipt:
+only detail pane loads if required.
+
+Print:
+only Print action shows pending.
+
+Digital receipt:
+only digital receipt action shows pending.
+
+Refund:
+only refund action/workflow shows pending.
+
+PIN approval:
+only approval action shows pending.
+
+Do not make Print and Refund load simultaneously.
+
+==================================================
+45. BEGINNER-FRIENDLY MICROCOPY
+==================================================
+
+Use plain operational language.
+
+GOOD:
+
+No receipt found.
+
+Request approval.
+
+Approve with PIN.
+
+This receipt has already been fully refunded.
+
+BAD:
+
+REFUND_PERMISSION_FAILURE
+
+No matching server record.
+
+Approval state mutation failed.
+
+==================================================
+46. PERMISSION SECURITY
+==================================================
+
+Frontend hiding is NOT security.
+
+Backend must authorize:
+
+- receipt access
+- print if restricted
+- digital delivery
+- refund request
+- refund approval
+- refund execution
+
+Store/organization scope must remain enforced.
+
+Direct API/server-action requests must not bypass permissions.
+
+==================================================
+47. AUDIT TRAIL
+==================================================
+
+Meaningful refund events should retain audit context.
+
+Examples:
+
+Refund requested
+Refund approved
+Refund rejected
+Refund executed
+
+Include:
+
+receipt
+store
+register
+requesting employee
+approver
+amount
+reason
+timestamp
+
+Never log PIN values.
+
+==================================================
+48. OFFLINE CONSIDERATIONS
+==================================================
+
+Do not fake refund approval or refund completion while offline if the existing integrity model requires server authorization.
+
+If refund cannot safely proceed offline:
+
+show a clear message.
+
+Example:
+
+Refund approval requires a connection.
+
+Do not silently queue a financial refund if current architecture does not safely support it.
+
+Printing an already-synced/local receipt may continue according to existing capability.
+
+==================================================
+49. NO UNRELATED BACKEND REWRITE
+==================================================
+
+This is primarily:
+
+- receipt UI redesign
+- selection state cleanup
+- search UX
+- refund approval integration
+
+Reuse existing:
+
+receipt data
+refund services
+approval services
+PIN verification
+permissions
+RPCs
+inventory reversal logic
+payment reversal logic
+
+Do not create parallel receipt/refund systems.
+
+==================================================
+50. REMOVE OLD POS RECEIPT UI
+==================================================
+
+After implementation, audit for obsolete POS receipt presentation such as:
+
+View buttons
+per-row Refund buttons
+per-row Print buttons
+per-row Digital Receipt buttons
+Open full receipt
+duplicate date labels
+duplicate store/register labels
+horizontal ellipsis for receipt actions
+old center receipt modal
+old unnecessary receipt preview in Digital Receipt
+
+Inspect each match before removal.
+
+Do not remove legitimate Back Office functionality.
+
+If obsolete code cannot safely be deleted:
+
+mark:
+
+CANDIDATE_FOR_REMOVAL
+
+==================================================
+FINAL DESKTOP TARGET
+==================================================
+
+Conceptually:
+
+┌───────────────────────┬──────────────────────────────────────┐
+│ WED, SEP 2, 2026      │ Receipt #297 · 11:05 AM              │
+│                       │ Completed          [Refund] [⋮]       │
+│ 💵 ₱380          #297 │──────────────────────────────────────│
+│ Cash · 11:05 AM       │                                      │
+│                       │          RECEIPT CONTENT              │
+│ TUE, SEP 1, 2026      │                                      │
+│                       │                                      │
+│ GCash ₱550       #296 │                                      │
+│ GCash · 9:15 PM       │                                      │
+│                       │                                      │
+│ FRI, AUG 28, 2026     │                                      │
+│                       │                                      │
+│ 💵 ₱360           #49 │                                      │
+│ Cash · 4:04 PM        │                                      │
+│                       │                                      │
+│ G/B/C ₱1,440      #48 │                                      │
+│ Split · 1:18 PM       │                                      │
+└───────────────────────┴──────────────────────────────────────┘
+
+⋮ menu:
+
+Print receipt
+Digital receipt
+
+==================================================
+FINAL REFUND TARGET
+==================================================
+
+Refund
+↓
+Choose items / quantities
+↓
+Reason
+↓
+Calculate eligible refund
+↓
+Evaluate permission
+↓
+IF approval needed:
+
+[ Approve with PIN ]
+[ Request approval ]
+
+Approve with PIN:
+authorized nearby supervisor/manager/owner
+↓
+server-side verification
+↓
+approval
+
+Request approval:
+backend approval request
+↓
+authorized approver
+↓
+approve/reject
+↓
+resume pending refund
+
+Then:
+execute canonical refund
+↓
+update receipt status
+↓
+audit history
+
+==================================================
+IMPLEMENTATION ORDER
+==================================================
+
+PHASE 0
+Audit existing receipt/refund/search architecture.
+
+PHASE 1
+Stabilize receipt workspace layout.
+
+PHASE 2
+Implement date-grouped compact receipt list.
+
+PHASE 3
+Implement payment icons/compact row hierarchy.
+
+PHASE 4
+Remove redundant POS row metadata.
+
+PHASE 5
+Fix receipt selection state/animation/loading issues.
+
+PHASE 6
+Implement sticky receipt mini-header.
+
+PHASE 7
+Implement vertical ⋮ menu.
+
+PHASE 8
+Move Print + Digital Receipt into ⋮.
+
+PHASE 9
+Simplify Digital Receipt to delivery-only UI.
+
+PHASE 10
+Implement/refine search + clear + no-results behavior.
+
+PHASE 11
+Implement refund UI.
+
+PHASE 12
+Integrate permission-based refund authorization.
+
+PHASE 13
+Implement Approve with PIN.
+
+PHASE 14
+Implement Request Approval.
+
+PHASE 15
+Verify partial/full refund states.
+
+PHASE 16
+Tablet responsive implementation.
+
+PHASE 17
+Mobile receipt implementation.
+
+PHASE 18
+Animation/layout stability audit.
+
+PHASE 19
+Security + store scope + audit verification.
+
+PHASE 20
+Regression testing.
+
+Proceed through ALL phases.
+
+Do not stop after merely changing the receipt rows.
+
+==================================================
+MANDATORY QA
+==================================================
+
+TEST RECEIPT HISTORY
+
+- receipts grouped by date
+- date not repeated in each row
+- time visible
+- total visible
+- receipt number visible
+- payment method understandable
+- split payment understandable
+- no View button
+- whole row clickable
+
+
+TEST SELECTION
+
+- click receipt #48
+- detail becomes #48
+- click #49
+- detail becomes #49
+- left pane does not resize
+- right pane does not resize
+- no scale animation
+- no page jump
+- no temporary enlarged row
+- no stray Loading Receipt under row
+
+
+TEST HEADER
+
+- receipt number visible
+- time visible
+- status visible
+- Refund visible
+- vertical ⋮ visible
+- header stays while receipt content scrolls
+
+
+TEST ⋮
+
+Click vertical ⋮.
+
+Only appropriate utility actions appear:
+
+Print receipt
+Digital receipt
+
+Refund is not inside the utility menu.
+
+
+TEST PRINT
+
+Print targets currently selected receipt.
+
+
+TEST DIGITAL RECEIPT
+
+Digital receipt opens only delivery UI.
+
+No duplicate receipt preview.
+
+
+TEST SEARCH
+
+Search valid receipt:
+matches appear.
+
+Search invalid receipt:
+show No receipt found.
+
+Click Clear search:
+normal date-grouped history returns.
+
+Delete entire search input manually:
+normal history returns automatically.
+
+
+TEST REFUND — CASHIER
+
+Cashier without direct approval:
+Refund
+→ approval required.
+
+Test:
+
+Approve with PIN
+
+and:
+
+Request approval.
+
+
+TEST PIN
+
+Invalid approver PIN:
+rejected.
+
+Employee without refund approval:
+rejected.
+
+Employee outside store scope:
+rejected.
+
+Authorized approver:
+accepted.
+
+
+TEST REQUEST APPROVAL
+
+Request created.
+Approver can approve/reject.
+Approved request resumes same refund.
+Rejected request cannot execute.
+
+
+TEST REFUND INTEGRITY
+
+Partial refund.
+Full refund.
+Already-refunded quantity.
+Duplicate refund submission.
+Receipt status.
+Inventory.
+Payments.
+Audit history.
+
+
+TEST RESPONSIVE
+
+Desktop
+Laptop
+Tablet landscape
+Tablet portrait
+Large phone
+Normal phone
+Small phone
+
+
+TEST ACCESSIBILITY
+
+- clickable rows keyboard accessible
+- selected state accessible
+- ⋮ has accessible label such as Receipt actions
+- payment icons have text/labels
+- status does not rely only on color
+- refund modal accessible
+- PIN input accessible
+- drawers/sheets restore focus
+
+==================================================
+VALIDATION
+==================================================
+
+Run:
+
+npm run typecheck
+npm run lint
+npm run build
+
+Run existing relevant automated tests.
+
+Do not introduce new warnings.
+
+==================================================
+FINAL REPORT
+==================================================
+
+Report:
+
+1. Existing receipt architecture found
+2. Receipt list files changed
+3. Receipt detail files changed
+4. Search changes
+5. Selection/loading bug root cause
+6. Animation/stability changes
+7. Date grouping implementation
+8. Payment presentation
+9. Sticky mini-header
+10. Vertical ⋮ implementation
+11. Print behavior
+12. Digital receipt behavior
+13. Refund workflow
+14. Refund permissions
+15. PIN approval flow
+16. Remote approval flow
+17. Partial refund protection
+18. Desktop result
+19. Tablet result
+20. Mobile result
+21. Accessibility
+22. Security/RLS
+23. Audit logging
+24. Offline considerations
+25. Tests
+26. Typecheck
+27. Lint
+28. Build
+29. CANDIDATE_FOR_REMOVAL
+30. Remaining risks
+
+==================================================
+FINAL COMPLETION RULE
+==================================================
+
+Do NOT report:
+
+"Receipt redesign mostly implemented."
+
+Do NOT stop after visual changes.
+
+The redesign is complete only when:
+
+- compact receipt history works
+- date grouping works
+- redundant metadata is removed from POS presentation
+- receipt selection is stable
+- sticky mini-header works
+- Refund + vertical ⋮ hierarchy works
+- Print works
+- Digital Receipt is simplified
+- search/no-results/clear logic works
+- refund permissions work
+- PIN approval works
+- backend approval request works
+- partial/full refund integrity works
+- desktop/tablet/mobile are verified
+- typecheck/lint/build pass
+
+AUDIT
+→ IMPLEMENT
+→ TEST
+→ RE-AUDIT
+→ REPORT
+→ STOP.

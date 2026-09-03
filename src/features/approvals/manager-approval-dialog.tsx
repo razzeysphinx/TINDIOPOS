@@ -1,9 +1,10 @@
 "use client";
 
-import { LoaderCircle, ShieldCheck, X } from "lucide-react";
+import { Clock3, LoaderCircle, ShieldCheck } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { approveManagerApprovalAction } from "@/features/approvals/actions";
 
@@ -12,16 +13,23 @@ export function ManagerApprovalDialog({
   operationLabel,
   onApproved,
   onCancel,
+  onRequestApproval,
+  requestAmount,
+  requestReference,
 }: {
   approvalRequestId: string;
   operationLabel: string;
   onApproved: () => void;
   onCancel: () => void;
+  onRequestApproval?: () => void;
+  requestAmount?: string;
+  requestReference?: string;
 }) {
   const [employeeNumber, setEmployeeNumber] = useState("");
   const [pin, setPin] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [showPin, setShowPin] = useState(!onRequestApproval);
 
   const approve = () => {
     setMessage(null);
@@ -38,32 +46,34 @@ export function ManagerApprovalDialog({
   };
 
   return (
-    <div
-      aria-labelledby="manager-approval-title"
-      aria-modal="true"
-      className="fixed inset-0 z-50 grid place-items-center bg-foreground/35 p-4"
-      onMouseDown={(event) => {
-        if (event.currentTarget === event.target && !isPending) onCancel();
-      }}
-      role="dialog"
-    >
-      <section className="max-h-[calc(100svh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-xl border bg-background p-4 shadow-xl sm:p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold tracking-[0.14em] text-primary">TINDIO SECURITY</p>
-            <h2 className="mt-1 break-words text-lg font-semibold" id="manager-approval-title">
-              Manager approval required
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Approve this {operationLabel.toLowerCase()} only. The cashier keeps their own access.
+    <Dialog.Root onOpenChange={(open) => { if (!open && !isPending) onCancel(); }} open>
+      <DialogContent closeLabel="Cancel manager approval" showCloseButton={!isPending}>
+        <DialogHeader>
+          <p className="text-xs font-semibold tracking-[0.14em] text-primary">TINDIO SECURITY</p>
+          <DialogTitle className="mt-1 break-words">Manager approval required</DialogTitle>
+          <DialogDescription>
+            Approve this {operationLabel.toLowerCase()} only. The cashier keeps their own access.
+          </DialogDescription>
+          {requestReference || requestAmount ? <p className="mt-2 text-sm font-medium">{[requestReference, requestAmount].filter(Boolean).join(" · ")}</p> : null}
+        </DialogHeader>
+
+        <DialogBody>
+        {!showPin ? (
+          <div className="grid gap-3">
+            <Button onClick={() => setShowPin(true)} type="button">
+              <ShieldCheck />
+              Approve with PIN
+            </Button>
+            <Button onClick={onRequestApproval} type="button" variant="outline">
+              <Clock3 />
+              Request approval
+            </Button>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Use a nearby authorized employee&apos;s PIN, or leave this request pending for an authorized approver in Back Office.
             </p>
           </div>
-          <Button aria-label="Cancel manager approval" disabled={isPending} onClick={onCancel} size="icon" type="button" variant="ghost">
-            <X />
-          </Button>
-        </div>
-
-        <div className="mt-5 grid gap-3">
+        ) : (
+        <div className="grid gap-3">
           <label className="grid gap-1.5 text-sm font-medium">
             Manager employee number
             <Input
@@ -98,7 +108,9 @@ export function ManagerApprovalDialog({
           </div>
           {message ? <p aria-live="polite" className="text-sm text-muted-foreground">{message}</p> : null}
         </div>
-      </section>
-    </div>
+        )}
+        </DialogBody>
+      </DialogContent>
+    </Dialog.Root>
   );
 }

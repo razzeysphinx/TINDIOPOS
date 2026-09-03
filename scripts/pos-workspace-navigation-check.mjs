@@ -31,6 +31,9 @@ for (const [label, href] of [["Sales", "/pos"], ["Receipts", "/pos/receipts"], [
 }
 
 assert.match(header, /OfflineQueueStatus/, "POS header must expose automatic sync state");
+assert.match(header, /sticky top-0 z-40/, "The shared POS header must remain above every scrolling POS workspace");
+assert.match(header, /bg-card/, "The persistent POS header must use an opaque surface");
+assert.match(header, /shadow-\[/, "The persistent POS header must retain a subtle scrolling separator");
 assert.match(header, /onCreateCustomer/, "POS header must expose the New customer creation action");
 assert.match(header, /onViewCart/, "POS header must provide the compact cart review action");
 assert.match(header, /ShoppingCart/, "The compact cart review action must have a recognizable icon");

@@ -20,6 +20,18 @@ const checkoutItemSchema = z.object({
   itemNote: z.string().trim().max(500).nullable().optional(),
 });
 
+export const validateCartStockSchema = z.object({
+  storeId: z.uuid(),
+  registerId: z.uuid(),
+  items: z.array(checkoutItemSchema.pick({
+    productId: true,
+    variantId: true,
+    quantity: true,
+  })).min(1).max(100),
+});
+
+export type ValidateCartStockValues = z.infer<typeof validateCartStockSchema>;
+
 const checkoutPaymentSchema = z
   .object({
     paymentMethodId: z.uuid(),

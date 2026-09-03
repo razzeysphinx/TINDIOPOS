@@ -1,13 +1,13 @@
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ReceiptText, Search } from "lucide-react";
+import { ReceiptText } from "lucide-react";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { loadPosReceiptHistory, loadPosWorkspace } from "@/features/pos/data";
 import { PosReceiptHistory } from "@/features/pos/pos-receipt-history";
+import { PosReceiptSearch } from "@/features/pos/pos-receipt-search";
 import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
 import { canAccessBackOffice, getPosNavigationCapabilities, getWorkspaceHome, hasPermission, hasStoreAccess, requireBusinessContext } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,8 @@ export default async function PosReceiptsPage({
   ]);
   const hasMore = receipts.length === 25;
   const canIssueRefund = hasPermission(context, "sales.refund");
+  const canRequestRefund = hasPermission(context, "approvals.request");
+  const canAuthorizeRefund = hasPermission(context, "approvals.authorize");
   const canReprintReceipts = hasPermission(context, "receipts.reprint");
   const nextBefore = hasMore ? receipts.at(-1)?.receipt_number : undefined;
   const pageQuery = new URLSearchParams();
@@ -42,7 +44,7 @@ export default async function PosReceiptsPage({
   if (nextBefore) pageQuery.set("before", String(nextBefore));
 
   return (
-    <main className="min-h-svh bg-background">
+    <main className="min-h-svh bg-background lg:grid lg:h-svh lg:grid-rows-[auto_1fr] lg:overflow-hidden">
       <PosWorkspaceHeader
         canAccessBackOffice={canAccessBackOffice(context)}
         {...getPosNavigationCapabilities(context)}
@@ -55,31 +57,24 @@ export default async function PosReceiptsPage({
         timezone={context.organization.timezone}
         title="Receipts"
       />
-      <section className="mx-auto w-full max-w-5xl space-y-5 p-4 sm:p-6 lg:p-8">
-        <div>
-          <p className="text-xs font-semibold tracking-[0.12em] text-primary uppercase">POS history</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-[-0.03em]">Receipts</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Your completed sales are shown here. Managers with refund access can also review receipts in their assigned stores.
-          </p>
-        </div>
-
-        <form className="flex flex-col gap-2 sm:flex-row" method="get">
-          <label className="sr-only" htmlFor="pos-receipt-search">Search receipts</label>
-          <div className="relative min-w-0 flex-1">
-            <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="h-10 pl-9" defaultValue={query} id="pos-receipt-search" name="q" placeholder="Receipt number, store, register, or cashier" />
+      <section className="mx-auto flex min-h-0 w-full max-w-6xl flex-col gap-4 p-4 sm:p-6 lg:h-full lg:p-6">
+        <div className="grid shrink-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)] sm:items-end">
+          <div>
+            <p className="text-xs font-semibold tracking-[0.12em] text-primary uppercase">POS history</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-[-0.03em]">Receipts</h1>
           </div>
-          <Button type="submit" variant="outline">Search</Button>
-        </form>
+          <PosReceiptSearch initialQuery={query} key={query} />
+        </div>
 
         {receipts.length > 0 ? (
           <PosReceiptHistory
             receipts={receipts.map((receipt) => ({
               ...receipt,
               canReprint: canReprintReceipts,
-              canRefund: canIssueRefund && hasStoreAccess(context, receipt.store_id),
+              canRefund: (canIssueRefund || canRequestRefund) && hasStoreAccess(context, receipt.store_id),
             }))}
+            paymentMethods={workspace.paymentMethods}
+            showEmployeeContext={canIssueRefund || canAuthorizeRefund}
             timezone={context.organization.timezone}
           />
         ) : (
@@ -87,15 +82,18 @@ export default async function PosReceiptsPage({
             <CardContent className="grid min-h-48 place-items-center p-6 text-center">
               <div>
                 <ReceiptText className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
-                <p className="mt-3 font-medium">No matching POS receipts</p>
-                <p className="mt-1 text-sm text-muted-foreground">Completed receipts in your permitted store scope will appear here.</p>
+                <p className="mt-3 font-medium">{query ? "No receipt found" : "No receipts yet."}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {query ? `We couldn't find a receipt matching “${query}”.` : "Completed sales will appear here."}
+                </p>
+                {query ? <Link className={cn(buttonVariants({ className: "mt-4", variant: "outline" }))} href="/pos/receipts">Clear search</Link> : null}
               </div>
             </CardContent>
           </Card>
         )}
 
         {nextBefore ? (
-          <div className="flex justify-center">
+          <div className="flex shrink-0 justify-center">
             <Link className={cn(buttonVariants({ variant: "outline" }))} href={`/pos/receipts?${pageQuery.toString()}`}>
               Load earlier receipts
             </Link>

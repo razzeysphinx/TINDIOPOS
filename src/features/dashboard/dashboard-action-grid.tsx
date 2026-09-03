@@ -33,6 +33,9 @@ function getBusinessActions(
   permissions: readonly string[],
   inventoryEnabled: boolean,
 ): DashboardAction[] {
+  // CANDIDATE_FOR_REMOVAL: the Owner Dashboard now uses compact, low-priority
+  // quick actions. Keep this branch until every external reference is verified;
+  // the inventory surface below is still an active dependency.
   const actions: DashboardAction[] = [];
 
   if (hasPermission(permissions, "reports.view")) {

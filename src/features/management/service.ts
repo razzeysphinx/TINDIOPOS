@@ -5,8 +5,11 @@ import {
   createRegisterSchema,
   createRoleSchema,
   createStoreSchema,
+  changeEmployeeLifecycleSchema,
+  deleteEmployeeSchema,
   revokeInvitationSchema,
   updateEmployeeAssignmentsSchema,
+  updateEmployeeProfileSchema,
   updateRegisterSchema,
   updateRoleSchema,
   updateStoreSchema,
@@ -247,6 +250,56 @@ export async function updateEmployeeAssignments(
   }
 
   return { ok: true, message: "Employee assignments updated." };
+}
+
+export async function updateEmployeeProfile(
+  context: BusinessContext,
+  input: unknown,
+): Promise<ManagementActionResult> {
+  const parsed = updateEmployeeProfileSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("update_employee_profile", {
+    target_organization_id: context.organization.id,
+    target_employee_id: parsed.data.employeeId,
+    target_full_name: parsed.data.fullName,
+    target_phone: parsed.data.phone,
+  });
+  if (error) return { ok: false, message: databaseMessage(error.code, error.message || "TINDIO could not update the employee profile.") };
+  return { ok: true, message: "Employee profile updated." };
+}
+
+export async function changeEmployeeLifecycle(
+  context: BusinessContext,
+  input: unknown,
+): Promise<ManagementActionResult<{ status: string }>> {
+  const parsed = changeEmployeeLifecycleSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("change_employee_lifecycle", {
+    target_organization_id: context.organization.id,
+    target_employee_id: parsed.data.employeeId,
+    target_action: parsed.data.action,
+    target_reason: parsed.data.reason,
+  });
+  if (error || !data) return { ok: false, message: databaseMessage(error?.code, error?.message || "TINDIO could not change this employee's status.") };
+  return { ok: true, message: parsed.data.action === "REACTIVATE" ? "Employee reactivated. Set a new PIN before they use attendance." : parsed.data.action === "ARCHIVE" ? "Employee archived." : "Employee deactivated.", data: { status: data } };
+}
+
+export async function deleteEmployeeIfEligible(
+  context: BusinessContext,
+  input: unknown,
+): Promise<ManagementActionResult> {
+  const parsed = deleteEmployeeSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("delete_employee_if_eligible", {
+    target_organization_id: context.organization.id,
+    target_employee_id: parsed.data.employeeId,
+    target_confirmation_number: parsed.data.confirmationNumber,
+  });
+  if (error || !data) return { ok: false, message: databaseMessage(error?.code, error?.message || "TINDIO could not permanently delete this employee.") };
+  return { ok: true, message: "Employee permanently deleted." };
 }
 
 export async function createEmployeeInvitation(

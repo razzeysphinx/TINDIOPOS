@@ -60,9 +60,26 @@ export const updateRoleSchema = createRoleSchema
 export const updateEmployeeAssignmentsSchema = z.object({
   employeeId: z.uuid(),
   jobTitle: z.string().trim().max(120),
-  status: z.enum(["active", "inactive", "suspended"]),
+  status: z.enum(["active", "inactive", "suspended", "archived"]),
   roleIds: z.array(z.uuid()).min(1, "Assign at least one role.").max(20),
   storeIds: z.array(z.uuid()).min(1, "Assign at least one active store.").max(100),
+});
+
+export const updateEmployeeProfileSchema = z.object({
+  employeeId: z.uuid(),
+  fullName: z.string().trim().min(2, "Enter the employee's name.").max(160),
+  phone: z.string().trim().max(40),
+});
+
+export const changeEmployeeLifecycleSchema = z.object({
+  employeeId: z.uuid(),
+  action: z.enum(["DEACTIVATE", "REACTIVATE", "ARCHIVE"]),
+  reason: z.string().trim().min(2, "Enter a reason.").max(500),
+});
+
+export const deleteEmployeeSchema = z.object({
+  employeeId: z.uuid(),
+  confirmationNumber: z.string().trim().min(2).max(32),
 });
 
 export const createInvitationSchema = z.object({
@@ -103,4 +120,5 @@ export type UpdateRegisterValues = z.infer<typeof updateRegisterSchema>;
 export type CreateRoleValues = z.infer<typeof createRoleSchema>;
 export type UpdateRoleValues = z.infer<typeof updateRoleSchema>;
 export type UpdateEmployeeAssignmentsValues = z.infer<typeof updateEmployeeAssignmentsSchema>;
+export type UpdateEmployeeProfileValues = z.infer<typeof updateEmployeeProfileSchema>;
 export type CreateInvitationValues = z.infer<typeof createInvitationSchema>;

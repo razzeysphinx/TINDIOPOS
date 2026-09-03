@@ -1,0 +1,462 @@
+TINDIO POS — FIX GLOBAL HEAD NAVIGATION / STICKY POS HEADER
+
+CURRENT PROBLEM
+
+The POS top navigation/header disappears when scrolling through long sections such as:
+
+- Items
+- Receipts
+- Shift
+- Sales
+- Settings
+
+This is incorrect for a cashier workspace.
+
+The POS header contains important persistent operational context and MUST remain visible at all times.
+
+==================================================
+GLOBAL RULE
+==================================================
+
+THE POS HEAD NAVIGATION MUST NEVER SCROLL OUT OF VIEW.
+
+This must be fixed at the POS SHELL / LAYOUT level.
+
+Do NOT patch only the Items page.
+
+The behavior must apply consistently to every POS route/workspace.
+
+==================================================
+TARGET ARCHITECTURE
+==================================================
+
+Structure the POS shell conceptually as:
+
+POS SHELL
+
+├── STICKY / FIXED POS HEADER
+│   ├── hamburger/navigation trigger
+│   ├── current POS section
+│   ├── business / employee context
+│   ├── connection / sync status
+│   └── contextual header actions where applicable
+│
+└── SCROLLABLE POS CONTENT
+    ├── Sales
+    ├── Receipts
+    ├── Shift
+    ├── Items
+    └── Settings
+
+The HEADER stays.
+
+The PAGE CONTENT scrolls.
+
+==================================================
+IMPLEMENTATION REQUIREMENT
+==================================================
+
+Inspect the existing POS layout first.
+
+Determine whether the current architecture uses:
+
+- page/body scrolling
+- nested POS shell scrolling
+- overflow containers
+- sticky/fixed headers
+- App Router layouts
+
+Fix this in the highest appropriate shared POS layout component.
+
+Prefer ONE shared implementation.
+
+Do NOT duplicate sticky-header CSS into every route.
+
+==================================================
+DESKTOP
+==================================================
+
+Desktop header should remain pinned to the top of the POS viewport.
+
+Example:
+
+┌──────────────────────────────────────────────────────────────┐
+│ ☰  Items                      RAZZEY TRADING · Razzy    Online│
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│ PAGE CONTENT                                                  │
+│                                                              │
+│ ← THIS AREA SCROLLS                                           │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+
+Scrolling 5000px down the Items page must still show the header.
+
+==================================================
+TABLET
+==================================================
+
+Same rule.
+
+Header remains visible in:
+
+- tablet landscape
+- tablet portrait
+
+Do not allow the header to disappear just because the layout changes breakpoint.
+
+Keep controls touch-friendly.
+
+==================================================
+MOBILE
+==================================================
+
+Mobile header must also remain visible.
+
+However, keep it compact so it does not consume too much vertical space.
+
+Conceptually:
+
+☰  Sales                    ● Online
+   Razzy Sphinx
+
+or equivalent current design.
+
+Do NOT make the mobile header unnecessarily tall.
+
+When mobile cart badge is implemented, it may also live in this persistent header.
+
+==================================================
+SCROLL OWNERSHIP
+==================================================
+
+Avoid letting the entire browser document be the uncontrolled scroll container if that causes the POS header to disappear.
+
+Prefer a shell structure where appropriate:
+
+POS ROOT
+height: 100dvh
+
+HEADER
+flex-shrink: 0
+sticky/fixed top
+
+CONTENT
+flex: 1
+overflow-y: auto
+
+Adapt this to the current architecture.
+
+Do not blindly apply exact CSS without inspecting existing containers.
+
+==================================================
+STICKY VS FIXED
+==================================================
+
+Prefer sticky inside the POS shell if it works correctly with the existing layout.
+
+Example concept:
+
+position: sticky
+top: 0
+
+If the existing overflow architecture prevents sticky from behaving correctly, fix the scroll container rather than adding random fixed positioning.
+
+Use fixed only if necessary.
+
+Do NOT create:
+
+header fixed over content
++
+content starting underneath it
+
+without compensating for header height.
+
+No content may become hidden behind the header.
+
+==================================================
+BACKGROUND
+==================================================
+
+The header must have an OPAQUE surface.
+
+Do not allow page text/product rows to visually appear through or behind it while scrolling.
+
+Use the existing TINDIO POS surface/background.
+
+==================================================
+BORDER / SHADOW
+==================================================
+
+Use a subtle separator when content is scrolling beneath the header.
+
+For example:
+
+- bottom border
+- very subtle shadow
+
+Do not make the header visually heavy.
+
+The goal is simply to preserve hierarchy.
+
+==================================================
+Z-INDEX
+==================================================
+
+Create a controlled stacking hierarchy.
+
+Header should be above ordinary:
+
+- product rows
+- cards
+- tables
+- page content
+
+but below:
+
+- dialogs
+- sheets
+- popovers that intentionally overlay it
+
+Do NOT fix this with random:
+
+z-[99999]
+
+values.
+
+Use the application's existing layer strategy.
+
+==================================================
+POPOVERS
+==================================================
+
+Controls launched from the sticky header must still display correctly.
+
+Examples:
+
+- hamburger navigation
+- sync status popover
+- cart sheet trigger
+- account/navigation elements
+
+They must not be clipped by the header's overflow container.
+
+Do not set overflow hidden on the header if it breaks overlays.
+
+==================================================
+POS SECTION CONTEXT
+==================================================
+
+The persistent header should continue showing useful context.
+
+Examples:
+
+Sales
+Receipts
+Shift
+Items
+Settings
+
+Do not lose the current section label while scrolling.
+
+Business/employee context should also remain available according to the current UI.
+
+==================================================
+CONNECTION STATUS
+==================================================
+
+Online/offline/sync state must remain visible in the persistent header.
+
+Examples:
+
+Online
+Offline · 3
+Syncing
+Sync problem
+
+This is particularly important during long POS sessions.
+
+==================================================
+NO DUPLICATE HEADERS
+==================================================
+
+Do NOT create a second sticky header inside Items, Receipts, Shift, etc.
+
+There must be ONE POS-level header.
+
+Individual pages may have their own content heading below it.
+
+Example:
+
+GLOBAL HEADER
+☰ Items                         Online
+
+PAGE CONTENT
+OPERATIONAL CATALOG
+Items
+Browse current sellable items...
+
+This is correct.
+
+Do not merge every page heading into the global header unless there is a good architectural reason.
+
+==================================================
+INTERACTION WITH OTHER STICKY UI
+==================================================
+
+We also have other sticky/persistent mobile UI requirements.
+
+Ensure the layer order works with:
+
+- product filter toolbar
+- mobile mini-cart
+- desktop cart footer
+- payment completion footer
+- cart sheet
+- category popover
+
+Conceptually:
+
+TOP:
+Persistent POS Header
+
+MIDDLE:
+Scrollable workspace
+
+BOTTOM ON MOBILE:
+Persistent Mini Cart
+
+OVERLAYS:
+Popover / Drawer / Sheet / Dialog
+
+Do not let sticky regions overlap.
+
+==================================================
+VIEWPORT HEIGHT
+==================================================
+
+Use modern viewport sizing where appropriate.
+
+Prefer 100dvh / equivalent strategy over brittle 100vh if supported by the current stack and browser target.
+
+This is especially important on:
+
+- iOS browsers
+- Android browsers
+- tablets
+
+where browser chrome can change viewport height.
+
+==================================================
+MOBILE KEYBOARD
+==================================================
+
+When the on-screen keyboard opens:
+
+- header should remain logically stable
+- active fields should remain reachable
+- sticky bottom actions must not cover inputs
+
+Do not force the header to jump because viewport height changes.
+
+==================================================
+QA — EVERY POS ROUTE
+==================================================
+
+Test scrolling on:
+
+1. Sales
+2. Receipts
+3. Shift
+4. Items
+5. Settings
+
+If other POS routes exist, test them too.
+
+For each:
+
+scroll from top to bottom.
+
+PASS only if the global POS header remains visible.
+
+==================================================
+QA — DEVICE WIDTHS
+==================================================
+
+Verify:
+
+Desktop
+Laptop
+Tablet landscape
+Tablet portrait
+Normal phone
+Small phone
+Phone landscape
+
+==================================================
+QA — LAYERING
+==================================================
+
+Verify:
+
+- content never renders over header
+- content never becomes visible through header
+- header does not cover first page content
+- category popover still works
+- hamburger works
+- sync status popover works
+- cart sheet works
+- modal overlays remain above header
+- no horizontal overflow introduced
+
+==================================================
+DO NOT BREAK
+==================================================
+
+Do not change:
+
+- POS route permissions
+- shift rules
+- offline state
+- cart state
+- payment logic
+- receipt logic
+- employee identity
+- navigation behavior
+
+This is a shell/layout fix.
+
+==================================================
+IMPLEMENTATION
+==================================================
+
+1. Audit current POS shell and scroll containers.
+2. Identify why header scrolls away.
+3. Fix the shared POS layout.
+4. Ensure page content becomes the intended scroll region.
+5. Apply correct sticky/stacking/background behavior.
+6. Test every POS route.
+7. Test desktop/tablet/mobile.
+8. Run typecheck/lint/build.
+
+==================================================
+FINAL REPORT
+==================================================
+
+Report:
+
+1. Root cause of header disappearing
+2. Shared POS layout file changed
+3. Scroll container architecture
+4. Header positioning strategy
+5. Z-index/layer strategy
+6. Desktop result
+7. Tablet result
+8. Mobile result
+9. Routes tested
+10. Overlay/popover regression result
+11. Typecheck
+12. Lint
+13. Build
+
+STOP after completing and validating the global POS header fix.

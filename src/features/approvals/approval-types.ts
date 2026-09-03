@@ -1,3 +1,5 @@
+import type { Json } from "@/lib/supabase/database.types";
+
 export type ApprovalPreparationResult =
   | {
       ok: true;
@@ -15,6 +17,10 @@ export type ApprovalPreparationResult =
 
 export type ApprovalActionResult =
   | { ok: true; message: string }
+  | { ok: false; message: string };
+
+export type ApprovalStatusResult =
+  | { ok: true; status: "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED" | "CONSUMED" | "CANCELLED"; expiresAt: string }
   | { ok: false; message: string };
 
 export type ApprovalRuleDbRow = {
@@ -35,6 +41,8 @@ export type ApprovalRequestDbRow = {
   requested_at: string;
   decided_at: string | null;
   expires_at: string;
+  request_payload: Json;
+  store_id: string | null;
 };
 
 export type ApprovalAuditLogRow = {

@@ -4,11 +4,18 @@ import { Printer } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
+export function printReceiptDocument() {
+  document.body.dataset.printMode = "receipt";
+  const cleanup = () => { delete document.body.dataset.printMode; };
+  window.addEventListener("afterprint", cleanup, { once: true });
+  window.print();
+  window.setTimeout(cleanup, 1000);
+}
+
 export function ReceiptPrintButton({ printMode }: { printMode?: "receipt" }) {
   const printReceipt = () => {
-    if (printMode === "receipt") document.body.dataset.printMode = "receipt";
-    window.print();
-    if (printMode === "receipt") window.setTimeout(() => { delete document.body.dataset.printMode; }, 0);
+    if (printMode === "receipt") printReceiptDocument();
+    else window.print();
   };
 
   return (

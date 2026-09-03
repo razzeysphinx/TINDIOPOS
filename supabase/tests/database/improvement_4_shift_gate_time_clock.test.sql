@@ -16,14 +16,15 @@ select has_column(
   'organizations can configure blind cash closing'
 );
 select ok(
-  to_regprocedure('public.clock_in_employee(uuid,uuid,text)') is not null
-  and to_regprocedure('public.clock_out_employee(uuid,text)') is not null
+  to_regprocedure('public.clock_in_employee_with_pin(uuid,uuid,uuid,text,uuid)') is not null
+  and to_regprocedure('public.clock_out_employee_with_pin(uuid,uuid,text,uuid)') is not null
   and to_regprocedure('public.get_current_time_clock_entry(uuid)') is not null,
   'time-clock RPCs exist'
 );
 select ok(
-  not has_function_privilege('anon', 'public.clock_in_employee(uuid,uuid,text)', 'execute'),
-  'anonymous callers cannot clock in'
+  not has_function_privilege('anon', 'public.clock_in_employee_with_pin(uuid,uuid,uuid,text,uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'public.clock_in_employee(uuid,uuid,text)', 'execute'),
+  'anonymous callers and the legacy attendance bypass cannot clock in'
 );
 select ok(
   not has_table_privilege('authenticated', 'public.time_clock_entries', 'insert'),
@@ -53,11 +54,18 @@ insert into phase4_context (organization_id, store_id, register_id)
 select organization_id, store_id, register_id
 from public.bootstrap_organization('Phase 4 Controls Retail', 'Phase 4 Main', 'Phase 4 Counter');
 
+select public.set_employee_pin(
+  (select organization_id from phase4_context),
+  (select id from public.employees where organization_id = (select organization_id from phase4_context) and profile_id = 'd4000000-0000-4000-8000-000000000001'),
+  '410041'
+);
+
 select lives_ok(
   format(
-    $$select public.clock_in_employee(%L, %L, null)$$,
+    $$select * from public.clock_in_employee_with_pin(%L, %L, %L, '410041', 'd4000000-0000-4000-8000-000000000041')$$,
     (select organization_id from phase4_context),
-    (select store_id from phase4_context)
+    (select store_id from phase4_context),
+    (select id from public.employees where organization_id = (select organization_id from phase4_context) and profile_id = 'd4000000-0000-4000-8000-000000000001')
   ),
   'an active assigned employee can clock in without opening a register shift'
 );
@@ -68,8 +76,9 @@ select is(
 );
 select lives_ok(
   format(
-    $$select public.clock_out_employee(%L, null)$$,
-    (select organization_id from phase4_context)
+    $$select * from public.clock_out_employee_with_pin(%L, %L, '410041', 'd4000000-0000-4000-8000-000000000042')$$,
+    (select organization_id from phase4_context),
+    (select id from public.employees where organization_id = (select organization_id from phase4_context) and profile_id = 'd4000000-0000-4000-8000-000000000001')
   ),
   'an employee can clock out without a register-shift transition'
 );

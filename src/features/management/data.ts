@@ -3,6 +3,7 @@ import "server-only";
 import type {
   ManagementDisplaySessionRow,
   ManagementEmployeesWorkspace,
+  ManagementEmployeeDetail,
   ManagementRegisterDrawerData,
   ManagementRegisterOperationalDrawerData,
   ManagementRegistersWorkspace,
@@ -533,4 +534,17 @@ export async function loadManagementEmployees(
     rolePermissions: rolePermissionsResult.data ?? [],
     invitations: invitationsResult.data ?? [],
   };
+}
+
+export async function loadManagementEmployeeDetail(
+  context: BusinessContext,
+  employeeId: string,
+): Promise<ManagementEmployeeDetail | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_employee_management_detail", {
+    target_organization_id: context.organization.id,
+    target_employee_id: employeeId,
+  });
+  if (error) throw new Error(`Unable to load employee details: ${error.message}`);
+  return data ? data as unknown as ManagementEmployeeDetail : null;
 }

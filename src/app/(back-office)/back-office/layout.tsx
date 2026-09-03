@@ -18,7 +18,8 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
   await connection();
   const context = await requireBackOfficeContext();
   const displayName = context.profile.full_name || context.profile.email;
-  const canUsePos = context.permissions.includes("pos.access");
+  const canUsePos = context.permissions.includes("pos.access")
+    && context.permissions.includes("sales.create");
   const navigationAccess = {
     canManageSettings: context.permissions.includes("settings.manage"),
     canManageCustomers: context.permissions.includes("customers.manage"),

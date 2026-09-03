@@ -58,10 +58,15 @@ export type PosReceiptSummary = {
   refund_total_minor: number;
   refund_count: number;
   has_refundable_quantity: boolean;
+  payment_methods: Array<{
+    name: string;
+    type: "CASH" | "CARD" | "E_WALLET" | "BANK_TRANSFER" | "VOUCHER" | "OTHER";
+  }>;
 };
 
 export type PosReceiptDetail = {
   receipt: { id: string; number: number; issuedAt: string; layout: Json | null };
+  customerEmail: string | null;
   sale: {
     id: string;
     storeId: string;
@@ -84,6 +89,8 @@ export type PosReceiptDetail = {
     totalMinor: number;
     completedAt: string;
     reason: string;
+    paymentName: string | null;
+    paymentReference: string | null;
     items: Array<{ id: string; saleItemId: string; name: string; quantity: number; unit: string; lineTotalMinor: number }>;
   }>;
 };
@@ -284,7 +291,10 @@ export async function loadPosWorkspace(
   const timeClockEntry: TimeClockEntry | null = timeClockResult.data?.[0]
     ? {
         id: timeClockResult.data[0].entry_id,
+        employeeId: context.employee.id,
+        employeeName: context.profile.full_name || context.profile.email || context.employee.employee_number,
         storeId: timeClockResult.data[0].store_id,
+        storeName: stores.find((store) => store.id === timeClockResult.data[0].store_id)?.name ?? "Assigned store",
         clockedInAt: timeClockResult.data[0].clocked_in_at,
       }
     : null;

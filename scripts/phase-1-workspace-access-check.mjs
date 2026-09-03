@@ -68,6 +68,9 @@ test("Back Office navigation cannot add an unguarded destination or a sidebar PO
 test("authorized Back Office users receive a separate POS workspace switch", async () => {
   const layout = await source("src/app/(back-office)/back-office/layout.tsx");
 
-  assert.match(layout, /const canUsePos = context\.permissions\.includes\("sales\.create"\);/);
+  assert.match(
+    layout,
+    /const canUsePos = context\.permissions\.includes\("pos\.access"\)\s*&& context\.permissions\.includes\("sales\.create"\);/,
+  );
   assert.match(layout, /canUsePos \? \(\s*<Button[^>]*render=\{<Link href="\/pos" \/>\}/);
 });

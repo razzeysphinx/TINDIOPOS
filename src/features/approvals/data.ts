@@ -19,6 +19,13 @@ export async function loadSecurityOverview(
     .order("created_at", { ascending: false })
     .limit(30);
   if (options.storeId) auditQuery = auditQuery.eq("store_id", options.storeId);
+  let requestsQuery = supabase
+    .from("approval_requests")
+    .select("id, store_id, operation_code, status, requested_amount_minor, reason, request_payload, requested_by_employee_id, approved_by_employee_id, requested_at, decided_at, expires_at")
+    .eq("organization_id", organizationId)
+    .order("requested_at", { ascending: false })
+    .limit(20);
+  if (options.storeId) requestsQuery = requestsQuery.eq("store_id", options.storeId);
 
   const [rulesResult, requestsResult, auditResult, employeesResult] = await Promise.all([
     supabase
@@ -27,12 +34,7 @@ export async function loadSecurityOverview(
       .eq("organization_id", organizationId)
       .in("operation_code", approvalOperationSchema.options)
       .order("operation_code"),
-    supabase
-      .from("approval_requests")
-      .select("id, operation_code, status, requested_amount_minor, reason, requested_by_employee_id, approved_by_employee_id, requested_at, decided_at, expires_at")
-      .eq("organization_id", organizationId)
-      .order("requested_at", { ascending: false })
-      .limit(20),
+    requestsQuery,
     options.includeAudit ? auditQuery : Promise.resolve({ data: [], error: null }),
     supabase.from("employees").select("id, employee_number").eq("organization_id", organizationId),
   ]);

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ManagerApprovalDialog } from "@/features/approvals/manager-approval-dialog";
-import { requestManagerApprovalAction } from "@/features/approvals/actions";
+import { loadManagerApprovalStatusAction, requestManagerApprovalAction } from "@/features/approvals/actions";
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
 import { refundSaleAction } from "@/features/receipts/actions";
 
@@ -35,6 +35,8 @@ const selectClassName =
 
 export function RefundForm({
   autoFocus = false,
+  onCompleted,
+  receiptId,
   saleId,
   currencyCode,
   items,
@@ -43,6 +45,8 @@ export function RefundForm({
   receiptNumber,
 }: {
   autoFocus?: boolean;
+  onCompleted?: () => void;
+  receiptId: string;
   saleId: string;
   currencyCode: string;
   items: RefundableItem[];
@@ -61,8 +65,11 @@ export function RefundForm({
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [message, setMessage] = useState<string | null>(null);
   const [approvalRequestId, setApprovalRequestId] = useState<string | null>(null);
+  const [approvalStatus, setApprovalStatus] = useState<"PENDING" | "APPROVED" | "REJECTED" | "EXPIRED" | null>(null);
+  const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const isBusy = isPending || approvalRequestId !== null;
+  const isBusy = isPending || approvalStatus === "PENDING" || approvalStatus === "APPROVED";
+  const draftStorageKey = `tindio-refund-approval:${receiptId}`;
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -71,6 +78,64 @@ export function RefundForm({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [autoFocus]);
+
+  useEffect(() => {
+    let frame: number | null = null;
+    try {
+      const stored = window.sessionStorage.getItem(draftStorageKey);
+      if (!stored) return;
+      const draft = JSON.parse(stored) as {
+        approvalRequestId?: string;
+        idempotencyKey?: string;
+        paymentMethodId?: string;
+        quantities?: Record<string, string>;
+        reason?: string;
+        referenceNumber?: string;
+      };
+      if (!draft.approvalRequestId || !draft.idempotencyKey) return;
+      frame = window.requestAnimationFrame(() => {
+        setApprovalRequestId(draft.approvalRequestId ?? null);
+        setIdempotencyKey(draft.idempotencyKey ?? crypto.randomUUID());
+        if (draft.paymentMethodId) setPaymentMethodId(draft.paymentMethodId);
+        if (draft.quantities) setQuantities(draft.quantities);
+        setReason(draft.reason ?? "");
+        setReferenceNumber(draft.referenceNumber ?? "");
+        setApprovalStatus("PENDING");
+        setMessage("This refund is waiting for approval. Your selected items are preserved.");
+      });
+    } catch {
+      window.sessionStorage.removeItem(draftStorageKey);
+    }
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, [draftStorageKey]);
+
+  useEffect(() => {
+    if (!approvalRequestId || approvalStatus !== "PENDING") return;
+    let active = true;
+    const check = async () => {
+      const result = await loadManagerApprovalStatusAction({ approvalRequestId });
+      if (!active || !result.ok) return;
+      if (result.status === "APPROVED") {
+        setApprovalStatus("APPROVED");
+        setIsApprovalDialogOpen(false);
+        setMessage("Approval received. Complete this exact refund when ready.");
+      } else if (result.status === "REJECTED" || result.status === "EXPIRED" || result.status === "CANCELLED") {
+        setApprovalStatus(result.status === "REJECTED" ? "REJECTED" : "EXPIRED");
+        setApprovalRequestId(null);
+        setIsApprovalDialogOpen(false);
+        window.sessionStorage.removeItem(draftStorageKey);
+        setMessage(result.status === "REJECTED" ? "This refund request was rejected." : "This refund approval expired. Review the refund and request approval again.");
+      }
+    };
+    void check();
+    const interval = window.setInterval(() => void check(), 3000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [approvalRequestId, approvalStatus, draftStorageKey]);
 
   const selectedItems = useMemo(
     () =>
@@ -115,12 +180,20 @@ export function RefundForm({
     setMessage(result.message);
 
     if (result.ok) {
+      window.sessionStorage.removeItem(draftStorageKey);
       setIdempotencyKey(crypto.randomUUID());
+      setApprovalRequestId(null);
+      setApprovalStatus(null);
+      onCompleted?.();
       router.refresh();
     }
   };
 
   const submit = () => {
+    if (!navigator.onLine) {
+      setMessage("Refund approval requires a connection. Reconnect before continuing.");
+      return;
+    }
     if (selectedItems.length === 0) {
       setMessage("Select at least one item and quantity to refund.");
       return;
@@ -141,6 +214,8 @@ export function RefundForm({
         operationCode: "sales.refund",
         reason,
         payload: {
+          receipt_id: receiptId,
+          receipt_number: receiptNumber,
           sale_id: saleId,
           payment_method_id: paymentMethodId,
           reason: reason.trim(),
@@ -159,6 +234,16 @@ export function RefundForm({
 
       if (approval.decision === "APPROVAL_REQUIRED") {
         setApprovalRequestId(approval.data.approvalRequestId);
+        setApprovalStatus("PENDING");
+        setIsApprovalDialogOpen(true);
+        window.sessionStorage.setItem(draftStorageKey, JSON.stringify({
+          approvalRequestId: approval.data.approvalRequestId,
+          idempotencyKey,
+          paymentMethodId,
+          quantities,
+          reason,
+          referenceNumber,
+        }));
         setMessage(approval.message);
         return;
       }
@@ -190,16 +275,16 @@ export function RefundForm({
         </div>
         {remainingItems.length > 0 ? (
           <div className="overflow-hidden rounded-lg border">
-            <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground sm:grid-cols-[minmax(0,1fr)_7rem_6rem]">
+            <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground sm:grid-cols-[minmax(0,1fr)_11rem_6rem]">
               <span>Item</span>
-              <span className="hidden sm:block">Available</span>
+              <span className="hidden sm:block">Purchased · refunded · available</span>
               <span className="text-right">Return qty.</span>
             </div>
             {remainingItems.map((item) => {
               const remainingQuantity = item.quantity - item.refundedQuantity;
               return (
                 <div
-                  className="grid grid-cols-[minmax(0,1fr)_5.5rem] items-center gap-3 border-b px-3 py-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_7rem_6rem]"
+                  className="grid grid-cols-[minmax(0,1fr)_5.5rem] items-center gap-3 border-b px-3 py-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_11rem_6rem]"
                   key={item.saleItemId}
                 >
                   <div className="min-w-0">
@@ -210,7 +295,7 @@ export function RefundForm({
                     </p>
                   </div>
                   <span className="hidden text-sm text-muted-foreground sm:block">
-                    {remainingQuantity} {item.unit}
+                    {item.quantity} · {item.refundedQuantity} · {remainingQuantity} {item.unit}
                   </span>
                   <Input
                     aria-label={`Refund quantity for ${item.name}`}
@@ -262,13 +347,15 @@ export function RefundForm({
         </div>
 
         <label className="grid gap-1.5 text-sm font-medium">
-          Refund reason
+          Refund reason (required)
           <textarea
+            aria-required="true"
             className="min-h-20 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
             disabled={isBusy}
             maxLength={500}
             minLength={2}
             onChange={(event) => setReason(event.target.value)}
+            placeholder="Describe why the customer is returning these items."
             required
             value={reason}
           />
@@ -288,7 +375,9 @@ export function RefundForm({
               isBusy ||
               remainingItems.length === 0 ||
               !paymentMethodId ||
-              selectedItems.length === 0
+              selectedItems.length === 0 ||
+              reason.trim().length < 2 ||
+              Boolean(selectedPaymentMethod?.requiresReference && !referenceNumber.trim())
             }
             onClick={submit}
             type="button"
@@ -297,6 +386,22 @@ export function RefundForm({
             {isPending ? <LoaderCircle className="animate-spin" /> : <RotateCcw />}
             Complete refund
           </Button>
+          {approvalStatus === "PENDING" && approvalRequestId ? (
+            <Button onClick={() => setIsApprovalDialogOpen(true)} type="button" variant="outline">
+              Approve with PIN
+            </Button>
+          ) : null}
+          {approvalStatus === "APPROVED" && approvalRequestId ? (
+            <Button
+              disabled={isPending}
+              onClick={() => startTransition(async () => completeRefund(approvalRequestId))}
+              type="button"
+              variant="destructive"
+            >
+              {isPending ? <LoaderCircle className="animate-spin" /> : <RotateCcw />}
+              Complete approved refund
+            </Button>
+          ) : null}
           {paymentMethods.length === 0 ? (
             <p className="text-sm text-destructive">
               No enabled refund method is available for this store.
@@ -305,18 +410,25 @@ export function RefundForm({
           {message ? <p aria-live="polite" className="text-sm text-muted-foreground">{message}</p> : null}
         </div>
       </CardContent>
-      {approvalRequestId ? (
+      {approvalRequestId && isApprovalDialogOpen ? (
         <ManagerApprovalDialog
           approvalRequestId={approvalRequestId}
           onApproved={() => {
             const requestId = approvalRequestId;
-            setApprovalRequestId(null);
+            setIsApprovalDialogOpen(false);
+            setApprovalStatus("APPROVED");
             startTransition(async () => {
               await completeRefund(requestId);
             });
           }}
-          onCancel={() => setApprovalRequestId(null)}
+          onCancel={() => setIsApprovalDialogOpen(false)}
+          onRequestApproval={() => {
+            setIsApprovalDialogOpen(false);
+            setMessage("Approval request sent. This refund will stay ready while an authorized manager reviews it.");
+          }}
           operationLabel="Refund"
+          requestAmount={formatMinorMoney(totalMinor, currencyCode)}
+          requestReference={`Receipt #${receiptNumber}`}
         />
       ) : null}
     </Card>

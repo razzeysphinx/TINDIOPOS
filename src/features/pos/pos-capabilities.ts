@@ -60,7 +60,7 @@ export function getPosCapabilities({
     canUseDining,
     canUseOpenTickets,
     canUseShiftControls: ["shifts.open", "shifts.close", "cash.pay_in", "cash.pay_out", "settings.manage"].some(has),
-    canUseTimeClock: features.time_clock,
+    canUseTimeClock: features.time_clock && has("attendance.use"),
     canUseCustomerLoyalty: features.loyalty && canCreateSales,
     canViewReceipts: canCreateSales && has("receipts.view"),
     // The configured features remain authoritative. Business type supplies

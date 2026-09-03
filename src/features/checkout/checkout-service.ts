@@ -5,15 +5,117 @@ import {
   checkoutSaleSchema,
   checkoutSubmissionSchema,
   type CheckoutSaleValues,
+  type ValidateCartStockValues,
+  validateCartStockSchema,
 } from "@/features/checkout/checkout-schema";
 import { posDeviceRequestHeaders } from "@/features/devices/device-schema";
 import type {
   CheckoutPaymentSummary,
   CheckoutSaleActionResult,
+  NegativeStockItem,
+  NegativeStockPolicy,
+  ValidateCartStockActionResult,
 } from "@/features/checkout/checkout-types";
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
+
+type StockValidationRpc = {
+  rpc: (name: "validate_pos_cart_stock", args: {
+    target_organization_id: string;
+    target_store_id: string;
+    target_register_id: string;
+    target_items: Json;
+  }) => Promise<{ data: Json | null; error: { code?: string; message?: string } | null }>;
+};
+
+function stockItemFromDatabase(value: unknown): NegativeStockItem | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const item = value as Record<string, unknown>;
+  if (
+    typeof item.product_id !== "string"
+    || (item.variant_id !== null && typeof item.variant_id !== "string")
+    || typeof item.product_name !== "string"
+    || (item.variant_name !== null && typeof item.variant_name !== "string")
+  ) return null;
+
+  const availableQuantity = Number(item.available_quantity);
+  const cartQuantity = Number(item.cart_quantity);
+  const projectedQuantity = Number(item.projected_quantity);
+  if (![availableQuantity, cartQuantity, projectedQuantity].every(Number.isFinite)) return null;
+
+  return {
+    productId: item.product_id,
+    variantId: item.variant_id,
+    productName: item.product_name,
+    variantName: item.variant_name,
+    availableQuantity,
+    cartQuantity,
+    projectedQuantity,
+  };
+}
+
+export async function validateCartStock(
+  context: BusinessContext,
+  input: unknown,
+): Promise<ValidateCartStockActionResult> {
+  if (
+    !hasPermission(context, "pos.access")
+    || !hasPermission(context, "sales.create")
+    || !hasPermission(context, "payments.accept")
+  ) {
+    return { ok: false, message: "You do not have permission to start payment." };
+  }
+
+  const parsed = validateCartStockSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Check the cart, then try Charge again." };
+  const data = parsed.data satisfies ValidateCartStockValues;
+  if (!context.storeIds.includes(data.storeId)) {
+    return { ok: false, message: "You are not assigned to this store." };
+  }
+
+  const supabase = await createClient();
+  const { data: result, error } = await (supabase as unknown as StockValidationRpc).rpc(
+    "validate_pos_cart_stock",
+    {
+      target_organization_id: context.organization.id,
+      target_store_id: data.storeId,
+      target_register_id: data.registerId,
+      target_items: data.items.map((item) => ({
+        product_id: item.productId,
+        variant_id: item.variantId,
+        quantity: item.quantity,
+      })) as Json,
+    },
+  );
+
+  if (error || !result || typeof result !== "object" || Array.isArray(result)) {
+    return {
+      ok: false,
+      message: checkoutDatabaseMessage(error?.code, error?.message),
+    };
+  }
+
+  const payload = result as Record<string, Json | undefined>;
+  const policy = payload.policy;
+  if (policy !== "allow" && policy !== "warn" && policy !== "block") {
+    return { ok: false, message: "TINDIO could not read this store's stock safeguard." };
+  }
+
+  return {
+    ok: true,
+    policy: policy satisfies NegativeStockPolicy,
+    items: Array.isArray(payload.items)
+      ? payload.items.flatMap((item) => {
+          const mapped = stockItemFromDatabase(item);
+          return mapped ? [mapped] : [];
+        })
+      : [],
+    checkedAt: typeof payload.checked_at === "string"
+      ? payload.checked_at
+      : new Date().toISOString(),
+  };
+}
 
 function checkoutDatabaseMessage(
   code: string | undefined,
@@ -305,6 +407,7 @@ export async function completeCheckout(
   const { data: negativeItemCount } = await supabase.rpc("get_checkout_stock_warning", {
     target_organization_id: context.organization.id,
     target_store_id: data.storeId,
+    target_sale_id: result.sale_id,
   });
   const inventoryWarning =
     typeof negativeItemCount === "number" && negativeItemCount > 0

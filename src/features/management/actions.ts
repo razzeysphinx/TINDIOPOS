@@ -13,6 +13,8 @@ import type { ManagementActionResult } from "@/features/management/management-ty
 import { hashInvitationToken } from "@/features/management/invitation-token";
 import {
   createEmployeeInvitation,
+  changeEmployeeLifecycle,
+  deleteEmployeeIfEligible,
   createRegister,
   createRole,
   createStore,
@@ -20,6 +22,7 @@ import {
   revokeEmployeeInvitation,
   updateRegister,
   updateEmployeeAssignments,
+  updateEmployeeProfile,
   updateRole,
   updateStore,
   validationError,
@@ -174,6 +177,30 @@ export async function updateEmployeeAssignmentsAction(
     revalidatePath("/back-office", "layout");
   }
 
+  return result;
+}
+
+export async function updateEmployeeProfileAction(input: unknown): Promise<ManagementActionResult> {
+  const context = await requireBusinessContext();
+  if (!hasPermission(context, "employees.manage")) return { ok: false, message: "You do not have permission to update employees." };
+  const result = await updateEmployeeProfile(context, input);
+  if (result.ok) { revalidatePath("/back-office/employees"); revalidatePath("/back-office/employees", "layout"); }
+  return result;
+}
+
+export async function changeEmployeeLifecycleAction(input: unknown): Promise<ManagementActionResult<{ status: string }>> {
+  const context = await requireBusinessContext();
+  if (!hasPermission(context, "employees.manage")) return { ok: false, message: "You do not have permission to change employee access." };
+  const result = await changeEmployeeLifecycle(context, input);
+  if (result.ok) { revalidatePath("/back-office/employees"); revalidatePath("/back-office", "layout"); revalidatePath("/pos", "layout"); }
+  return result;
+}
+
+export async function deleteEmployeeIfEligibleAction(input: unknown): Promise<ManagementActionResult> {
+  const context = await requireBusinessContext();
+  if (!hasPermission(context, "employees.manage")) return { ok: false, message: "You do not have permission to delete employees." };
+  const result = await deleteEmployeeIfEligible(context, input);
+  if (result.ok) { revalidatePath("/back-office/employees"); revalidatePath("/back-office", "layout"); }
   return result;
 }
 

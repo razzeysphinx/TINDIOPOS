@@ -590,7 +590,7 @@ export function EditEmployeeButton({
   employee: {
     id: string;
     jobTitle: string | null;
-    status: "active" | "inactive" | "suspended";
+    status: "active" | "inactive" | "suspended" | "archived";
     roleIds: string[];
     storeIds: string[];
   };
@@ -651,16 +651,9 @@ export function EditEmployeeButton({
         </DialogHeader>
         <DialogBody>
           <form className="space-y-5" noValidate onSubmit={submit}>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4">
               <FormField label="Job title" error={form.formState.errors.jobTitle?.message}>
                 <Input autoFocus {...form.register("jobTitle")} />
-              </FormField>
-                <FormField label="Status" error={form.formState.errors.status?.message}>
-                  <select disabled={lockOwnRoleAndStatus} className={selectClassName} {...form.register("status")}>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="suspended">Suspended</option>
-                </select>
               </FormField>
             </div>
             <fieldset>

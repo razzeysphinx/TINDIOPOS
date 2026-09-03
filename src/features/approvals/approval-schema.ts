@@ -26,6 +26,11 @@ export const approveManagerApprovalSchema = z.object({
   pin: z.string().regex(/^\d{6,12}$/, "Use a 6–12 digit PIN."),
 });
 
+export const decideManagerApprovalSchema = z.object({
+  approvalRequestId: z.uuid(),
+  decision: z.enum(["APPROVED", "REJECTED"]),
+});
+
 export const setEmployeePinSchema = z.object({
   employeeId: z.uuid(),
   pin: z.string().regex(/^\d{6,12}$/, "Use a 6–12 digit PIN."),

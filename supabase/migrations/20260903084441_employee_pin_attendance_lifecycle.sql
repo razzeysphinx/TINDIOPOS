@@ -301,14 +301,17 @@ begin
   end if;
   actor_id := private.require_attendance_terminal(target_organization_id, target_store_id);
 
-  select employee,
-         coalesce(nullif(profile.full_name, ''), profile.email, employee.employee_number)
-  into selected_employee, selected_name
+  select employee.* into selected_employee
   from public.employees employee
   join public.profiles profile on profile.id = employee.profile_id
   where employee.id = target_employee_id
     and employee.organization_id = target_organization_id
   for update of employee;
+
+  select coalesce(nullif(profile.full_name, ''), profile.email, selected_employee.employee_number)
+  into selected_name
+  from public.profiles profile
+  where profile.id = selected_employee.profile_id;
 
   select store.name into selected_store_name
   from public.stores store
@@ -951,11 +954,14 @@ begin
   if actor_id = target_employee_id then
     raise exception 'You cannot permanently delete your own employee record.' using errcode = '42501';
   end if;
-  select employee, coalesce(nullif(profile.full_name, ''), profile.email, employee.employee_number)
-  into employee_record, employee_name
+  select employee.* into employee_record
   from public.employees employee join public.profiles profile on profile.id = employee.profile_id
   where employee.id = target_employee_id and employee.organization_id = target_organization_id
   for update of employee;
+  select coalesce(nullif(profile.full_name, ''), profile.email, employee_record.employee_number)
+  into employee_name
+  from public.profiles profile
+  where profile.id = employee_record.profile_id;
   if upper(btrim(coalesce(target_confirmation_number, ''))) <> employee_record.employee_number then
     raise exception 'Enter the exact employee number to confirm permanent deletion.' using errcode = '23514';
   end if;

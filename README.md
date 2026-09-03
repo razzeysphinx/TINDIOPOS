@@ -53,7 +53,7 @@ The browser does not determine access. Server-side JWT verification and database
 The POS verifies the cashier's active shift before it loads the product workspace. With no active shift, TINDIO renders only the opening-shift gate; product search, barcode entry, cart actions, checkout, and the catalogue endpoint remain unavailable. Checkout accepts only item references, quantities, selected register, validated payment method IDs/amounts, and an idempotency key; the database reconstructs prices, computes totals/change, creates payment snapshots and the receipt, and records tracked stock deductions as one transaction. A sale or refund is linked atomically to the cashier's open register shift. Receipt history and thermal-friendly reprints read immutable snapshots. Refunds use a separate idempotent transaction that cannot edit the original sale and restores only stock that was originally tracked. Shift closing locks the drawer ledger, derives expected cash from opening cash, net cash payments, cash refunds, pay-ins, and pay-outs, then permanently records the count and difference.
 
 Customer profiles are visible only to authorized CRM managers. The POS customer lookup has its own store-assignment and active-shift guard and returns only the fields required for a sale. Loyalty balances are never a writable field: earnings, redemptions, and refund reversals append immutable `loyalty_transactions` rows. Redemptions use an internal `LOYALTY` voucher tender, preserving merchandise totals, payment records, refund values, and shift cash expectations.
-
+n
 ## Quality checks
 
 ```powershell

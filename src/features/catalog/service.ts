@@ -5,6 +5,7 @@ import {
   createCategorySchema,
   createProductComponentSchema,
   createProductSchema,
+  deleteCatalogProductSchema,
   createProductUnitSchema,
   generateCatalogIdentifiersSchema,
   importCatalogCsvSchema,
@@ -36,7 +37,32 @@ const CATALOG_DB_MESSAGES: Record<string, string> = {
   "23514": "The catalogue or stock details violate a business rule.",
   "22023": "The catalogue or stock details violate a business rule.",
   "42501": PERMISSION_DENIED_MESSAGE,
+  "55000": "This product has business history or stock and cannot be deleted. Keep it archived instead.",
 };
+
+export async function deleteCatalogProduct(
+  context: BusinessContext,
+  input: unknown,
+): Promise<CatalogActionResult> {
+  const parsed = deleteCatalogProductSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_catalog_product_if_eligible", {
+    target_organization_id: context.organization.id,
+    target_product_id: parsed.data.productId,
+    target_confirmation_name: parsed.data.confirmationName,
+  });
+
+  if (error) {
+    return {
+      ok: false,
+      message: databaseMessage(error.code, "TINDIO could not permanently delete this product."),
+    };
+  }
+
+  return { ok: true, message: "Product permanently deleted." };
+}
 
 export function databaseMessage(code: string | undefined, fallback: string) {
   return postgresCodeMessage(code, fallback, CATALOG_DB_MESSAGES);

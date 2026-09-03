@@ -103,11 +103,13 @@ export async function ShiftWorkspacePage({
           .order("opened_at", { ascending: false })
           .limit(40)
       : Promise.resolve({ data: [], error: null }),
-    supabase
-      .from("organizations")
-      .select("show_expected_cash_before_close")
-      .eq("id", context.organization.id)
-      .single(),
+    isOperationsMode
+      ? supabase
+          .from("organizations")
+          .select("show_expected_cash_before_close")
+          .eq("id", context.organization.id)
+          .single()
+      : Promise.resolve({ data: null, error: null }),
     !isOperationsMode && canViewClosedShiftAudit
       ? database.rpc("get_shift_audit_history", {
           target_organization_id: context.organization.id,
@@ -174,7 +176,7 @@ export async function ShiftWorkspacePage({
       (!storeScope.selectedStoreId || shift.storeId === storeScope.selectedStoreId)
       && (!registerFilter || shift.registerId === registerFilter)
       && (!employeeFilter || shift.openedByEmployeeId === employeeFilter)
-      && (!searchParams.start || shift.openedAt >= `${searchParams.start}T00:00:00.000Z`)
+      && (!searchParams.start || (shift.closedAt ?? shift.openedAt) >= `${searchParams.start}T00:00:00.000Z`)
       && (!searchParams.end || (shift.closedAt ?? shift.openedAt) <= `${searchParams.end}T23:59:59.999Z`),
     )
     : allShifts;
@@ -191,12 +193,14 @@ export async function ShiftWorkspacePage({
     !isOperationsMode || canClose
       ? shiftsForOperationalWorkspace
       : shiftsForOperationalWorkspace.filter((shift) => shift.openedByEmployeeId === context.employee.id);
-  const recentClosedShifts = shifts.filter((shift) => shift.status === "closed").slice(0, 25);
+  const recentClosedShifts = shifts
+    .filter((shift) => shift.status === "closed")
+    .slice(0, isOperationsMode ? 25 : 100);
   const openShiftIds = openShifts.map((shift) => shift.id);
   const visibleShiftIds = [...new Set([...openShiftIds, ...recentClosedShifts.map((shift) => shift.id)])];
   const canReadOperationalSummaries = isOperationsMode
-    || hasPermission(context, "settings.manage")
-    || SHIFT_PERMISSIONS.some((permission) => hasPermission(context, permission));
+    && (hasPermission(context, "settings.manage")
+      || SHIFT_PERMISSIONS.some((permission) => hasPermission(context, permission)));
   const [summariesResult, movementsResult, operationalSummaryResults] = await Promise.all([
     Promise.all(
       openShiftIds.map((shiftId) =>
@@ -264,9 +268,9 @@ export async function ShiftWorkspacePage({
         description={
           isOperationsMode
             ? "Open drawers, record cash movements, and close against a counted amount."
-            : "Review recent drawer closures and cash accountability without changing a register shift."
+            : "Review closed shifts, cash reconciliation, and drawer differences across your authorized stores and registers."
         }
-        action={<Badge variant="secondary"><CircleDollarSign aria-hidden="true" />{openShifts.length} open</Badge>}
+        action={isOperationsMode ? <Badge variant="secondary"><CircleDollarSign aria-hidden="true" />{openShifts.length} open</Badge> : undefined}
       />
       <ShiftManager
         auditFilters={!isOperationsMode ? (
@@ -315,6 +319,6 @@ export default async function ShiftsPage({
 }: {
   searchParams: Promise<{ employee?: string; end?: string; register?: string; start?: string; store?: string }>;
 }) {
-  await requireBackOfficePermission(["dashboard.view", "reports.view", "shifts.view_history", "settings.manage"]);
+  await requireBackOfficePermission(["shifts.view_history", "settings.manage"]);
   return <ShiftWorkspacePage mode="reports" searchParams={await searchParams} />;
 }

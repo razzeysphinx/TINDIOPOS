@@ -165,6 +165,11 @@ export const setProductArchivedSchema = z.object({
   isArchived: z.boolean(),
 });
 
+export const deleteCatalogProductSchema = z.object({
+  productId: z.uuid(),
+  confirmationName: z.string().trim().min(1).max(160),
+});
+
 export const updateProductSchema = z.object({
   productId: z.uuid(),
   name: z.string().trim().min(1, "Enter a product name.").max(160),

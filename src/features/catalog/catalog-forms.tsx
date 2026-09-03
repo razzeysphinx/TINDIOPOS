@@ -1,10 +1,12 @@
 "use client";
 
 import { useId, useState, useTransition, type ComponentProps, type FormEvent, type ReactNode } from "react";
+import { Menu } from "@base-ui/react/menu";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Archive,
   Boxes,
+  ChevronDown,
   Download,
   LoaderCircle,
   PackagePlus,
@@ -622,136 +624,121 @@ export function CreateProductForm({
         <PackagePlus aria-hidden="true" />
         Add product
       </DialogTrigger>
-      <DialogContent size="large">
+      <DialogContent size="wide">
         <DialogHeader>
           <DialogTitle>Add product</DialogTitle>
-          <DialogDescription>Create a simple item or an item with saleable variants.</DialogDescription>
+          <DialogDescription>Start with the common product details. Open Advanced settings only when needed.</DialogDescription>
         </DialogHeader>
         <DialogBody>
           <form className="space-y-6" onSubmit={submit} noValidate>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <FormField label="Product name" error={form.formState.errors.name?.message}>
-            <Input placeholder="House Coffee" {...form.register("name")} />
-          </FormField>
-          <FormField label="Category" error={form.formState.errors.categoryId?.message}>
-            <select className={selectClassName} {...form.register("categoryId")}>
-              <option value="">Uncategorized</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </FormField>
-          <FormField label="Product type" error={form.formState.errors.productType?.message}>
-            <select
-              className={selectClassName}
-              {...typeRegistration}
-              onChange={(event) => {
-                typeRegistration.onChange(event);
-                if (event.target.value === "variable") {
-                  form.setValue("sku", "");
-                  form.setValue("barcode", "");
-                  if (fields.length === 0) {
-                    append({ name: "", sku: "", barcode: "", price: "0.00", cost: "0.00" });
-                  }
-                } else {
-                  replace([]);
-                  if (event.target.value === "composite") {
-                    form.setValue("trackInventory", true);
-                  }
-                }
-              }}
-            >
-              <option value="simple">Simple product</option>
-              <option value="variable">Variant product</option>
-              <option value="composite">Composite product</option>
-            </select>
-          </FormField>
-          <FormField label="Unit" error={form.formState.errors.unit?.message}>
-            <ProductUnitSelector options={unitOptions} {...form.register("unit")} />
-          </FormField>
-        </div>
-
-        <FormField label="Description" error={form.formState.errors.description?.message}>
-          <Input placeholder="Optional product description" {...form.register("description")} />
-        </FormField>
-
-        <div className="grid gap-4 sm:grid-cols-3">
-          <FormField label="Image URL" error={form.formState.errors.imageUrl?.message}>
-            <Input placeholder="https://…/product.jpg" {...form.register("imageUrl")} />
-          </FormField>
-          <Label className="flex h-9 items-center gap-2 self-end rounded-lg border px-3">
-            <input type="checkbox" {...form.register("isVariablePrice")} />
-            Enter price at sale
-          </Label>
-          <Label className="flex h-9 items-center gap-2 self-end rounded-lg border px-3">
-            <input
-              type="checkbox"
-              disabled={!canUseWeightedProducts}
-              {...form.register("allowFractionalQuantity")}
-            />
-            Allow fractional quantity{!canUseWeightedProducts ? " (disabled)" : ""}
-          </Label>
-        </div>
-
-        {productType !== "variable" ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <FormField label="SKU" error={form.formState.errors.sku?.message}>
-              <Input placeholder="COFFEE-001" {...form.register("sku")} />
-            </FormField>
-            <FormField label="Barcode" error={form.formState.errors.barcode?.message}>
-              <Input
-                placeholder={barcodeSource === "tindio" ? "Generated TINDIO barcode" : "480000000001"}
-                {...form.register("barcode")}
-              />
-            </FormField>
-            <FormField label="Selling price" error={form.formState.errors.price?.message}>
-              <Input inputMode="decimal" placeholder="0.00" {...form.register("price")} />
-            </FormField>
-            {canViewCost ? (
-              <FormField label="Cost" error={form.formState.errors.cost?.message}>
-                <Input inputMode="decimal" placeholder="0.00" {...form.register("cost")} />
+            <section className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Product name" error={form.formState.errors.name?.message}>
+                <Input autoFocus placeholder="House Coffee" {...form.register("name")} />
               </FormField>
-            ) : null}
-            <fieldset className="grid gap-1.5 sm:col-span-2">
-              <legend className="text-sm font-medium">Barcode source</legend>
-              <div className="flex flex-wrap gap-3">
-                <Label className="flex items-center gap-2 text-sm">
-                  <input
-                    checked={barcodeSource === "existing"}
-                    name="barcode-source"
-                    onChange={() => setBarcodeSource("existing")}
-                    type="radio"
-                  />
-                  Enter existing UPC/EAN
-                </Label>
-                <Label className="flex items-center gap-2 text-sm">
-                  <input
-                    checked={barcodeSource === "tindio"}
-                    name="barcode-source"
-                    onChange={() => setBarcodeSource("tindio")}
-                    type="radio"
-                  />
-                  Generate TINDIO barcode
-                </Label>
-              </div>
-            </fieldset>
-            <div className="self-end">
-              <IdentifierGenerationButton
-                label={barcodeSource === "tindio" ? undefined : "Auto-generate SKU"}
-                onGenerated={({ barcode, sku }) => {
-                  form.setValue("sku", sku, { shouldDirty: true, shouldValidate: true });
-                  if (barcodeSource === "tindio") {
-                    form.setValue("barcode", barcode, { shouldDirty: true, shouldValidate: true });
-                  }
-                }}
-                productName={productName}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
+              <FormField label="Category" error={form.formState.errors.categoryId?.message}>
+                <select className={selectClassName} {...form.register("categoryId")}>
+                  <option value="">Uncategorized</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </select>
+              </FormField>
+              {productType !== "variable" ? (
+                <>
+                  <FormField label="Selling price" error={form.formState.errors.price?.message}>
+                    <Input inputMode="decimal" placeholder="0.00" {...form.register("price")} />
+                  </FormField>
+                  {canViewCost ? (
+                    <FormField label="Cost" error={form.formState.errors.cost?.message}>
+                      <Input inputMode="decimal" placeholder="0.00" {...form.register("cost")} />
+                    </FormField>
+                  ) : null}
+                  <FormField label="SKU" error={form.formState.errors.sku?.message}>
+                    <Input placeholder="COFFEE-001" {...form.register("sku")} />
+                  </FormField>
+                  <FormField label="Barcode" error={form.formState.errors.barcode?.message}>
+                    <Input
+                      placeholder={barcodeSource === "tindio" ? "Generated TINDIO barcode" : "480000000001"}
+                      {...form.register("barcode")}
+                    />
+                  </FormField>
+                  <div className="sm:col-span-2">
+                    <IdentifierGenerationButton
+                      label={barcodeSource === "tindio" ? undefined : "Auto-generate SKU"}
+                      onGenerated={({ barcode, sku }) => {
+                        form.setValue("sku", sku, { shouldDirty: true, shouldValidate: true });
+                        if (barcodeSource === "tindio") {
+                          form.setValue("barcode", barcode, { shouldDirty: true, shouldValidate: true });
+                        }
+                      }}
+                      productName={productName}
+                    />
+                  </div>
+                </>
+              ) : null}
+              <Label className="flex min-h-9 items-center gap-2 rounded-lg border px-3 py-2 sm:col-span-2">
+                <input
+                  type="checkbox"
+                  disabled={!canTrackInventory || productType === "composite"}
+                  {...form.register("trackInventory")}
+                />
+                Track inventory{!canTrackInventory ? " (disabled)" : ""}
+              </Label>
+            </section>
+
+            <details className="rounded-xl border p-4">
+              <summary className="cursor-pointer font-medium">Advanced settings</summary>
+              <div className="mt-4 space-y-5">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField label="Product type" error={form.formState.errors.productType?.message}>
+                    <select
+                      className={selectClassName}
+                      {...typeRegistration}
+                      onChange={(event) => {
+                        typeRegistration.onChange(event);
+                        if (event.target.value === "variable") {
+                          form.setValue("sku", "");
+                          form.setValue("barcode", "");
+                          if (fields.length === 0) append({ name: "", sku: "", barcode: "", price: "0.00", cost: "0.00" });
+                        } else {
+                          replace([]);
+                          if (event.target.value === "composite") form.setValue("trackInventory", true);
+                        }
+                      }}
+                    >
+                      <option value="simple">Standard product</option>
+                      <option value="variable">Variant product</option>
+                      <option value="composite">Composite product</option>
+                    </select>
+                  </FormField>
+                  <FormField label="Base unit" error={form.formState.errors.unit?.message}>
+                    <ProductUnitSelector options={unitOptions} {...form.register("unit")} />
+                  </FormField>
+                  <FormField label="Description" error={form.formState.errors.description?.message}>
+                    <Input placeholder="Optional product description" {...form.register("description")} />
+                  </FormField>
+                  <FormField label="Image URL" error={form.formState.errors.imageUrl?.message}>
+                    <Input placeholder="https://…/product.jpg" {...form.register("imageUrl")} />
+                  </FormField>
+                </div>
+
+                {productType !== "variable" ? (
+                  <fieldset className="grid gap-2">
+                    <legend className="text-sm font-medium">Barcode source</legend>
+                    <div className="flex flex-wrap gap-3">
+                      <Label className="flex items-center gap-2 text-sm">
+                        <input checked={barcodeSource === "existing"} name="barcode-source" onChange={() => setBarcodeSource("existing")} type="radio" />
+                        Enter existing UPC/EAN
+                      </Label>
+                      <Label className="flex items-center gap-2 text-sm">
+                        <input checked={barcodeSource === "tindio"} name="barcode-source" onChange={() => setBarcodeSource("tindio")} type="radio" />
+                        Generate TINDIO barcode
+                      </Label>
+                    </div>
+                  </fieldset>
+                ) : null}
+
+                {productType === "variable" ? <div className="space-y-3">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h3 className="font-medium">Variants</h3>
@@ -825,36 +812,42 @@ export function CreateProductForm({
             {typeof form.formState.errors.variants?.message === "string" ? (
               <p className="text-xs text-destructive">{form.formState.errors.variants.message}</p>
             ) : null}
-          </div>
-        )}
+                  </div> : null}
 
-        <div className="grid gap-5 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
-          <fieldset>
-            <legend className="text-sm font-medium">Available stores</legend>
-            <div className="mt-2 flex flex-wrap gap-3">
-              {stores.map((store) => (
-                <Label className="flex items-center gap-2 rounded-lg border px-3 py-2" key={store.id}>
-                  <input type="checkbox" value={store.id} {...form.register("storeIds")} />
-                  {store.name}
-                </Label>
-              ))}
-            </div>
-            <FieldError message={form.formState.errors.storeIds?.message} />
-          </fieldset>
-          <Label className="flex h-9 items-center gap-2 rounded-lg border px-3">
-            <input
-              type="checkbox"
-              disabled={!canTrackInventory || productType === "composite"}
-              {...form.register("trackInventory")}
-            />
-            Track inventory{!canTrackInventory ? " (disabled)" : ""}
-          </Label>
-          <Button disabled={isPending || stores.length === 0} type="submit">
-            {isPending ? <LoaderCircle className="animate-spin" /> : <PackagePlus />}
-            Create product
-          </Button>
-        </div>
-            <ResultMessage result={result} />
+                <fieldset>
+                  <legend className="text-sm font-medium">Available stores</legend>
+                  <p className="mt-1 text-xs text-muted-foreground">Choose where this product can be sold.</p>
+                  <div className="mt-2 grid max-h-44 gap-2 overflow-y-auto rounded-lg border p-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {stores.map((store) => (
+                      <Label className="flex items-center gap-2" key={store.id}>
+                        <input type="checkbox" value={store.id} {...form.register("storeIds")} />
+                        {store.name}
+                      </Label>
+                    ))}
+                  </div>
+                  <FieldError message={form.formState.errors.storeIds?.message} />
+                </fieldset>
+
+                <div className="flex flex-wrap gap-3">
+                  <Label className="flex min-h-9 items-center gap-2 rounded-lg border px-3 py-2">
+                    <input type="checkbox" {...form.register("isVariablePrice")} />
+                    Enter price at sale
+                  </Label>
+                  <Label className="flex min-h-9 items-center gap-2 rounded-lg border px-3 py-2">
+                    <input type="checkbox" disabled={!canUseWeightedProducts} {...form.register("allowFractionalQuantity")} />
+                    Allow fractional quantity{!canUseWeightedProducts ? " (disabled)" : ""}
+                  </Label>
+                </div>
+              </div>
+            </details>
+
+            <DialogFooter>
+              <Button disabled={isPending || stores.length === 0} type="submit">
+                {isPending ? <LoaderCircle className="animate-spin" /> : <PackagePlus />}
+                Create product
+              </Button>
+              <ResultMessage result={result} />
+            </DialogFooter>
           </form>
         </DialogBody>
       </DialogContent>
@@ -1050,6 +1043,7 @@ export function CatalogCsvTools({
   stores: Array<{ id: string; name: string }>;
 }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<CatalogCsvPreviewRow[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [filename, setFilename] = useState("");
@@ -1125,13 +1119,43 @@ export function CatalogCsvTools({
     });
   };
 
+  const menuItemClassName = "flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-highlighted:bg-muted";
+
   return (
-    <ManagementCard
-      title="Catalog CSV"
-      description="Validate a preview before one atomic import, or export the current simple-product catalogue."
-      icon={<Upload aria-hidden="true" />}
-    >
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+    <>
+      <Menu.Root>
+        <Menu.Trigger className={buttonVariants({ variant: "outline" })}>
+          Import / Export
+          <ChevronDown aria-hidden="true" />
+        </Menu.Trigger>
+        <Menu.Portal>
+          <Menu.Positioner align="end" className="z-50" side="bottom" sideOffset={6}>
+            <Menu.Popup className="w-56 rounded-lg border bg-popover p-1 shadow-lg outline-none">
+              <Menu.Item className={menuItemClassName} onClick={() => setOpen(true)}>
+                <Upload aria-hidden="true" className="size-4" />
+                Import products
+              </Menu.Item>
+              <Menu.Item className={menuItemClassName} render={<a href="/api/catalog/export" />}>
+                <Download aria-hidden="true" className="size-4" />
+                Export catalog
+              </Menu.Item>
+              <Menu.Item className={menuItemClassName} onClick={downloadTemplate}>
+                <Download aria-hidden="true" className="size-4" />
+                Download CSV template
+              </Menu.Item>
+            </Menu.Popup>
+          </Menu.Positioner>
+        </Menu.Portal>
+      </Menu.Root>
+
+      <Dialog.Root onOpenChange={setOpen} open={open}>
+      <DialogContent size="wide">
+        <DialogHeader>
+          <DialogTitle>Import products</DialogTitle>
+          <DialogDescription>Upload a CSV, review the validation preview, then confirm the import.</DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+      <div className="grid gap-4">
         <div className="grid gap-2">
           <Label htmlFor="catalog-csv-file">Import CSV</Label>
           <Input
@@ -1144,21 +1168,23 @@ export function CatalogCsvTools({
             Simple products only; 500 rows per import. Nothing is imported until the preview is valid and you confirm.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={downloadTemplate} type="button" variant="outline">
-            <Download /> Template
-          </Button>
-          <Button nativeButton={false} render={<a href="/api/catalog/export" />} type="button" variant="outline">
-            Export catalogue
-          </Button>
-        </div>
       </div>
 
       <fieldset className="mt-4">
         <legend className="text-sm font-medium">Make imported products available in</legend>
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-1 flex justify-end">
+          <Button
+            onClick={() => setSelectedStoreIds(selectedStoreIds.length === stores.length ? [] : stores.map((store) => store.id))}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {selectedStoreIds.length === stores.length ? "Clear stores" : "Select all stores"}
+          </Button>
+        </div>
+        <div className="mt-2 grid max-h-44 gap-2 overflow-y-auto rounded-lg border p-3 sm:grid-cols-2 lg:grid-cols-3">
           {stores.map((store) => (
-            <Label className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm" key={store.id}>
+            <Label className="flex items-center gap-2 text-sm" key={store.id}>
               <input
                 checked={selectedStoreIds.includes(store.id)}
                 onChange={() => toggleStore(store.id)}
@@ -1210,8 +1236,11 @@ export function CatalogCsvTools({
           {rows.length > 20 ? <p className="border-t px-3 py-2 text-xs text-muted-foreground">Showing the first 20 rows of the validated preview.</p> : null}
         </div>
       ) : null}
-      <ResultMessage result={result} />
-    </ManagementCard>
+          <ResultMessage result={result} />
+        </DialogBody>
+      </DialogContent>
+      </Dialog.Root>
+    </>
   );
 }
 

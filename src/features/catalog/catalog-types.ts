@@ -58,6 +58,32 @@ export type CatalogCostEntry = {
   cost_minor: number;
 };
 
+export type CatalogInventoryLevelRow = {
+  product_id: string;
+  variant_id: string | null;
+  store_id: string;
+  quantity: number;
+};
+
+export type CatalogProductUnitRow = {
+  id: string;
+  product_id: string;
+  unit_code: string;
+  unit_name: string;
+  factor_to_base: number;
+  is_base: boolean;
+  is_sale_unit: boolean;
+  is_purchase_unit: boolean;
+};
+
+export type CatalogProductComponentRow = {
+  id: string;
+  product_id: string;
+  component_product_id: string;
+  component_variant_id: string | null;
+  quantity_per_composite: number;
+};
+
 export type CatalogWorkspace = {
   categories: CatalogCategoryRow[];
   stores: CatalogStoreRow[];
@@ -65,6 +91,9 @@ export type CatalogWorkspace = {
   variants: CatalogVariantRow[];
   settings: CatalogStoreSettingRow[];
   costs: CatalogCostEntry[];
+  inventoryLevels: CatalogInventoryLevelRow[];
+  units: CatalogProductUnitRow[];
+  components: CatalogProductComponentRow[];
 };
 
 export type CatalogExportProductRow = {

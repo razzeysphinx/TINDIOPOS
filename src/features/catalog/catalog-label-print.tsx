@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { code39SvgMarkup, createCode39Barcode } from "@/features/catalog/code39";
 
-type ProductLabelPrintButtonProps = {
+export type ProductLabelPrintButtonProps = {
   barcode: string | null;
   price: string;
   productName: string;
@@ -67,7 +67,7 @@ export function ProductLabelPrintButton({
           </DialogBody>
           <DialogFooter className="border-t px-6 py-4">
             <Button
-              onClick={() => printProductLabel({ barcode: barcodeModel, price, productName, sku })}
+              onClick={() => printProductLabelDocument({ barcode, price, productName, sku })}
               type="button"
             >
               <Printer aria-hidden="true" />
@@ -107,6 +107,18 @@ function ProductLabelPreview({
       <p className="truncate text-[10px] text-neutral-700">SKU: {sku || "Not set"}</p>
     </section>
   );
+}
+
+export function printProductLabelDocument({
+  barcode,
+  price,
+  productName,
+  sku,
+}: ProductLabelPrintButtonProps) {
+  if (!barcode) return;
+  const barcodeModel = createCode39Barcode(barcode);
+  if (!barcodeModel) return;
+  printProductLabel({ barcode: barcodeModel, price, productName, sku });
 }
 
 function printProductLabel({

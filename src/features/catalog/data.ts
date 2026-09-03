@@ -32,7 +32,7 @@ export async function loadCatalogWorkspace(
   const supabase = await createClient();
   const organizationId = context.organization.id;
 
-  const [categoriesResult, storesResult, productsResult, variantsResult, settingsResult] =
+  const [categoriesResult, storesResult, productsResult, variantsResult, settingsResult, inventoryLevelsResult, unitsResult, componentsResult] =
     await Promise.all([
       supabase
         .from("categories")
@@ -63,6 +63,20 @@ export async function loadCatalogWorkspace(
         .from("product_store_settings")
         .select("product_id, store_id, is_available, price_override_minor, low_stock_level")
         .eq("organization_id", organizationId),
+      supabase
+        .from("inventory_levels")
+        .select("product_id, variant_id, store_id, quantity")
+        .eq("organization_id", organizationId),
+      supabase
+        .from("product_units")
+        .select("id, product_id, unit_code, unit_name, factor_to_base, is_base, is_sale_unit, is_purchase_unit")
+        .eq("organization_id", organizationId)
+        .order("is_base", { ascending: false })
+        .order("unit_name", { ascending: true }),
+      supabase
+        .from("product_components")
+        .select("id, product_id, component_product_id, component_variant_id, quantity_per_composite")
+        .eq("organization_id", organizationId),
     ]);
 
   const baseError = [
@@ -71,6 +85,9 @@ export async function loadCatalogWorkspace(
     productsResult,
     variantsResult,
     settingsResult,
+    inventoryLevelsResult,
+    unitsResult,
+    componentsResult,
   ].find((result) => result.error)?.error;
 
   if (baseError) {
@@ -99,6 +116,9 @@ export async function loadCatalogWorkspace(
     variants: variantsResult.data ?? [],
     settings: settingsResult.data ?? [],
     costs,
+    inventoryLevels: inventoryLevelsResult.data ?? [],
+    units: unitsResult.data ?? [],
+    components: componentsResult.data ?? [],
   };
 }
 

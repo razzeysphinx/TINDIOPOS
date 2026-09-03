@@ -25,6 +25,8 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
     canManageCustomers: context.permissions.includes("customers.manage"),
     canViewReceipts: context.permissions.includes("receipts.view"),
     canViewReports: context.permissions.includes("reports.view"),
+    canViewShiftHistory: context.permissions.includes("shifts.view_history")
+      || context.permissions.includes("settings.manage"),
     canViewDashboard: context.permissions.includes("dashboard.view"),
     canViewKitchen: context.features.kitchen_display && context.permissions.some((permission) => ["kitchen.view", "kitchen.manage"].includes(permission)),
     canUseApprovals: context.permissions.some((permission) => ["approvals.manage", "audit.view"].includes(permission)),

@@ -5780,6 +5780,14 @@ export type Database = {
         }
         Returns: string
       }
+      delete_catalog_product_if_eligible: {
+        Args: {
+          target_confirmation_name: string
+          target_organization_id: string
+          target_product_id: string
+        }
+        Returns: string
+      }
       approve_manager_approval: {
         Args: {
           target_approval_request_id: string

@@ -19,10 +19,8 @@ export async function GET() {
     return NextResponse.json({ error: "Product management access is required." }, { status: 403 });
   }
 
-  const exportData = await loadCatalogExportData(
-    context,
-    hasPermission(context, "products.view_cost"),
-  );
+  const includeCosts = hasPermission(context, "products.view_cost");
+  const exportData = await loadCatalogExportData(context, includeCosts);
 
   if (!exportData.ok) {
     return NextResponse.json(
@@ -53,7 +51,7 @@ export async function GET() {
       "sku",
       "barcode",
       "price",
-      "cost",
+      ...(includeCosts ? ["cost"] : []),
       "track_inventory",
       "unit",
       "image_url",
@@ -69,7 +67,7 @@ export async function GET() {
       product.sku ?? "",
       product.barcode ?? "",
       toMoneyInput(product.price_minor),
-      toMoneyInput(costByProduct.get(product.id) ?? 0),
+      ...(includeCosts ? [toMoneyInput(costByProduct.get(product.id) ?? 0)] : []),
       product.track_inventory ? "yes" : "no",
       product.unit,
       product.image_url ?? "",

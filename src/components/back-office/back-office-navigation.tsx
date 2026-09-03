@@ -34,6 +34,7 @@ export type BackOfficeNavigationAccess = {
   canViewDashboard?: boolean;
   canManageCustomers?: boolean;
   canViewReports?: boolean;
+  canViewShiftHistory?: boolean;
   canManageSettings?: boolean;
   canViewKitchen?: boolean;
   canUseApprovals?: boolean;
@@ -90,7 +91,7 @@ const navigationGroups: NavigationGroup[] = [
         href: "/back-office/shifts",
         label: "Shift reports",
         icon: CircleDollarSign,
-        isVisible: (access) => access.canViewReports === true || access.canViewDashboard === true,
+        isVisible: (access) => access.canViewShiftHistory === true,
       },
     ],
   },

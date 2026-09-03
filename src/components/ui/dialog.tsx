@@ -22,6 +22,7 @@ function DialogContent({
   children,
   className,
   closeLabel = "Close dialog",
+  nonBlocking = false,
   size = "default",
   showCloseButton = true,
   side = "center",
@@ -29,6 +30,7 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Popup> & {
   size?: "default" | "wide" | "large";
   closeLabel?: string;
+  nonBlocking?: boolean;
   showCloseButton?: boolean;
   side?: "center" | "left" | "right";
 }) {
@@ -36,10 +38,11 @@ function DialogContent({
 
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-[1px] transition-opacity motion-reduce:transition-none data-ending-style:opacity-0" />
+      {!nonBlocking ? <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-[1px] transition-opacity motion-reduce:transition-none data-ending-style:opacity-0" /> : null}
       <DialogPrimitive.Viewport
         className={cn(
           "fixed inset-0 z-50 flex overflow-y-auto",
+          nonBlocking && "pointer-events-none",
           side === "left"
             ? "items-stretch justify-start"
             : side === "right"
@@ -50,6 +53,7 @@ function DialogContent({
         <DialogPrimitive.Popup
           className={cn(
             "relative my-auto max-h-[calc(100svh-1.5rem)] w-full overflow-hidden rounded-xl border bg-background shadow-2xl outline-none motion-reduce:transition-none",
+            nonBlocking && "pointer-events-auto",
             !isSideDrawer && "transition-all data-ending-style:scale-95 data-ending-style:opacity-0",
             isSideDrawer && "transition-[transform,opacity] data-starting-style:opacity-0 data-ending-style:opacity-0",
             size === "default" && "max-w-lg",

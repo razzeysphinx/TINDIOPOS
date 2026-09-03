@@ -16,11 +16,12 @@ const shiftMigration = await readFile(
 );
 
 test("closed shifts provide a printout from immutable stored close values", () => {
-  assert.match(shiftManager, /Shift-close audit trail/);
+  assert.match(shiftManager, /Shift history/);
   assert.match(shiftManager, /ShiftClosePrintButton/);
   assert.match(shiftManager, /window\.open\("", "tindio-shift-close"/);
-  assert.match(shiftManager, /expectedCashMinor=\{shift\.expectedCashMinor \?\? 0\}/);
-  assert.match(shiftManager, /countedCashMinor=\{shift\.countedCashMinor \?\? 0\}/);
+  assert.match(shiftManager, /expectedCashMinor=\{detail\.shift\.expectedCashMinor\}/);
+  assert.match(shiftManager, /countedCashMinor=\{detail\.shift\.countedCashMinor\}/);
+  assert.match(shiftManager, /renderAsMenuItem/);
 });
 
 test("current cash accountability UI retains the existing operational controls", () => {

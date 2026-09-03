@@ -94,7 +94,7 @@ export function ShiftAuditReportView({
           openedAt={report.shift.openedAt}
           operationalSummary={operationalSummary}
           registerName={report.shift.register}
-          shiftId={report.shift.id}
+          shiftId={report.shift.number}
           storeName={report.shift.store}
           timezone={timezone}
         />

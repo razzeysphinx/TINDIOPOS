@@ -10,6 +10,7 @@ import {
   createProductComponent,
   createProductUnit,
   databaseMessage,
+  deleteCatalogProduct,
   generateCatalogIdentifiers,
   importCatalogCsv,
   setCategoryArchived,
@@ -128,6 +129,23 @@ export async function setProductArchivedAction(
     revalidatePath("/back-office/inventory");
   }
 
+  return result;
+}
+
+export async function deleteCatalogProductAction(
+  input: unknown,
+): Promise<CatalogActionResult> {
+  const context = await requireBusinessContext();
+
+  if (!hasPermission(context, "products.manage")) {
+    return { ok: false, message: "You do not have permission to delete products." };
+  }
+
+  const result = await deleteCatalogProduct(context, input);
+  if (result.ok) {
+    revalidatePath("/back-office/catalog");
+    revalidatePath("/back-office/inventory");
+  }
   return result;
 }
 

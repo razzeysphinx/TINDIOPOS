@@ -30,6 +30,7 @@
     "test:print-export-ux": "node --test scripts/print-export-ux-check.mjs",
     "test:context-help": "node --test scripts/context-help-check.mjs",
     "test:global-filters": "node --test scripts/global-filter-bar-check.mjs",
+    "test:catalog-product-workspace": "node scripts/catalog-product-workspace-check.mjs",
     "test:tenant-load": "node scripts/phase-16-tenant-load-check.mjs",
     "typecheck": "tsc --noEmit --incremental false"
   },

@@ -21,16 +21,21 @@ test("Phase 4 derives product totals from existing authorized store-level projec
   assert.match(stockView, /href=\{row\.detailHref\}/);
 });
 
-test("Phase 4 preserves the shared store scope and store-specific detail route", async () => {
-  const inventoryPage = await source("src/app/(back-office)/back-office/inventory/page.tsx");
+test("Phase 4 preserves shared store scope and stock-detail routing after the Stock & Restock split", async () => {
+  const [inventoryPage, replenishmentPage] = await Promise.all([
+    source("src/app/(back-office)/back-office/inventory/page.tsx"),
+    source("src/app/(back-office)/back-office/replenishment/page.tsx"),
+  ]);
 
-  assert.match(inventoryPage, /const storeScope = resolveBackOfficeStoreScope\(context, parameters\)/);
-  assert.match(inventoryPage, /const scopedStoreIds = selectedStoreId \? \[selectedStoreId\] : storeScope\.storeIds/);
-  assert.match(inventoryPage, /levelsQuery\.in\("store_id", scopedStoreIds\)/);
-  assert.match(inventoryPage, /productId: level\.product_id/);
-  assert.match(inventoryPage, /variantId: level\.variant_id/);
-  assert.match(inventoryPage, /multiStoreCount=\{stores\.length\}/);
-  assert.match(inventoryPage, /detailHref: inventoryDetailHref\("stock", level\.id\)/);
+  assert.match(inventoryPage, /rawRequestedTab === "stock"/);
+  assert.match(inventoryPage, /redirect\(`\/back-office\/replenishment\?\$\{query\.toString\(\)\}`\)/);
+  assert.match(replenishmentPage, /const storeScope = resolveBackOfficeStoreScope\(context, parameters\)/);
+  assert.match(replenishmentPage, /const visibleStore = \(storeId: string\) => !storeScope\.selectedStoreId \|\| storeId === storeScope\.selectedStoreId/);
+  assert.match(replenishmentPage, /const stockLevels = levels\.filter\(\(level\) => visibleStore\(level\.store_id\)\)/);
+  assert.match(replenishmentPage, /productId: level\.product_id/);
+  assert.match(replenishmentPage, /variantId: level\.variant_id/);
+  assert.match(replenishmentPage, /multiStoreCount=\{stores\.filter\(\(store\) => visibleStore\(store\.id\)\)\.length\}/);
+  assert.match(replenishmentPage, /detailHref: `\/back-office\/inventory\?\$\{query\.toString\(\)}`/);
 });
 
 test("Phase 4 is a read-only presentation layer with no new database write path", async () => {

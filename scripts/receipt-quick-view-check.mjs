@@ -6,6 +6,7 @@ const paths = {
   action: "../src/features/receipts/quick-view/actions.ts",
   detail: "../src/features/receipts/detail/data.ts",
   delivery: "../src/features/receipts/receipt-delivery-form.tsx",
+  detailDrawer: "../src/components/back-office/back-office-detail-drawer.tsx",
   dialog: "../src/components/ui/dialog.tsx",
   drawer: "../src/features/receipts/receipt-list-quick-view.tsx",
   globals: "../src/app/globals.css",
@@ -50,7 +51,9 @@ test("receipt list opens a right drawer without retaining a View button", () => 
   assert.match(source.drawer, /Payment methods:/);
   assert.doesNotMatch(source.drawer, /Loading receipt…/, "Receipt rows must remain stable while the drawer loads");
   assert.match(source.drawer, /md:hidden/, "Mobile receipts must use a compact card layout instead of the wide table");
-  assert.match(source.drawer, /<DialogContent className="flex h-dvh max-h-none max-w-none flex-col rounded-none sm:max-w-xl" closeLabel="Close receipt quick view" side="right">/);
+  assert.match(source.drawer, /<BackOfficeDetailDrawer closeLabel="Close receipt quick view" width="compact">/);
+  assert.match(source.detailDrawer, /side="right"/);
+  assert.match(source.detailDrawer, /"flex h-dvh max-h-none max-w-none flex-col rounded-none"/);
   assert.match(source.drawer, /<DialogBody className="min-h-0 max-h-none flex-1">/);
   assert.match(source.drawer, /className="min-h-full"/);
   assert.match(source.dialog, /const isSideDrawer = side !== "center"/);

@@ -219,6 +219,7 @@ export const setProductStoreAvailabilitySchema = z
 export const setProductStoreConfigurationSchema = z.object({
   productId: z.uuid(),
   storeId: z.uuid(),
+  restockPolicy: z.enum(["restock", "do_not_restock"]),
   priceOverride: z
     .string()
     .trim()

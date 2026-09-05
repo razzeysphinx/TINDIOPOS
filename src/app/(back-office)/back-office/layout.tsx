@@ -31,15 +31,19 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
     canViewKitchen: context.features.kitchen_display && context.permissions.some((permission) => ["kitchen.view", "kitchen.manage"].includes(permission)),
     canUseApprovals: context.permissions.some((permission) => ["approvals.manage", "audit.view"].includes(permission)),
     canUseInventory: context.features.inventory && context.permissions.some(
-      (permission) => permission === "inventory.view" || permission === "inventory.manage",
+      (permission) => permission === "inventory.view" || permission === "inventory.count" || permission === "inventory.manage",
     ),
+    canCountInventory: context.features.inventory && context.permissions.some(
+      (permission) => permission === "inventory.count" || permission === "inventory.manage",
+    ),
+    canManageInventory: context.features.inventory && context.permissions.includes("inventory.manage"),
     canManageCatalog: context.permissions.includes("products.manage"),
     canManageAdvancedSales: context.permissions.includes("products.manage"),
     canManageEmployees: context.permissions.includes("employees.manage"),
     canManageRoles: context.permissions.includes("roles.manage"),
     canManageStores: context.permissions.includes("stores.manage"),
     canManageRegisters: context.permissions.includes("registers.manage"),
-    canUseTimeClock: context.features.time_clock && context.permissions.includes("dashboard.view"),
+    canUseTimeClock: context.features.time_clock && context.permissions.includes("employees.manage"),
     canManageDevices: context.permissions.includes("devices.manage"),
   };
 

@@ -96,6 +96,7 @@ export async function createProductAction(
   if (result.ok) {
     revalidatePath("/back-office/catalog");
     revalidatePath("/back-office/inventory");
+    revalidatePath("/back-office/replenishment");
   }
 
   return result;
@@ -127,6 +128,7 @@ export async function setProductArchivedAction(
   if (result.ok) {
     revalidatePath("/back-office/catalog");
     revalidatePath("/back-office/inventory");
+    revalidatePath("/back-office/replenishment");
   }
 
   return result;
@@ -145,6 +147,7 @@ export async function deleteCatalogProductAction(
   if (result.ok) {
     revalidatePath("/back-office/catalog");
     revalidatePath("/back-office/inventory");
+    revalidatePath("/back-office/replenishment");
   }
   return result;
 }
@@ -216,6 +219,7 @@ export async function setProductStoreConfigurationAction(input: unknown): Promis
   if (result.ok) {
     revalidatePath("/back-office/catalog");
     revalidatePath("/back-office/inventory");
+    revalidatePath("/back-office/replenishment");
   }
   return result;
 }

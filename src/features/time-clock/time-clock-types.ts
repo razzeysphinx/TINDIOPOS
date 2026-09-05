@@ -44,3 +44,29 @@ export type TimeClockWorkspace = {
   entry: TimeClockEntry | null;
   employees: AttendanceEmployee[];
 };
+
+export type TimeAttendanceEntry = {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  employeeNumber: string;
+  storeId: string;
+  storeName: string;
+  clockedInAt: string;
+  clockedOutAt: string | null;
+  clockInVerificationMethod: string;
+  clockOutVerificationMethod: string | null;
+};
+
+export type TimeAttendanceEmployeeOption = {
+  id: string;
+  name: string;
+  employeeNumber: string;
+};
+
+export type TimeAttendanceWorkspace = {
+  entries: TimeAttendanceEntry[];
+  employees: TimeAttendanceEmployeeOption[];
+  stores: TimeClockStoreOption[];
+  clockedInCount: number;
+};

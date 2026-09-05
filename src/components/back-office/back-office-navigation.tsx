@@ -39,6 +39,8 @@ export type BackOfficeNavigationAccess = {
   canViewKitchen?: boolean;
   canUseApprovals?: boolean;
   canUseInventory?: boolean;
+  canCountInventory?: boolean;
+  canManageInventory?: boolean;
   canUseTimeClock?: boolean;
   canManageDevices?: boolean;
   canManageCatalog?: boolean;
@@ -50,6 +52,8 @@ export type BackOfficeNavigationAccess = {
 };
 
 type NavigationItem = {
+  /** The route name used in breadcrumbs when it differs from the menu label. */
+  breadcrumbLabel?: string;
   href: string;
   label: string;
   icon: LucideIcon;
@@ -104,6 +108,7 @@ const navigationGroups: NavigationGroup[] = [
         // Returns are reviewed and actioned from the immutable receipt
         // record, so a separate link would only duplicate this destination.
         label: "Receipts & returns",
+        breadcrumbLabel: "Receipts",
         icon: ReceiptText,
         isVisible: (access) => access.canViewReceipts === true,
       },
@@ -127,7 +132,7 @@ const navigationGroups: NavigationGroup[] = [
     icon: PackageSearch,
     label: "Catalog",
     items: [
-      { href: "/back-office/catalog", label: "Products", icon: PackageSearch, isVisible: (access) => access.canManageCatalog === true },
+      { href: "/back-office/catalog", label: "Products", breadcrumbLabel: "Catalog", icon: PackageSearch, isVisible: (access) => access.canManageCatalog === true },
       { href: "/back-office/categories", label: "Categories", icon: Shapes, isVisible: (access) => access.canManageCatalog === true },
     ],
   },
@@ -137,15 +142,22 @@ const navigationGroups: NavigationGroup[] = [
     items: [
       {
         href: "/back-office/inventory",
-        label: "Stock & inventory",
+        label: "Inventory Control",
+        breadcrumbLabel: "Inventory",
         icon: Warehouse,
         isVisible: (access) => access.canUseInventory === true,
       },
       {
-        href: "/back-office/replenishment",
-        label: "Restock items",
+        href: "/back-office/replenishment?tab=levels",
+        label: "Stock & Restock",
         icon: Truck,
         isVisible: (access) => access.canUseInventory === true,
+      },
+      {
+        href: "/back-office/purchasing?tab=purchase-orders",
+        label: "Purchasing",
+        icon: PackageSearch,
+        isVisible: (access) => access.canManageInventory === true,
       },
     ],
   },
@@ -169,7 +181,7 @@ const navigationGroups: NavigationGroup[] = [
       { href: "/back-office/roles", label: "Roles & access", icon: ShieldCheck, isVisible: (access) => access.canManageRoles === true },
       {
         href: "/back-office/time-clock",
-        label: "Time clock",
+        label: "Time & attendance",
         icon: Clock3,
         isVisible: (access) => access.canUseTimeClock === true,
       },
@@ -243,10 +255,60 @@ const navigationGroups: NavigationGroup[] = [
   },
 ];
 
+function routePathname(href: string) {
+  return href.split("?", 1)[0] || href;
+}
+
 function isCurrentRoute(pathname: string, href: string) {
-  return href === "/back-office"
+  const destinationPathname = routePathname(href);
+
+  return destinationPathname === "/back-office"
     ? pathname === href
-    : pathname === href || pathname.startsWith(`${href}/`);
+    : pathname === destinationPathname || pathname.startsWith(`${destinationPathname}/`);
+}
+
+export type BackOfficeBreadcrumb = {
+  href?: string;
+  label: string;
+};
+
+/**
+ * Resolves the breadcrumb from the same permission-aware navigation registry
+ * used by the sidebar. Detail routes use their server-rendered page title as a
+ * final label, so an internal route parameter is never presented as a UUID.
+ */
+export function getBackOfficeBreadcrumbs(
+  pathname: string,
+  currentLabel: string,
+  access: BackOfficeNavigationAccess | null,
+): BackOfficeBreadcrumb[] {
+  if (!access) return [];
+
+  const entries = [
+    ...primaryNavigation.map((item) => ({ item, group: null as NavigationGroup | null })),
+    ...navigationGroups.flatMap((group) => group.items.map((item) => ({ item, group }))),
+  ].sort((first, second) => second.item.href.length - first.item.href.length);
+  const match = entries.find(({ item }) => item.isVisible(access) && isCurrentRoute(pathname, item.href));
+
+  if (!match) return [];
+
+  const result: BackOfficeBreadcrumb[] = [{ href: "/back-office", label: "Back Office" }];
+  const itemLabel = match.item.breadcrumbLabel ?? match.item.label;
+  const isDetailRoute = pathname !== routePathname(match.item.href);
+
+  const append = (item: BackOfficeBreadcrumb) => {
+    if (result.at(-1)?.label !== item.label) result.push(item);
+  };
+
+  if (match.group) append({ label: match.group.label });
+  append({ href: isDetailRoute ? match.item.href : undefined, label: itemLabel });
+
+  const normalizedCurrentLabel = currentLabel.trim();
+  if (isDetailRoute && normalizedCurrentLabel && result.at(-1)?.label !== normalizedCurrentLabel) {
+    append({ label: normalizedCurrentLabel });
+  }
+
+  return result;
 }
 
 export function getBackOfficePageTitle(pathname: string) {

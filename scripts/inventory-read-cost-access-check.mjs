@@ -11,13 +11,21 @@ async function source(relativePath) {
 }
 
 test("Phase 8 permits inventory read access without exposing mutation workspaces", async () => {
-  const inventoryPage = await source("src/app/(back-office)/back-office/inventory/page.tsx");
+  const [inventoryPage, stockRestockPage, navigation] = await Promise.all([
+    source("src/app/(back-office)/back-office/inventory/page.tsx"),
+    source("src/app/(back-office)/back-office/replenishment/page.tsx"),
+    source("src/features/inventory/inventory-workspace-navigation.tsx"),
+  ]);
   const layout = await source("src/app/(back-office)/back-office/layout.tsx");
   const dal = await source("src/lib/auth/dal.ts");
 
   assert.match(inventoryPage, /requireBackOfficePermission\(\["inventory\.view", "inventory\.manage"\]\)/);
-  assert.match(inventoryPage, /requestedTab === "stock" \|\| requestedTab === "activity"/);
-  assert.match(inventoryPage, /INVENTORY_TABS\.filter\(\(tab\) => tab\.id === "stock" \|\| tab\.id === "activity"\)/);
+  assert.match(inventoryPage, /const activeTab = workspace === "purchasing" \|\| canManage \|\| requestedTab === "activity"/);
+  assert.match(inventoryPage, /if \(workspace === "purchasing" && !canManage\)/);
+  assert.match(inventoryPage, /redirect\(`\/back-office\/inventory\?\$\{query\.toString\(\)\}`\)/);
+  assert.match(stockRestockPage, /if \(!canManage && activeTab !== "levels"\)/);
+  assert.match(navigation, /!canManage && item\.id !== "activity"/);
+  assert.match(navigation, /canManage \|\| item\.id === "levels"/);
   assert.match(layout, /permission === "inventory\.view" \|\| permission === "inventory\.manage"/);
   assert.match(dal, /"inventory\.view",\n  "inventory\.manage"/);
   assert.match(dal, /hasAnyPermission\(context, \["inventory\.view", "inventory\.manage"\]\)/);

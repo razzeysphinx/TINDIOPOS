@@ -138,6 +138,38 @@ export const completeInventoryCountSchema = z
     }
   });
 
+export const createInventoryCountDraftSchema = z
+  .object({
+    storeId: z.uuid("Select a store."),
+    note: z.string().trim().max(500),
+    countMode: z.enum(["standard", "blind"]),
+    scopeType: z.enum(["full_store", "category", "supplier", "selected"]),
+    scopeReferenceId: z.string().trim().optional(),
+    selectedItems: z
+      .array(z.object({ productId: z.uuid(), variantId: optionalUuid }))
+      .max(500, "Choose no more than 500 items."),
+    sortMode: z.enum(["category_name", "supplier_name", "sku", "barcode", "product_name"]),
+    includeZeroStock: z.boolean(),
+  })
+  .superRefine((value, context) => {
+    if ((value.scopeType === "category" || value.scopeType === "supplier") && !z.uuid().safeParse(value.scopeReferenceId).success) {
+      context.addIssue({ code: "custom", path: ["scopeReferenceId"], message: `Select a ${value.scopeType}.` });
+    }
+    if (value.scopeType === "selected" && value.selectedItems.length === 0) {
+      context.addIssue({ code: "custom", path: ["selectedItems"], message: "Choose at least one item." });
+    }
+  });
+
+export const saveInventoryCountLineSchema = saleableLine.extend({
+  inventoryCountId: z.uuid("Choose an inventory count."),
+  countedQuantity,
+});
+
+export const inventoryCountTransitionSchema = z.object({
+  inventoryCountId: z.uuid("Choose an inventory count."),
+  note: z.string().trim().max(500).optional(),
+});
+
 export const transferStockSchema = z
   .object({
     sourceStoreId: z.uuid("Select a source store."),

@@ -61,7 +61,7 @@ export async function loadCatalogWorkspace(
         .order("sort_order", { ascending: true }),
       supabase
         .from("product_store_settings")
-        .select("product_id, store_id, is_available, price_override_minor, low_stock_level")
+        .select("product_id, store_id, is_available, price_override_minor, low_stock_level, restock_policy")
         .eq("organization_id", organizationId),
       supabase
         .from("inventory_levels")

@@ -50,6 +50,7 @@ export type CatalogStoreSettingRow = {
   is_available: boolean | null;
   price_override_minor: number | null;
   low_stock_level: number | null;
+  restock_policy: "restock" | "do_not_restock";
 };
 
 export type CatalogCostEntry = {

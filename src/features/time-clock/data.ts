@@ -2,6 +2,9 @@ import "server-only";
 
 import type {
   AttendanceEmployee,
+  TimeAttendanceEmployeeOption,
+  TimeAttendanceEntry,
+  TimeAttendanceWorkspace,
   TimeClockEntry,
   TimeClockStoreOption,
   TimeClockWorkspace,
@@ -82,4 +85,93 @@ export async function loadTimeClockWorkspace(
   const stores = (storesResult.data ?? []) as TimeClockStoreOption[];
   const employees = stores[0] ? await loadAttendanceEmployees(context, stores[0].id) : [];
   return { stores, employees, entry: mapCurrentEntry(entryResult.data, context, stores) };
+}
+
+/**
+ * Back Office audit data. This deliberately reads the canonical attendance
+ * records; clock-in/out operations remain in the POS employee workflow.
+ */
+export async function loadTimeAttendanceWorkspace(
+  context: BusinessContext,
+  filters: { storeId?: string | null; employeeId?: string | null; start?: string | null; end?: string | null },
+): Promise<TimeAttendanceWorkspace> {
+  const supabase = await createClient();
+  let entriesQuery = supabase
+    .from("time_clock_entries")
+    .select("id, employee_id, store_id, clocked_in_at, clocked_out_at, clock_in_verification_method, clock_out_verification_method")
+    .eq("organization_id", context.organization.id)
+    .order("clocked_in_at", { ascending: false })
+    .limit(200);
+
+  if (filters.storeId) entriesQuery = entriesQuery.eq("store_id", filters.storeId);
+  if (filters.employeeId) entriesQuery = entriesQuery.eq("employee_id", filters.employeeId);
+  if (filters.start) entriesQuery = entriesQuery.gte("clocked_in_at", `${filters.start}T00:00:00.000Z`);
+  if (filters.end) entriesQuery = entriesQuery.lte("clocked_in_at", `${filters.end}T23:59:59.999Z`);
+
+  const [entriesResult, employeesResult, storesResult, clockedInResult] = await Promise.all([
+    entriesQuery,
+    supabase
+      .from("employees")
+      .select("id, profile_id, employee_number")
+      .eq("organization_id", context.organization.id)
+      .order("employee_number", { ascending: true }),
+    supabase
+      .from("stores")
+      .select("id, name, is_active")
+      .eq("organization_id", context.organization.id)
+      .in("id", context.storeIds)
+      .order("name", { ascending: true }),
+    supabase
+      .from("time_clock_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", context.organization.id)
+      .is("clocked_out_at", null),
+  ]);
+
+  const baseError = [entriesResult, employeesResult, storesResult, clockedInResult].find((result) => result.error)?.error;
+  if (baseError) throw new Error(`Unable to load time and attendance: ${baseError.message}`);
+
+  const employees = employeesResult.data ?? [];
+  const profileIds = employees.map((employee) => employee.profile_id);
+  const profilesResult = profileIds.length > 0
+    ? await supabase.from("profiles").select("id, full_name, email").in("id", profileIds)
+    : { data: [], error: null };
+  if (profilesResult.error) throw new Error(`Unable to load attendance employees: ${profilesResult.error.message}`);
+
+  const profiles = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile]));
+  const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
+  const storeById = new Map((storesResult.data ?? []).map((store) => [store.id, store.name]));
+  const employeeOptions: TimeAttendanceEmployeeOption[] = employees.map((employee) => {
+    const profile = profiles.get(employee.profile_id);
+    return {
+      id: employee.id,
+      name: profile?.full_name || profile?.email || employee.employee_number,
+      employeeNumber: employee.employee_number,
+    };
+  });
+  const entries: TimeAttendanceEntry[] = (entriesResult.data ?? []).map((entry) => {
+    const employee = employeeById.get(entry.employee_id);
+    const profile = employee ? profiles.get(employee.profile_id) : undefined;
+    return {
+      id: entry.id,
+      employeeId: entry.employee_id,
+      employeeName: profile?.full_name || profile?.email || employee?.employee_number || "Unknown employee",
+      employeeNumber: employee?.employee_number || "—",
+      storeId: entry.store_id,
+      storeName: storeById.get(entry.store_id) ?? "Assigned store",
+      clockedInAt: entry.clocked_in_at,
+      clockedOutAt: entry.clocked_out_at,
+      clockInVerificationMethod: entry.clock_in_verification_method,
+      clockOutVerificationMethod: entry.clock_out_verification_method,
+    };
+  });
+
+  return {
+    entries,
+    employees: employeeOptions,
+    stores: (storesResult.data ?? [])
+      .filter((store) => store.is_active)
+      .map((store) => ({ id: store.id, name: store.name })),
+    clockedInCount: clockedInResult.count ?? 0,
+  };
 }

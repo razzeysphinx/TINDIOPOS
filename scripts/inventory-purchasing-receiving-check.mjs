@@ -24,12 +24,41 @@ test("Phase 6 organizes the existing purchasing actions into orders, receiving, 
   assert.match(workflow, /setPurchasingSection\("receiving"\)/);
 });
 
+test("Purchasing has its own workspace while reusing the canonical workflows", async () => {
+  const [navigation, page, purchasingPage, workflow] = await Promise.all([
+    source("src/features/inventory/inventory-workspace-navigation.tsx"),
+    source("src/app/(back-office)/back-office/inventory/page.tsx"),
+    source("src/app/(back-office)/back-office/purchasing/page.tsx"),
+    source("src/features/inventory/advanced-inventory-workflows.tsx"),
+  ]);
+
+  assert.match(navigation, /type InventoryWorkspace = "control" \| "restock" \| "purchasing"/);
+  assert.match(navigation, /const inventoryControlItems/);
+  assert.match(navigation, /const purchasingItems/);
+  assert.match(navigation, /supplier-returns/);
+  assert.match(navigation, /visiblePurchasingItems/);
+  assert.match(navigation, /return `\/back-office\/purchasing\?\$\{query\.toString\(\)\}`/);
+  assert.doesNotMatch(navigation.split("const purchasingItems")[0], /id: "receiving"/);
+  assert.match(page, /workspace === "control" && legacyPurchasingTab/);
+  assert.match(page, /redirect\(`\/back-office\/purchasing\?\$\{query\.toString\(\)\}`\)/);
+  assert.match(page, /const purchasingTabHref/);
+  assert.match(page, /workspace=\{workspace\}/);
+  assert.match(purchasingPage, /<InventoryWorkspacePage \{\.\.\.props\} workspace="purchasing" \/>/);
+  assert.match(page, /showPurchasingTabs=\{false\}/);
+  assert.match(page, /activeTab === "supplier-returns"/);
+  assert.match(page, /initialReceiptOrderId=\{requestedPurchaseOrderId\}/);
+  assert.match(page, /receivingHref=\{purchasingTabHref\("receiving"\)\}/);
+  assert.match(workflow, /router\.push\(`\$\{receivingHref\}&purchaseOrder=/);
+  assert.match(workflow, /only receiving changes stock/);
+});
+
 test("Phase 6 keeps cost visibility and receiving mutations on the existing safeguards", async () => {
   const workflow = await source("src/features/inventory/advanced-inventory-workflows.tsx");
 
   assert.match(workflow, /canViewCosts && activeSuppliers/);
   assert.match(workflow, /Purchase-order creation requires the existing cost-view permission/);
   assert.match(workflow, /receivableOrders/);
+  assert.match(workflow, /receivePurchaseOrderAction\(/);
   assert.doesNotMatch(workflow, /from\("inventory_levels"\)\.update/);
 });
 

@@ -1160,33 +1160,96 @@ export type Database = {
           },
         ]
       }
-      inventory_count_lines: {
+      inventory_adjustments: {
         Row: {
-          counted_quantity: number
-          expected_quantity: number
+          adjustment_number: number
+          created_at: string
+          created_by_employee_id: string
           id: string
-          inventory_count_id: string
+          note: string | null
           organization_id: string
           product_id: string
+          quantity_delta: number
+          reason_code: string
+          store_id: string
           variant_id: string | null
         }
         Insert: {
-          counted_quantity: number
-          expected_quantity: number
+          adjustment_number?: number
+          created_at?: string
+          created_by_employee_id: string
           id?: string
-          inventory_count_id: string
+          note?: string | null
           organization_id: string
           product_id: string
+          quantity_delta: number
+          reason_code: string
+          store_id: string
           variant_id?: string | null
         }
         Update: {
-          counted_quantity?: number
+          adjustment_number?: number
+          created_at?: string
+          created_by_employee_id?: string
+          id?: string
+          note?: string | null
+          organization_id?: string
+          product_id?: string
+          quantity_delta?: number
+          reason_code?: string
+          store_id?: string
+          variant_id?: string | null
+        }
+        Relationships: []
+      }
+      inventory_count_lines: {
+        Row: {
+          barcode_snapshot: string | null
+          category_name_snapshot: string
+          counted_quantity: number | null
+          expected_quantity: number
+          id: string
+          inventory_count_id: string
+          line_sort_order: number
+          organization_id: string
+          product_id: string
+          product_name_snapshot: string
+          sku_snapshot: string | null
+          unit_snapshot: string
+          variant_id: string | null
+          variant_name_snapshot: string | null
+        }
+        Insert: {
+          barcode_snapshot?: string | null
+          category_name_snapshot: string
+          counted_quantity?: number | null
+          expected_quantity: number
+          id?: string
+          inventory_count_id: string
+          line_sort_order?: number
+          organization_id: string
+          product_id: string
+          product_name_snapshot: string
+          sku_snapshot?: string | null
+          unit_snapshot: string
+          variant_id?: string | null
+          variant_name_snapshot?: string | null
+        }
+        Update: {
+          barcode_snapshot?: string | null
+          category_name_snapshot?: string
+          counted_quantity?: number | null
           expected_quantity?: number
           id?: string
           inventory_count_id?: string
+          line_sort_order?: number
           organization_id?: string
           product_id?: string
+          product_name_snapshot?: string
+          sku_snapshot?: string | null
+          unit_snapshot?: string
           variant_id?: string | null
+          variant_name_snapshot?: string | null
         }
         Relationships: [
           {
@@ -1214,37 +1277,61 @@ export type Database = {
       }
       inventory_counts: {
         Row: {
+          count_mode: string
+          count_number: number
           completed_at: string | null
           completed_by_employee_id: string | null
           id: string
+          include_zero_stock: boolean
           note: string | null
           organization_id: string
+          scope_reference_id: string | null
+          scope_selection: Json
+          scope_type: string
+          sort_mode: string
           started_at: string
           started_by_employee_id: string
           status: string
           store_id: string
+          updated_at: string
         }
         Insert: {
+          count_mode?: string
+          count_number?: number
           completed_at?: string | null
           completed_by_employee_id?: string | null
           id?: string
+          include_zero_stock?: boolean
           note?: string | null
           organization_id: string
+          scope_reference_id?: string | null
+          scope_selection?: Json
+          scope_type?: string
+          sort_mode?: string
           started_at?: string
           started_by_employee_id: string
           status?: string
           store_id: string
+          updated_at?: string
         }
         Update: {
+          count_mode?: string
+          count_number?: number
           completed_at?: string | null
           completed_by_employee_id?: string | null
           id?: string
+          include_zero_stock?: boolean
           note?: string | null
           organization_id?: string
+          scope_reference_id?: string | null
+          scope_selection?: Json
+          scope_type?: string
+          sort_mode?: string
           started_at?: string
           started_by_employee_id?: string
           status?: string
           store_id?: string
+          updated_at?: string
         }
         Relationships: [
           {
@@ -3046,6 +3133,7 @@ export type Database = {
           organization_id: string
           price_override_minor: number | null
           product_id: string
+          restock_policy: "do_not_restock" | "restock"
           store_id: string
           updated_at: string
         }
@@ -3056,6 +3144,7 @@ export type Database = {
           organization_id: string
           price_override_minor?: number | null
           product_id: string
+          restock_policy?: "do_not_restock" | "restock"
           store_id: string
           updated_at?: string
         }
@@ -3066,6 +3155,7 @@ export type Database = {
           organization_id?: string
           price_override_minor?: number | null
           product_id?: string
+          restock_policy?: "do_not_restock" | "restock"
           store_id?: string
           updated_at?: string
         }
@@ -6052,6 +6142,64 @@ export type Database = {
         }
         Returns: string
       }
+      create_inventory_count_draft: {
+        Args: {
+          target_note?: string
+          target_organization_id: string
+          target_store_id: string
+        }
+        Returns: string
+      }
+      create_inventory_count_plan: {
+        Args: {
+          target_count_mode: string
+          target_include_zero_stock: boolean
+          target_note: string
+          target_organization_id: string
+          target_scope_reference_id: string | null
+          target_scope_type: string
+          target_selected_items: Json
+          target_sort_mode: string
+          target_store_id: string
+        }
+        Returns: string
+      }
+      get_inventory_count_suppliers: {
+        Args: { target_organization_id: string }
+        Returns: { id: string; name: string }[]
+      }
+      save_inventory_count_line: {
+        Args: {
+          target_counted_quantity: number
+          target_inventory_count_id: string
+          target_organization_id: string
+          target_product_id: string
+          target_variant_id: string | null
+        }
+        Returns: undefined
+      }
+      submit_inventory_count_for_review: {
+        Args: {
+          target_inventory_count_id: string
+          target_organization_id: string
+        }
+        Returns: undefined
+      }
+      post_inventory_count: {
+        Args: {
+          target_inventory_count_id: string
+          target_organization_id: string
+        }
+        Returns: undefined
+      }
+      cancel_inventory_count: {
+        Args: {
+          target_inventory_count_id: string
+          target_note?: string
+          target_organization_id: string
+        }
+        Returns: undefined
+      }
       complete_organization_export: {
         Args: {
           target_export_session_id: string
@@ -6135,6 +6283,25 @@ export type Database = {
           target_store_id: string
         }
         Returns: undefined
+      }
+      set_catalog_product_store_configuration_v2: {
+        Args: {
+          target_low_stock_level: number
+          target_organization_id: string
+          target_price_override_minor: number
+          target_product_id: string
+          target_restock_policy: string
+          target_store_id: string
+        }
+        Returns: undefined
+      }
+      set_catalog_product_archived_safely: {
+        Args: {
+          target_is_archived: boolean
+          target_organization_id: string
+          target_product_id: string
+        }
+        Returns: string
       }
       create_custom_role: {
         Args: {

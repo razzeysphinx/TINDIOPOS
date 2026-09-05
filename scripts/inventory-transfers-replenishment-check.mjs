@@ -17,7 +17,7 @@ test("Phase 7 makes the approval-aware replenishment workflow the primary transf
   assert.match(inventoryPage, /InventoryTransferWorkspace/);
   assert.match(inventoryPage, /awaitingReceiptCount=\{inTransitTransfers\.length\}/);
   assert.doesNotMatch(inventoryPage, /sections=\{\["transfers"\]\}/);
-  assert.match(workspace, /Open replenishment/);
+  assert.match(workspace, /Open restock items/);
   assert.match(workspace, /Requested/);
   assert.match(workspace, /Approved & picked/);
   assert.match(workspace, /In transit/);

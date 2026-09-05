@@ -258,16 +258,19 @@ export async function setProductArchived(
   if (!parsed.success) return validationError();
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("products")
-    .update({ status: parsed.data.isArchived ? "archived" : "active" })
-    .eq("id", parsed.data.productId)
-    .eq("organization_id", context.organization.id)
-    .select("id")
-    .maybeSingle();
+  const { error } = await supabase.rpc("set_catalog_product_archived_safely", {
+    target_organization_id: context.organization.id,
+    target_product_id: parsed.data.productId,
+    target_is_archived: parsed.data.isArchived,
+  });
 
-  if (error || !data) {
-    return { ok: false, message: "The product could not be updated." };
+  if (error) {
+    return {
+      ok: false,
+      message: error.code === "55000"
+        ? error.message
+        : databaseMessage(error.code, "The product could not be updated."),
+    };
   }
 
   return {
@@ -416,7 +419,7 @@ export async function setProductStoreConfiguration(
   const parsed = setProductStoreConfigurationSchema.safeParse(input);
   if (!parsed.success) return validationError();
   const supabase = await createClient();
-  const { error } = await supabase.rpc("set_catalog_product_store_configuration", {
+  const { error } = await supabase.rpc("set_catalog_product_store_configuration_v2", {
     target_organization_id: context.organization.id,
     target_product_id: parsed.data.productId,
     target_store_id: parsed.data.storeId,
@@ -426,9 +429,10 @@ export async function setProductStoreConfiguration(
     target_low_stock_level: (parsed.data.lowStockLevel
       ? Number(parsed.data.lowStockLevel)
       : null) as never,
+    target_restock_policy: parsed.data.restockPolicy,
   });
   if (error) return { ok: false, message: databaseMessage(error.code, "Store product settings could not be updated.") };
-  return { ok: true, message: "Store price and low-stock settings updated." };
+  return { ok: true, message: "Store price, low-stock, and restock settings updated." };
 }
 
 export async function createProductUnit(

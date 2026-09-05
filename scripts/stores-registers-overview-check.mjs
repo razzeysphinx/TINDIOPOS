@@ -6,6 +6,7 @@ const paths = {
   actions: "../src/features/management/actions.ts",
   data: "../src/features/management/data.ts",
   drawerAction: "../src/features/management/quick-view/actions.ts",
+  drawerShell: "../src/components/back-office/back-office-detail-drawer.tsx",
   navigation: "../src/components/back-office/back-office-navigation.tsx",
   overview: "../src/app/(back-office)/back-office/stores-registers/page.tsx",
   overviewClient: "../src/features/management/stores-registers-overview.tsx",
@@ -50,7 +51,14 @@ test("store quick view opens on demand, preserves focus, and uses central store 
   assert.match(source.data, /hasStoreAccess\(context, storeId\)/);
   assert.match(source.data, /\.eq\("store_id", storeId\)/);
   assert.match(source.overviewClient, /aria-label={`View store \$\{store\.name\}, \$\{store\.code\}`}/);
-  assert.match(source.overviewClient, /side="right"/);
+  assert.match(source.overviewClient, /<BackOfficeDetailDrawer closeLabel="Close details" width="wide">/);
+  assert.match(source.overviewClient, /const \[drawerView, setDrawerView\] = useState<"store" \| "register">\("store"\)/);
+  assert.match(source.overviewClient, /setDrawerView\("register"\)/);
+  assert.match(source.overviewClient, /function RegisterDrawerHeader/);
+  assert.match(source.overviewClient, /function RegisterDrawerBody/);
+  assert.match(source.overviewClient, /onReturnToStore=\{returnToStore\}/);
+  assert.doesNotMatch(source.overviewClient, /setIsRegisterDrawerOpen|closeRegisterDrawer/);
+  assert.match(source.drawerShell, /side="right"/);
   assert.match(source.overviewClient, /if \(requestId\.current !== currentRequest\) return;/);
   assert.match(source.overviewClient, /document\.getElementById\(focusTargetId\)\?\.focus\(\)/);
   assert.match(source.overviewClient, /aria-label="Loading store"/);
@@ -96,4 +104,6 @@ test("register operational drawer reuses the authoritative shift summary and rec
   assert.match(source.overviewClient, /Shift open/);
   assert.match(source.overviewClient, /Shift closed/);
   assert.match(source.overviewClient, /EditStoreButton/);
+  assert.match(source.overviewClient, /View technical details/);
+  assert.match(source.overviewClient, /<details/);
 });

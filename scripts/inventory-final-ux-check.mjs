@@ -4,16 +4,20 @@ import test from "node:test";
 
 const source = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-const [inventoryPage, stockView, productDetail, storeScope] = await Promise.all([
+const [inventoryPage, stockView, productDetail, storeScope, workspaceNavigation, activityList] = await Promise.all([
   source("../src/app/(back-office)/back-office/inventory/page.tsx"),
   source("../src/features/inventory/inventory-stock-view.tsx"),
   source("../src/features/inventory/inventory-product-detail.tsx"),
   source("../src/lib/server/back-office-store-scope.ts"),
+  source("../src/features/inventory/inventory-workspace-navigation.tsx"),
+  source("../src/features/inventory/inventory-activity-list.tsx"),
 ]);
 
 test("Phase 10 keeps Inventory understandable, responsive, and keyboard-addressable", () => {
-  assert.match(inventoryPage, /aria-label="Inventory sections" className="overflow-x-auto(?: overscroll-x-contain)? border-b"/);
-  assert.match(inventoryPage, /Use Stock for current balances, Activity for recent changes/);
+  assert.match(workspaceNavigation, /InventoryWorkspace = "control" \| "restock" \| "purchasing"/);
+  assert.match(workspaceNavigation, /Stock adjustments/);
+  assert.match(workspaceNavigation, /Stock levels/);
+  assert.match(inventoryPage, /Use Stock Levels for current balances, Activity for recent changes/);
   assert.match(inventoryPage, /Needs attention/);
   assert.match(stockView, /aria-label="List view"/);
   assert.match(stockView, /aria-label="Grid view"/);
@@ -24,6 +28,9 @@ test("Phase 10 keeps Inventory understandable, responsive, and keyboard-addressa
   assert.match(productDetail, /<DialogContent side="right">/);
   assert.match(productDetail, /No inventory activity has been recorded for this item yet\./);
   assert.match(productDetail, /View full activity/);
+  assert.match(inventoryPage, /<InventoryActivityList/);
+  assert.match(activityList, /<BackOfficeDetailDrawer/);
+  assert.match(activityList, /immutable inventory ledger record/);
 });
 
 test("Phase 10 applies employee store assignments before Inventory data is displayed", () => {

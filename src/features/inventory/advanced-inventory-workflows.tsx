@@ -146,6 +146,10 @@ export function AdvancedInventoryWorkflows({
   currencyCode,
   canViewCosts,
   adjustmentReasons,
+  initialPurchasingSection = "orders",
+  initialReceiptOrderId,
+  receivingHref,
+  showPurchasingTabs = true,
   sections = ALL_ADVANCED_INVENTORY_SECTIONS,
 }: {
   stores: StoreOption[];
@@ -156,6 +160,13 @@ export function AdvancedInventoryWorkflows({
   currencyCode: string;
   canViewCosts?: boolean;
   adjustmentReasons: Array<{ code: string; name: string }>;
+  /** Lets Inventory Control deep-link to one purchasing workflow without duplicating it. */
+  initialPurchasingSection?: "orders" | "receiving" | "suppliers";
+  /** Keeps a contextual PO → Receiving handoff in the canonical query-driven workspace. */
+  initialReceiptOrderId?: string | null;
+  receivingHref?: string;
+  /** The shared Inventory navigation owns the top-level purchasing destinations. */
+  showPurchasingTabs?: boolean;
   sections?: readonly AdvancedInventorySection[];
 }) {
   const router = useRouter();
@@ -171,7 +182,7 @@ export function AdvancedInventoryWorkflows({
   const [supplierResult, setSupplierResult] = useState<WorkflowResult | null>(null);
   const [purchaseResult, setPurchaseResult] = useState<WorkflowResult | null>(null);
   const [receiptResult, setReceiptResult] = useState<WorkflowResult | null>(null);
-  const [purchasingSection, setPurchasingSection] = useState<"orders" | "receiving" | "suppliers">("orders");
+  const [purchasingSection, setPurchasingSection] = useState<"orders" | "receiving" | "suppliers">(initialPurchasingSection);
   const [countResult, setCountResult] = useState<WorkflowResult | null>(null);
   const [transferResult, setTransferResult] = useState<WorkflowResult | null>(null);
 
@@ -206,10 +217,11 @@ export function AdvancedInventoryWorkflows({
       lines: order.lines.filter((line) => line.receivedQuantity < line.orderedQuantity),
     }))
     .filter((order) => order.lines.length > 0);
-  const [receiptOrderId, setReceiptOrderId] = useState(receivableOrders[0]?.id ?? "");
+  const initialReceiptOrder = receivableOrders.find((order) => order.id === initialReceiptOrderId) ?? receivableOrders[0];
+  const [receiptOrderId, setReceiptOrderId] = useState(initialReceiptOrder?.id ?? "");
   const [receiptNote, setReceiptNote] = useState("");
   const [receiptQuantities, setReceiptQuantities] = useState<Record<string, string>>(() =>
-    receiptDraft(receivableOrders[0]),
+    receiptDraft(initialReceiptOrder),
   );
   const [countStoreId, setCountStoreId] = useState(firstStoreId);
   const [countNote, setCountNote] = useState("");
@@ -260,7 +272,9 @@ export function AdvancedInventoryWorkflows({
     : "Inventory operations";
   const description = sections.length === 1
     ? sections[0] === "purchasing"
-      ? "Manage suppliers, purchase orders, and receiving without mixing them into stock levels."
+      ? purchasingSection === "receiving"
+        ? "Record what physically arrived from a purchase order. Receiving is the bridge from procurement to the inventory ledger."
+        : "Manage suppliers, purchase orders, deliveries, and procurement costs. Purchase orders record buying intent; only receiving changes stock."
       : sections[0] === "counts"
         ? "Count what you physically have, review the difference, then record the verified correction."
         : "Prepare stock transfers between stores and review the details before sending them."
@@ -417,7 +431,8 @@ export function AdvancedInventoryWorkflows({
         </p>
       </div>
 
-      {showPurchasing ? (
+      {/* CANDIDATE_FOR_REMOVAL: retained as the component's standalone fallback; the shared Inventory navigation now owns these destinations. */}
+      {showPurchasing && showPurchasingTabs ? (
         <PurchasingSectionTabs activeSection={purchasingSection} onChange={setPurchasingSection} />
       ) : null}
 
@@ -534,6 +549,10 @@ export function AdvancedInventoryWorkflows({
           currencyCode={currencyCode}
           orders={purchaseOrders}
           onReceive={(order) => {
+            if (receivingHref) {
+              router.push(`${receivingHref}&purchaseOrder=${encodeURIComponent(order.id)}`);
+              return;
+            }
             setReceiptOrderId(order.id);
             setReceiptQuantities(receiptDraft(order));
             setPurchasingSection("receiving");

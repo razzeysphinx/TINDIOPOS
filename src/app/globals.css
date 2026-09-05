@@ -364,4 +364,21 @@
     color: #52645d;
     font-size: 9px;
   }
+
+  body[data-print-mode="inventory-count"] * {
+    visibility: hidden !important;
+  }
+
+  body[data-print-mode="inventory-count"] [data-inventory-count-print-document],
+  body[data-print-mode="inventory-count"] [data-inventory-count-print-document] * {
+    visibility: visible !important;
+  }
+
+  body[data-print-mode="inventory-count"] [data-inventory-count-print-document] {
+    display: block !important;
+    left: 0;
+    position: absolute;
+    top: 0;
+    width: 100%;
+  }
 }

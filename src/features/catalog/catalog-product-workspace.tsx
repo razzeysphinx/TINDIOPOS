@@ -6,6 +6,7 @@ import { useMemo, useRef, useState, useTransition, type FormEvent } from "react"
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
+import { BackOfficeDetailDrawer } from "@/components/back-office/back-office-detail-drawer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -23,6 +24,7 @@ type ProductWorkspaceProps = CatalogWorkspace & {
   canUseWeightedProducts: boolean;
   canViewCost: boolean;
   currencyCode: string;
+  initialStatus?: "active" | "archived" | "all";
   unitOptions: string[];
 };
 
@@ -75,10 +77,11 @@ export function CatalogProductWorkspace(props: ProductWorkspaceProps) {
   }, [variants]);
   const [query, setQuery] = useState("");
   const [categoryId, setCategoryId] = useState("");
-  const [status, setStatus] = useState("active");
+  const [status, setStatus] = useState(props.initialStatus ?? "active");
   const [productType, setProductType] = useState("");
   const [storeId, setStoreId] = useState("");
   const [sort, setSort] = useState("name-asc");
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -108,6 +111,14 @@ export function CatalogProductWorkspace(props: ProductWorkspaceProps) {
   const visibleProducts = filteredProducts.slice((safePage - 1) * pageSize, safePage * pageSize);
   const selectedProduct = products.find((product) => product.id === selectedProductId) ?? null;
   const filtersAreActive = Boolean(query || categoryId || productType || storeId || status !== "active");
+  const secondaryFilterCount = [productType, storeId].filter(Boolean).length;
+  const activeFilterLabels = [
+    query ? `Search: ${query}` : null,
+    categoryId ? `Category: ${categoryNames.get(categoryId) ?? "Selected"}` : null,
+    status !== "active" ? `Status: ${status === "all" ? "All" : "Archived"}` : null,
+    productType ? `Type: ${productType === "variants" ? "Variants" : productType[0].toUpperCase() + productType.slice(1)}` : null,
+    storeId ? `Store: ${activeStores.find((store) => store.id === storeId)?.name ?? "Selected"}` : null,
+  ].filter((label): label is string => Boolean(label));
 
   const chooseProduct = (productId: string) => {
     lastFocusedProductId.current = productId;
@@ -128,7 +139,7 @@ export function CatalogProductWorkspace(props: ProductWorkspaceProps) {
   const clearFilters = () => {
     setQuery("");
     setCategoryId("");
-    setStatus("active");
+    setStatus(props.initialStatus ?? "active");
     setProductType("");
     setStoreId("");
     setSort("name-asc");
@@ -136,9 +147,9 @@ export function CatalogProductWorkspace(props: ProductWorkspaceProps) {
   };
 
   return <>
-    <section aria-label="Catalog filters" className="space-y-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <label className="relative block min-w-0 flex-1 lg:max-w-xl">
+    <section aria-label="Catalog toolbar" className="space-y-3 rounded-xl border bg-card p-3 shadow-sm sm:p-4">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+        <label className="relative block min-w-0 flex-1 xl:max-w-xl">
           <span className="sr-only">Search products</span>
           <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input className="pl-9" onChange={(event) => { setQuery(event.target.value); resetPage(); }} placeholder="Search products, SKU or barcode" type="search" value={query} />
@@ -148,19 +159,22 @@ export function CatalogProductWorkspace(props: ProductWorkspaceProps) {
           {activeStores.length ? <CreateProductForm canTrackInventory={canTrackInventory} canUseWeightedProducts={canUseWeightedProducts} canViewCost={canViewCost} categories={activeCategories.map(({ id, name }) => ({ id, name }))} stores={activeStores.map(({ id, name }) => ({ id, name }))} unitOptions={unitOptions} /> : null}
         </div>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-end gap-2">
         <select aria-label="Category" className={selectClassName} onChange={(event) => { setCategoryId(event.target.value); resetPage(); }} value={categoryId}><option value="">All categories</option>{activeCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
-        <select aria-label="Status" className={selectClassName} onChange={(event) => { setStatus(event.target.value); resetPage(); }} value={status}><option value="active">Active</option><option value="archived">Archived</option><option value="all">All statuses</option></select>
-        <select aria-label="Product type" className={selectClassName} onChange={(event) => { setProductType(event.target.value); resetPage(); }} value={productType}><option value="">All product types</option><option value="standard">Standard</option><option value="variants">Variants</option><option value="composite">Composite</option></select>
-        <select aria-label="Store" className={selectClassName} onChange={(event) => { setStoreId(event.target.value); resetPage(); }} value={storeId}><option value="">All stores</option>{activeStores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select>
+        <select aria-label="Status" className={selectClassName} onChange={(event) => { setStatus(event.target.value as "active" | "archived" | "all"); resetPage(); }} value={status}><option value="active">Active</option><option value="archived">Archived</option><option value="all">All statuses</option></select>
+        <button aria-controls="catalog-more-filters" aria-expanded={moreFiltersOpen} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-input bg-background px-3 text-sm font-medium outline-none hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" onClick={() => setMoreFiltersOpen((current) => !current)} type="button"><SlidersHorizontal aria-hidden="true" className="size-4" />More filters{secondaryFilterCount > 0 ? ` · ${secondaryFilterCount}` : ""}</button>
+        <div className={moreFiltersOpen ? "contents" : "hidden"} id="catalog-more-filters">
+          <select aria-label="Product type" className={selectClassName} onChange={(event) => { setProductType(event.target.value); resetPage(); }} value={productType}><option value="">All product types</option><option value="standard">Standard</option><option value="variants">Variants</option><option value="composite">Composite</option></select>
+          <select aria-label="Store" className={selectClassName} onChange={(event) => { setStoreId(event.target.value); resetPage(); }} value={storeId}><option value="">All stores</option>{activeStores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select>
+        </div>
         <label className="flex items-center gap-2 text-sm text-muted-foreground"><span>Sort</span><select aria-label="Sort products" className={selectClassName} onChange={(event) => { setSort(event.target.value); resetPage(); }} value={sort}><option value="name-asc">Name A–Z</option><option value="name-desc">Name Z–A</option><option value="price-asc">Price low–high</option><option value="price-desc">Price high–low</option><option value="recent">Recently added</option></select></label>
       </div>
+      {filtersAreActive ? <div aria-label="Active catalog filters" className="flex flex-wrap items-center gap-2">{activeFilterLabels.map((label) => <Badge key={label} variant="outline">{label}</Badge>)}<Button onClick={clearFilters} size="sm" type="button" variant="ghost">Clear filters</Button></div> : null}
     </section>
 
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-3">
-        <div><CardTitle>Products</CardTitle><p aria-live="polite" className="mt-1 text-sm text-muted-foreground">{filteredProducts.length} product{filteredProducts.length === 1 ? "" : "s"}</p></div>
-        <SlidersHorizontal aria-hidden="true" className="size-5 text-muted-foreground" />
+        <div><CardTitle>Products</CardTitle><p aria-live="polite" className="mt-1 text-sm text-muted-foreground">{filtersAreActive ? `${filteredProducts.length} of ${products.length} products` : `${products.length} product${products.length === 1 ? "" : "s"}`}</p></div>
       </CardHeader>
       <CardContent className="p-0">
         {visibleProducts.length ? <>
@@ -177,9 +191,9 @@ export function CatalogProductWorkspace(props: ProductWorkspaceProps) {
     </Card>
 
     <Dialog.Root modal={false} onOpenChange={(open) => { if (!open) closeDrawer(); }} open={drawerOpen}>
-      <DialogContent className="flex h-dvh max-h-none max-w-none flex-col rounded-none sm:max-w-[40rem]" closeLabel="Close product details" nonBlocking side="right">
+      <BackOfficeDetailDrawer closeLabel="Close product details" nonBlocking>
         {selectedProduct ? <ProductDrawer activeCategories={activeCategories} activeStores={activeStores} allProducts={products} canTrackInventory={canTrackInventory} canUseWeightedProducts={canUseWeightedProducts} canViewCost={canViewCost} components={componentsByProduct.get(selectedProduct.id) ?? []} costMinor={costByProduct.get(selectedProduct.id) ?? 0} currencyCode={currencyCode} inventoryLevels={inventoryByProduct.get(selectedProduct.id) ?? []} key={selectedProduct.id} product={selectedProduct} settings={settingsByProduct.get(selectedProduct.id) ?? []} units={unitsByProduct.get(selectedProduct.id) ?? []} variants={variantsByProduct.get(selectedProduct.id) ?? []} /> : null}
-      </DialogContent>
+      </BackOfficeDetailDrawer>
     </Dialog.Root>
   </>;
 }
@@ -196,12 +210,22 @@ type ListRowProps = {
 };
 
 function stockStatus(product: ListRowProps["product"], levels: ListRowProps["inventoryLevels"], settings: ListRowProps["settings"]) {
-  if (!product.track_inventory) return { label: "Not tracked", tone: "text-muted-foreground" };
+  if (!product.track_inventory) return { attention: null, label: "Not tracked", tone: "text-muted-foreground" };
   const total = levels.reduce((sum, level) => sum + Number(level.quantity), 0);
-  if (levels.some((level) => Number(level.quantity) < 0)) return { label: `${total} · Negative`, tone: "text-destructive" };
-  if (total <= 0) return { label: "0 · Out", tone: "text-destructive" };
-  const low = levels.some((level) => { const threshold = settings.find((setting) => setting.store_id === level.store_id)?.low_stock_level; return threshold !== null && threshold !== undefined && Number(level.quantity) <= Number(threshold); });
-  return { label: low ? `${total} · Low` : String(total), tone: low ? "text-amber-700 dark:text-amber-400" : "text-foreground" };
+  if (total < 0) return { attention: "Negative total", label: `${total} on hand`, tone: "text-destructive" };
+  const negativeStores = new Set(levels.filter((level) => Number(level.quantity) < 0).map((level) => level.store_id));
+  if (negativeStores.size > 0) return { attention: `${negativeStores.size} store${negativeStores.size === 1 ? "" : "s"} negative`, label: `${total} on hand`, tone: "text-destructive" };
+  if (total === 0) return { attention: "Out of stock", label: "0 on hand", tone: "text-destructive" };
+  const lowStores = new Set(levels.filter((level) => { const threshold = settings.find((setting) => setting.store_id === level.store_id)?.low_stock_level; return threshold !== null && threshold !== undefined && Number(level.quantity) <= Number(threshold); }).map((level) => level.store_id));
+  return { attention: lowStores.size > 0 ? `${lowStores.size} store${lowStores.size === 1 ? "" : "s"} low` : null, label: `${total} on hand`, tone: lowStores.size > 0 ? "text-amber-700 dark:text-amber-400" : "text-foreground" };
+}
+
+function StockSummary({ stock }: { stock: ReturnType<typeof stockStatus> }) {
+  return <span className={`block ${stock.tone}`}><span className="block font-medium">{stock.label}</span>{stock.attention ? <span className="mt-0.5 block text-xs font-normal">{stock.attention}</span> : null}</span>;
+}
+
+function sellingAvailability(availableStores: number, activeStoreCount: number) {
+  return `${availableStores} of ${activeStoreCount} selling`;
 }
 
 function ProductTableRow({ activeStoreCount, categoryName, currencyCode, inventoryLevels, isSelected, onSelect, product, settings }: ListRowProps) {
@@ -209,7 +233,7 @@ function ProductTableRow({ activeStoreCount, categoryName, currencyCode, invento
   const availableStores = settings.filter((setting) => setting.is_available).length;
   return <tr aria-label={`Open ${product.name}`} aria-pressed={isSelected} className={`cursor-pointer transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 ${isSelected ? "bg-primary/10 hover:bg-primary/10" : ""}`} id={`catalog-product-${product.id}`} onClick={onSelect} onKeyDown={(event) => { if (event.currentTarget !== event.target || (event.key !== "Enter" && event.key !== " ")) return; event.preventDefault(); onSelect(); }} role="button" tabIndex={0}>
     <td className="px-5 py-3"><div className="flex min-w-0 items-center gap-3">{product.image_url ? <span aria-hidden="true" className="size-10 shrink-0 rounded-lg border bg-cover bg-center" style={{ backgroundImage: `url(${product.image_url})` }} /> : <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-secondary text-primary"><Package aria-hidden="true" className="size-4" /></span>}<span className="min-w-0"><span className="block truncate font-semibold">{product.name}</span><span className="block truncate text-xs text-muted-foreground">{product.sku || product.barcode || productTypeLabel(product.product_type, product.is_composite)}</span></span></div></td>
-    <td className="px-3 py-3 text-muted-foreground">{categoryName}</td><td className="px-3 py-3 text-right font-medium tabular-nums">{product.product_type === "variable" ? "Varies" : formatMinorMoney(product.price_minor, currencyCode)}</td><td className={`px-3 py-3 font-medium ${stock.tone}`}>{stock.label}</td><td className="px-3 py-3 text-muted-foreground">{availableStores} / {activeStoreCount}</td><td className="px-5 py-3"><Badge variant={product.status === "archived" ? "outline" : "secondary"}>{product.status === "archived" ? "Archived" : "Active"}</Badge></td>
+    <td className="px-3 py-3 text-muted-foreground">{categoryName}</td><td className="px-3 py-3 text-right font-medium tabular-nums">{product.product_type === "variable" ? "Varies" : formatMinorMoney(product.price_minor, currencyCode)}</td><td className="px-3 py-3"><StockSummary stock={stock} /></td><td className="px-3 py-3 text-muted-foreground">{sellingAvailability(availableStores, activeStoreCount)}</td><td className="px-5 py-3"><Badge variant={product.status === "archived" ? "outline" : "secondary"}>{product.status === "archived" ? "Archived" : "Active"}</Badge></td>
   </tr>;
 }
 
@@ -217,7 +241,7 @@ function ProductMobileRow(props: ListRowProps) {
   const { activeStoreCount, categoryName, currencyCode, inventoryLevels, isSelected, onSelect, product, settings } = props;
   const stock = stockStatus(product, inventoryLevels, settings);
   const availableStores = settings.filter((setting) => setting.is_available).length;
-  return <button aria-pressed={isSelected} className={`w-full px-4 py-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 ${isSelected ? "bg-primary/10" : ""}`} id={`catalog-product-mobile-${product.id}`} onClick={onSelect} type="button"><span className="flex items-start justify-between gap-3"><span className="min-w-0"><span className="block truncate font-semibold">{product.name}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{categoryName} · {productTypeLabel(product.product_type, product.is_composite)}</span></span><Badge variant={product.status === "archived" ? "outline" : "secondary"}>{product.status === "archived" ? "Archived" : "Active"}</Badge></span><span className="mt-3 grid grid-cols-3 gap-2 text-xs text-muted-foreground"><span>Price<strong className="block truncate text-foreground">{product.product_type === "variable" ? "Varies" : formatMinorMoney(product.price_minor, currencyCode)}</strong></span><span>Stock<strong className={`block ${stock.tone}`}>{stock.label}</strong></span><span>Stores<strong className="block text-foreground">{availableStores} / {activeStoreCount}</strong></span></span></button>;
+  return <button aria-pressed={isSelected} className={`w-full px-4 py-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 ${isSelected ? "bg-primary/10" : ""}`} id={`catalog-product-mobile-${product.id}`} onClick={onSelect} type="button"><span className="flex items-start justify-between gap-3"><span className="min-w-0"><span className="block truncate font-semibold">{product.name}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{categoryName} · {productTypeLabel(product.product_type, product.is_composite)}</span></span><Badge variant={product.status === "archived" ? "outline" : "secondary"}>{product.status === "archived" ? "Archived" : "Active"}</Badge></span><span className="mt-3 grid grid-cols-2 gap-3 text-xs text-muted-foreground"><span className="min-w-0">Price<strong className="block truncate text-foreground">{product.product_type === "variable" ? "Varies" : formatMinorMoney(product.price_minor, currencyCode)}</strong></span><span className="min-w-0">Stock<StockSummary stock={stock} /></span><span className="col-span-2 min-w-0">Stores<strong className="block truncate text-foreground" title={sellingAvailability(availableStores, activeStoreCount)}>{sellingAvailability(availableStores, activeStoreCount)}</strong></span></span></button>;
 }
 
 type ProductDrawerProps = {
@@ -239,7 +263,11 @@ type ProductDrawerProps = {
 
 function ProductDrawer(props: ProductDrawerProps) {
   const { product, activeCategories, units } = props;
+  const router = useRouter();
   const [tab, setTab] = useState<DrawerTab>("overview");
+  const [lifecycleOpen, setLifecycleOpen] = useState(false);
+  const [lifecycleResult, setLifecycleResult] = useState<CatalogActionResult<unknown> | null>(null);
+  const [isLifecyclePending, startLifecycleTransition] = useTransition();
   const tabs: Array<{ id: DrawerTab; label: string }> = [{ id: "overview", label: "Overview" }];
   if (props.canTrackInventory && product.track_inventory) tabs.push({ id: "inventory", label: "Inventory" });
   tabs.push({ id: "stores", label: "Stores" });
@@ -249,7 +277,7 @@ function ProductDrawer(props: ProductDrawerProps) {
 
   return <>
     <DialogHeader className="sticky top-0 z-10 shrink-0 bg-background pr-20 sm:pr-24">
-      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><DialogTitle className="truncate">{product.name}</DialogTitle><Badge variant={product.status === "archived" ? "outline" : "secondary"}>{product.status === "archived" ? "Archived" : "Active"}</Badge></div><DialogDescription><span className="block text-xs font-medium tracking-wide uppercase">Category</span>{categoryName}</DialogDescription></div><Menu.Root modal={false}><Menu.Trigger aria-label="Product actions" className="grid size-9 shrink-0 place-items-center rounded-lg border bg-background text-muted-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"><EllipsisVertical aria-hidden="true" className="size-4" /></Menu.Trigger><Menu.Portal><Menu.Positioner align="end" className="z-[70]" side="bottom" sideOffset={6}><Menu.Popup className="w-52 rounded-lg border bg-popover p-1 shadow-lg outline-none"><ProductActionMenuItems currencyCode={props.currencyCode} product={product} /></Menu.Popup></Menu.Positioner></Menu.Portal></Menu.Root></div>
+      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><DialogTitle className="truncate">{product.name}</DialogTitle><Badge variant={product.status === "archived" ? "outline" : "secondary"}>{product.status === "archived" ? "Archived" : "Active"}</Badge></div><DialogDescription><span className="block text-xs font-medium tracking-wide uppercase">Category</span>{categoryName}</DialogDescription></div><Menu.Root modal={false}><Menu.Trigger aria-label="Product actions" className="grid size-9 shrink-0 place-items-center rounded-lg border bg-background text-muted-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"><EllipsisVertical aria-hidden="true" className="size-4" /></Menu.Trigger><Menu.Portal><Menu.Positioner align="end" className="z-[70]" side="bottom" sideOffset={6}><Menu.Popup className="w-52 rounded-lg border bg-popover p-1 shadow-lg outline-none"><ProductActionMenuItems currencyCode={props.currencyCode} onLifecycle={() => { setLifecycleResult(null); setLifecycleOpen(true); }} product={product} /></Menu.Popup></Menu.Positioner></Menu.Portal></Menu.Root></div>
       <div aria-label="Product sections" className="-mb-4 mt-4 flex gap-1 overflow-x-auto" role="tablist">{tabs.map((item) => <button aria-selected={tab === item.id} className={`shrink-0 border-b-2 px-3 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${tab === item.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`} key={item.id} onClick={() => setTab(item.id)} role="tab" type="button">{item.label}</button>)}</div>
     </DialogHeader>
     <DialogBody className="min-h-0 max-h-none flex-1">
@@ -259,14 +287,27 @@ function ProductDrawer(props: ProductDrawerProps) {
       {tab === "units" ? <ProductUnits {...props} /> : null}
       {tab === "components" ? <ProductComponents {...props} /> : null}
     </DialogBody>
+    <Dialog.Root onOpenChange={setLifecycleOpen} open={lifecycleOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{product.status === "archived" ? `Restore ${product.name}?` : `Archive ${product.name}?`}</DialogTitle>
+          <DialogDescription>{product.status === "archived" ? "Restoring makes the product active again. Store selling availability remains unchanged." : "TINDIO will first check stock on hand, open purchase orders, counts, requests, transfers, and active composite recipes. Nothing is deleted."}</DialogDescription>
+        </DialogHeader>
+        <DialogBody className="space-y-4">
+          <ResultMessage result={lifecycleResult} />
+          <div className="flex justify-end gap-2">
+            <Button disabled={isLifecyclePending} onClick={() => setLifecycleOpen(false)} type="button" variant="outline">Cancel</Button>
+            <Button disabled={isLifecyclePending} onClick={() => startLifecycleTransition(async () => { const next = await setProductArchivedAction({ productId: product.id, isArchived: product.status !== "archived" }); setLifecycleResult(next); if (next.ok) { setLifecycleOpen(false); router.refresh(); } })} type="button" variant={product.status === "archived" ? "default" : "destructive"}>{isLifecyclePending ? <LoaderCircle className="animate-spin" /> : product.status === "archived" ? <RotateCcw /> : <Archive />}{product.status === "archived" ? "Restore product" : "Archive product"}</Button>
+          </div>
+        </DialogBody>
+      </DialogContent>
+    </Dialog.Root>
   </>;
 }
 
-function ProductActionMenuItems({ currencyCode, product }: { currencyCode: string; product: ProductDrawerProps["product"] }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+function ProductActionMenuItems({ currencyCode, onLifecycle, product }: { currencyCode: string; onLifecycle: () => void; product: ProductDrawerProps["product"] }) {
   const menuItemClassName = "flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none data-highlighted:bg-muted disabled:pointer-events-none disabled:opacity-50";
-  return <>{product.product_type !== "variable" ? <Menu.Item className={menuItemClassName} disabled={!product.barcode} onClick={() => printProductLabelDocument({ barcode: product.barcode, price: formatMinorMoney(product.price_minor, currencyCode), productName: product.name, sku: product.sku })}><Printer aria-hidden="true" className="size-4" />Print label</Menu.Item> : null}<Menu.Item className={menuItemClassName} disabled={isPending} onClick={() => startTransition(async () => { const result = await setProductArchivedAction({ productId: product.id, isArchived: product.status !== "archived" }); if (result.ok) router.refresh(); })}>{isPending ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : product.status === "archived" ? <RotateCcw aria-hidden="true" className="size-4" /> : <Archive aria-hidden="true" className="size-4" />}{product.status === "archived" ? "Restore" : "Archive"}</Menu.Item></>;
+  return <>{product.product_type !== "variable" ? <Menu.Item className={menuItemClassName} disabled={!product.barcode} onClick={() => printProductLabelDocument({ barcode: product.barcode, price: formatMinorMoney(product.price_minor, currencyCode), productName: product.name, sku: product.sku })}><Printer aria-hidden="true" className="size-4" />Print label</Menu.Item> : null}<Menu.Item className={menuItemClassName} onClick={onLifecycle}>{product.status === "archived" ? <RotateCcw aria-hidden="true" className="size-4" /> : <Archive aria-hidden="true" className="size-4" />}{product.status === "archived" ? "Restore" : "Archive"}</Menu.Item></>;
 }
 
 function ResultMessage({ result }: { result: CatalogActionResult<unknown> | null }) {
@@ -302,8 +343,7 @@ function DeleteProductControl({ productId, productName }: { productId: string; p
 
 function ProductInventory(props: ProductDrawerProps) {
   const stock = stockStatus(props.product, props.inventoryLevels, props.settings);
-  const total = props.inventoryLevels.reduce((sum, level) => sum + Number(level.quantity), 0);
-  return <section className="space-y-5"><div><h3 className="font-semibold">Inventory summary</h3><p className="mt-1 text-sm text-muted-foreground">A light product snapshot. Movement history and stock actions stay in Inventory.</p></div><div className="divide-y rounded-xl border px-4"><SummaryRow label="Tracked" value={props.product.track_inventory ? "Yes" : "No"} /><SummaryRow label="Total available" value={String(total)} /><SummaryRow label="Status" value={stock.label.includes("·") ? stock.label.split("·").at(-1)?.trim() ?? stock.label : stock.label} /></div><Button nativeButton={false} render={<a href={`/back-office/inventory?search=${encodeURIComponent(props.product.name)}`} />} variant="outline"><Warehouse aria-hidden="true" />View in Inventory</Button></section>;
+  return <section className="space-y-5"><div><h3 className="font-semibold">Inventory summary</h3><p className="mt-1 text-sm text-muted-foreground">A light product snapshot. Movement history and stock actions stay in Inventory.</p></div><div className="divide-y rounded-xl border px-4"><SummaryRow label="Tracked" value={props.product.track_inventory ? "Yes" : "No"} /><SummaryRow label="Total on hand" value={stock.label} /><SummaryRow label="Status" value={stock.attention ?? (props.product.track_inventory ? "In stock" : "Not tracked")} /></div><Button nativeButton={false} render={<a href={`/back-office/inventory?search=${encodeURIComponent(props.product.name)}`} />} variant="outline"><Warehouse aria-hidden="true" />View in Inventory</Button></section>;
 }
 
 function ProductStores(props: ProductDrawerProps) {
@@ -314,8 +354,8 @@ function StoreSettings({ currencyCode, product, setting, store }: { currencyCode
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<CatalogActionResult<unknown> | null>(null);
-  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const form = new FormData(event.currentTarget); setResult(null); startTransition(async () => { const next = await setProductStoreConfigurationAction({ productId: product.id, storeId: store.id, priceOverride: form.get("priceOverride"), lowStockLevel: form.get("lowStockLevel") }); setResult(next); if (next.ok) router.refresh(); }); };
-  return <form className="rounded-xl border p-4" onSubmit={submit}><div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-semibold">{store.name}</h4><p className="text-xs text-muted-foreground">Default selling price: {formatMinorMoney(product.price_minor, currencyCode)}</p></div><ProductAvailabilityButton isAvailable={setting?.is_available ?? false} productId={product.id} storeId={store.id} storeName={store.name} /></div><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="grid gap-1.5 text-sm font-medium">Override price<Input defaultValue={setting?.price_override_minor == null ? "" : moneyInput(setting.price_override_minor)} inputMode="decimal" name="priceOverride" placeholder="Use organization default" /></label><label className="grid gap-1.5 text-sm font-medium">Low-stock alert<Input defaultValue={setting?.low_stock_level ?? ""} inputMode="decimal" name="lowStockLevel" placeholder="Optional" /></label></div><div className="mt-3 flex flex-wrap items-center gap-3"><Button disabled={isPending} size="sm" type="submit" variant="outline">{isPending ? <LoaderCircle className="animate-spin" /> : null}Save store settings</Button><ResultMessage result={result} /></div></form>;
+  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const form = new FormData(event.currentTarget); setResult(null); startTransition(async () => { const next = await setProductStoreConfigurationAction({ productId: product.id, storeId: store.id, priceOverride: form.get("priceOverride"), lowStockLevel: form.get("lowStockLevel"), restockPolicy: form.get("restockPolicy") }); setResult(next); if (next.ok) router.refresh(); }); };
+  return <form className="rounded-xl border p-4" onSubmit={submit}><div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-semibold">{store.name}</h4><p className="text-xs text-muted-foreground">Default selling price: {formatMinorMoney(product.price_minor, currencyCode)}</p></div><ProductAvailabilityButton isAvailable={setting?.is_available ?? false} productId={product.id} storeId={store.id} storeName={store.name} /></div><div className="mt-4 grid gap-3 sm:grid-cols-3"><label className="grid gap-1.5 text-sm font-medium">Override price<Input defaultValue={setting?.price_override_minor == null ? "" : moneyInput(setting.price_override_minor)} inputMode="decimal" name="priceOverride" placeholder="Use organization default" /></label><label className="grid gap-1.5 text-sm font-medium">Low-stock alert<Input defaultValue={setting?.low_stock_level ?? ""} inputMode="decimal" name="lowStockLevel" placeholder="Optional" /></label><label className="grid gap-1.5 text-sm font-medium">Restock intention<select className={selectClassName} defaultValue={setting?.restock_policy ?? "restock"} name="restockPolicy"><option value="restock">Restock normally</option><option value="do_not_restock">Do not restock</option></select></label></div><p className="mt-3 text-xs text-muted-foreground">“Do not restock” removes this item from restock suggestions at this store. It does not archive the product or change stock history.</p><div className="mt-3 flex flex-wrap items-center gap-3"><Button disabled={isPending} size="sm" type="submit" variant="outline">{isPending ? <LoaderCircle className="animate-spin" /> : null}Save store settings</Button><ResultMessage result={result} /></div></form>;
 }
 
 function ProductUnits(props: ProductDrawerProps) {

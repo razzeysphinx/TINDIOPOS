@@ -40,18 +40,14 @@ test("Stock status derives from the existing projection and optional replenishme
   assert.match(stockView, /condition === "low" \|\| condition === "negative" \|\| condition === "out_of_stock"/);
 });
 
-test("Inventory page scopes selected-store stock queries and redacts financial fields without permission", async () => {
-  const inventoryPage = await source("src/app/(back-office)/back-office/inventory/page.tsx");
+test("Stock & Restock scopes selected-store stock queries and redacts financial fields without permission", async () => {
+  const replenishmentPage = await source("src/app/(back-office)/back-office/replenishment/page.tsx");
 
-  assert.match(inventoryPage, /const settingsQuery = supabase/);
-  assert.match(inventoryPage, /const levelsQuery = supabase/);
-  assert.match(inventoryPage, /const scopedStoreIds = selectedStoreId \? \[selectedStoreId\] : storeScope\.storeIds/);
-  assert.match(inventoryPage, /settingsQuery\.in\("store_id", scopedStoreIds\)/);
-  assert.match(inventoryPage, /levelsQuery\.in\("store_id", scopedStoreIds\)/);
-  assert.match(inventoryPage, /replenishmentRulesQuery\?\.in\("store_id", scopedStoreIds\)/);
-  assert.match(inventoryPage, /averageCostMinor: canViewCosts\s+\? averageCostByStockLevel\.get/);
-  assert.match(inventoryPage, /rpc\("get_inventory_valuation"/);
-  assert.match(inventoryPage, /reorderPoint: canManage \? reorderPoints\.get/);
-  assert.match(inventoryPage, /<InventoryStockView/);
-  assert.match(inventoryPage, /href=\{inventoryTabHref\("stock", "attention"\)\}\s+label="Needs attention"/);
+  assert.match(replenishmentPage, /const visibleStore = \(storeId: string\) => !storeScope\.selectedStoreId \|\| storeId === storeScope\.selectedStoreId/);
+  assert.match(replenishmentPage, /supabase\.from\("product_store_settings"/);
+  assert.match(replenishmentPage, /supabase\.from\("inventory_levels"/);
+  assert.match(replenishmentPage, /canViewCosts \? supabase\.rpc\("get_inventory_valuation"/);
+  assert.match(replenishmentPage, /averageCostMinor: canViewCosts/);
+  assert.match(replenishmentPage, /<InventoryStockView/);
+  assert.match(replenishmentPage, /workspace="restock"/);
 });

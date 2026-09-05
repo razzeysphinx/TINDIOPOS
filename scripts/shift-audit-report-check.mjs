@@ -4,11 +4,12 @@ import { readFile } from "node:fs/promises";
 const root = new URL("..", import.meta.url);
 const source = (path) => readFile(new URL(path, root), "utf8");
 
-const [workspace, manager, navigation, layout, quickViewAction, detailPage, detailData, migration, historyMigration] = await Promise.all([
+const [workspace, manager, navigation, layout, drawerShell, quickViewAction, detailPage, detailData, migration, historyMigration] = await Promise.all([
   source("src/app/(back-office)/back-office/shifts/page.tsx"),
   source("src/features/shifts/shift-manager.tsx"),
   source("src/components/back-office/back-office-navigation.tsx"),
   source("src/app/(back-office)/back-office/layout.tsx"),
+  source("src/components/back-office/back-office-detail-drawer.tsx"),
   source("src/features/shifts/quick-view/actions.ts"),
   source("src/app/(back-office)/back-office/shifts/[shiftId]/page.tsx"),
   source("src/features/shifts/data.ts"),
@@ -25,11 +26,14 @@ assert.match(navigation, /access\.canViewShiftHistory === true/, "Shift Reports 
 assert.match(layout, /canViewShiftHistory:[\s\S]*?shifts\.view_history[\s\S]*?settings\.manage/, "Layout must derive shift-history navigation access from authoritative permissions");
 assert.match(workspace, /<ShiftManager\s+auditFilters=\{!isOperationsMode/, "Report filters must be provided to the Shift Manager rather than rendered as a separate page card");
 assert.match(workspace, /<GlobalFilterBar[\s\S]*?embedded/, "Shift reports must reuse the shared filter form in embedded mode");
+assert.match(workspace, /showEmbeddedDividers=\{false\}/, "The embedded shift filters must not add duplicate dividers inside the Shift History card");
 assert.match(manager, /<ShiftAuditDrawer/, "The audit trail must reuse a shared right-side shift-report drawer");
 assert.match(manager, /<ClosedShiftHistory\s+auditFilters=\{auditFilters\}/, "The existing filter form must be placed in the audit-trail workflow");
+assert.match(manager, /<CardHeader className="border-b">[\s\S]*?<CardTitle>Shift history<\/CardTitle>/, "Shift history must retain one intentional divider beneath its description");
 assert.match(manager, /<CardContent className="space-y-4">\s*\{auditFilters\}/, "Filters must render directly above the closed-shift results");
-assert.match(manager, /side="right"/, "The selected report must open from the right");
-assert.match(manager, /className="flex h-dvh max-h-none max-w-none flex-col rounded-none sm:max-w-\[34rem\]"/, "The shift-report drawer must fill the available height without resizing the page");
+assert.match(manager, /<BackOfficeDetailDrawer closeLabel="Close shift report" width="compact">/, "The selected report must use the shared Back Office detail drawer");
+assert.match(drawerShell, /side="right"/, "The shared detail drawer must open from the right");
+assert.match(drawerShell, /"flex h-dvh max-h-none max-w-none flex-col rounded-none"/, "The shared detail drawer must fill the available height without resizing the page");
 assert.match(manager, /role=\{canViewClosedShiftAudit \? "button" : undefined\}/, "Authorized closed-shift rows must be keyboard-accessible controls");
 assert.match(manager, /onKeyDown=\{\(event\) =>/, "Rows must support keyboard activation");
 assert.match(manager, /id=\{`shift-report-open-\$\{shift\.id\}`\}/, "Drawer focus must return to the selected row after close");

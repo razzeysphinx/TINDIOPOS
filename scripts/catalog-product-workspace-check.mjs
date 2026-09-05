@@ -4,11 +4,12 @@ import { readFile } from "node:fs/promises";
 const root = new URL("..", import.meta.url);
 const source = (path) => readFile(new URL(path, root), "utf8");
 
-const [page, workspace, forms, dialog, data, actions, exportRoute, migration] = await Promise.all([
+const [page, workspace, forms, dialog, detailDrawer, data, actions, exportRoute, migration] = await Promise.all([
   source("src/app/(back-office)/back-office/catalog/page.tsx"),
   source("src/features/catalog/catalog-product-workspace.tsx"),
   source("src/features/catalog/catalog-forms.tsx"),
   source("src/components/ui/dialog.tsx"),
+  source("src/components/back-office/back-office-detail-drawer.tsx"),
   source("src/features/catalog/data.ts"),
   source("src/features/catalog/actions.ts"),
   source("src/app/api/catalog/export/route.ts"),
@@ -21,9 +22,15 @@ assert.match(page, /CatalogProductWorkspace/, "Catalog must use the product-firs
 assert.doesNotMatch(page, /CatalogExtensionForms/, "Advanced catalog forms must not lead the page");
 
 assert.match(workspace, /Search products, SKU or barcode/, "Catalog must provide forgiving product search");
+assert.match(workspace, /More filters/, "Secondary Catalog filters must use a labeled control rather than an unexplained icon");
+assert.match(workspace, /activeFilterLabels/, "Active Catalog filters must be summarized for clear result context");
+assert.match(workspace, /sellingAvailability/, "Store availability must be explicitly labeled as selling availability");
+assert.match(workspace, /on hand/, "Catalog stock must identify the displayed aggregate as on-hand stock");
+assert.match(workspace, /negativeStores\.size/, "A store-level negative-stock warning must remain distinct from a negative total");
 for (const label of ["All categories", "All statuses", "All product types", "All stores", "Name A–Z"]) assert.match(workspace, new RegExp(label));
 for (const column of ["Product", "Category", "Price", "Stock", "Stores", "Status"]) assert.match(workspace, new RegExp(`>${column}<`));
-assert.match(workspace, /side="right"/, "Product details must use a right-side drawer");
+assert.match(workspace, /<BackOfficeDetailDrawer closeLabel="Close product details" nonBlocking>/, "Product details must use the shared right-side drawer");
+assert.match(detailDrawer, /side="right"/, "The shared detail drawer must open product details from the right");
 assert.match(workspace, /modal=\{false\}/, "The open drawer must allow another product row to update the same panel");
 assert.match(workspace, /nonBlocking/, "The product drawer must keep the underlying product list interactive");
 assert.match(workspace, /aria-label="Product actions"/, "Drawer utility menu must be accessible");

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowLeft,
   CircleDollarSign,
   MapPin,
   MonitorSmartphone,
@@ -13,12 +14,12 @@ import type { ReactNode } from "react";
 import { useRef, useState, useTransition } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { BackOfficeDetailDrawer } from "@/components/back-office/back-office-detail-drawer";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogBody,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -55,15 +56,17 @@ export function StoresRegisterOverview({
   const [isLoading, startLoadingTransition] = useTransition();
   const [loadError, setLoadError] = useState(false);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
+  const [drawerView, setDrawerView] = useState<"store" | "register">("store");
   const requestId = useRef(0);
   const lastFocusedStoreTargetId = useRef<string | null>(null);
   const [registerDetail, setRegisterDetail] = useState<ManagementRegisterOperationalDrawerData | null>(null);
-  const [isRegisterDrawerOpen, setIsRegisterDrawerOpen] = useState(false);
   const [isRegisterLoading, startRegisterLoadingTransition] = useTransition();
   const [registerLoadError, setRegisterLoadError] = useState(false);
   const [selectedRegisterId, setSelectedRegisterId] = useState<string | null>(null);
   const registerRequestId = useRef(0);
-  const lastFocusedRegisterTargetId = useRef<string | null>(null);
+  // CANDIDATE_FOR_REMOVAL: retained temporarily to avoid deleting the former
+  // second-drawer implementation before its replacement receives QA.
+  const shouldRenderLegacyRegisterDrawer = false as boolean;
 
   const openStore = (storeId: string, focusTargetId = `store-open-${storeId}`) => {
     const currentRequest = requestId.current + 1;
@@ -76,7 +79,7 @@ export function StoresRegisterOverview({
     setRegisterDetail(null);
     setRegisterLoadError(false);
     setSelectedRegisterId(null);
-    setIsRegisterDrawerOpen(false);
+    setDrawerView("store");
     setIsDrawerOpen(true);
 
     startLoadingTransition(async () => {
@@ -99,24 +102,23 @@ export function StoresRegisterOverview({
     setSelectedStoreId(null);
     setLoadError(false);
     setDetail(null);
-    setIsRegisterDrawerOpen(false);
     setSelectedRegisterId(null);
     setRegisterLoadError(false);
     setRegisterDetail(null);
+    setDrawerView("store");
     const focusTargetId = lastFocusedStoreTargetId.current;
     if (focusTargetId) {
       window.requestAnimationFrame(() => document.getElementById(focusTargetId)?.focus());
     }
   };
 
-  const openRegister = (registerId: string, focusTargetId = `register-open-${registerId}`) => {
+  const openRegister = (registerId: string) => {
     const currentRequest = registerRequestId.current + 1;
     registerRequestId.current = currentRequest;
-    lastFocusedRegisterTargetId.current = focusTargetId;
     setSelectedRegisterId(registerId);
     setRegisterDetail(null);
     setRegisterLoadError(false);
-    setIsRegisterDrawerOpen(true);
+    setDrawerView("register");
 
     startRegisterLoadingTransition(async () => {
       const result = await loadManagementRegisterDrawerAction({ registerId });
@@ -131,16 +133,12 @@ export function StoresRegisterOverview({
     });
   };
 
-  const closeRegisterDrawer = () => {
+  const returnToStore = () => {
     registerRequestId.current += 1;
-    setIsRegisterDrawerOpen(false);
     setSelectedRegisterId(null);
     setRegisterLoadError(false);
     setRegisterDetail(null);
-    const focusTargetId = lastFocusedRegisterTargetId.current;
-    if (focusTargetId) {
-      window.requestAnimationFrame(() => document.getElementById(focusTargetId)?.focus());
-    }
+    setDrawerView("store");
   };
 
   const handleStoreSaved = (updated: { address: string; isActive: boolean; name: string; phone: string }) => {
@@ -167,7 +165,7 @@ export function StoresRegisterOverview({
             : register),
         }
       : current);
-    closeRegisterDrawer();
+    returnToStore();
   };
 
   return (
@@ -209,14 +207,14 @@ export function StoresRegisterOverview({
                   <SummaryMetric
                     icon={<CircleDollarSign aria-hidden="true" />}
                     label="Open shifts"
-                    value={store.openShiftCount === 0 ? "None" : String(store.openShiftCount)}
+                    value={String(store.openShiftCount)}
                   />
                 ) : null}
                 {store.activeDeviceCount !== null ? (
                   <SummaryMetric
                     icon={<MonitorSmartphone aria-hidden="true" />}
                     label="Managed devices"
-                    value={store.activeDeviceCount === 0 ? "None" : String(store.activeDeviceCount)}
+                    value={String(store.activeDeviceCount)}
                   />
                 ) : null}
                 {store.syncIssueCount && store.syncIssueCount > 0 ? (
@@ -230,7 +228,7 @@ export function StoresRegisterOverview({
               {store.address ? (
                 <p className="flex items-start gap-2 text-sm text-muted-foreground">
                   <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                  <span>{store.address}</span>
+                  <span className="min-w-0 break-words">{store.address}</span>
                 </p>
               ) : null}
             </CardContent>
@@ -239,12 +237,11 @@ export function StoresRegisterOverview({
       </section>
 
       <Dialog.Root onOpenChange={(open) => { if (!open) closeDrawer(); }} open={isDrawerOpen}>
-        <DialogContent
-          className="flex h-dvh max-h-none max-w-none flex-col rounded-none sm:max-w-[42rem]"
-          closeLabel="Close store details"
-          side="right"
-        >
-          <DialogHeader className="shrink-0">
+        <BackOfficeDetailDrawer closeLabel="Close details" width="wide">
+          <DialogHeader className="shrink-0 bg-background">
+            {drawerView === "register" ? <RegisterDrawerHeader detail={registerDetail} onReturnToStore={returnToStore} /> : null}
+            {drawerView === "store" ? (
+              <>
             <DialogTitle>{detail ? `${detail.store.code} · ${detail.store.name}` : "Store details"}</DialogTitle>
             {detail ? (
               <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -254,9 +251,26 @@ export function StoresRegisterOverview({
                 <DialogDescription className="mt-0">Store and register overview</DialogDescription>
               </div>
             ) : null}
+              </>
+            ) : null}
           </DialogHeader>
 
           <DialogBody className="min-h-0 max-h-none flex-1">
+            {drawerView === "register" ? (
+              <RegisterDrawerBody
+                canManageRegisters={canManageRegisters}
+                canViewShiftHistory={canViewShiftHistory}
+                currencyCode={currencyCode}
+                detail={registerDetail}
+                isLoading={isRegisterLoading}
+                loadError={registerLoadError}
+                onRegisterSaved={handleRegisterSaved}
+                onRetry={() => { if (selectedRegisterId) openRegister(selectedRegisterId); }}
+                timezone={timezone}
+              />
+            ) : null}
+            {drawerView === "store" ? (
+              <>
             {isLoading ? <StoreDrawerSkeleton /> : null}
             {!isLoading && loadError ? (
               <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
@@ -280,16 +294,15 @@ export function StoresRegisterOverview({
                 summary={stores.find((store) => store.id === detail.store.id)}
               />
             ) : null}
+              </>
+            ) : null}
           </DialogBody>
-        </DialogContent>
+        </BackOfficeDetailDrawer>
       </Dialog.Root>
 
-      <Dialog.Root onOpenChange={(open) => { if (!open) closeRegisterDrawer(); }} open={isRegisterDrawerOpen}>
-        <DialogContent
-          className="flex h-dvh max-h-none max-w-none flex-col rounded-none sm:max-w-[40rem]"
-          closeLabel="Close register details"
-          side="right"
-        >
+      {/* CANDIDATE_FOR_REMOVAL: superseded by the single replace-in-place drawer above. */}
+      {shouldRenderLegacyRegisterDrawer ? <Dialog.Root open={false}>
+        <BackOfficeDetailDrawer closeLabel="Close register details">
           <DialogHeader className="shrink-0">
             <DialogTitle>{registerDetail ? `${registerDetail.register.name} · ${registerDetail.register.code}` : "Register details"}</DialogTitle>
             {registerDetail ? (
@@ -327,8 +340,8 @@ export function StoresRegisterOverview({
               />
             ) : null}
           </DialogBody>
-        </DialogContent>
-      </Dialog.Root>
+        </BackOfficeDetailDrawer>
+      </Dialog.Root> : null}
     </>
   );
 }
@@ -359,7 +372,7 @@ function StoreDrawerContent({
 }: {
   canManageStores: boolean;
   detail: ManagementStoreDrawerData;
-  onOpenRegister: (registerId: string, focusTargetId?: string) => void;
+  onOpenRegister: (registerId: string) => void;
   onStoreSaved: (updated: { address: string; isActive: boolean; name: string; phone: string }) => void;
   summary: ManagementStoreRegisterOverviewRow | undefined;
 }) {
@@ -378,10 +391,10 @@ function StoreDrawerContent({
           </div>
           {summary ? <DrawerDetail label="Registers" value={String(summary.registerCount)} /> : null}
           {summary?.openShiftCount !== null && summary?.openShiftCount !== undefined ? (
-            <DrawerDetail label="Open shifts" value={summary.openShiftCount === 0 ? "None" : String(summary.openShiftCount)} />
+            <DrawerDetail label="Open shifts" value={String(summary.openShiftCount)} />
           ) : null}
           {summary?.activeDeviceCount !== null && summary?.activeDeviceCount !== undefined ? (
-            <DrawerDetail label="Managed devices" value={summary.activeDeviceCount === 0 ? "None" : String(summary.activeDeviceCount)} />
+            <DrawerDetail label="Managed devices" value={String(summary.activeDeviceCount)} />
           ) : null}
           {summary?.syncIssueCount !== null && summary?.syncIssueCount !== undefined && summary.syncIssueCount > 0 ? (
             <DrawerDetail label="Needs attention" value={`${summary.syncIssueCount} sync issue${summary.syncIssueCount === 1 ? "" : "s"}`} />
@@ -467,6 +480,73 @@ function StoreDrawerSkeleton() {
       </div>
     </div>
   );
+}
+
+function RegisterDrawerHeader({
+  detail,
+  onReturnToStore,
+}: {
+  detail: ManagementRegisterOperationalDrawerData | null;
+  onReturnToStore: () => void;
+}) {
+  const summary = detail ? registerSummary(detail) : null;
+  return (
+    <>
+      <Button className="-ml-2 mb-2 w-fit" onClick={onReturnToStore} size="sm" type="button" variant="ghost">
+        <ArrowLeft aria-hidden="true" />{detail?.store.code ?? "Store"}
+      </Button>
+      <DialogTitle>{detail?.register.name ?? "Register details"}</DialogTitle>
+      {detail && summary ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Badge variant={summary.variant}>{summary.label}</Badge>
+          <DialogDescription className="mt-0">Register code: {detail.register.code}</DialogDescription>
+          <p className="basis-full text-sm text-muted-foreground">{detail.store.code} / {detail.store.name}</p>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function RegisterDrawerBody({
+  canManageRegisters,
+  canViewShiftHistory,
+  currencyCode,
+  detail,
+  isLoading,
+  loadError,
+  onRegisterSaved,
+  onRetry,
+  timezone,
+}: {
+  canManageRegisters: boolean;
+  canViewShiftHistory: boolean;
+  currencyCode: string;
+  detail: ManagementRegisterOperationalDrawerData | null;
+  isLoading: boolean;
+  loadError: boolean;
+  onRegisterSaved: (updated: { isActive: boolean; name: string }) => void;
+  onRetry: () => void;
+  timezone: string;
+}) {
+  if (isLoading) return <RegisterDrawerSkeleton />;
+  if (loadError) {
+    return (
+      <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
+        <p className="font-medium text-foreground">We couldn&apos;t load this register.</p>
+        <Button className="mt-4" onClick={onRetry} type="button" variant="outline">Try again</Button>
+      </div>
+    );
+  }
+  return detail ? (
+    <RegisterDrawerContent
+      canManageRegisters={canManageRegisters}
+      canViewShiftHistory={canViewShiftHistory}
+      currencyCode={currencyCode}
+      detail={detail}
+      onRegisterSaved={onRegisterSaved}
+      timezone={timezone}
+    />
+  ) : null;
 }
 
 function RegisterDrawerContent({
@@ -608,32 +688,36 @@ function DeviceAndSyncSection({
 }) {
   const deviceContext = detail.deviceContext;
   if (!deviceContext) return null;
+  const needsAttention = deviceContext.recordedPendingSyncCount > 0 || deviceContext.syncIssueCount > 0;
 
   return (
     <section aria-labelledby="register-device-sync-heading" className="rounded-xl border p-4">
-      <h2 className="text-sm font-semibold" id="register-device-sync-heading">Device & sync</h2>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold" id="register-device-sync-heading">Device & sync</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{needsAttention ? "This register needs a sync review." : "Everything is synchronized."}</p>
+        </div>
+        <Badge variant={needsAttention ? "outline" : "secondary"}>{needsAttention ? "Needs attention" : "Healthy"}</Badge>
+      </div>
       {deviceContext.activeDevice ? (
-        <dl className="mt-3 grid gap-4 text-sm sm:grid-cols-2">
-          <DrawerDetail label="Managed device" value={deviceContext.activeDevice.name} />
-          <DrawerDetail label="App version" value={deviceContext.activeDevice.appVersion} />
-          <DrawerDetail
-            label="Last recorded activity"
-            value={deviceContext.activeDevice.lastSeenAt ? formatDateTime(deviceContext.activeDevice.lastSeenAt, timezone) : "No activity recorded"}
-          />
-        </dl>
+        <p className="mt-3 text-sm text-muted-foreground">{deviceContext.activeDevice.name} · Last activity: {deviceContext.activeDevice.lastSeenAt ? formatDateTime(deviceContext.activeDevice.lastSeenAt, timezone) : "No activity recorded"}</p>
       ) : (
-        <p className="mt-1 text-sm text-muted-foreground">No active managed device is linked to this register.</p>
+        <p className="mt-3 text-sm text-muted-foreground">No active managed device is linked to this register.</p>
       )}
-      <dl className="mt-4 divide-y border-t text-sm">
-        <DrawerDetail label="Server-recorded sync queue" value={`${deviceContext.recordedPendingSyncCount} awaiting sync`} />
-        <DrawerDetail label="Sync issues requiring review" value={String(deviceContext.syncIssueCount)} />
-      </dl>
-      {deviceContext.recordedPendingSyncCount > 0 ? <p className="mt-3 text-xs text-muted-foreground">This count reflects records received by TINDIO; device-local work appears after a synchronization attempt.</p> : null}
-      {deviceContext.syncIssueCount > 0 ? (
+      {needsAttention ? (
         <Link className={`${buttonVariants({ variant: "outline" })} mt-4`} href={`/back-office/offline-sync?store=${detail.store.id}`}>
           Review sync activity
         </Link>
       ) : null}
+      <details className="mt-4 border-t pt-4 text-sm">
+        <summary className="cursor-pointer font-medium text-primary">View technical details</summary>
+        <dl className="mt-3 divide-y">
+          <DrawerDetail label="App version" value={deviceContext.activeDevice?.appVersion ?? "Not reported"} />
+          <DrawerDetail label="Server-recorded sync queue" value={`${deviceContext.recordedPendingSyncCount} awaiting sync`} />
+          <DrawerDetail label="Sync issues requiring review" value={String(deviceContext.syncIssueCount)} />
+        </dl>
+        <p className="mt-3 text-xs text-muted-foreground">These counts reflect records received by TINDIO; device-local work appears after a synchronization attempt.</p>
+      </details>
     </section>
   );
 }

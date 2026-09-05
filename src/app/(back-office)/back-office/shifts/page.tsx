@@ -280,6 +280,7 @@ export async function ShiftWorkspacePage({
             embedded
             fromDate={searchParams.start}
             namePrefix="shift-report-filter"
+            showEmbeddedDividers={false}
             storeId={storeScope.selectedStoreId}
             stores={await loadAuthorizedBackOfficeStores(context)}
             toDate={searchParams.end}

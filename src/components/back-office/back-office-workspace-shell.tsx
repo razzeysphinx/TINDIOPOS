@@ -16,6 +16,7 @@ import {
   type BackOfficeNavigationAccess,
   getBackOfficePageTitle,
 } from "@/components/back-office/back-office-navigation";
+import { BackOfficeNavigationProvider } from "@/components/back-office/back-office-navigation-context";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -101,44 +102,46 @@ export function BackOfficeWorkspaceShell({
   const [isCollapsed, setIsCollapsed] = useState(true);
 
   return (
-    <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed }}>
-      <div className="min-h-svh bg-muted/35 pt-14">
-        {header}
-        <div
-          className={cn(
-            "min-h-[calc(100svh-3.5rem)] lg:grid lg:transition-[grid-template-columns] lg:duration-200",
-            isCollapsed ? "lg:grid-cols-[5rem_minmax(0,1fr)]" : "lg:grid-cols-[16rem_minmax(0,1fr)]",
-          )}
-        >
-          <aside
-            aria-label="Back Office sidebar"
-            className="hidden min-w-0 overflow-hidden border-r border-border bg-card print:hidden lg:sticky lg:top-14 lg:flex lg:h-[calc(100svh-3.5rem)] lg:self-start lg:flex-col"
+    <BackOfficeNavigationProvider access={navigationAccess}>
+      <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed }}>
+        <div className="min-h-svh bg-muted/35 pt-14">
+          {header}
+          <div
+            className={cn(
+              "min-h-[calc(100svh-3.5rem)] lg:grid lg:transition-[grid-template-columns] lg:duration-200",
+              isCollapsed ? "lg:grid-cols-[5rem_minmax(0,1fr)]" : "lg:grid-cols-[16rem_minmax(0,1fr)]",
+            )}
           >
-            <div className={cn("border-b border-border", isCollapsed ? "grid place-items-center p-3" : "p-4")}>
-              {isCollapsed ? (
-                <Tooltip content={`${displayName} (${employeeNumber})`} side="right">
-                  <span className="grid size-8 place-items-center rounded-full bg-secondary text-secondary-foreground">
-                    <CircleUserRound aria-hidden="true" className="size-4" />
-                  </span>
-                </Tooltip>
-              ) : (
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary text-secondary-foreground">
-                    <CircleUserRound aria-hidden="true" className="size-4" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{displayName}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{employeeNumber}</p>
+            <aside
+              aria-label="Back Office sidebar"
+              className="hidden min-w-0 overflow-hidden border-r border-border bg-card print:hidden lg:sticky lg:top-14 lg:flex lg:h-[calc(100svh-3.5rem)] lg:self-start lg:flex-col"
+            >
+              <div className={cn("border-b border-border", isCollapsed ? "grid place-items-center p-3" : "p-4")}>
+                {isCollapsed ? (
+                  <Tooltip content={`${displayName} (${employeeNumber})`} side="right">
+                    <span className="grid size-8 place-items-center rounded-full bg-secondary text-secondary-foreground">
+                      <CircleUserRound aria-hidden="true" className="size-4" />
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary text-secondary-foreground">
+                      <CircleUserRound aria-hidden="true" className="size-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{displayName}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{employeeNumber}</p>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-            <BackOfficeNavigation {...navigationAccess} collapsed={isCollapsed} />
-          </aside>
+                )}
+              </div>
+              <BackOfficeNavigation {...navigationAccess} collapsed={isCollapsed} />
+            </aside>
 
-          <div className="min-w-0">{children}</div>
+            <div className="min-w-0">{children}</div>
+          </div>
         </div>
-      </div>
-    </SidebarContext.Provider>
+      </SidebarContext.Provider>
+    </BackOfficeNavigationProvider>
   );
 }

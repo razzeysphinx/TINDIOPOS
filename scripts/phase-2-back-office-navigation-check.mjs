@@ -53,22 +53,37 @@ test("Settings labels expose the existing profile/features and advanced-sales su
   assert.match(settings, /label: "Advanced sales"/);
 });
 
-test("navigation remains permission-aware and inventory stays internally tabbed", async () => {
-  const [navigation, inventory, advancedWorkflows, integrityWorkflows] = await Promise.all([
+test("navigation remains permission-aware and Inventory uses three sibling workspaces", async () => {
+  const [navigation, inventory, workspaceNavigation, countWorkspace, advancedWorkflows, integrityWorkflows] = await Promise.all([
     source("src/components/back-office/back-office-navigation.tsx"),
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
+    source("src/features/inventory/inventory-workspace-navigation.tsx"),
+    source("src/features/inventory/inventory-count-workspace.tsx"),
     source("src/features/inventory/advanced-inventory-workflows.tsx"),
     source("src/features/inventory/inventory-integrity-workflows.tsx"),
   ]);
 
   assert.match(navigation, /isVisible: \(access: BackOfficeNavigationAccess\) => boolean;/);
-  assert.match(inventory, /const INVENTORY_TABS = \[/);
-  for (const label of ["Overview", "Stock", "Activity", "Counts", "Purchasing", "Transfers"]) {
-    assert.match(inventory, new RegExp(`label: "${label}"`));
+  const inventoryGroup = navigationGroup(navigation, "Inventory");
+  for (const label of ["Inventory Control", "Stock & Restock", "Purchasing"]) {
+    assert.match(inventoryGroup, new RegExp(`label: "${label}"`));
   }
-  assert.match(inventory, /href=\{`\/back-office\/inventory\?tab=\$\{tab\.id\}\$\{storeId \? `&store=\$\{storeId\}` : ""\}`\}/);
-  assert.match(inventory, /sections=\{\["counts"\]\}/);
+  for (const href of ["/back-office/inventory", "/back-office/replenishment?tab=levels", "/back-office/purchasing?tab=purchase-orders"]) {
+    assert.match(inventoryGroup, new RegExp(href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  for (const label of ["Overview", "Inventory activity", "Stock adjustments", "Inventory counts", "Purchase orders", "Receiving", "Suppliers", "Supplier returns", "Transfer orders", "Inventory valuation"]) {
+    assert.match(workspaceNavigation, new RegExp(`label: "${label}"`));
+  }
+  assert.doesNotMatch(workspaceNavigation.split("const purchasingItems")[0], /id: "receiving"/);
+  assert.match(workspaceNavigation, /className="flex flex-wrap items-center gap-1"/);
+  assert.doesNotMatch(workspaceNavigation, /min-w-max/);
+  assert.ok(inventory.indexOf("<InventoryWorkspaceNavigation") < inventory.indexOf("<DashboardActionGrid"));
+  assert.match(countWorkspace, /Count documents/);
+  assert.match(countWorkspace, /<BackOfficeDetailDrawer/);
+  assert.match(countWorkspace, /New inventory count/);
   assert.match(inventory, /sections=\{\["purchasing"\]\}/);
+  assert.match(inventory, /workspace === "control" && legacyPurchasingTab/);
+  assert.match(inventory, /const purchasingTabHref/);
   // Transfers use the approval-aware request/receipt path. Do not require the
   // older immediate-transfer form, which remains only as a marked candidate
   // for removal while historical QA is completed.

@@ -28,6 +28,7 @@ export type InventoryStockRow = {
   productName: string;
   quantity: number;
   reorderPoint: number | null;
+  restockPolicy: "restock" | "do_not_restock";
   sku: string | null;
   storeId: string;
   storeName: string;
@@ -38,6 +39,7 @@ export type InventoryStockRow = {
 };
 
 type InventoryStockViewProps = {
+  archivedProductCount: number;
   canUseReorderStatus: boolean;
   canViewCosts: boolean;
   currencyCode: string;
@@ -57,7 +59,7 @@ export type InventoryStockStatus =
   | "out_of_stock";
 
 type InventoryStockLayout = "grid" | "list";
-type InventoryStockSort = "name_asc" | "name_desc" | "quantity_asc" | "quantity_desc" | "updated_desc" | "value_desc";
+type InventoryStockSort = "priority" | "name_asc" | "name_desc" | "quantity_asc" | "quantity_desc" | "updated_desc" | "value_desc";
 type InventoryStockGroup = "none" | "category" | "status" | "store";
 type InventoryStockRollup = {
   availableStoreCount: number;
@@ -81,6 +83,13 @@ const stockStatusLabels: Record<Exclude<InventoryStockStatus, "all">, string> = 
 
 function stockCondition(row: InventoryStockRow): InventoryStockCondition {
   return getInventoryStockCondition({ quantity: row.quantity, reorderPoint: row.reorderPoint });
+}
+
+function stockConditionPriority(condition: InventoryStockCondition) {
+  if (condition === "negative") return 0;
+  if (condition === "low") return 1;
+  if (condition === "in_stock") return 2;
+  return 3;
 }
 
 function matchesStatus(row: InventoryStockRow, status: InventoryStockStatus) {
@@ -153,6 +162,10 @@ function stockValue(row: InventoryStockRow) {
 function sortRollups(rows: InventoryStockRollup[], sort: InventoryStockSort) {
   return [...rows].sort((left, right) => {
     switch (sort) {
+      case "priority":
+        return Math.min(...left.rows.map((row) => stockConditionPriority(stockCondition(row))))
+          - Math.min(...right.rows.map((row) => stockConditionPriority(stockCondition(row))))
+          || rollupLabel(left).localeCompare(rollupLabel(right));
       case "name_desc":
         return rollupLabel(right).localeCompare(rollupLabel(left));
       case "quantity_asc":
@@ -187,6 +200,7 @@ function subscribeToLayoutPreference() {
 }
 
 export function InventoryStockView({
+  archivedProductCount,
   canUseReorderStatus,
   canViewCosts,
   currencyCode,
@@ -205,7 +219,7 @@ export function InventoryStockView({
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("all");
   const [status, setStatus] = useState<InventoryStockStatus>(initialStatus);
-  const [sort, setSort] = useState<InventoryStockSort>("name_asc");
+  const [sort, setSort] = useState<InventoryStockSort>("priority");
   const [group, setGroup] = useState<InventoryStockGroup>("none");
   const [isPrinting, setIsPrinting] = useState(false);
 
@@ -240,6 +254,10 @@ export function InventoryStockView({
 
   const sortedRows = useMemo(() => [...filteredRows].sort((left, right) => {
     switch (sort) {
+      case "priority":
+        return stockConditionPriority(stockCondition(left)) - stockConditionPriority(stockCondition(right))
+          || rowLabel(left).localeCompare(rowLabel(right))
+          || left.storeName.localeCompare(right.storeName);
       case "name_desc":
         return rowLabel(right).localeCompare(rowLabel(left));
       case "quantity_asc":
@@ -275,7 +293,7 @@ export function InventoryStockView({
     return Array.from(result.values());
   }, [group, sortedRows]);
 
-  const hasClientFilters = search.length > 0 || categoryId !== "all" || status !== "all" || sort !== "name_asc" || group !== "none";
+  const hasClientFilters = search.length > 0 || categoryId !== "all" || status !== "all" || sort !== "priority" || group !== "none";
   const updateLayout = (nextLayout: InventoryStockLayout) => {
     setSessionLayout(nextLayout);
     try {
@@ -288,7 +306,7 @@ export function InventoryStockView({
     setSearch("");
     setCategoryId("all");
     setStatus("all");
-    setSort("name_asc");
+    setSort("priority");
     setGroup("none");
   };
   const printCurrentView = () => {
@@ -340,6 +358,14 @@ export function InventoryStockView({
         </div>
       </div>
 
+      <StockSummary
+        archivedProductCount={archivedProductCount}
+        canUseReorderStatus={canUseReorderStatus}
+        onStatusChange={setStatus}
+        rows={rows}
+        status={status}
+      />
+
       <div className="rounded-xl border bg-card p-3 sm:p-4">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(15rem,1.5fr)_repeat(4,minmax(0,1fr))_auto]">
           <label className="grid gap-1.5 sm:col-span-2 xl:col-span-1">
@@ -371,6 +397,7 @@ export function InventoryStockView({
           <label className="grid gap-1.5">
             <span className="text-sm font-medium">Sort</span>
             <select className={selectClassName} onChange={(event) => setSort(event.target.value as InventoryStockSort)} value={sort}>
+              <option value="priority">Action priority</option>
               <option value="name_asc">Name A–Z</option>
               <option value="name_desc">Name Z–A</option>
               <option value="quantity_desc">Quantity high–low</option>
@@ -418,6 +445,54 @@ export function InventoryStockView({
     </section>
     <InventoryPrintDocument canViewCosts={canViewCosts} currencyCode={currencyCode} rows={sortedRows} scope={printScope} />
     </>
+  );
+}
+
+function StockSummary({
+  archivedProductCount,
+  canUseReorderStatus,
+  onStatusChange,
+  rows,
+  status,
+}: {
+  archivedProductCount: number;
+  canUseReorderStatus: boolean;
+  onStatusChange: (status: InventoryStockStatus) => void;
+  rows: InventoryStockRow[];
+  status: InventoryStockStatus;
+}) {
+  const counts = rows.reduce<Record<InventoryStockCondition, number>>((result, row) => {
+    result[stockCondition(row)] += 1;
+    return result;
+  }, { in_stock: 0, low: 0, negative: 0, out_of_stock: 0 });
+  const activeProductCount = new Set(rows.map((row) => row.productId)).size;
+  const metrics: Array<{ label: string; value: number; target: InventoryStockStatus; visible: boolean }> = [
+    { label: "Active products", value: activeProductCount, target: "all", visible: true },
+    { label: "In stock", value: counts.in_stock, target: "in_stock", visible: true },
+    { label: "Low stock", value: counts.low, target: "low", visible: canUseReorderStatus },
+    { label: "Out of stock", value: counts.out_of_stock, target: "out_of_stock", visible: true },
+    { label: "Negative stock", value: counts.negative, target: "negative", visible: true },
+  ];
+
+  return (
+    <section aria-label="Stock summary" className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+      {metrics.filter((metric) => metric.visible).map((metric) => (
+        <button
+          aria-pressed={status === metric.target}
+          className="rounded-xl border bg-card p-3 text-left outline-none transition-colors hover:border-primary/40 hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring aria-pressed:border-primary aria-pressed:bg-primary/5"
+          key={metric.label}
+          onClick={() => onStatusChange(metric.target)}
+          type="button"
+        >
+          <span className="block text-2xl font-semibold tabular-nums">{metric.value}</span>
+          <span className="mt-1 block text-xs text-muted-foreground">{metric.label}</span>
+        </button>
+      ))}
+      <Link className="rounded-xl border bg-card p-3 text-left outline-none transition-colors hover:border-primary/40 hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring" href="/back-office/catalog?status=archived">
+        <span className="block text-2xl font-semibold tabular-nums">{archivedProductCount}</span>
+        <span className="mt-1 block text-xs text-muted-foreground">Archived</span>
+      </Link>
+    </section>
   );
 }
 
@@ -555,7 +630,7 @@ function StockListRow({ canViewCosts, currencyCode, row }: { canViewCosts: boole
       <td className="px-4 py-3 text-muted-foreground">{row.categoryName ?? "Uncategorized"}</td>
       <td className="px-4 py-3 text-muted-foreground">{row.storeName}</td>
       <td className="px-4 py-3 text-right"><p className="font-semibold">{formatQuantity(row.quantity)}</p><p className="text-xs text-muted-foreground">{row.unit}</p></td>
-      <td className="px-4 py-3"><StatusBadges condition={condition} isAvailable={row.isAvailable} /></td>
+      <td className="px-4 py-3"><StatusBadges condition={condition} isAvailable={row.isAvailable} restockPolicy={row.restockPolicy} /></td>
       {canViewCosts ? <td className="px-4 py-3 text-right text-muted-foreground">{row.averageCostMinor === null ? "—" : formatMoney(row.quantity * row.averageCostMinor, currencyCode)}</td> : null}
       <td className="whitespace-nowrap px-4 py-3 text-right text-xs text-muted-foreground">{formatDate(row.updatedAt)}</td>
     </tr>
@@ -571,7 +646,7 @@ function StockCard({ canViewCosts, currencyCode, row }: { canViewCosts: boolean;
     <Card className="transition-colors hover:ring-primary/30" size="sm">
       <CardHeader className="flex-row items-start justify-between gap-3">
         <div className="min-w-0"><CardTitle className="truncate">{rowLabel(row)}</CardTitle><CardDescription className="mt-1 truncate">{row.categoryName ?? "Uncategorized"} · {row.storeName}</CardDescription></div>
-        <StatusBadges condition={condition} isAvailable={row.isAvailable} />
+        <StatusBadges condition={condition} isAvailable={row.isAvailable} restockPolicy={row.restockPolicy} />
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-end justify-between gap-4"><div><p className="text-3xl font-semibold tracking-tight">{formatQuantity(row.quantity)}</p><p className="text-xs text-muted-foreground">{row.unit}</p></div><p className="text-right text-xs text-muted-foreground">Updated<br />{formatDate(row.updatedAt)}</p></div>
@@ -583,8 +658,8 @@ function StockCard({ canViewCosts, currencyCode, row }: { canViewCosts: boolean;
   );
 }
 
-function StatusBadges({ condition, isAvailable }: { condition: ReturnType<typeof stockCondition>; isAvailable: boolean }) {
-  return <span className="flex flex-wrap justify-end gap-1"><Badge variant={statusVariant(condition)}>{stockStatusLabels[condition]}</Badge>{isAvailable ? <Badge variant="secondary">Available</Badge> : <Badge variant="outline">Off</Badge>}</span>;
+function StatusBadges({ condition, isAvailable, restockPolicy }: { condition: ReturnType<typeof stockCondition>; isAvailable: boolean; restockPolicy: InventoryStockRow["restockPolicy"] }) {
+  return <span className="flex flex-wrap justify-end gap-1"><Badge variant={statusVariant(condition)}>{stockStatusLabels[condition]}</Badge>{restockPolicy === "do_not_restock" ? <Badge variant="outline">Do not restock</Badge> : null}{isAvailable ? <Badge variant="secondary">Selling enabled</Badge> : <Badge variant="outline">Selling disabled</Badge>}</span>;
 }
 
 function StockEmptyState({ description, title }: { description: string; title: string }) {

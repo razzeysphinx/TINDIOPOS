@@ -151,7 +151,7 @@ function getInventoryActions(): DashboardAction[] {
     {
       title: "Buy and receive stock",
       description: "Manage suppliers, purchase orders, and deliveries.",
-      href: "/back-office/inventory?tab=purchasing",
+      href: "/back-office/purchasing?tab=purchase-orders",
       icon: PackageSearch,
     },
     {

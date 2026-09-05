@@ -21,6 +21,7 @@ import { useMemo, useRef, useState, useTransition, type ReactNode } from "react"
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
+import { BackOfficeDetailDrawer } from "@/components/back-office/back-office-detail-drawer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ContextHelp } from "@/components/back-office/context-help";
@@ -1004,7 +1005,7 @@ function ClosedShiftHistory({
   return (
     <>
     {presentation === "audit-card" ? <Card>
-      <CardHeader>
+      <CardHeader className="border-b">
         <CardTitle>Shift history</CardTitle>
         <p className="mt-1 text-sm text-muted-foreground">Review closed shifts, expected cash, counted cash, and any differences.</p>
       </CardHeader>
@@ -1126,11 +1127,7 @@ function ShiftAuditDrawer({
 
   return (
     <Dialog.Root onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }} open={open}>
-      <DialogContent
-        className="flex h-dvh max-h-none max-w-none flex-col rounded-none sm:max-w-[34rem]"
-        closeLabel="Close shift report"
-        side="right"
-      >
+      <BackOfficeDetailDrawer closeLabel="Close shift report" width="compact">
         <DialogHeader className="sticky top-0 z-10 shrink-0 border-b bg-background pr-20 sm:pr-24">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -1175,7 +1172,7 @@ function ShiftAuditDrawer({
             timezone={timezone}
           /> : null}
         </DialogBody>
-      </DialogContent>
+      </BackOfficeDetailDrawer>
     </Dialog.Root>
   );
 }

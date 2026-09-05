@@ -22,6 +22,12 @@ import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Employees" };
 
+function formatStoreAssignment(storeNames: string[]) {
+  if (storeNames.length === 0) return "No store assignment";
+  if (storeNames.length <= 3) return storeNames.join(", ");
+  return `${storeNames.slice(0, 3).join(", ")} +${storeNames.length - 3} more`;
+}
+
 export default async function EmployeesPage({
   searchParams,
 }: {
@@ -97,7 +103,7 @@ export default async function EmployeesPage({
               Invitation links expire automatically after seven days.
             </p>
           </div>
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid gap-3">
             {pendingInvitations.map((invitation) => {
               return (
                 <Card key={invitation.id} size="sm">
@@ -135,7 +141,7 @@ export default async function EmployeesPage({
       ) : null}
 
       {visibleEmployees.length > 0 ? (
-        <section className="grid gap-4 lg:grid-cols-2">
+        <section aria-label="Employees" className="overflow-hidden rounded-2xl border bg-card">
           {visibleEmployees.map((employee) => {
           const profile = profiles.get(employee.profile_id);
           const employeeRoles = roleLinks
@@ -147,8 +153,8 @@ export default async function EmployeesPage({
             .map((link) => stores.get(link.store_id))
             .filter((store): store is string => Boolean(store));
             return (
-            <Card key={employee.id}>
-              <CardHeader className="flex-row items-start justify-between">
+            <Card className="gap-4 rounded-none border-b py-4 ring-0 last:border-b-0 sm:grid sm:grid-cols-[minmax(0,1.45fr)_minmax(10rem,0.85fr)_minmax(10rem,0.8fr)_auto] sm:items-center" key={employee.id}>
+              <CardHeader className="flex-row items-start justify-between px-4 sm:px-0">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="grid size-10 shrink-0 place-items-center rounded-full bg-secondary text-primary">
                     <UserRound className="size-5" aria-hidden="true" />
@@ -166,25 +172,18 @@ export default async function EmployeesPage({
                   {employee.status}
                 </Badge>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CardContent className="grid gap-3 px-4 sm:col-span-3 sm:grid-cols-[minmax(10rem,0.85fr)_minmax(10rem,0.8fr)_auto] sm:items-center sm:px-0">
+                <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
                   <IdCard className="size-4" aria-hidden="true" />
-                  <span className="font-mono text-xs">{employee.employee_number}</span>
-                  <span>·</span>
-                  <span>{employee.job_title || "No job title"}</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {employeeRoles.map((role) => (
-                    <Badge key={role} variant="outline">
-                      {role}
-                    </Badge>
-                  ))}
+                  <span className="shrink-0 font-mono text-xs">{employee.employee_number}</span>
+                  <span className="shrink-0">·</span>
+                  <span className="min-w-0 truncate" title={employee.job_title || employeeRoles.join(", ") || "No role assigned"}>{employee.job_title || employeeRoles.join(", ") || "No role assigned"}</span>
                 </div>
                 <div className="flex items-start gap-2 text-sm text-muted-foreground">
                   <Building2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                  {employeeStores.join(", ") || "No store assignment"}
+                  <span className="truncate" title={employeeStores.join(", ")}>{formatStoreAssignment(employeeStores)}</span>
                 </div>
-                <div className="flex justify-end border-t pt-3"><Link className={buttonVariants({ variant: "ghost", size: "sm" })} href={`/back-office/employees/${employee.id}`}><Eye />View</Link></div>
+                <div className="flex justify-end border-t pt-3 sm:border-t-0 sm:pt-0"><Link aria-label={`View ${profile?.full_name || employee.employee_number}`} className={buttonVariants({ variant: "ghost", size: "sm" })} href={`/back-office/employees/${employee.id}`}><Eye />View</Link></div>
               </CardContent>
             </Card>
             );

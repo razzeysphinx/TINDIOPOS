@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { BackOfficeDetailDrawer } from "@/components/back-office/back-office-detail-drawer";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
@@ -207,7 +208,7 @@ export function ReceiptListQuickView({
       </div>
 
       <Dialog.Root onOpenChange={(open) => { if (!open) closeDrawer(); }} open={isDrawerOpen}>
-        <DialogContent className="flex h-dvh max-h-none max-w-none flex-col rounded-none sm:max-w-xl" closeLabel="Close receipt quick view" side="right">
+        <BackOfficeDetailDrawer closeLabel="Close receipt quick view" width="compact">
           <DialogHeader className="shrink-0">
             <DialogTitle>{detail ? `Receipt #${detail.receipt.number}` : "Receipt details"}</DialogTitle>
             {detail ? (
@@ -245,7 +246,7 @@ export function ReceiptListQuickView({
               ) : null}
             </DialogFooter>
           ) : null}
-        </DialogContent>
+        </BackOfficeDetailDrawer>
       </Dialog.Root>
 
       <Dialog.Root onOpenChange={(open) => { if (!open) closeDigitalReceipt(); }} open={isDigitalReceiptOpen}>

@@ -916,6 +916,7 @@ export function CatalogExtensionForms({
         storeId,
         priceOverride: form.get("priceOverride"),
         lowStockLevel: form.get("lowStockLevel"),
+        restockPolicy: form.get("restockPolicy"),
       });
       setStoreConfigurationResult(next);
       if (next.ok) router.refresh();
@@ -986,6 +987,7 @@ export function CatalogExtensionForms({
           <select className={selectClassName} onChange={(event) => setStoreId(event.target.value)} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select>
           <Input inputMode="decimal" name="priceOverride" placeholder="Store price override (optional)" />
           <Input inputMode="decimal" name="lowStockLevel" placeholder="Low-stock level (optional)" />
+          <select aria-label="Restock intention" className={selectClassName} defaultValue="restock" name="restockPolicy"><option value="restock">Restock normally</option><option value="do_not_restock">Do not restock</option></select>
           <Button disabled={isStoreConfigurationPending} type="submit">{isStoreConfigurationPending ? <LoaderCircle className="animate-spin" /> : <Warehouse />} Save settings</Button>
         </form>
         <ResultMessage result={storeConfigurationResult} />

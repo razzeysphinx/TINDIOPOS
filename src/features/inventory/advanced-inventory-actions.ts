@@ -5,15 +5,18 @@ import { revalidatePath } from "next/cache";
 import { moneyInputToMinor } from "@/features/catalog/catalog-money";
 import {
   completeInventoryCountSchema,
+  createInventoryCountDraftSchema,
   createAdjustmentReasonSchema,
   createPurchaseOrderSchema,
   createSupplierSchema,
   importSuppliersCsvSchema,
   importInventoryAdjustmentsCsvSchema,
+  inventoryCountTransitionSchema,
   produceCompositeSchema,
   receiveStockTransferSchema,
   receivePurchaseOrderSchema,
   recordInventoryAdjustmentSchema,
+  saveInventoryCountLineSchema,
   returnToSupplierSchema,
   transferStockSchema,
   updateInventoryPolicySchema,
@@ -53,6 +56,20 @@ async function requireInventoryManager() {
 
   if (!hasPermission(context, "inventory.manage")) {
     return { context, error: "You do not have permission to manage inventory." };
+  }
+
+  return { context, error: null };
+}
+
+async function requireInventoryCounter() {
+  const context = await requireBusinessContext();
+
+  if (!context.features.inventory) {
+    return { context, error: "Inventory is disabled for this business." };
+  }
+
+  if (!hasPermission(context, "inventory.count") && !hasPermission(context, "inventory.manage")) {
+    return { context, error: "You do not have permission to perform inventory counts." };
   }
 
   return { context, error: null };
@@ -204,30 +221,141 @@ export async function receivePurchaseOrderAction(
 export async function completeInventoryCountAction(
   input: unknown,
 ): Promise<AdvancedInventoryActionResult<{ inventoryCountId: string }>> {
-  const { context, error: permissionError } = await requireInventoryManager();
+  const { context, error: permissionError } = await requireInventoryCounter();
   if (permissionError) return { ok: false, message: permissionError };
 
   const parsed = completeInventoryCountSchema.safeParse(input);
   if (!parsed.success) return validationError();
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("complete_inventory_count", {
+  // Preserve the existing review UI while making the database the source of
+  // truth for each count transition. A failed save deliberately leaves the
+  // draft unposted; it can never create a partial stock correction.
+  const { data: inventoryCountId, error: createError } = await supabase.rpc("create_inventory_count_draft", {
     target_organization_id: context.organization.id,
     target_store_id: parsed.data.storeId,
     target_note: parsed.data.note,
-    target_lines: parsed.data.lines.map((line) => ({
-      product_id: line.productId,
-      variant_id: line.variantId || null,
-      counted_quantity: line.countedQuantity,
-    })) as Json,
   });
 
-  if (error || !data) {
-    return { ok: false, message: databaseMessage(error?.code, "TINDIO could not complete the count.") };
+  if (createError || !inventoryCountId) {
+    return { ok: false, message: databaseMessage(createError?.code, "TINDIO could not create the inventory-count document.") };
+  }
+
+  for (const line of parsed.data.lines) {
+    const { error: lineError } = await supabase.rpc("save_inventory_count_line", {
+      target_organization_id: context.organization.id,
+      target_inventory_count_id: inventoryCountId,
+      target_product_id: line.productId,
+      target_variant_id: line.variantId || null,
+      target_counted_quantity: Number(line.countedQuantity),
+    });
+    if (lineError) {
+      return { ok: false, message: databaseMessage(lineError.code, "TINDIO saved the count draft but could not save one item. Review the draft before posting it.") };
+    }
+  }
+
+  const { error: reviewError } = await supabase.rpc("submit_inventory_count_for_review", {
+    target_organization_id: context.organization.id,
+    target_inventory_count_id: inventoryCountId,
+  });
+  if (reviewError) {
+    return { ok: false, message: databaseMessage(reviewError.code, "TINDIO saved the count draft but could not submit it for review.") };
+  }
+
+  const { error: postError } = await supabase.rpc("post_inventory_count", {
+    target_organization_id: context.organization.id,
+    target_inventory_count_id: inventoryCountId,
+  });
+  if (postError) {
+    return { ok: false, message: databaseMessage(postError.code, "TINDIO saved the reviewed count but could not post its variance.") };
   }
 
   revalidatePath("/back-office/inventory");
-  return { ok: true, message: "Inventory count completed and variances posted.", data: { inventoryCountId: data } };
+  revalidatePath("/back-office/replenishment");
+  return { ok: true, message: "Inventory count reviewed and variances posted.", data: { inventoryCountId } };
+}
+
+export async function createInventoryCountDraftAction(
+  input: unknown,
+): Promise<AdvancedInventoryActionResult<{ inventoryCountId: string }>> {
+  const { context, error: permissionError } = await requireInventoryCounter();
+  if (permissionError) return { ok: false, message: permissionError };
+  const parsed = createInventoryCountDraftSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("create_inventory_count_plan", {
+    target_count_mode: parsed.data.countMode,
+    target_include_zero_stock: parsed.data.includeZeroStock,
+    target_note: parsed.data.note,
+    target_organization_id: context.organization.id,
+    target_scope_reference_id: parsed.data.scopeReferenceId || null,
+    target_scope_type: parsed.data.scopeType,
+    target_selected_items: parsed.data.selectedItems.map((item) => ({
+      product_id: item.productId,
+      variant_id: item.variantId || null,
+    })) as Json,
+    target_sort_mode: parsed.data.sortMode,
+    target_store_id: parsed.data.storeId,
+  });
+  if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not prepare the inventory count.") };
+  revalidatePath("/back-office/inventory");
+  return { ok: true, message: "Count prepared. Record the physical quantities, then submit it for review.", data: { inventoryCountId: data } };
+}
+
+export async function saveInventoryCountLineAction(input: unknown): Promise<AdvancedInventoryActionResult> {
+  const { context, error: permissionError } = await requireInventoryCounter();
+  if (permissionError) return { ok: false, message: permissionError };
+  const parsed = saveInventoryCountLineSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("save_inventory_count_line", {
+    target_organization_id: context.organization.id,
+    target_inventory_count_id: parsed.data.inventoryCountId,
+    target_product_id: parsed.data.productId,
+    target_variant_id: parsed.data.variantId || null,
+    target_counted_quantity: Number(parsed.data.countedQuantity),
+  });
+  if (error) return { ok: false, message: databaseMessage(error.code, "TINDIO could not save this physical count.") };
+  revalidatePath("/back-office/inventory");
+  return { ok: true, message: "Counted quantity saved." };
+}
+
+async function transitionInventoryCount(
+  input: unknown,
+  operation: "submit_inventory_count_for_review" | "post_inventory_count" | "cancel_inventory_count",
+  successMessage: string,
+): Promise<AdvancedInventoryActionResult> {
+  const { context, error: permissionError } = await requireInventoryCounter();
+  if (permissionError) return { ok: false, message: permissionError };
+  const parsed = inventoryCountTransitionSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+  const supabase = await createClient();
+  const { error } = operation === "cancel_inventory_count"
+    ? await supabase.rpc(operation, {
+        target_organization_id: context.organization.id,
+        target_inventory_count_id: parsed.data.inventoryCountId,
+        target_note: parsed.data.note ?? "",
+      })
+    : await supabase.rpc(operation, {
+        target_organization_id: context.organization.id,
+        target_inventory_count_id: parsed.data.inventoryCountId,
+      });
+  if (error) return { ok: false, message: databaseMessage(error.code, "TINDIO could not update this inventory-count document.") };
+  revalidatePath("/back-office/inventory");
+  revalidatePath("/back-office/replenishment");
+  return { ok: true, message: successMessage };
+}
+
+export async function submitInventoryCountForReviewAction(input: unknown) {
+  return transitionInventoryCount(input, "submit_inventory_count_for_review", "Inventory count is ready for review.");
+}
+
+export async function postInventoryCountAction(input: unknown) {
+  return transitionInventoryCount(input, "post_inventory_count", "Inventory count posted. Variances are now in the immutable activity ledger.");
+}
+
+export async function cancelInventoryCountAction(input: unknown) {
+  return transitionInventoryCount(input, "cancel_inventory_count", "Inventory count cancelled. No stock variance was posted.");
 }
 
 export async function transferStockAction(

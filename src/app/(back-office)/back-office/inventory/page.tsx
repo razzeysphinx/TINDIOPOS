@@ -1,10 +1,9 @@
 import { ArrowDown, ArrowUp, Boxes, PackageOpen, Warehouse } from "lucide-react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { ContextHelp } from "@/components/back-office/context-help";
-import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -22,20 +21,23 @@ import {
 } from "@/features/inventory/advanced-inventory-workflows";
 import type { InventorySaleableItem } from "@/features/catalog/catalog-forms";
 import { InventoryIntegrityWorkflows } from "@/features/inventory/inventory-integrity-workflows";
+import { InventoryActivityList } from "@/features/inventory/inventory-activity-list";
+import { InventoryCountWorkspace } from "@/features/inventory/inventory-count-workspace";
+import { SupplyChainWorkflows, type ReplenishmentRule } from "@/features/inventory/supply-chain-workflows";
 import {
   InventoryProductDetail,
   type InventoryProductDetailData,
 } from "@/features/inventory/inventory-product-detail";
-import {
-  InventoryStockView,
-  type InventoryStockStatus,
-} from "@/features/inventory/inventory-stock-view";
+import { type InventoryStockStatus } from "@/features/inventory/inventory-stock-view";
 import { getInventoryStockCondition } from "@/features/inventory/inventory-stock-status";
 import { InventoryTransferWorkspace } from "@/features/inventory/inventory-transfer-workspace";
 import {
-  loadAuthorizedBackOfficeStores,
-  resolveBackOfficeStoreScope,
-} from "@/lib/server/back-office-store-scope";
+  InventoryWorkspaceNavigation,
+  type InventoryControlTab,
+  type InventoryWorkspace,
+  type PurchasingTab,
+} from "@/features/inventory/inventory-workspace-navigation";
+import { resolveBackOfficeStoreScope } from "@/lib/server/back-office-store-scope";
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import type { TableRow } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
@@ -43,16 +45,43 @@ import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Inventory" };
 
-const INVENTORY_TABS = [
+const INVENTORY_CONTROL_TABS: readonly { id: InventoryControlTab; label: string }[] = [
   { id: "overview", label: "Overview" },
-  { id: "stock", label: "Stock" },
   { id: "activity", label: "Activity" },
+  { id: "adjustments", label: "Stock adjustments" },
   { id: "counts", label: "Counts" },
-  { id: "purchasing", label: "Purchasing" },
   { id: "transfers", label: "Transfers" },
+  { id: "production", label: "Production" },
+  { id: "valuation", label: "Valuation" },
+];
+
+const PURCHASING_TABS: readonly PurchasingTab[] = [
+  "purchase-orders",
+  "receiving",
+  "suppliers",
+  "supplier-returns",
+];
+
+const INVENTORY_TABS = [
+  ...INVENTORY_CONTROL_TABS,
+  ...PURCHASING_TABS.map((id) => ({ id, label: id.replaceAll("-", " ") })),
 ] as const;
 
-type InventoryTab = (typeof INVENTORY_TABS)[number]["id"];
+type InventoryTab = InventoryControlTab | PurchasingTab;
+
+export type InventoryWorkspacePageProps = {
+  searchParams: Promise<{
+    configuration?: string | string[];
+    detail?: string | string[];
+    from?: string | string[];
+    movementType?: string | string[];
+    purchaseOrder?: string | string[];
+    status?: string | string[];
+    store?: string;
+    tab?: string | string[];
+    to?: string | string[];
+  }>;
+};
 
 const INVENTORY_STOCK_STATUSES = [
   "all",
@@ -65,12 +94,14 @@ const INVENTORY_STOCK_STATUSES = [
 ] as const satisfies readonly InventoryStockStatus[];
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MOVEMENT_TYPES = ["OPENING_STOCK", "ADJUSTMENT", "DAMAGE", "LOSS", "SALE", "REFUND", "RECEIPT", "COUNT", "TRANSFER_OUT", "TRANSFER_IN", "SUPPLIER_RETURN", "PRODUCTION", "DISASSEMBLY"] as const;
 
-function resolveInventoryTab(value: string | string[] | undefined): InventoryTab {
+function resolveInventoryTab(value: string | string[] | undefined, workspace: "control" | "purchasing"): InventoryTab {
   const candidate = Array.isArray(value) ? value[0] : value;
-  return INVENTORY_TABS.some((tab) => tab.id === candidate)
-    ? candidate as InventoryTab
-    : "overview";
+  if (candidate === "purchasing") return "purchase-orders";
+  const allowedTabs = workspace === "purchasing" ? PURCHASING_TABS : INVENTORY_CONTROL_TABS.map((tab) => tab.id);
+  if (allowedTabs.includes(candidate as never)) return candidate as InventoryTab;
+  return workspace === "purchasing" ? "purchase-orders" : "overview";
 }
 
 function resolveInventoryStockStatus(value: string | string[] | undefined): InventoryStockStatus {
@@ -83,6 +114,16 @@ function resolveInventoryStockStatus(value: string | string[] | undefined): Inve
 function resolveInventoryLevelId(value: string | string[] | undefined) {
   const candidate = Array.isArray(value) ? value[0] : value;
   return candidate && UUID_PATTERN.test(candidate) ? candidate : null;
+}
+
+function resolveDate(value: string | string[] | undefined) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate && /^\d{4}-\d{2}-\d{2}$/.test(candidate) ? candidate : null;
+}
+
+function resolveMovementType(value: string | string[] | undefined) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return MOVEMENT_TYPES.includes(candidate as (typeof MOVEMENT_TYPES)[number]) ? candidate as (typeof MOVEMENT_TYPES)[number] : null;
 }
 
 async function loadInventoryItemActivity({
@@ -113,7 +154,8 @@ async function loadInventoryItemActivity({
   return query.order("created_at", { ascending: false }).limit(limit);
 }
 
-function InventoryTabs({
+/** CANDIDATE_FOR_REMOVAL: retained while shared InventoryWorkspaceNavigation completes QA. */
+export function InventoryTabs({
   activeTab,
   canManage,
   storeId,
@@ -124,7 +166,7 @@ function InventoryTabs({
 }) {
   const tabs = canManage
     ? INVENTORY_TABS
-    : INVENTORY_TABS.filter((tab) => tab.id === "stock" || tab.id === "activity");
+    : INVENTORY_TABS.filter((tab) => tab.id === "activity");
 
   return (
     <nav aria-label="Inventory sections" className="overflow-x-auto overscroll-x-contain border-b">
@@ -153,21 +195,75 @@ function InventoryTabs({
   );
 }
 
-export default async function InventoryPage({
+export default async function InventoryPage(props: InventoryWorkspacePageProps) {
+  return <InventoryWorkspacePage {...props} workspace="control" />;
+}
+
+/**
+ * Shared server-rendered inventory data surface. The control and purchasing
+ * routes deliberately reuse this loader so their authorization, store scope,
+ * purchase-order, receiving, and ledger behavior cannot drift apart.
+ */
+export async function InventoryWorkspacePage({
   searchParams,
-}: {
-  searchParams: Promise<{ detail?: string | string[]; status?: string | string[]; store?: string; tab?: string | string[] }>;
-}) {
-  const context = await requireBackOfficePermission(["inventory.view", "inventory.manage"]);
+  workspace,
+}: InventoryWorkspacePageProps & { workspace: Extract<InventoryWorkspace, "control" | "purchasing"> }) {
+  const context = await requireBackOfficePermission(["inventory.view", "inventory.count", "inventory.manage"]);
   const parameters = await searchParams;
-  const requestedTab = resolveInventoryTab(parameters.tab);
+  const rawRequestedTab = Array.isArray(parameters.tab) ? parameters.tab[0] : parameters.tab;
+  if (rawRequestedTab === "stock") {
+    const query = new URLSearchParams({ tab: "levels" });
+    if (parameters.store) query.set("store", parameters.store);
+    if (parameters.detail && !Array.isArray(parameters.detail)) query.set("detail", parameters.detail);
+    redirect(`/back-office/replenishment?${query.toString()}`);
+  }
   const canManage = hasPermission(context, "inventory.manage");
-  const activeTab = canManage || requestedTab === "stock" || requestedTab === "activity"
+  const canCount = hasPermission(context, "inventory.count") || canManage;
+  const selectedStore = parameters.store;
+  const purchaseOrder = Array.isArray(parameters.purchaseOrder) ? parameters.purchaseOrder[0] : parameters.purchaseOrder;
+  const legacyPurchasingTab = rawRequestedTab === "purchasing"
+    ? "purchase-orders"
+    : PURCHASING_TABS.includes(rawRequestedTab as PurchasingTab)
+      ? rawRequestedTab as PurchasingTab
+      : null;
+  const legacyControlTab = INVENTORY_CONTROL_TABS.some((tab) => tab.id === rawRequestedTab)
+    ? rawRequestedTab as InventoryControlTab
+    : null;
+
+  if (workspace === "control" && legacyPurchasingTab) {
+    const query = new URLSearchParams({ tab: legacyPurchasingTab });
+    if (selectedStore) query.set("store", selectedStore);
+    if (purchaseOrder) query.set("purchaseOrder", purchaseOrder);
+    redirect(`/back-office/purchasing?${query.toString()}`);
+  }
+
+  if (workspace === "purchasing" && legacyControlTab) {
+    const query = new URLSearchParams({ tab: legacyControlTab });
+    if (selectedStore) query.set("store", selectedStore);
+    redirect(`/back-office/inventory?${query.toString()}`);
+  }
+
+  if (workspace === "purchasing" && !canManage) {
+    const query = new URLSearchParams({ tab: "activity" });
+    if (selectedStore) query.set("store", selectedStore);
+    redirect(`/back-office/inventory?${query.toString()}`);
+  }
+
+  const requestedTab = resolveInventoryTab(parameters.tab, workspace);
+  const activeTab = workspace === "purchasing" || canManage || requestedTab === "activity" || (canCount && requestedTab === "counts")
     ? requestedTab
-    : "stock";
+    : "activity";
+  // CANDIDATE_FOR_REMOVAL: retained while the legacy stock query parameter is
+  // still accepted for backwards-compatible deep links to Stock & Restock.
   const initialStockStatus = resolveInventoryStockStatus(parameters.status);
+  void initialStockStatus;
   const requestedDetailLevelId = resolveInventoryLevelId(parameters.detail);
-  const selectedDetailLevelId = activeTab === "stock" || activeTab === "activity"
+  const requestedPurchaseOrderId = resolveInventoryLevelId(parameters.purchaseOrder);
+  const showConfiguration = parameters.configuration === "1" || parameters.configuration?.[0] === "1";
+  const activityFrom = resolveDate(parameters.from);
+  const activityTo = resolveDate(parameters.to);
+  const activityMovementType = resolveMovementType(parameters.movementType);
+  const selectedDetailLevelId = activeTab === "activity"
     ? requestedDetailLevelId
     : null;
   const storeScope = resolveBackOfficeStoreScope(context, parameters);
@@ -204,13 +300,13 @@ export default async function InventoryPage({
     .from("inventory_levels")
     .select("id, store_id, product_id, variant_id, quantity, updated_at")
     .eq("organization_id", organizationId);
-  const valuationQuery = canViewCosts
+  const valuationQuery = activeTab === "valuation" && canViewCosts
     ? supabase.rpc("get_inventory_valuation", { target_organization_id: organizationId })
     : Promise.resolve({ data: [], error: null });
   const replenishmentRulesQuery = canManage
     ? supabase
         .from("inventory_replenishment_rules")
-        .select("store_id, product_id, variant_id, reorder_point")
+        .select("id, store_id, product_id, variant_id, preferred_warehouse_id, reorder_point, target_stock")
         .eq("organization_id", organizationId)
     : null;
   const purchaseOrdersQuery = canManage
@@ -237,12 +333,16 @@ export default async function InventoryPage({
         .order("created_at", { ascending: false })
         .limit(30)
     : null;
-  const inventoryCountsQuery = canManage && activeTab === "counts"
+
+  if (activityFrom) recentMovementsQuery?.gte("created_at", `${activityFrom}T00:00:00.000Z`);
+  if (activityTo) recentMovementsQuery?.lt("created_at", `${activityTo}T23:59:59.999Z`);
+  if (activityMovementType) recentMovementsQuery?.eq("movement_type", activityMovementType);
+  const inventoryCountsQuery = canCount && activeTab === "counts"
     ? supabase
         .from("inventory_counts")
-        .select("id, store_id, status, note, started_at, completed_at")
+        .select("id, count_number, store_id, status, note, started_at, completed_at, updated_at, count_mode, scope_type, scope_reference_id, sort_mode, include_zero_stock")
         .eq("organization_id", organizationId)
-        .eq("status", "completed")
+        .in("status", ["draft", "in_progress", "ready_for_review", "posted", "cancelled", "open", "completed"])
         .order("started_at", { ascending: false })
         .limit(25)
     : null;
@@ -274,6 +374,8 @@ export default async function InventoryPage({
     stockTransferLinesResult,
     replenishmentRulesResult,
     inventoryCountsResult,
+    warehousesResult,
+    countSuppliersResult,
   ] = await Promise.all([
     supabase
       .from("stores")
@@ -328,7 +430,7 @@ export default async function InventoryPage({
     canManage
       ? supabase
           .from("suppliers")
-          .select("id, name, contact_name, email, phone, address, notes, is_active")
+          .select("id, name, contact_name, email, phone, address, notes, is_active, lead_time_days")
           .eq("organization_id", organizationId)
           .order("name", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
@@ -357,9 +459,20 @@ export default async function InventoryPage({
       : Promise.resolve({ data: [], error: null }),
     replenishmentRulesQuery ?? Promise.resolve({ data: [], error: null }),
     inventoryCountsQuery ?? Promise.resolve({
-      data: [] as Array<Pick<TableRow<"inventory_counts">, "id" | "store_id" | "status" | "note" | "started_at" | "completed_at">>,
+      data: [] as Array<Pick<TableRow<"inventory_counts">, "id" | "count_number" | "store_id" | "status" | "note" | "started_at" | "completed_at" | "updated_at" | "count_mode" | "scope_type" | "scope_reference_id" | "sort_mode" | "include_zero_stock">>,
       error: null,
     }),
+    canManage && showConfiguration
+      ? supabase
+          .from("supply_chain_warehouses")
+          .select("id, store_id, code, name")
+          .eq("organization_id", organizationId)
+          .eq("is_active", true)
+          .order("name", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    canCount && activeTab === "counts"
+      ? supabase.rpc("get_inventory_count_suppliers", { target_organization_id: organizationId })
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   const error = [
@@ -379,6 +492,7 @@ export default async function InventoryPage({
     stockTransferLinesResult,
     replenishmentRulesResult,
     inventoryCountsResult,
+    countSuppliersResult,
   ].find((result) => result.error)?.error;
 
   if (error) {
@@ -396,8 +510,11 @@ export default async function InventoryPage({
   const movements = (movementsResult.data ?? []).filter((movement) => visibleStore(movement.store_id));
   const suppliers = suppliersResult.data ?? [];
   const purchaseOrders = (purchaseOrdersResult.data ?? []).filter((order) => visibleStore(order.store_id));
+  const inventoryCounts = (inventoryCountsResult.data ?? []).filter((count) => visibleStore(count.store_id));
+  const countSuppliers = countSuppliersResult.data ?? [];
   const purchaseOrderIds = purchaseOrders.map((order) => order.id);
-  const [purchaseOrderLinesResult, goodsReceiptsResult] = await Promise.all([
+  const countIds = inventoryCounts.map((count) => count.id);
+  const [purchaseOrderLinesResult, goodsReceiptsResult, countLinesResult] = await Promise.all([
     purchaseOrderIds.length
       ? supabase
           .from("purchase_order_lines")
@@ -414,9 +531,17 @@ export default async function InventoryPage({
           .order("received_at", { ascending: false })
           .limit(50)
       : Promise.resolve({ data: [], error: null }),
+    countIds.length
+      ? supabase
+          .from("inventory_count_lines")
+          .select("id, inventory_count_id, product_id, variant_id, expected_quantity, counted_quantity, product_name_snapshot, variant_name_snapshot, category_name_snapshot, sku_snapshot, barcode_snapshot, unit_snapshot, line_sort_order")
+          .eq("organization_id", organizationId)
+          .in("inventory_count_id", countIds)
+          .order("line_sort_order", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
-  const purchasingError = [purchaseOrderLinesResult, goodsReceiptsResult].find((result) => result.error)?.error;
+  const purchasingError = [purchaseOrderLinesResult, goodsReceiptsResult, countLinesResult].find((result) => result.error)?.error;
   if (purchasingError) {
     throw new Error(`Unable to load purchasing history: ${purchasingError.message}`);
   }
@@ -437,6 +562,7 @@ export default async function InventoryPage({
   const purchaseOrderLines = purchaseOrderLinesResult.data ?? [];
   const goodsReceipts = goodsReceiptsResult.data ?? [];
   const goodsReceiptLines = goodsReceiptLinesResult.data ?? [];
+  const inventoryCountLines = countLinesResult.data ?? [];
   const purchaseOrderLineIds = purchaseOrderLines.map((line) => line.id);
   const purchaseOrderLineCostRows: Array<{ id: string; unit_cost_minor: number }> = [];
   // The permission-checked RPC intentionally accepts no more than 100 IDs.
@@ -465,7 +591,7 @@ export default async function InventoryPage({
   const stockTransfers = (stockTransfersResult.data ?? []).filter((transfer) => visibleStore(transfer.source_store_id) || visibleStore(transfer.destination_store_id));
   const stockTransferLines = stockTransferLinesResult.data ?? [];
   const replenishmentRules = (replenishmentRulesResult.data ?? []).filter((rule) => visibleStore(rule.store_id));
-  const inventoryCounts = (inventoryCountsResult.data ?? []).filter((count) => visibleStore(count.store_id));
+  const warehouses = warehousesResult.data ?? [];
   const storeNames = new Map(stores.map((store) => [store.id, store.name]));
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
   const productById = new Map(products.map((product) => [product.id, product]));
@@ -511,7 +637,12 @@ export default async function InventoryPage({
   }
 
   const detailMovements = detailMovementsResult.data ?? [];
-  const actorEmployeeIds = [...new Set(detailMovements.map((movement) => movement.actor_employee_id))];
+  const activityActorSource = selectedDetailLevel
+    ? detailMovements
+    : activeTab === "activity"
+      ? movements
+      : [];
+  const actorEmployeeIds = [...new Set(activityActorSource.map((movement) => movement.actor_employee_id))];
   const employeesResult = hasPermission(context, "employees.manage") && actorEmployeeIds.length
     ? await supabase
         .from("employees")
@@ -534,7 +665,7 @@ export default async function InventoryPage({
     throw new Error(`Unable to load inventory activity employee names: ${profilesResult.error.message}`);
   }
 
-  const receiptSaleIds = [...new Set(detailMovements.flatMap((movement) => (
+  const receiptSaleIds = [...new Set(activityActorSource.flatMap((movement) => (
     movement.source_id && (movement.source_type === "sale" || movement.source_type === "composite_sale")
       ? [movement.source_id]
       : []
@@ -593,10 +724,73 @@ export default async function InventoryPage({
 
   const advancedItems = items.map((item) => ({
     ...item,
+    barcode: item.variantId
+      ? variantById.get(item.variantId)?.barcode ?? null
+      : productById.get(item.productId)?.barcode ?? null,
+    categoryId: productById.get(item.productId)?.category_id ?? null,
+    categoryName: productById.get(item.productId)?.category_id
+      ? categoryNames.get(productById.get(item.productId)?.category_id ?? "") ?? "Uncategorized"
+      : "Uncategorized",
     identifiers: item.identifiers ?? [],
+    sku: item.variantId
+      ? variantById.get(item.variantId)?.sku ?? null
+      : productById.get(item.productId)?.sku ?? null,
     unit: productById.get(item.productId)?.unit ?? "units",
     quantitiesByStore:
       quantitiesBySaleable.get(`${item.productId}|${item.variantId ?? ""}`) ?? {},
+  }));
+  const warehouseNames = new Map(warehouses.map((warehouse) => [warehouse.id, `${warehouse.code} · ${warehouse.name}`]));
+  const configurationRules: ReplenishmentRule[] = replenishmentRules.map((rule) => {
+    const product = productById.get(rule.product_id);
+    const variant = rule.variant_id ? variantById.get(rule.variant_id) : null;
+    const item = advancedItems.find((candidate) => candidate.productId === rule.product_id && candidate.variantId === rule.variant_id);
+    return {
+      id: rule.id,
+      storeId: rule.store_id,
+      productId: rule.product_id,
+      variantId: rule.variant_id,
+      preferredWarehouseId: rule.preferred_warehouse_id,
+      reorderPoint: Number(rule.reorder_point),
+      targetStock: Number(rule.target_stock),
+      label: item?.label ?? `${product?.name ?? "Unavailable product"}${variant ? ` / ${variant.name}` : ""}`,
+      unit: item?.unit ?? product?.unit ?? "units",
+      currentQuantity: item?.quantitiesByStore[rule.store_id] ?? 0,
+      storeName: storeNames.get(rule.store_id) ?? "Inactive store",
+      warehouseName: rule.preferred_warehouse_id ? warehouseNames.get(rule.preferred_warehouse_id) ?? "Unavailable warehouse" : null,
+    };
+  });
+  const countLinesByDocument = new Map<string, typeof inventoryCountLines>();
+  for (const line of inventoryCountLines) {
+    const savedLines = countLinesByDocument.get(line.inventory_count_id) ?? [];
+    savedLines.push(line);
+    countLinesByDocument.set(line.inventory_count_id, savedLines);
+  }
+  const inventoryCountDocuments = inventoryCounts.map((count) => ({
+    countMode: count.count_mode as "standard" | "blind",
+    id: count.id,
+    includeZeroStock: count.include_zero_stock,
+    countNumber: Number(count.count_number),
+    scopeReferenceId: count.scope_reference_id,
+    scopeType: count.scope_type as "full_store" | "category" | "supplier" | "selected",
+    sortMode: count.sort_mode as "category_name" | "supplier_name" | "sku" | "barcode" | "product_name",
+    storeName: storeNames.get(count.store_id) ?? "Inactive store",
+    status: count.status as "draft" | "in_progress" | "ready_for_review" | "posted" | "cancelled" | "open" | "completed",
+    note: count.note,
+    updatedAt: count.updated_at,
+    lines: (countLinesByDocument.get(count.id) ?? []).map((line) => {
+      return {
+        id: line.id,
+        productId: line.product_id,
+        variantId: line.variant_id,
+        label: `${line.product_name_snapshot}${line.variant_name_snapshot ? ` / ${line.variant_name_snapshot}` : ""}`,
+        categoryName: line.category_name_snapshot,
+        sku: line.sku_snapshot,
+        barcode: line.barcode_snapshot,
+        unit: line.unit_snapshot,
+        expectedQuantity: Number(line.expected_quantity),
+        countedQuantity: line.counted_quantity === null ? null : Number(line.counted_quantity),
+      };
+    }),
   }));
   const supplierNames = new Map(suppliers.map((supplier) => [supplier.id, supplier.name]));
   const purchaseOrderLinesByOrder = new Map<string, typeof purchaseOrderLines>();
@@ -708,10 +902,39 @@ export default async function InventoryPage({
   const outOfStockCount = levels.filter((level) => Number(level.quantity) === 0).length;
   const negativeStockCount = levels.filter((level) => Number(level.quantity) < 0).length;
   const needsAttentionCount = outOfStockCount + negativeStockCount;
-  const inventoryTabHref = (tab: InventoryTab, status?: InventoryStockStatus) =>
-    `/back-office/inventory?tab=${tab}${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}${status && status !== "all" ? `&status=${status}` : ""}`;
-  const inventoryDetailHref = (tab: Extract<InventoryTab, "activity" | "stock">, levelId: string) =>
-    `${inventoryTabHref(tab, tab === "stock" ? initialStockStatus : undefined)}&detail=${levelId}`;
+  const inventoryTabHref = (tab: InventoryControlTab) =>
+    `/back-office/inventory?tab=${tab}${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}`;
+  const purchasingTabHref = (tab: PurchasingTab) =>
+    `/back-office/purchasing?tab=${tab}${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}`;
+  const purchasingSectionLabels: Record<PurchasingTab, string> = {
+    "purchase-orders": "Purchase orders",
+    receiving: "Receiving",
+    suppliers: "Suppliers",
+    "supplier-returns": "Supplier returns",
+  };
+  const controlSectionLabels: Partial<Record<InventoryControlTab, string>> = {
+    adjustments: "Stock adjustments",
+    counts: "Inventory counts",
+    production: "Production",
+    transfers: "Transfer orders",
+    valuation: "Inventory valuation",
+  };
+  const breadcrumbs = workspace === "purchasing"
+    ? [
+        { href: "/back-office", label: "Back Office" },
+        { href: inventoryTabHref("overview"), label: "Inventory" },
+        { href: purchasingTabHref("purchase-orders"), label: "Purchasing" },
+        { label: purchasingSectionLabels[activeTab as PurchasingTab] },
+      ]
+    : [
+        { href: "/back-office", label: "Back Office" },
+        { href: inventoryTabHref("overview"), label: "Inventory" },
+        { label: controlSectionLabels[activeTab as InventoryControlTab] ?? "Inventory Control" },
+      ];
+  const stockLevelsHref = (status?: InventoryStockStatus) =>
+    `/back-office/replenishment?tab=levels${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}${status && status !== "all" ? `&status=${status}` : ""}`;
+  const inventoryDetailHref = (levelId: string) =>
+    `${inventoryTabHref("activity")}&detail=${levelId}`;
   const stockRows = levels.flatMap((level) => {
     const product = productById.get(level.product_id);
     const variant = level.variant_id ? variantById.get(level.variant_id) : undefined;
@@ -726,7 +949,7 @@ export default async function InventoryPage({
       barcode: variant?.barcode ?? product.barcode,
       categoryId: product.category_id,
       categoryName: product.category_id ? categoryNames.get(product.category_id) ?? "Uncategorized" : "Uncategorized",
-      detailHref: inventoryDetailHref("stock", level.id),
+      detailHref: inventoryDetailHref(level.id),
       id: level.id,
       isAvailable: availability.get(`${level.product_id}|${level.store_id}`) === true,
       productId: level.product_id,
@@ -742,6 +965,9 @@ export default async function InventoryPage({
       variantName: variant?.name ?? null,
     }];
   });
+  // CANDIDATE_FOR_REMOVAL: retained source data for the previous Inventory
+  // stock-list surface. Stock & Restock now owns that workspace.
+  void stockRows;
   const selectedDetailProduct = selectedDetailLevel ? productById.get(selectedDetailLevel.product_id) : undefined;
   const selectedDetailVariant = selectedDetailLevel?.variant_id
     ? variantById.get(selectedDetailLevel.variant_id)
@@ -764,18 +990,18 @@ export default async function InventoryPage({
             storeName: storeNames.get(movement.store_id) ?? "Unavailable store",
           };
         }),
-        adjustmentHref: canManage ? `${inventoryTabHref("overview")}#inventory-operations` : null,
+        adjustmentHref: canManage ? inventoryTabHref("adjustments") : null,
         barcode: selectedDetailVariant?.barcode ?? selectedDetailProduct.barcode,
         categoryName: selectedDetailProduct.category_id ? categoryNames.get(selectedDetailProduct.category_id) ?? "Uncategorized" : "Uncategorized",
-        closeHref: inventoryTabHref("stock", initialStockStatus),
+        closeHref: inventoryTabHref("activity"),
         condition: getInventoryStockCondition({
           quantity: Number(selectedDetailLevel.quantity),
           reorderPoint: reorderPoints.get(`${selectedDetailLevel.store_id}|${selectedDetailLevel.product_id}|${selectedDetailLevel.variant_id ?? ""}`) ?? null,
         }),
-        fullActivityHref: inventoryDetailHref("activity", selectedDetailLevel.id),
+        fullActivityHref: inventoryDetailHref(selectedDetailLevel.id),
         isAvailable: availability.get(`${selectedDetailLevel.product_id}|${selectedDetailLevel.store_id}`) === true,
         productName: selectedDetailProduct.name,
-        purchasingHref: inventoryTabHref("purchasing"),
+        purchasingHref: purchasingTabHref("purchase-orders"),
         quantity: Number(selectedDetailLevel.quantity),
         reorderPoint: reorderPoints.get(`${selectedDetailLevel.store_id}|${selectedDetailLevel.product_id}|${selectedDetailLevel.variant_id ?? ""}`) ?? null,
         sku: selectedDetailVariant?.sku ?? selectedDetailProduct.sku,
@@ -822,21 +1048,57 @@ export default async function InventoryPage({
       },
     ]),
   );
+  const activityRows = activityMovements.map((movement) => {
+    const product = productById.get(movement.product_id);
+    const variant = movement.variant_id ? variantById.get(movement.variant_id) : undefined;
+    const movementCost = movementCostById.get(movement.id);
+    const receipt = movement.source_id ? receiptBySaleId.get(movement.source_id) : undefined;
+
+    return {
+      actorName: actorNames.get(movement.actor_employee_id) ?? null,
+      createdAt: movement.created_at,
+      id: movement.id,
+      movementType: movement.movement_type,
+      productName: `${product?.name ?? "Unavailable product"}${variant ? ` / ${variant.name}` : ""}`,
+      quantityAfter: Number(movement.quantity_after),
+      quantityBefore: Number(movement.quantity_before),
+      quantityDelta: Number(movement.quantity_delta),
+      reason: movement.reason_code ?? movement.reason,
+      referenceHref: receipt ? `/back-office/receipts/${receipt.id}` : null,
+      referenceLabel: receipt ? `Receipt ${receipt.receipt_number}` : formatInventorySourceReference(movement.source_type),
+      storeName: storeNames.get(movement.store_id) ?? "Unavailable store",
+      unit: product?.unit ?? "units",
+      ...(canViewCosts && movementCost ? {
+        unitCostMinor: movementCost.unitCostMinor,
+        valueDeltaMinor: movementCost.valueDeltaMinor,
+      } : {}),
+    };
+  });
 
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Stock control"
-        title="Inventory"
-        description="See what you have, what needs restocking, and why your stock quantity changed."
+        eyebrow={workspace === "purchasing" ? "Purchasing" : "Stock control"}
+        title={workspace === "purchasing" ? "Purchasing" : "Inventory Control"}
+        description={workspace === "purchasing"
+          ? "Manage suppliers, purchase orders, deliveries, and procurement costs. Purchase orders record buying intent; only receiving changes stock."
+          : "See what you have, what needs restocking, and why your stock quantity changed."}
+        breadcrumbs={breadcrumbs}
         action={
           <Badge variant={canManage ? "secondary" : "outline"}>
-            {canManage ? "Stock management" : "Level view"}
+            {canManage ? workspace === "purchasing" ? "Purchasing access" : "Stock management" : "Level view"}
           </Badge>
         }
       />
 
-      <GlobalFilterBar action="/back-office/inventory" hiddenFields={{ tab: activeTab, status: activeTab === "stock" && initialStockStatus !== "all" ? initialStockStatus : undefined }} namePrefix="inventory-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={await loadAuthorizedBackOfficeStores(context)} />
+      <InventoryWorkspaceNavigation
+        activeTab={activeTab}
+        canCount={canCount}
+        canManage={canManage}
+        canUseProduction={context.features.production}
+        storeId={storeScope.selectedStoreId}
+        workspace={workspace}
+      />
 
       {activeTab === "overview" ? (
         <DashboardActionGrid
@@ -845,8 +1107,6 @@ export default async function InventoryPage({
           surface="inventory"
         />
       ) : null}
-
-      <InventoryTabs activeTab={activeTab} canManage={canManage} storeId={storeScope.selectedStoreId} />
 
       {activeTab === "overview" ? (
         <section className="space-y-4" aria-labelledby="inventory-health-title">
@@ -858,19 +1118,19 @@ export default async function InventoryPage({
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <InventoryMetricCard
-              href={inventoryTabHref("stock")}
+              href={stockLevelsHref()}
               label="Tracked items"
               detail="Available across the selected stores"
               value={items.length}
             />
             <InventoryMetricCard
-              href={inventoryTabHref("stock", "attention")}
+              href={stockLevelsHref("attention")}
               label="Needs attention"
               detail={`${outOfStockCount} out of stock · ${negativeStockCount} negative`}
               value={needsAttentionCount}
             />
             <InventoryMetricCard
-              href={inventoryTabHref("purchasing")}
+              href={purchasingTabHref("purchase-orders")}
               label="Awaiting receiving"
               detail="Open or partially received purchase orders"
               value={receivableOrders.length}
@@ -886,23 +1146,44 @@ export default async function InventoryPage({
             <CardHeader>
               <CardTitle>Simple first</CardTitle>
               <CardDescription>
-                Use Stock for current balances, Activity for recent changes, and the operational tabs only when work needs to be done.
+                Use Stock Levels for current balances, Activity for recent changes, and operational documents only when work needs to be done.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("stock")}>View stock</Link>
+              <Link className="text-sm font-medium text-primary hover:underline" href={stockLevelsHref()}>View stock levels</Link>
               <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("activity")}>View activity</Link>
-              <Link className="text-sm font-medium text-primary hover:underline" href="/back-office/replenishment">Restock items</Link>
+              <Link className="text-sm font-medium text-primary hover:underline" href="/back-office/replenishment?tab=needs-restocking">Needs restocking</Link>
+              {canManage ? <Link className="text-sm font-medium text-primary hover:underline" href={`${inventoryTabHref("overview")}&configuration=1`}>Inventory configuration</Link> : null}
             </CardContent>
           </Card>
+        </section>
+      ) : null}
+
+      {activeTab === "overview" && canManage && showConfiguration ? (
+        <section aria-labelledby="inventory-configuration-title" className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold" id="inventory-configuration-title">Inventory configuration</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Set warehouses, supplier lead time, and replenishment rules here. Daily Stock & Restock stays focused on balances and requests.</p>
+          </div>
+          <SupplyChainWorkflows
+            stores={stores.map(({ id, name }) => ({ id, name }))}
+            warehouses={warehouses.map((warehouse) => ({ id: warehouse.id, storeId: warehouse.store_id, code: warehouse.code, name: warehouse.name }))}
+            suppliers={suppliers.filter((supplier) => supplier.is_active).map((supplier) => ({ id: supplier.id, name: supplier.name, leadTimeDays: Number(supplier.lead_time_days) }))}
+            items={advancedItems}
+            rules={configurationRules}
+            requests={[]}
+            inboundPurchaseOrders={[]}
+            defaultStoreId={storeScope.selectedStoreId}
+            sections={["configuration"]}
+          />
         </section>
       ) : null}
 
       {activeTab === "overview" && canManage ? (
         <details className="group rounded-xl border bg-card" id="inventory-operations">
           <summary className="cursor-pointer list-none px-5 py-4 font-medium marker:hidden">
-            More inventory operations
-            <span className="ml-2 text-sm font-normal text-muted-foreground">Adjustments, safeguards, and production</span>
+            Inventory safeguards
+            <span className="ml-2 text-sm font-normal text-muted-foreground">Negative-stock policy configuration</span>
           </summary>
           <div className="space-y-6 border-t p-5">
             {/* CANDIDATE_FOR_REMOVAL: the older approval-aware adjustment form remains in catalog-forms.tsx, but this page now exposes one controlled-reason adjustment workflow. */}
@@ -914,15 +1195,15 @@ export default async function InventoryPage({
               adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
               inTransitTransfers={inTransitTransfers}
               composites={compositeProducts}
-              sections={["safeguards", "adjustments", "production"]}
+              sections={["safeguards"]}
             />
           </div>
         </details>
       ) : null}
 
-      {activeTab === "purchasing" && canManage ? (
-        <>
+      {(["purchase-orders", "receiving", "suppliers"] as const).includes(activeTab as "purchase-orders" | "receiving" | "suppliers") && canManage ? (
           <AdvancedInventoryWorkflows
+          key={activeTab}
           stores={stores.map(({ id, name }) => ({ id, name }))}
           items={advancedItems}
           suppliers={suppliers.map((supplier) => ({
@@ -940,23 +1221,62 @@ export default async function InventoryPage({
           currencyCode={context.organization.currency_code}
           canViewCosts={canViewCosts}
           adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name }))}
+          initialReceiptOrderId={requestedPurchaseOrderId}
+          initialPurchasingSection={activeTab === "receiving" ? "receiving" : activeTab === "suppliers" ? "suppliers" : "orders"}
+          receivingHref={purchasingTabHref("receiving")}
+          showPurchasingTabs={false}
           sections={["purchasing"]}
           />
-          <InventoryIntegrityWorkflows
-            stores={stores.map(({ id, name }) => ({ id, name }))}
-            items={advancedItems}
-            suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
-            policies={policiesByStore}
-            adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
-            inTransitTransfers={inTransitTransfers}
-            composites={compositeProducts}
-            sections={["supplier-returns"]}
-          />
-        </>
       ) : null}
 
-      {activeTab === "counts" && canManage ? (
+      {activeTab === "supplier-returns" && canManage ? (
+        <InventoryIntegrityWorkflows
+          stores={stores.map(({ id, name }) => ({ id, name }))}
+          items={advancedItems}
+          suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
+          policies={policiesByStore}
+          adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
+          inTransitTransfers={inTransitTransfers}
+          composites={compositeProducts}
+          sections={["supplier-returns"]}
+        />
+      ) : null}
+
+      {activeTab === "adjustments" && canManage ? (
+        <InventoryIntegrityWorkflows
+          stores={stores.map(({ id, name }) => ({ id, name }))}
+          items={advancedItems}
+          suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
+          policies={policiesByStore}
+          adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
+          inTransitTransfers={inTransitTransfers}
+          composites={compositeProducts}
+          sections={["adjustments"]}
+        />
+      ) : null}
+
+      {activeTab === "counts" && canCount ? (
         <>
+          <InventoryCountWorkspace
+            documents={inventoryCountDocuments}
+            categories={categories.filter((category) => !category.is_archived).map(({ id, name }) => ({ id, name }))}
+            items={advancedItems.map(({ barcode, categoryId, categoryName, productId, quantitiesByStore, sku, storeIds, variantId, label, unit }) => ({
+              barcode,
+              categoryId,
+              categoryName,
+              productId,
+              quantitiesByStore,
+              sku,
+              storeIds,
+              variantId,
+              label,
+              unit,
+            }))}
+            stores={stores.map(({ id, name }) => ({ id, name }))}
+            suppliers={countSuppliers}
+          />
+          {/* CANDIDATE_FOR_REMOVAL: the previous one-step count form remains for source compatibility but is no longer mounted. The document workspace preserves drafts and server-reviewed posting. */}
+          {false ? <>
         <AdvancedInventoryWorkflows
           stores={stores.map(({ id, name }) => ({ id, name }))}
           items={advancedItems}
@@ -972,9 +1292,10 @@ export default async function InventoryPage({
             <CardDescription>A completed count keeps both the expected and counted quantities. If they differ, TINDIO records the correction in stock activity.</CardDescription>
           </CardHeader>
           <CardContent>
-            {inventoryCounts.length ? <div className="divide-y rounded-xl border">{inventoryCounts.map((count) => <article className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4" key={count.id}><div><p className="font-medium">{storeNames.get(count.store_id) ?? "Inactive store"}</p><p className="mt-1 text-xs text-muted-foreground">{count.note || "No count note"}</p></div><div className="text-sm text-muted-foreground"><p className="capitalize">{count.status}</p><p className="mt-1 text-xs">{formatDate(count.completed_at ?? count.started_at)}</p></div></article>)}</div> : <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">No completed inventory counts are available in this store scope yet.</p>}
+            {inventoryCounts.length ? <div className="divide-y rounded-xl border">{inventoryCounts.map((count) => <article className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4" key={count.id}><div><p className="font-medium">Count #{count.count_number} · {storeNames.get(count.store_id) ?? "Inactive store"}</p><p className="mt-1 text-xs text-muted-foreground">{count.note || "No count note"}</p></div><div className="text-sm text-muted-foreground"><p className="capitalize">{count.status === "posted" ? "Posted" : count.status}</p><p className="mt-1 text-xs">{formatDate(count.completed_at ?? count.started_at)}</p></div></article>)}</div> : <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">No posted inventory counts are available in this store scope yet.</p>}
           </CardContent>
         </Card>
+          </> : null}
         </>
       ) : null}
 
@@ -982,7 +1303,7 @@ export default async function InventoryPage({
         <>
           <InventoryTransferWorkspace
             awaitingReceiptCount={inTransitTransfers.length}
-            replenishmentHref={`/back-office/replenishment${storeScope.selectedStoreId ? `?store=${storeScope.selectedStoreId}` : ""}`}
+            replenishmentHref={`/back-office/replenishment?tab=requests${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}`}
           />
           <InventoryIntegrityWorkflows
             stores={stores.map(({ id, name }) => ({ id, name }))}
@@ -997,10 +1318,40 @@ export default async function InventoryPage({
         </>
       ) : null}
 
-      {(activeTab === "stock" || activeTab === "activity") ? (
+      {activeTab === "production" && canManage && context.features.production ? (
+        <InventoryIntegrityWorkflows
+          stores={stores.map(({ id, name }) => ({ id, name }))}
+          items={advancedItems}
+          suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
+          policies={policiesByStore}
+          adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
+          inTransitTransfers={inTransitTransfers}
+          composites={compositeProducts}
+          sections={["production"]}
+        />
+      ) : null}
+
+      {activeTab === "valuation" && canViewCosts ? (
+        <InventoryValuationSummary
+          currencyCode={context.organization.currency_code}
+          entries={inventoryValuation.map((entry) => ({
+            averageCostMinor: Number(entry.average_cost_minor),
+            quantity: Number(entry.quantity),
+            storeName: storeNames.get(entry.store_id) ?? "Unavailable store",
+          }))}
+        />
+      ) : activeTab === "valuation" ? (
+        <BackOfficeStateCard
+          description="Cost and valuation data stays restricted to employees with the existing cost-view permission."
+          icon={<Warehouse className="size-5" aria-hidden="true" />}
+          title="Inventory valuation access required"
+        />
+      ) : null}
+
+      {activeTab === "activity" ? (
         <>
-          {activeTab === "stock" ? <><InventoryStockView canUseReorderStatus={canManage} canViewCosts={canViewCosts} currencyCode={context.organization.currency_code} initialStatus={initialStockStatus} multiStoreCount={stores.length} preferenceScope={organizationId} rows={stockRows} /><InventoryProductDetail detail={inventoryDetail} /></> : null}
-          {/* CANDIDATE_FOR_REMOVAL: retained legacy stock-card renderer pending Phase 2 visual QA. */}
+          <InventoryProductDetail detail={inventoryDetail} />
+          {/* CANDIDATE_FOR_REMOVAL: retained legacy stock-card renderer pending Stock & Restock visual QA. */}
           {false ? <section className="space-y-3" aria-labelledby="stock-levels-title">
         <div>
           <h2 className="text-lg font-semibold" id="stock-levels-title">
@@ -1088,8 +1439,22 @@ export default async function InventoryPage({
             </p>
           </div>
 
-          {activityMovements.length > 0 ? (
-            <Card>
+          {!selectedDetailLevel ? (
+            <form action="/back-office/inventory" className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3" method="get">
+              <input name="tab" type="hidden" value="activity" />
+              <label className="grid gap-1 text-sm font-medium"><span>From</span><input className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm" defaultValue={activityFrom ?? ""} name="from" type="date" /></label>
+              <label className="grid gap-1 text-sm font-medium"><span>To</span><input className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm" defaultValue={activityTo ?? ""} name="to" type="date" /></label>
+              <label className="grid gap-1 text-sm font-medium"><span>Store</span><select className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm" defaultValue={storeScope.selectedStoreId ?? ""} name="store"><option value="">All authorized stores</option>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label>
+              <label className="grid gap-1 text-sm font-medium"><span>Document type</span><select className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm" defaultValue={activityMovementType ?? ""} name="movementType"><option value="">All activity</option>{MOVEMENT_TYPES.map((movementType) => <option key={movementType} value={movementType}>{movementType.replaceAll("_", " ")}</option>)}</select></label>
+              <button className="h-8 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground" type="submit">Apply</button>
+            </form>
+          ) : null}
+
+          {activityRows.length > 0 ? (
+            <>
+              <InventoryActivityList currencyCode={context.organization.currency_code} rows={activityRows} />
+              {/* CANDIDATE_FOR_REMOVAL: retained legacy movement-card renderer until the shared activity drawer completes visual QA. */}
+              {false ? <Card>
               <CardContent className="divide-y px-0">
                 {activityMovements.map((movement) => {
                   const product = productById.get(movement.product_id);
@@ -1152,7 +1517,8 @@ export default async function InventoryPage({
                   );
                 })}
               </CardContent>
-            </Card>
+              </Card> : null}
+            </>
           ) : (
             <BackOfficeStateCard
               description="Opening stock and adjustments will be listed here."
@@ -1165,6 +1531,44 @@ export default async function InventoryPage({
         </>
       ) : null}
     </div>
+  );
+}
+
+function InventoryValuationSummary({
+  currencyCode,
+  entries,
+}: {
+  currencyCode: string;
+  entries: Array<{ averageCostMinor: number; quantity: number; storeName: string }>;
+}) {
+  const completeEntries = entries.filter((entry) => entry.averageCostMinor > 0);
+  const missingCostEntries = entries.filter((entry) => entry.quantity !== 0 && entry.averageCostMinor === 0);
+  const totalValueMinor = completeEntries.reduce(
+    (total, entry) => total + entry.quantity * entry.averageCostMinor,
+    0,
+  );
+
+  return (
+    <section aria-labelledby="inventory-valuation-title" className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold" id="inventory-valuation-title">Inventory valuation</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Valuation uses recorded average cost. Positions with a zero recorded cost are kept separate so they are not silently treated as confirmed zero-value stock.
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Recorded value</p><p className="mt-1 text-2xl font-semibold">{formatMoney(totalValueMinor, currencyCode)}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Costed positions</p><p className="mt-1 text-2xl font-semibold">{completeEntries.length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Missing cost</p><p className="mt-1 text-2xl font-semibold">{missingCostEntries.length}</p></CardContent></Card>
+      </div>
+      {missingCostEntries.length ? (
+        <Card>
+          <CardContent className="p-4 text-sm text-muted-foreground">
+            {missingCostEntries.length} stock position{missingCostEntries.length === 1 ? " has" : "s have"} a zero recorded cost and {missingCostEntries.length === 1 ? "is" : "are"} excluded from the confirmed valuation. Review its acquisition cost before relying on this total.
+          </CardContent>
+        </Card>
+      ) : null}
+    </section>
   );
 }
 

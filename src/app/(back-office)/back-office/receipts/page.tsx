@@ -273,6 +273,7 @@ export default async function ReceiptsPage({
             stores={stores}
             toDate={parameters.end}
             showEmbeddedDividers={false}
+            timezone={context.organization.timezone}
           />
 
       {receipts.length > 0 ? (

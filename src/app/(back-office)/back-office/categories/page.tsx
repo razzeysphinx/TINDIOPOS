@@ -1,21 +1,5 @@
-import { Archive, Shapes } from "lucide-react";
-
-import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { PageHeader } from "@/components/back-office/page-header";
-import { GuardedDeleteDialog } from "@/components/back-office/guarded-delete-dialog";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  CategoryArchiveButton,
-  CreateCategoryForm,
-  EditCategoryButton,
-} from "@/features/catalog/catalog-forms";
+import { CategoryManagementWorkspace } from "@/features/catalog/category-management-workspace";
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
@@ -43,75 +27,21 @@ export default async function CategoriesPage() {
         eyebrow="Catalog setup"
         title="Categories"
         description="Group products so your team can find them quickly while selling."
-        action={canManage ? <CreateCategoryForm /> : undefined}
       />
 
-      {categories.length > 0 ? (
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {categories.map((category) => (
-            <Card className={category.is_archived ? "opacity-65" : undefined} key={category.id}>
-              <CardHeader className="flex-row items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span
-                    className="grid size-10 shrink-0 place-items-center rounded-lg text-white"
-                    style={{ backgroundColor: category.color ?? "#0f766e" }}
-                  >
-                    <Shapes className="size-5" aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0">
-                    <CardTitle className="truncate">{category.name}</CardTitle>
-                    <CardDescription className="mt-1">
-                      Order {category.sort_order}
-                    </CardDescription>
-                  </div>
-                </div>
-                <Badge variant={category.is_archived ? "outline" : "secondary"}>
-                  {category.is_archived ? "Archived" : "Active"}
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="min-h-10 text-sm leading-5 text-muted-foreground">
-                  {category.description || "No description added."}
-                </p>
-                {canManage ? (
-                  <div className="flex flex-wrap justify-end gap-1 border-t pt-3">
-                    <EditCategoryButton
-                      category={{
-                        id: category.id,
-                        name: category.name,
-                        description: category.description,
-                        icon: category.icon as "shapes" | "cup-soda" | "utensils" | "shirt" | "smartphone" | "package",
-                        color: category.color,
-                        sortOrder: category.sort_order,
-                      }}
-                    />
-                    <CategoryArchiveButton
-                      categoryId={category.id}
-                      isArchived={category.is_archived}
-                    />
-                    {category.is_archived ? (
-                      <GuardedDeleteDialog
-                        recordId={category.id}
-                        recordName={category.name}
-                        recordType="category"
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          ))}
-        </section>
-      ) : (
-        <BackOfficeStateCard
-          action={canManage ? <CreateCategoryForm /> : null}
-          description="Add the first category when the organization is ready."
-          icon={
-            <Archive className="size-8 text-muted-foreground" aria-hidden="true" />
-          }
-          title="No categories yet"
-        />
-      )}
+      <CategoryManagementWorkspace
+        canManage={canManage}
+        categories={categories.map((category) => ({
+          id: category.id,
+          name: category.name,
+          description: category.description,
+          icon: category.icon as "shapes" | "cup-soda" | "utensils" | "shirt" | "smartphone" | "package",
+          color: category.color,
+          sortOrder: category.sort_order,
+          isArchived: category.is_archived,
+        }))}
+        preferenceScope={context.organization.id}
+      />
     </div>
   );
 }

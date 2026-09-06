@@ -104,6 +104,7 @@ export default async function TimeClockPage({
             storeId={storeScope.selectedStoreId}
             stores={workspace.stores}
             toDate={parameters.end}
+            timezone={context.organization.timezone}
           />
 
           {workspace.entries.length > 0 ? (

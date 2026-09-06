@@ -283,6 +283,7 @@ export async function ShiftWorkspacePage({
             storeId={storeScope.selectedStoreId}
             stores={await loadAuthorizedBackOfficeStores(context)}
             toDate={searchParams.end}
+            timezone={context.organization.timezone}
           />
         ) : null}
         canClose={canClose}

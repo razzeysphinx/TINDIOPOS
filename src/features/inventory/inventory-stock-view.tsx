@@ -1,11 +1,12 @@
 "use client";
 
-import { Grid2X2, List, LoaderCircle, Printer, Search, SlidersHorizontal } from "lucide-react";
+import { LoaderCircle, Printer, Search, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { ContextHelp } from "@/components/back-office/context-help";
+import { GridListViewToggle } from "@/components/back-office/view-toggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -347,14 +348,7 @@ export function InventoryStockView({
             {isPrinting ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Printer aria-hidden="true" />}
             {isPrinting ? "Opening print dialog…" : "Print current view"}
           </Button>
-          <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-1" aria-label="Stock layout">
-          <Button aria-label="List view" aria-pressed={layout === "list"} onClick={() => updateLayout("list")} size="icon-sm" type="button" variant={layout === "list" ? "secondary" : "ghost"}>
-            <List aria-hidden="true" />
-          </Button>
-          <Button aria-label="Grid view" aria-pressed={layout === "grid"} onClick={() => updateLayout("grid")} size="icon-sm" type="button" variant={layout === "grid" ? "secondary" : "ghost"}>
-            <Grid2X2 aria-hidden="true" />
-          </Button>
-          </div>
+          <GridListViewToggle onChange={updateLayout} value={layout} />
         </div>
       </div>
 

@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useBackOfficeFilterNavigation } from "@/components/back-office/back-office-filter-navigation";
+import { DateRangePicker } from "@/components/back-office/date-range-picker";
 import { Label } from "@/components/ui/label";
 import type {
   DashboardComparisonKey,
@@ -21,6 +21,7 @@ export function DashboardFilterForm({
   startDate,
   storeId,
   stores,
+  timezone,
 }: {
   allowAllStores: boolean;
   comparison: DashboardComparisonKey;
@@ -29,16 +30,32 @@ export function DashboardFilterForm({
   startDate: string;
   storeId: string | null;
   stores: Array<{ id: string; name: string }>;
+  timezone: string;
 }) {
   const [selectedPeriod, setSelectedPeriod] = useState<DashboardPeriodKey>(period);
+  const { isPending, updateFilters } = useBackOfficeFilterNavigation("/back-office");
+
+  const updatePeriod = (nextPeriod: DashboardPeriodKey) => {
+    setSelectedPeriod(nextPeriod);
+    // Selecting Custom only opens its date-range control. No query is made
+    // until the user finishes their custom range with Done.
+    if (nextPeriod === "custom") return;
+    updateFilters({ end: null, period: nextPeriod, start: null });
+  };
 
   return (
     <section aria-label="Dashboard scope" className="rounded-xl border bg-card p-3 shadow-sm">
-      <form action="/back-office" className="grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end" method="get">
+      <div className="grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
         {stores.length > 0 ? (
           <div className="grid min-w-0 gap-1.5 lg:min-w-44">
             <Label htmlFor="dashboard-store">Store</Label>
-            <select className={selectClassName} defaultValue={storeId ?? ""} id="dashboard-store" name="store">
+            <select
+              className={selectClassName}
+              defaultValue={storeId ?? ""}
+              id="dashboard-store"
+              name="store"
+              onChange={(event) => updateFilters({ store: event.target.value })}
+            >
               {allowAllStores ? <option value="">All stores</option> : null}
               {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
             </select>
@@ -50,7 +67,7 @@ export function DashboardFilterForm({
             className={selectClassName}
             id="dashboard-period"
             name="period"
-            onChange={(event) => setSelectedPeriod(event.target.value as DashboardPeriodKey)}
+            onChange={(event) => updatePeriod(event.target.value as DashboardPeriodKey)}
             value={selectedPeriod}
           >
             <option value="today">Today</option>
@@ -64,25 +81,23 @@ export function DashboardFilterForm({
         </div>
         <div className="grid min-w-0 gap-1.5 lg:min-w-48">
           <Label htmlFor="dashboard-comparison">Compare</Label>
-          <select className={selectClassName} defaultValue={comparison} id="dashboard-comparison" name="compare">
+          <select className={selectClassName} defaultValue={comparison} id="dashboard-comparison" name="compare" onChange={(event) => updateFilters({ compare: event.target.value })}>
             <option value="previous">Previous equivalent period</option>
             <option value="none">No comparison</option>
           </select>
         </div>
         {selectedPeriod === "custom" ? (
-          <>
-            <div className="grid min-w-0 gap-1.5 lg:min-w-40">
-              <Label htmlFor="dashboard-start">From date</Label>
-              <Input defaultValue={startDate} id="dashboard-start" name="start" type="date" />
-            </div>
-            <div className="grid min-w-0 gap-1.5 lg:min-w-40">
-              <Label htmlFor="dashboard-end">To date</Label>
-              <Input defaultValue={endDate} id="dashboard-end" name="end" type="date" />
-            </div>
-          </>
+          <DateRangePicker
+            key={`${startDate}:${endDate}`}
+            endDate={endDate}
+            id="dashboard-date-range"
+            onCommit={({ end, start }) => updateFilters({ end, period: "custom", start })}
+            startDate={startDate}
+            timezone={timezone}
+          />
         ) : null}
-        <Button className="sm:col-span-2 sm:w-auto" type="submit">Apply</Button>
-      </form>
+      </div>
+      <p aria-live="polite" className="sr-only">{isPending ? "Updating dashboard" : ""}</p>
     </section>
   );
 }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
+import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -356,7 +357,7 @@ export async function InventoryWorkspacePage({
     : null;
 
   if (activityFrom) recentMovementsQuery?.gte("created_at", `${activityFrom}T00:00:00.000Z`);
-  if (activityTo) recentMovementsQuery?.lt("created_at", `${activityTo}T23:59:59.999Z`);
+  if (activityTo) recentMovementsQuery?.lte("created_at", `${activityTo}T23:59:59.999Z`);
   if (activityMovementType) recentMovementsQuery?.eq("movement_type", activityMovementType);
   const inventoryCountsQuery = canCount && ["overview", "health", "counts"].includes(activeTab)
     ? supabase
@@ -1636,14 +1637,27 @@ export async function InventoryWorkspacePage({
           </div>
 
           {!selectedDetailLevel ? (
-            <form action="/back-office/inventory" className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3" method="get">
-              <input name="tab" type="hidden" value="activity" />
-              <label className="grid gap-1 text-sm font-medium"><span>From</span><input className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm" defaultValue={activityFrom ?? ""} name="from" type="date" /></label>
-              <label className="grid gap-1 text-sm font-medium"><span>To</span><input className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm" defaultValue={activityTo ?? ""} name="to" type="date" /></label>
-              <label className="grid gap-1 text-sm font-medium"><span>Store</span><select className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm" defaultValue={storeScope.selectedStoreId ?? ""} name="store"><option value="">All authorized stores</option>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label>
-              <label className="grid gap-1 text-sm font-medium"><span>Document type</span><select className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm" defaultValue={activityMovementType ?? ""} name="movementType"><option value="">All activity</option>{MOVEMENT_TYPES.map((movementType) => <option key={movementType} value={movementType}>{movementType.replaceAll("_", " ")}</option>)}</select></label>
-              <button className="h-8 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground" type="submit">Apply</button>
-            </form>
+            <GlobalFilterBar
+              action="/back-office/inventory"
+              dateEndName="to"
+              dateStartName="from"
+              fromDate={activityFrom ?? undefined}
+              hiddenFields={{ tab: "activity" }}
+              namePrefix="inventory-activity-filter"
+              primaryAdditionalFields={(
+                <label className="grid min-w-0 gap-1.5 text-sm font-medium lg:min-w-44 lg:flex-none">
+                  Document type
+                  <select className="h-8 min-w-0 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" defaultValue={activityMovementType ?? ""} name="movementType">
+                    <option value="">All activity</option>
+                    {MOVEMENT_TYPES.map((movementType) => <option key={movementType} value={movementType}>{movementType.replaceAll("_", " ")}</option>)}
+                  </select>
+                </label>
+              )}
+              storeId={storeScope.selectedStoreId}
+              stores={stores}
+              timezone={context.organization.timezone}
+              toDate={activityTo ?? undefined}
+            />
           ) : null}
 
           {activityRows.length > 0 ? (

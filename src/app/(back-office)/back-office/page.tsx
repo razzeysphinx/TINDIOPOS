@@ -143,6 +143,7 @@ export default async function BackOfficePage({
         showDescription
       />
       <DashboardFilterForm
+        key={dashboardQueryString(period, selectedStoreId)}
         allowAllStores={hasOrganizationScope}
         comparison={period.comparison}
         endDate={period.filter.endDate}
@@ -150,6 +151,7 @@ export default async function BackOfficePage({
         startDate={period.filter.startDate}
         storeId={selectedStoreId}
         stores={stores}
+        timezone={context.organization.timezone}
       />
       <Suspense fallback={<DashboardSectionsLoading />} key={dashboardQueryString(period, selectedStoreId)}>
         <DashboardSections

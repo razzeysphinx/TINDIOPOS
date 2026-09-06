@@ -82,6 +82,7 @@ export default async function ReportsPage({
         showExports
         stores={stores}
         section={section}
+        timezone={context.organization.timezone}
       />
       <ReportingOverview
         currencyCode={context.organization.currency_code}

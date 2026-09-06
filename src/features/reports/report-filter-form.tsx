@@ -10,6 +10,7 @@ export function ReportFilterForm({
   showExports = false,
   allowAllStores = true,
   section,
+  timezone,
 }: {
   action: string;
   filter: ReportFilter;
@@ -17,6 +18,7 @@ export function ReportFilterForm({
   showExports?: boolean;
   allowAllStores?: boolean;
   section?: BusinessReportSection;
+  timezone: string;
 }) {
   const query = new URLSearchParams({ start: filter.startDate, end: filter.endDate });
   if (filter.storeId) query.set("store", filter.storeId);
@@ -35,6 +37,7 @@ export function ReportFilterForm({
       trailing={showExports ? (
         <ReportExportActions exportQuery={exportQuery} section={section} />
       ) : undefined}
+      timezone={timezone}
     />
   );
 }

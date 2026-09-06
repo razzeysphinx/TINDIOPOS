@@ -1845,7 +1845,7 @@ function PosDeviceConfigurationState({
         <h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em]">{loading ? "Checking this POS device" : "This device cannot use POS"}</h1>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">{message}</p>
         <p className="mt-4 text-sm font-medium">{organizationName} · {employeeName}</p>
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">Ask an owner or admin to register this browser from Back Office → POS devices, or to check whether its assigned register was changed or revoked.</p>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">Ask an owner or admin to register this browser from Back Office → POS Devices, or to check whether its assigned register was changed or revoked.</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           {canAccessBackOffice ? (
             <Button nativeButton={false} render={<Link href="/back-office" />}>

@@ -13,7 +13,7 @@ import type {
 } from "@/features/management/management-types";
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
-export const metadata = { title: "Roles and access" };
+export const metadata = { title: "Roles & Access" };
 
 export default async function RolesPage() {
   const context = await requireBackOfficePermission("roles.manage");
@@ -32,16 +32,9 @@ export default async function RolesPage() {
     <div className="space-y-8">
       <PageHeader
         eyebrow="Team"
-        title="Roles & access"
-        description="Choose what each person mainly does, then review the access included with that role. Access is still protected when someone opens a page or performs an action."
-        action={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Badge variant={canManage ? "secondary" : "outline"}>
-              {canManage ? "Management access" : "View access"}
-            </Badge>
-            {canManage ? <CreateRoleForm permissions={grantablePermissions} /> : null}
-          </div>
-        }
+        title="Roles & Access"
+        description="Choose what each role can do and review the permissions included with it."
+        action={canManage ? <CreateRoleForm permissions={grantablePermissions} /> : undefined}
       />
 
       <RoleGroup

@@ -138,9 +138,9 @@ export default async function BackOfficePage({
     <div className="space-y-5">
       <PageHeader
         eyebrow="Back Office"
-        title={`Good to see you, ${context.profile.full_name.split(" ")[0] || "there"}.`}
+        title="Dashboard"
         description={`${context.organization.name} · ${selectedStoreName} · ${period.periodLabel}`}
-        action={<Badge variant="secondary">{hasOrganizationScope ? "Organization dashboard" : "Assigned-store dashboard"}</Badge>}
+        showDescription
       />
       <DashboardFilterForm
         allowAllStores={hasOrganizationScope}

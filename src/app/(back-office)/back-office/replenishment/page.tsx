@@ -23,7 +23,7 @@ import { resolveBackOfficeStoreScope } from "@/lib/server/back-office-store-scop
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata = { title: "Restock items" };
+export const metadata = { title: "Stock & Restock" };
 
 const STOCK_RESTOCK_TABS: readonly StockRestockTab[] = ["levels", "needs-restocking", "requests"];
 
@@ -329,13 +329,12 @@ export default async function ReplenishmentPage({
       <PageHeader
         eyebrow="Inventory"
         title="Stock & Restock"
-        description="Review recorded stock, then plan replenishment without changing on-hand quantity until a controlled receiving or transfer step is completed."
+        description="Review stock levels and identify replenishment needs."
         breadcrumbs={[
           { href: "/back-office", label: "Back Office" },
           { href: "/back-office/inventory", label: "Inventory" },
           { label: "Stock & Restock" },
         ]}
-        action={<Badge variant={canManage ? "secondary" : "outline"}>{canManage ? "Inventory management" : "Stock levels"}</Badge>}
       />
       <InventoryWorkspaceNavigation activeTab={activeTab} canManage={canManage} storeId={storeScope.selectedStoreId} workspace="restock" />
       {activeTab === "levels" ? (

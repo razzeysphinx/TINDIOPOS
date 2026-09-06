@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
 import { PageHeader } from "@/components/back-office/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ReceiptListQuickView } from "@/features/receipts/receipt-list-quick-view";
@@ -74,7 +73,6 @@ export default async function ReceiptsPage({
           eyebrow="Sales"
           title="Receipts"
           description="Your role does not include access to completed transaction history."
-          action={<Badge variant="outline">No receipt access</Badge>}
         />
         <BackOfficeStateCard
           description="Ask an owner to add the receipts.view permission to one of your roles."
@@ -248,8 +246,7 @@ export default async function ReceiptsPage({
       <PageHeader
         eyebrow="Sales"
         title="Receipts"
-        description="Review completed transactions by authorized branch, register, cashier, payment method, and receipt number."
-        action={<Badge variant="secondary">Receipt access</Badge>}
+        description="Review completed transactions by store, register, cashier, payment method, and receipt number."
       />
 
       <Card>

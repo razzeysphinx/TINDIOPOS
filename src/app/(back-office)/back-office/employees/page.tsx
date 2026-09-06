@@ -79,7 +79,7 @@ export default async function EmployeesPage({
       <PageHeader
         eyebrow="Team"
         title="Employees"
-        description="Invite your team, choose what they can do, and select the stores where they can work."
+        description="Invite your team, assign roles, and choose the stores where they can work."
         action={canManage && grantableRoles.length > 0 && activeStores.length > 0 ? (
           <CreateInvitationForm roles={grantableRoles} stores={activeStores} />
         ) : undefined}

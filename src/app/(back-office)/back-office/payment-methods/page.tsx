@@ -1,10 +1,9 @@
 import { PageHeader } from "@/components/back-office/page-header";
-import { Badge } from "@/components/ui/badge";
 import { CreatePaymentMethodDialog, PaymentMethodsManager } from "@/features/payments/payment-methods-manager";
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata = { title: "Payment methods" };
+export const metadata = { title: "Payment Methods" };
 
 export default async function PaymentMethodsPage() {
   const context = await requireBackOfficePermission("settings.manage");
@@ -65,17 +64,10 @@ export default async function PaymentMethodsPage() {
     <div className="space-y-8">
       <PageHeader
         eyebrow="Settings"
-        title="Payment methods"
+        title="Payment Methods"
         description="Choose how customers can pay in the POS, then select the stores that accept each method. Past sales and reports stay unchanged."
         action={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Badge variant={canManage ? "secondary" : "outline"}>
-              {canManage ? "Settings access" : "View access"}
-            </Badge>
-            {canManage ? (
-              <CreatePaymentMethodDialog stores={stores.filter((store) => store.isActive)} />
-            ) : null}
-          </div>
+          canManage ? <CreatePaymentMethodDialog stores={stores.filter((store) => store.isActive)} /> : undefined
         }
       />
       <PaymentMethodsManager canManage={canManage} methods={methods} stores={stores} />

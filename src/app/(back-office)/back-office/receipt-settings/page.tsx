@@ -1,11 +1,10 @@
 import { PageHeader } from "@/components/back-office/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReceiptSettingsManager } from "@/features/receipts/receipt-settings-manager";
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata = { title: "Receipt settings" };
+export const metadata = { title: "Receipt Settings" };
 
 export default async function ReceiptSettingsPage() {
   const context = await requireBackOfficePermission("settings.manage");
@@ -16,9 +15,8 @@ export default async function ReceiptSettingsPage() {
       <div className="space-y-8">
         <PageHeader
           eyebrow="Settings"
-          title="Receipt settings"
+          title="Receipt Settings"
           description="Receipt details can be changed only by people who manage business settings."
-          action={<Badge variant="outline">No settings access</Badge>}
         />
         <Card>
           <CardHeader>
@@ -46,9 +44,8 @@ export default async function ReceiptSettingsPage() {
     <div className="space-y-8">
       <PageHeader
         eyebrow="Settings"
-        title="Receipt settings"
+        title="Receipt Settings"
         description="Choose the business details and print layout used on new receipts. Completed receipts keep the information saved at the time of sale."
-        action={<Badge variant="secondary">Settings access</Badge>}
       />
       <ReceiptSettingsManager
         canManage={canManage}

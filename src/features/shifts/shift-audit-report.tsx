@@ -79,7 +79,7 @@ export function ShiftAuditReportView({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Link className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground" href="/back-office/shifts">
-            <ArrowLeft aria-hidden="true" className="size-4" /> Shift reports
+            <ArrowLeft aria-hidden="true" className="size-4" /> Shift Reports
           </Link>
           <p className="mt-4 text-xs font-semibold tracking-[0.12em] text-primary uppercase">Shift-close audit</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-[-0.03em]">{report.shift.number}</h1>

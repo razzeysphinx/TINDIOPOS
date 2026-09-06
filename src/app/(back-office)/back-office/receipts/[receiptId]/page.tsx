@@ -38,6 +38,7 @@ export default async function ReceiptDetailPage({
     <div className="space-y-8">
       <PageHeader
         eyebrow="Sales · Receipt"
+        showTitle
         title={`Receipt #${detail.receipt.number}`}
         description="This receipt is rendered from immutable sale, payment, and refund snapshots."
         action={

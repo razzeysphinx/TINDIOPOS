@@ -84,7 +84,7 @@ export function InventoryWorkspaceNavigation({
   const visiblePurchasingItems = purchasingItems.filter(() => canManage);
   const restockNavigationItems = restockItems.filter((item) => canManage || item.id === "levels");
   const title = workspace === "control"
-    ? "Inventory Control sections"
+    ? "Stock Control sections"
     : workspace === "restock"
       ? "Stock & Restock sections"
       : "Purchasing sections";

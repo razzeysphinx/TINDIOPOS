@@ -149,6 +149,7 @@ export function AdvancedInventoryWorkflows({
   initialPurchasingSection = "orders",
   initialReceiptOrderId,
   receivingHref,
+  showHeader = true,
   showPurchasingTabs = true,
   sections = ALL_ADVANCED_INVENTORY_SECTIONS,
 }: {
@@ -165,6 +166,8 @@ export function AdvancedInventoryWorkflows({
   /** Keeps a contextual PO → Receiving handoff in the canonical query-driven workspace. */
   initialReceiptOrderId?: string | null;
   receivingHref?: string;
+  /** The parent workspace already supplies the H1 and purpose when embedded. */
+  showHeader?: boolean;
   /** The shared Inventory navigation owns the top-level purchasing destinations. */
   showPurchasingTabs?: boolean;
   sections?: readonly AdvancedInventorySection[];
@@ -421,15 +424,19 @@ export function AdvancedInventoryWorkflows({
   }
 
   return (
-    <section className="space-y-4" aria-labelledby="advanced-inventory-title">
-      <div>
+    <section
+      aria-label={showHeader ? undefined : "Purchasing operations"}
+      aria-labelledby={showHeader ? "advanced-inventory-title" : undefined}
+      className="space-y-4"
+    >
+      {showHeader ? <div>
         <h2 className="text-lg font-semibold" id="advanced-inventory-title">
           {title}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {description}
         </p>
-      </div>
+      </div> : null}
 
       {/* CANDIDATE_FOR_REMOVAL: retained as the component's standalone fallback; the shared Inventory navigation now owns these destinations. */}
       {showPurchasing && showPurchasingTabs ? (

@@ -41,7 +41,7 @@ export default async function StoresRegistersPage({
       <PageHeader
         eyebrow="Management"
         title="Stores & Registers"
-        description="Start with a store, then review the selling stations that belong to it. Shift and cash details remain available only where your access allows."
+        description="Manage store locations and the registers assigned to them."
         action={(
           <div className="flex flex-wrap gap-2">
             {canManageStores ? <CreateStoreForm /> : null}

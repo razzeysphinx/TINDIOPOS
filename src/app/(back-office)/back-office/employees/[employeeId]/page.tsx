@@ -37,7 +37,7 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
   return (
     <div className="space-y-8">
       <Button nativeButton={false} render={<Link href="/back-office/employees" />} size="sm" variant="ghost"><ArrowLeft />Employees</Button>
-      <PageHeader eyebrow="Team" title={employee.fullName} description={`${employee.employeeNumber} · ${employee.jobTitle || "No job title"}`} action={<Badge variant={employee.status === "active" ? "secondary" : "outline"}>{employee.status}</Badge>} />
+      <PageHeader eyebrow="Team" title={employee.fullName} description={`${employee.employeeNumber} · ${employee.jobTitle || "No job title"}`} action={<Badge variant={employee.status === "active" ? "secondary" : "outline"}>{employee.status}</Badge>} showDescription showTitle />
 
       <div className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2"><CardHeader><CardTitle>Overview</CardTitle></CardHeader><CardContent className="space-y-5">

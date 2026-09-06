@@ -1,9 +1,7 @@
-import { CloudUpload } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 
 import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
 import { PageHeader } from "@/components/back-office/page-header";
-import { Badge } from "@/components/ui/badge";
 import {
   OfflineSyncCenter,
   type OfflineSyncEventItem,
@@ -15,7 +13,7 @@ import {
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata = { title: "Offline sync" };
+export const metadata = { title: "Offline Sync" };
 
 export default async function OfflineSyncPage({
   searchParams,
@@ -63,9 +61,8 @@ export default async function OfflineSyncPage({
     <div className="space-y-8">
       <PageHeader
         eyebrow="POS resilience"
-        title="Offline sync center"
-        description="Check sales that were recorded while offline. If one needs attention, fix the device issue first, then retry it from the same POS device."
-        action={<Badge variant="secondary"><CloudUpload /> Device manager</Badge>}
+        title="Offline Sync"
+        description="Review offline sales synchronization and resolve conflicts that need attention."
       />
       <GlobalFilterBar action="/back-office/offline-sync" namePrefix="offline-sync-filter" showDateRange={false} storeId={scope.selectedStoreId} stores={stores} />
       <OfflineSyncCenter events={events} />

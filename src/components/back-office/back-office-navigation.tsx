@@ -87,13 +87,13 @@ const navigationGroups: NavigationGroup[] = [
         // category, employee, payment, discount, tax, and inventory views.
         // Keep one permission-gated destination instead of duplicating the
         // same reporting surface in the sidebar.
-        label: "Business reports",
+        label: "Business Reports",
         icon: BarChart3,
         isVisible: (access) => access.canViewReports === true,
       },
       {
         href: "/back-office/shifts",
-        label: "Shift reports",
+        label: "Shift Reports",
         icon: CircleDollarSign,
         isVisible: (access) => access.canViewShiftHistory === true,
       },
@@ -107,7 +107,7 @@ const navigationGroups: NavigationGroup[] = [
         href: "/back-office/receipts",
         // Returns are reviewed and actioned from the immutable receipt
         // record, so a separate link would only duplicate this destination.
-        label: "Receipts & returns",
+        label: "Receipts",
         breadcrumbLabel: "Receipts",
         icon: ReceiptText,
         isVisible: (access) => access.canViewReceipts === true,
@@ -132,7 +132,7 @@ const navigationGroups: NavigationGroup[] = [
     icon: PackageSearch,
     label: "Catalog",
     items: [
-      { href: "/back-office/catalog", label: "Products", breadcrumbLabel: "Catalog", icon: PackageSearch, isVisible: (access) => access.canManageCatalog === true },
+      { href: "/back-office/catalog", label: "Catalog", icon: PackageSearch, isVisible: (access) => access.canManageCatalog === true },
       { href: "/back-office/categories", label: "Categories", icon: Shapes, isVisible: (access) => access.canManageCatalog === true },
     ],
   },
@@ -142,8 +142,7 @@ const navigationGroups: NavigationGroup[] = [
     items: [
       {
         href: "/back-office/inventory",
-        label: "Inventory Control",
-        breadcrumbLabel: "Inventory",
+        label: "Stock Control",
         icon: Warehouse,
         isVisible: (access) => access.canUseInventory === true,
       },
@@ -167,7 +166,7 @@ const navigationGroups: NavigationGroup[] = [
     items: [
       {
         href: "/back-office/customers",
-        label: "Customers & loyalty",
+        label: "Customers & Loyalty",
         icon: Users,
         isVisible: (access) => access.canManageCustomers === true,
       },
@@ -178,16 +177,16 @@ const navigationGroups: NavigationGroup[] = [
     label: "Team",
     items: [
       { href: "/back-office/employees", label: "Employees", icon: Users, isVisible: (access) => access.canManageEmployees === true },
-      { href: "/back-office/roles", label: "Roles & access", icon: ShieldCheck, isVisible: (access) => access.canManageRoles === true },
+      { href: "/back-office/roles", label: "Roles & Access", icon: ShieldCheck, isVisible: (access) => access.canManageRoles === true },
       {
         href: "/back-office/time-clock",
-        label: "Time & attendance",
+        label: "Time & Attendance",
         icon: Clock3,
         isVisible: (access) => access.canUseTimeClock === true,
       },
       {
         href: "/back-office/security",
-        label: "Security & approvals",
+        label: "Approvals & Audit",
         icon: ShieldCheck,
         isVisible: (access) => access.canUseApprovals === true,
       },
@@ -205,13 +204,13 @@ const navigationGroups: NavigationGroup[] = [
       },
       {
         href: "/back-office/devices",
-        label: "POS devices",
+        label: "POS Devices",
         icon: MonitorSmartphone,
         isVisible: (access) => access.canManageDevices === true,
       },
       {
         href: "/back-office/offline-sync",
-        label: "Offline sync",
+        label: "Offline Sync",
         icon: CloudUpload,
         isVisible: (access) => access.canManageDevices === true,
       },
@@ -254,6 +253,14 @@ const navigationGroups: NavigationGroup[] = [
     ],
   },
 ];
+
+// These legacy management routes remain supported for bookmarked links. They
+// intentionally do not become duplicate sidebar destinations, but the shared
+// application header must still identify them accurately.
+const supplementalPageTitles: Record<string, string> = {
+  "/back-office/registers": "Registers",
+  "/back-office/stores": "Stores",
+};
 
 function routePathname(href: string) {
   return href.split("?", 1)[0] || href;
@@ -312,6 +319,9 @@ export function getBackOfficeBreadcrumbs(
 }
 
 export function getBackOfficePageTitle(pathname: string) {
+  const supplementalTitle = supplementalPageTitles[pathname];
+  if (supplementalTitle) return supplementalTitle;
+
   const navigationItems = [...primaryNavigation, ...navigationGroups.flatMap((group) => group.items)]
     .sort((first, second) => second.href.length - first.href.length);
 

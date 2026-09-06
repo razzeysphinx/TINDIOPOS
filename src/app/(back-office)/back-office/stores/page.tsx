@@ -22,6 +22,11 @@ export default async function StoresPage() {
         eyebrow="Management"
         title="Stores"
         description="Manage the places where you sell. Each store can have its own registers, team access, and stock."
+        breadcrumbs={[
+          { href: "/back-office", label: "Back Office" },
+          { label: "Management" },
+          { label: "Stores" },
+        ]}
         action={canManage && context.features.multi_store ? <CreateStoreForm /> : undefined}
       />
 

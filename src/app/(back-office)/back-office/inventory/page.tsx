@@ -48,7 +48,7 @@ import type { TableRow } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
-export const metadata = { title: "Inventory" };
+export const metadata = { title: "Stock Control" };
 
 const INVENTORY_CONTROL_TABS: readonly { id: InventoryControlTab; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -290,7 +290,7 @@ export async function InventoryWorkspacePage({
           action={<Badge variant="outline">Feature disabled</Badge>}
           description="Historical inventory records remain protected, but inventory workflows are currently disabled for this business."
           eyebrow="Inventory"
-          title="Inventory"
+          title="Stock Control"
         />
         <BackOfficeStateCard
           description="An owner or administrator can enable it in Business profile & features."
@@ -1052,7 +1052,7 @@ export async function InventoryWorkspacePage({
     : [
         { href: "/back-office", label: "Back Office" },
         { href: inventoryTabHref("overview"), label: "Inventory" },
-        { label: controlSectionLabels[activeTab as InventoryControlTab] ?? "Inventory Control" },
+        { label: controlSectionLabels[activeTab as InventoryControlTab] ?? "Stock Control" },
       ];
   const stockLevelsHref = (status?: InventoryStockStatus) =>
     `/back-office/replenishment?tab=levels${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}${status && status !== "all" ? `&status=${status}` : ""}`;
@@ -1293,16 +1293,11 @@ export async function InventoryWorkspacePage({
     <div className="space-y-8">
       <PageHeader
         eyebrow={workspace === "purchasing" ? "Purchasing" : "Stock control"}
-        title={workspace === "purchasing" ? "Purchasing" : "Inventory Control"}
+        title={workspace === "purchasing" ? "Purchasing" : "Stock Control"}
         description={workspace === "purchasing"
-          ? "Manage suppliers, purchase orders, deliveries, and procurement costs. Purchase orders record buying intent; only receiving changes stock."
-          : "See what you have, what needs restocking, and why your stock quantity changed."}
+          ? "Manage suppliers, purchase orders, receiving, and supplier returns."
+          : "See stock health, investigate changes, and manage controlled stock operations."}
         breadcrumbs={breadcrumbs}
-        action={
-          <Badge variant={canManage ? "secondary" : "outline"}>
-            {canManage ? workspace === "purchasing" ? "Purchasing access" : "Stock management" : "Level view"}
-          </Badge>
-        }
       />
 
       <InventoryWorkspaceNavigation
@@ -1416,6 +1411,7 @@ export async function InventoryWorkspacePage({
           initialReceiptOrderId={requestedPurchaseOrderId}
           initialPurchasingSection={activeTab === "receiving" ? "receiving" : activeTab === "suppliers" ? "suppliers" : "orders"}
           receivingHref={purchasingTabHref("receiving")}
+          showHeader={false}
           showPurchasingTabs={false}
           sections={["purchasing"]}
           />

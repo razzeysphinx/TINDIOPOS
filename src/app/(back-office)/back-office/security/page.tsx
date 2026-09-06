@@ -25,7 +25,7 @@ const operationLabels: Record<(typeof supportedOperations)[number], string> = {
   "inventory.adjust": "Inventory adjustment",
 };
 
-export const metadata = { title: "Security & approvals" };
+export const metadata = { title: "Approvals & Audit" };
 
 export default async function SecurityPage({
   searchParams,
@@ -68,9 +68,8 @@ export default async function SecurityPage({
     <div className="space-y-8">
       <PageHeader
         eyebrow="Security"
-        title="Approvals & audit"
-        description="High-risk operations can be authorized once by a qualified manager and remain traceable after completion."
-        action={<Badge variant={canManageRules ? "secondary" : "outline"}>{canManageRules ? "Rule management" : "Approval history"}</Badge>}
+        title="Approvals & Audit"
+        description="Configure approval rules and review high-risk operational accountability."
       />
       <GlobalFilterBar action="/back-office/security" namePrefix="security-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={stores} />
 

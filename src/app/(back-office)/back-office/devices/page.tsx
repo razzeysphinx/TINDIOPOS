@@ -1,9 +1,7 @@
-import { Laptop } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 
 import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
 import { PageHeader } from "@/components/back-office/page-header";
-import { Badge } from "@/components/ui/badge";
 import { DeviceManager } from "@/features/devices/device-manager";
 import {
   loadAuthorizedBackOfficeStores,
@@ -12,7 +10,7 @@ import {
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata = { title: "POS devices" };
+export const metadata = { title: "POS Devices" };
 
 type PosDeviceRow = {
   id: string;
@@ -65,5 +63,20 @@ export default async function DevicesPage({
   const registers = (registersResult.data ?? []).filter((register) => !selectedStoreId || register.store_id === selectedStoreId);
   const devices = (devicesResult.data ?? []).filter((device) => !selectedStoreId || device.store_id === selectedStoreId);
 
-  return <div className="space-y-8"><PageHeader eyebrow="Management" title="POS devices" description="Connect each POS browser or application to its register, check when it was last used, and remove it if the device should no longer have access." action={<Badge variant="secondary"><Laptop /> Device security</Badge>} /><GlobalFilterBar action="/back-office/devices" namePrefix="device-filter" showDateRange={false} storeId={selectedStoreId} stores={filterStores} /><DeviceManager devices={devices.map((device) => ({ id: device.id, name: device.name, storeId: device.store_id, registerId: device.register_id, status: device.status, appVersion: device.app_version, lastSeenAt: device.last_seen_at, createdAt: device.created_at, revokedAt: device.revoked_at }))} organizationId={context.organization.id} registers={registers.map((register) => ({ id: register.id, storeId: register.store_id, name: register.name, code: register.code }))} stores={stores} /></div>;
+  return (
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Management"
+        title="POS Devices"
+        description="Connect devices to registers and manage their access."
+      />
+      <GlobalFilterBar action="/back-office/devices" namePrefix="device-filter" showDateRange={false} storeId={selectedStoreId} stores={filterStores} />
+      <DeviceManager
+        devices={devices.map((device) => ({ id: device.id, name: device.name, storeId: device.store_id, registerId: device.register_id, status: device.status, appVersion: device.app_version, lastSeenAt: device.last_seen_at, createdAt: device.created_at, revokedAt: device.revoked_at }))}
+        organizationId={context.organization.id}
+        registers={registers.map((register) => ({ id: register.id, storeId: register.store_id, name: register.name, code: register.code }))}
+        stores={stores}
+      />
+    </div>
+  );
 }

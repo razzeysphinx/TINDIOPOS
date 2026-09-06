@@ -1,7 +1,4 @@
-import { MenuSquare } from "lucide-react";
-
 import { PageHeader } from "@/components/back-office/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadSmartMenuWorkspace } from "@/features/smart-menu/data";
 import { SmartMenuManager } from "@/features/smart-menu/smart-menu-manager";
@@ -20,7 +17,6 @@ export default async function SmartMenuPage() {
           eyebrow="Customer menu"
           title="Smart Menu"
           description="A settings manager can configure the customer-facing, view-only menu for each active store."
-          action={<Badge variant="outline">No settings access</Badge>}
         />
         <Card>
           <CardHeader>
@@ -40,7 +36,6 @@ export default async function SmartMenuPage() {
         eyebrow="Customer menu"
         title="Smart Menu"
         description="Publish a view-only customer menu from the current store catalog. Product changes remain managed in Catalog."
-        action={<Badge variant="secondary"><MenuSquare aria-hidden="true" /> Settings access</Badge>}
       />
       <SmartMenuManager {...workspace} />
     </div>

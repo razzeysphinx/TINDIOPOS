@@ -41,6 +41,7 @@
     "test:smart-menu-builder": "node --test scripts/smart-menu-builder-check.mjs",
     "test:discounts-and-taxes": "node --test scripts/discounts-and-taxes-rename-check.mjs",
     "test:business-reports-workspace": "node --test scripts/business-reports-workspace-check.mjs",
+    "test:back-office-header-naming": "node --test scripts/back-office-header-naming-check.mjs",
     "test:shift-audit-report": "node scripts/shift-audit-report-check.mjs",
     "test:receipt-refund-discoverability": "node scripts/receipt-refund-discoverability-check.mjs",
     "test:receipt-quick-view": "node --test scripts/receipt-quick-view-check.mjs",

@@ -19,7 +19,7 @@ import { ReportingOverview } from "@/features/reports/reporting-overview";
 import { resolveBusinessReportSection } from "@/features/reports/report-sections";
 import { requireBackOfficePermission } from "@/lib/auth/dal";
 
-export const metadata = { title: "Reports" };
+export const metadata = { title: "Business Reports" };
 
 export default async function ReportsPage({
   searchParams,
@@ -72,8 +72,7 @@ export default async function ReportsPage({
         description={hasOrganizationScope
           ? "Understand sales, products, stock, operations, customers, team performance, and accountability for the selected period."
           : "Understand sales, products, stock, operations, customers, team performance, and accountability for your assigned stores."}
-        action={<Badge variant="secondary">{hasOrganizationScope ? "Organization reports" : "Assigned-store reports"}</Badge>}
-        breadcrumbs={[{ href: "/back-office", label: "Back Office" }, { label: "Reports" }, { label: "Business reports" }]}
+        breadcrumbs={[{ href: "/back-office", label: "Back Office" }, { label: "Reports" }, { label: "Business Reports" }]}
       />
       <BusinessReportsNavigation activeSection={section} filterQuery={reportQueryString(filter)} />
       <ReportFilterForm

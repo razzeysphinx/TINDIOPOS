@@ -9,7 +9,7 @@ import { CreateCustomerForm, CustomerSegmentForm, LoyaltyProgramForm } from "@/f
 import { loadCustomersOverview } from "@/features/customers/data";
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
-export const metadata = { title: "Customers" };
+export const metadata = { title: "Customers & Loyalty" };
 
 export default async function CustomersPage() {
   const context = await requireBackOfficePermission("customers.manage");
@@ -20,10 +20,9 @@ export default async function CustomersPage() {
     return (
       <div className="space-y-8">
         <PageHeader
-          action={<Badge variant="outline">No CRM access</Badge>}
           description="Customer records and loyalty histories are available to authorized managers."
           eyebrow="CRM"
-          title="Customers"
+          title="Customers & Loyalty"
         />
         <BackOfficeStateCard
           description="Ask an owner or authorized administrator to give your role customer-management access."
@@ -48,7 +47,7 @@ export default async function CustomersPage() {
         }
         description="Keep customer details in one place, manage loyalty, and review completed purchases."
         eyebrow="CRM"
-        title="Customers & loyalty"
+        title="Customers & Loyalty"
       />
 
       <CustomerSegmentForm segments={overview.segments} />

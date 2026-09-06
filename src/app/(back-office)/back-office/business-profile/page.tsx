@@ -1,14 +1,11 @@
-import { Settings2 } from "lucide-react";
-
 import { PageHeader } from "@/components/back-office/page-header";
-import { Badge } from "@/components/ui/badge";
 import { BusinessProfileManager } from "@/features/business-profile/business-profile-manager";
 import { BackupRecoveryManager } from "@/features/organization-recovery/backup-recovery-manager";
 import { loadOrganizationRecoverySnapshot } from "@/features/organization-recovery/data";
 import { TenantReadinessManager } from "@/features/organization-readiness/tenant-readiness-manager";
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 
-export const metadata = { title: "Business profile" };
+export const metadata = { title: "Business Profile" };
 
 export default async function BusinessProfilePage() {
   const context = await requireBackOfficePermission([
@@ -28,7 +25,6 @@ export default async function BusinessProfilePage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        action={<Badge variant={canManage ? "secondary" : "outline"}><Settings2 aria-hidden="true" />{canManage ? "Settings access" : "View access"}</Badge>}
         description="Review your business type and optional tools. Changes affect future use only; your existing records stay intact."
         eyebrow="Organization settings"
         title="Business profile & features"

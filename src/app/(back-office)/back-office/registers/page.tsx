@@ -47,6 +47,11 @@ export default async function RegistersPage({
         eyebrow="Management"
         title="Registers"
         description="Set up each selling station your team uses. A register belongs to one store and is used to open shifts and record sales."
+        breadcrumbs={[
+          { href: "/back-office", label: "Back Office" },
+          { label: "Management" },
+          { label: "Registers" },
+        ]}
         action={canManage && activeStores.length > 0 ? <CreateRegisterForm stores={activeStores} /> : undefined}
       />
       <GlobalFilterBar action="/back-office/registers" namePrefix="register-filter" showDateRange={false} storeId={storeScope.selectedStoreId} stores={authorizedStores} />

@@ -12,7 +12,7 @@ import { loadTimeAttendanceWorkspace } from "@/features/time-clock/data";
 import { resolveBackOfficeStoreScope } from "@/lib/server/back-office-store-scope";
 import { requireBackOfficePermission } from "@/lib/auth/dal";
 
-export const metadata = { title: "Time & attendance" };
+export const metadata = { title: "Time & Attendance" };
 
 function formatDateTime(value: string, timezone: string) {
   return new Intl.DateTimeFormat("en-PH", {
@@ -45,7 +45,7 @@ export default async function TimeClockPage({
           action={<Badge variant="outline">Feature disabled</Badge>}
           description="Attendance records are retained, but this workflow is currently disabled for the business."
           eyebrow="Team"
-          title="Time & attendance"
+          title="Time & Attendance"
         />
         <BackOfficeStateCard
           description="An owner or administrator can enable Time clock in Business profile & features."
@@ -70,8 +70,8 @@ export default async function TimeClockPage({
     <div className="space-y-8">
       <PageHeader
         eyebrow="Team"
-        title="Time & attendance"
-        description="Review employee timecards and attendance status. Attendance remains separate from register shifts and cash accountability."
+        title="Time & Attendance"
+        description="Review employee timecards and attendance status."
         action={<Badge variant={workspace.clockedInCount > 0 ? "secondary" : "outline"}><Clock3 aria-hidden="true" />{workspace.clockedInCount} clocked in</Badge>}
       />
 

@@ -45,6 +45,8 @@ export default async function CustomerDetailPage({
         action={<Badge variant={customer.status === "active" ? "secondary" : "outline"}>Customer #{customer.customerNumber.toLocaleString()} Â· {customer.status}</Badge>}
         description={customer.phone ?? customer.email ?? "No contact details have been recorded."}
         eyebrow="Customer profile"
+        showDescription
+        showTitle
         title={customer.fullName}
       />
 

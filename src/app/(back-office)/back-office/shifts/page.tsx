@@ -13,7 +13,7 @@ import {
 import { hasPermission, requireBackOfficePermission, requireBusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata = { title: "Shift reports" };
+export const metadata = { title: "Shift Reports" };
 
 const SHIFT_PERMISSIONS = ["shifts.open", "shifts.close", "cash.pay_in", "cash.pay_out"] as const;
 
@@ -46,7 +46,6 @@ export async function ShiftWorkspacePage({
           eyebrow="Cash control"
           title="Register shifts"
           description="Open drawers, record cash movements, and close against a counted amount."
-          action={<Badge variant="outline">No shift access</Badge>}
         />
         <Card>
           <CardHeader>
@@ -264,11 +263,11 @@ export async function ShiftWorkspacePage({
     <div className="space-y-8">
       <PageHeader
         eyebrow="Cash control"
-        title={isOperationsMode ? "Shift controls" : "Shift reports"}
+        title={isOperationsMode ? "Shift Controls" : "Shift Reports"}
         description={
           isOperationsMode
             ? "Open drawers, record cash movements, and close against a counted amount."
-            : "Review closed shifts, cash reconciliation, and drawer differences across your authorized stores and registers."
+            : "Review closed shifts, cash reconciliation, and drawer differences."
         }
         action={isOperationsMode ? <Badge variant="secondary"><CircleDollarSign aria-hidden="true" />{openShifts.length} open</Badge> : undefined}
       />

@@ -117,9 +117,9 @@ export default async function ReplenishmentPage({
       ? supabase.from("stock_request_lines").select("id, stock_request_id, product_name_snapshot, variant_name_snapshot, unit_snapshot, requested_quantity, approved_quantity, picked_quantity, dispatched_quantity, received_quantity, short_quantity").eq("organization_id", organizationId).in("stock_request_id", requestIds)
       : Promise.resolve({ data: [], error: null }),
     requestIds.length
-      ? supabase.from("stock_transfers").select("id, stock_request_id, destination_store_id, status").eq("organization_id", organizationId).in("stock_request_id", requestIds)
+      ? supabase.from("stock_transfers").select("id, stock_request_id, destination_store_id, status, transfer_number").eq("organization_id", organizationId).in("stock_request_id", requestIds)
       : Promise.resolve({ data: [], error: null }),
-    supabase.from("stock_transfers").select("id, stock_request_id, destination_store_id, status").eq("organization_id", organizationId).in("status", ["in_transit", "partially_received"]),
+    supabase.from("stock_transfers").select("id, stock_request_id, destination_store_id, status, transfer_number").eq("organization_id", organizationId).in("status", ["in_transit", "partially_received"]),
     purchaseOrderIds.length
       ? supabase.from("purchase_order_lines").select("purchase_order_id, ordered_quantity, received_quantity").eq("organization_id", organizationId).in("purchase_order_id", purchaseOrderIds)
       : Promise.resolve({ data: [], error: null }),
@@ -228,7 +228,7 @@ export default async function ReplenishmentPage({
     };
   });
 
-  const transferByRequestId = new Map(stockTransfers.flatMap((transfer) => transfer.stock_request_id ? [[transfer.stock_request_id, transfer.id] as const] : []));
+  const transferByRequestId = new Map(stockTransfers.flatMap((transfer) => transfer.stock_request_id ? [[transfer.stock_request_id, transfer] as const] : []));
   const transferLineByRequestLineId = new Map((stockTransferLinesResult.data ?? []).flatMap((line) => line.stock_request_line_id ? [[line.stock_request_line_id, line.id] as const] : []));
   const discrepanciesByRequestLine = new Map<string, Array<{ note: string; quantity: number; reportedAt: string }>>();
   for (const discrepancy of discrepanciesResult.data ?? []) {
@@ -245,6 +245,7 @@ export default async function ReplenishmentPage({
   const supplyChainRequests: SupplyChainRequest[] = requests.map((request) => ({
     id: request.id,
     requestNumber: Number(request.request_number),
+    transferNumber: transferByRequestId.get(request.id)?.transfer_number ? Number(transferByRequestId.get(request.id)?.transfer_number) : null,
     status: request.status as SupplyChainRequest["status"],
     requestingStoreName: storeNames.get(request.requesting_store_id) ?? "Inactive store",
     warehouseName: warehouseNames.get(request.source_warehouse_id) ?? "Unavailable warehouse",

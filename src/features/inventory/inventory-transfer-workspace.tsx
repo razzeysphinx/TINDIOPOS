@@ -48,7 +48,7 @@ export function InventoryTransferWorkspace({
           <div>
             <p className="font-medium">Transfers awaiting receipt</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Complete or partially receive shipped transfers below. Destination balances remain unchanged until receipt.
+              Complete or partially receive shipped transfers in Restock items. Destination balances remain unchanged until receipt.
             </p>
           </div>
           <Badge variant={awaitingReceiptCount ? "secondary" : "outline"}>

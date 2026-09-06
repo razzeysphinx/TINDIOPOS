@@ -1067,28 +1067,34 @@ export type Database = {
         Row: {
           id: string
           note: string | null
+          operation_id: string
           organization_id: string
           purchase_order_id: string
           received_at: string
           received_by_employee_id: string
+          receipt_number: number
           store_id: string
         }
         Insert: {
           id?: string
           note?: string | null
+          operation_id: string
           organization_id: string
           purchase_order_id: string
           received_at?: string
           received_by_employee_id: string
+          receipt_number: number
           store_id: string
         }
         Update: {
           id?: string
           note?: string | null
+          operation_id?: string
           organization_id?: string
           purchase_order_id?: string
           received_at?: string
           received_by_employee_id?: string
+          receipt_number?: number
           store_id?: string
         }
         Relationships: [
@@ -1166,7 +1172,9 @@ export type Database = {
           created_at: string
           created_by_employee_id: string
           id: string
+          import_batch_id: string | null
           note: string | null
+          operation_id: string
           organization_id: string
           product_id: string
           quantity_delta: number
@@ -1179,7 +1187,9 @@ export type Database = {
           created_at?: string
           created_by_employee_id: string
           id?: string
+          import_batch_id?: string | null
           note?: string | null
+          operation_id: string
           organization_id: string
           product_id: string
           quantity_delta: number
@@ -1192,7 +1202,9 @@ export type Database = {
           created_at?: string
           created_by_employee_id?: string
           id?: string
+          import_batch_id?: string | null
           note?: string | null
+          operation_id?: string
           organization_id?: string
           product_id?: string
           quantity_delta?: number
@@ -1200,12 +1212,79 @@ export type Database = {
           store_id?: string
           variant_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "inventory_adjustments_import_batch_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_adjustment_import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_adjustment_import_batches: {
+        Row: {
+          created_at: string
+          created_by_employee_id: string
+          id: string
+          item_count: number
+          operation_id: string
+          organization_id: string
+          payload_fingerprint: string
+          reason_code: string
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by_employee_id: string
+          id?: string
+          item_count: number
+          operation_id: string
+          organization_id: string
+          payload_fingerprint: string
+          reason_code: string
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by_employee_id?: string
+          id?: string
+          item_count?: number
+          operation_id?: string
+          organization_id?: string
+          payload_fingerprint?: string
+          reason_code?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_adjustment_import_batches_created_by_employee_organization_fkey"
+            columns: ["created_by_employee_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "inventory_adjustment_import_batches_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_adjustment_import_batches_store_organization_fkey"
+            columns: ["store_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
       }
       inventory_count_lines: {
         Row: {
           barcode_snapshot: string | null
           category_name_snapshot: string
+          counted_at: string | null
           counted_quantity: number | null
           expected_quantity: number
           id: string
@@ -1214,6 +1293,7 @@ export type Database = {
           organization_id: string
           product_id: string
           product_name_snapshot: string
+          reconciled_expected_quantity: number | null
           sku_snapshot: string | null
           unit_snapshot: string
           variant_id: string | null
@@ -1222,6 +1302,7 @@ export type Database = {
         Insert: {
           barcode_snapshot?: string | null
           category_name_snapshot: string
+          counted_at?: string | null
           counted_quantity?: number | null
           expected_quantity: number
           id?: string
@@ -1230,6 +1311,7 @@ export type Database = {
           organization_id: string
           product_id: string
           product_name_snapshot: string
+          reconciled_expected_quantity?: number | null
           sku_snapshot?: string | null
           unit_snapshot: string
           variant_id?: string | null
@@ -1238,6 +1320,7 @@ export type Database = {
         Update: {
           barcode_snapshot?: string | null
           category_name_snapshot?: string
+          counted_at?: string | null
           counted_quantity?: number | null
           expected_quantity?: number
           id?: string
@@ -1246,6 +1329,7 @@ export type Database = {
           organization_id?: string
           product_id?: string
           product_name_snapshot?: string
+          reconciled_expected_quantity?: number | null
           sku_snapshot?: string | null
           unit_snapshot?: string
           variant_id?: string | null
@@ -1432,6 +1516,7 @@ export type Database = {
           created_at: string
           id: string
           movement_type: string
+          operation_id: string
           organization_id: string
           product_id: string
           quantity_after: number
@@ -1443,6 +1528,7 @@ export type Database = {
           source_type: string | null
           store_id: string
           unit_cost_minor: number
+          unit_snapshot: string
           value_delta_minor: number
           variant_id: string | null
         }
@@ -1451,6 +1537,7 @@ export type Database = {
           created_at?: string
           id?: string
           movement_type: string
+          operation_id: string
           organization_id: string
           product_id: string
           quantity_after: number
@@ -1462,6 +1549,7 @@ export type Database = {
           source_type?: string | null
           store_id: string
           unit_cost_minor?: number
+          unit_snapshot: string
           value_delta_minor?: number
           variant_id?: string | null
         }
@@ -1470,6 +1558,7 @@ export type Database = {
           created_at?: string
           id?: string
           movement_type?: string
+          operation_id?: string
           organization_id?: string
           product_id?: string
           quantity_after?: number
@@ -1481,6 +1570,7 @@ export type Database = {
           source_type?: string | null
           store_id?: string
           unit_cost_minor?: number
+          unit_snapshot?: string
           value_delta_minor?: number
           variant_id?: string | null
         }
@@ -2141,6 +2231,7 @@ export type Database = {
           entry_type: string
           id: string
           note: string | null
+          operation_id: string
           organization_id: string
           points_delta: number
           refund_id: string | null
@@ -2152,6 +2243,7 @@ export type Database = {
           entry_type: string
           id?: string
           note?: string | null
+          operation_id: string
           organization_id: string
           points_delta: number
           refund_id?: string | null
@@ -2163,6 +2255,7 @@ export type Database = {
           entry_type?: string
           id?: string
           note?: string | null
+          operation_id?: string
           organization_id?: string
           points_delta?: number
           refund_id?: string | null
@@ -3519,6 +3612,8 @@ export type Database = {
           organization_id: string
           product_id: string
           product_name_snapshot: string
+          purchase_unit_code_snapshot: string
+          purchase_unit_factor_to_base: number
           purchase_order_id: string
           received_quantity: number
           unit_cost_minor: number
@@ -3532,6 +3627,8 @@ export type Database = {
           organization_id: string
           product_id: string
           product_name_snapshot: string
+          purchase_unit_code_snapshot: string
+          purchase_unit_factor_to_base: number
           purchase_order_id: string
           received_quantity?: number
           unit_cost_minor?: number
@@ -3545,6 +3642,8 @@ export type Database = {
           organization_id?: string
           product_id?: string
           product_name_snapshot?: string
+          purchase_unit_code_snapshot?: string
+          purchase_unit_factor_to_base?: number
           purchase_order_id?: string
           received_quantity?: number
           unit_cost_minor?: number
@@ -3583,11 +3682,13 @@ export type Database = {
           expected_at: string | null
           id: string
           notes: string | null
+          operation_id: string
           order_number: number
           ordered_at: string | null
           organization_id: string
           received_at: string | null
           received_by_employee_id: string | null
+          requested_expected_at: string | null
           status: string
           store_id: string
           supplier_id: string
@@ -3599,11 +3700,13 @@ export type Database = {
           expected_at?: string | null
           id?: string
           notes?: string | null
+          operation_id: string
           order_number: number
           ordered_at?: string | null
           organization_id: string
           received_at?: string | null
           received_by_employee_id?: string | null
+          requested_expected_at?: string | null
           status?: string
           store_id: string
           supplier_id: string
@@ -3615,11 +3718,13 @@ export type Database = {
           expected_at?: string | null
           id?: string
           notes?: string | null
+          operation_id?: string
           order_number?: number
           ordered_at?: string | null
           organization_id?: string
           received_at?: string | null
           received_by_employee_id?: string | null
+          requested_expected_at?: string | null
           status?: string
           store_id?: string
           supplier_id?: string
@@ -4971,6 +5076,7 @@ export type Database = {
           dispatched_by_employee_id: string | null
           id: string
           note: string | null
+          operation_id: string
           organization_id: string
           picked_at: string | null
           picked_by_employee_id: string | null
@@ -4994,6 +5100,7 @@ export type Database = {
           dispatched_by_employee_id?: string | null
           id?: string
           note?: string | null
+          operation_id: string
           organization_id: string
           picked_at?: string | null
           picked_by_employee_id?: string | null
@@ -5017,6 +5124,7 @@ export type Database = {
           dispatched_by_employee_id?: string | null
           id?: string
           note?: string | null
+          operation_id?: string
           organization_id?: string
           picked_at?: string | null
           picked_by_employee_id?: string | null
@@ -5208,7 +5316,10 @@ export type Database = {
           destination_store_id: string
           id: string
           note: string | null
+          operation_id: string
+          operation_payload: Json
           organization_id: string
+          receipt_number: number
           received_at: string
           received_by_employee_id: string
           stock_transfer_id: string
@@ -5217,7 +5328,10 @@ export type Database = {
           destination_store_id: string
           id?: string
           note?: string | null
+          operation_id: string
+          operation_payload: Json
           organization_id: string
+          receipt_number: number
           received_at?: string
           received_by_employee_id: string
           stock_transfer_id: string
@@ -5226,7 +5340,10 @@ export type Database = {
           destination_store_id?: string
           id?: string
           note?: string | null
+          operation_id?: string
+          operation_payload?: Json
           organization_id?: string
+          receipt_number?: number
           received_at?: string
           received_by_employee_id?: string
           stock_transfer_id?: string
@@ -5268,12 +5385,14 @@ export type Database = {
           destination_store_id: string
           id: string
           note: string | null
+          operation_id: string
           organization_id: string
           received_at: string | null
           received_by_employee_id: string | null
           source_store_id: string
           status: string
           stock_request_id: string | null
+          transfer_number: number
           transferred_by_employee_id: string
         }
         Insert: {
@@ -5281,12 +5400,14 @@ export type Database = {
           destination_store_id: string
           id?: string
           note?: string | null
+          operation_id: string
           organization_id: string
           received_at?: string | null
           received_by_employee_id?: string | null
           source_store_id: string
           status?: string
           stock_request_id?: string | null
+          transfer_number: number
           transferred_by_employee_id: string
         }
         Update: {
@@ -5294,12 +5415,14 @@ export type Database = {
           destination_store_id?: string
           id?: string
           note?: string | null
+          operation_id?: string
           organization_id?: string
           received_at?: string | null
           received_by_employee_id?: string | null
           source_store_id?: string
           status?: string
           stock_request_id?: string | null
+          transfer_number?: number
           transferred_by_employee_id?: string
         }
         Relationships: [
@@ -6264,6 +6387,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      cancel_purchase_order: {
+        Args: {
+          target_note: string
+          target_organization_id: string
+          target_purchase_order_id: string
+        }
+        Returns: string
+      }
       complete_organization_export: {
         Args: {
           target_export_session_id: string
@@ -6399,6 +6530,7 @@ export type Database = {
           target_expected_at: string
           target_lines: Json
           target_notes: string
+          target_operation_id: string
           target_organization_id: string
           target_store_id: string
           target_supplier_id: string
@@ -6409,6 +6541,7 @@ export type Database = {
         Args: {
           target_lines: Json
           target_note: string
+          target_operation_id: string
           target_organization_id: string
           target_requesting_store_id: string
           target_source_warehouse_id: string
@@ -6460,6 +6593,7 @@ export type Database = {
       dispatch_stock_request: {
         Args: {
           target_note: string
+          target_operation_id: string
           target_organization_id: string
           target_stock_request_id: string
         }
@@ -6824,6 +6958,8 @@ export type Database = {
       }
       import_inventory_adjustments_csv: {
         Args: {
+          target_approval_request_id?: string | null
+          target_operation_id: string
           target_organization_id: string
           target_reason_code: string
           target_rows: Json
@@ -6948,6 +7084,7 @@ export type Database = {
         Args: {
           target_lines: Json
           target_note: string
+          target_operation_id: string
           target_organization_id: string
           target_purchase_order_id: string
         }
@@ -6957,6 +7094,7 @@ export type Database = {
         Args: {
           target_lines: Json
           target_note: string
+          target_operation_id: string
           target_organization_id: string
           target_stock_request_id: string
         }
@@ -6966,6 +7104,7 @@ export type Database = {
         Args: {
           target_lines: Json
           target_note: string
+          target_operation_id: string
           target_organization_id: string
           target_stock_transfer_id: string
         }
@@ -6986,6 +7125,20 @@ export type Database = {
           created_at: string
           was_replayed: boolean
         }[]
+      }
+      record_inventory_adjustment: {
+        Args: {
+          target_approval_request_id?: string | null
+          target_note: string
+          target_operation_id: string
+          target_organization_id: string
+          target_product_id: string
+          target_quantity_delta: number
+          target_reason_code: string
+          target_store_id: string
+          target_variant_id: string | null
+        }
+        Returns: string
       }
       record_inventory_adjustment_v2: {
         Args: {

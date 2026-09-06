@@ -6,7 +6,9 @@ const source = await readFile(new URL("../src/features/inventory/inventory-integ
 
 test("each inventory integrity mutation owns an action-specific transition", () => {
   const actionStates = [
-    ["isPolicyPending", "startPolicyTransition"],
+    ["isDefaultPolicyPending", "startDefaultPolicyTransition"],
+    ["isOverridePolicyPending", "startOverridePolicyTransition"],
+    ["isRemoveOverridePending", "startRemoveOverrideTransition"],
     ["isReasonPending", "startReasonTransition"],
     ["isAdjustmentPending", "startAdjustmentTransition"],
     ["isTransferPending", "startTransferTransition"],
@@ -21,9 +23,11 @@ test("each inventory integrity mutation owns an action-specific transition", () 
   assert.doesNotMatch(source, /const \[isPending, startTransition\] = useTransition\(\);/);
 });
 
-test("safeguard and adjustment-reason forms do not share a loading state", () => {
-  assert.match(source, /<form className="space-y-3" onSubmit=\{submitPolicy\} noValidate>/);
-  assert.match(source, /<SubmitRow pending=\{isPolicyPending\} pendingLabel="Saving safeguard\.\.\." result=\{policyResult\} label="Save safeguard"/);
+test("stock-policy and adjustment-reason forms do not share a loading state", () => {
+  assert.match(source, /<form className="rounded-xl border bg-muted\/20 p-4" onSubmit=\{submitDefaultPolicy\} noValidate>/);
+  assert.match(source, /<Button disabled=\{isDefaultPolicyPending\} type="submit">\{isDefaultPolicyPending \? <>\s*<LoaderCircle className="animate-spin" \/>Saving default\.\.\.<\/> :/);
+  assert.match(source, /<form className="grid gap-3 rounded-xl border border-dashed p-4 md:grid-cols-\[minmax\(0,1fr\)_minmax\(0,1fr\)_auto\] md:items-end" onSubmit=\{submitOverridePolicy\} noValidate>/);
+  assert.match(source, /<Button disabled=\{isOverridePolicyPending\} type="submit">\{isOverridePolicyPending \? <>\s*<LoaderCircle className="animate-spin" \/>Saving override\.\.\.<\/> :/);
   assert.match(source, /<form className="grid gap-3 sm:grid-cols-2" onSubmit=\{submitReason\} noValidate>/);
   assert.match(source, /<Button disabled=\{isReasonPending\} type="submit">\{isReasonPending \? <><LoaderCircle/);
   assert.match(source, /Adding reason\.\.\./);

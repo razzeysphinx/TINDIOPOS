@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(49);
+select plan(50);
 
 select has_table('public', 'inventory_policies', 'inventory policies table exists');
 select has_table('public', 'inventory_adjustment_reasons', 'inventory adjustment reasons table exists');
@@ -35,12 +35,13 @@ select has_column('public', 'sale_items', 'cogs_minor', 'sale items retain immut
 select ok(to_regprocedure('public.update_inventory_policy(uuid,uuid,text)') is not null, 'negative-stock policy routine exists');
 select ok(to_regprocedure('public.create_inventory_adjustment_reason(uuid,text,text,text)') is not null, 'adjustment reason routine exists');
 select ok(to_regprocedure('public.record_inventory_adjustment_v2(uuid,uuid,uuid,uuid,numeric,text,text)') is not null, 'controlled adjustment routine exists');
-select ok(to_regprocedure('public.ship_stock_transfer(uuid,uuid,uuid,jsonb,text)') is not null, 'in-transit transfer shipping routine exists');
-select ok(to_regprocedure('public.receive_stock_transfer(uuid,uuid,jsonb,text)') is not null, 'partial transfer receiving routine exists');
+select ok(to_regprocedure('public.ship_stock_transfer(uuid,uuid,uuid,jsonb,text)') is not null, 'legacy immediate-shipment routine is retained for migration compatibility');
+select ok(to_regprocedure('public.receive_stock_transfer(uuid,uuid,jsonb,text,uuid)') is not null, 'idempotent legacy transfer-receipt routine exists');
 select ok(to_regprocedure('public.return_to_supplier(uuid,uuid,uuid,jsonb,text)') is not null, 'supplier return routine exists');
 select ok(to_regprocedure('public.produce_composite(uuid,uuid,uuid,numeric,text)') is not null, 'composite production routine exists');
 select ok(to_regprocedure('public.get_inventory_valuation(uuid)') is not null, 'inventory valuation routine exists');
 select ok(not has_function_privilege('anon', 'public.ship_stock_transfer(uuid,uuid,uuid,jsonb,text)', 'execute'), 'anonymous callers cannot ship transfers');
+select ok(not has_function_privilege('authenticated', 'public.ship_stock_transfer(uuid,uuid,uuid,jsonb,text)', 'execute'), 'authenticated callers cannot bypass request approval with immediate shipment');
 select ok(not has_table_privilege('authenticated', 'public.inventory_policies', 'insert'), 'authenticated callers cannot insert stock policies directly');
 
 insert into auth.users (id, email, raw_user_meta_data)
@@ -101,14 +102,15 @@ grant select, insert, update on integrity_purchase_context to authenticated;
 insert into integrity_purchase_context (purchase_order_id)
 select public.create_purchase_order(
   context.organization_id, context.store_id, context.supplier_id, 'Integrity delivery', null,
-  jsonb_build_array(jsonb_build_object('product_id', context.product_id, 'variant_id', null, 'quantity', '10', 'unit_cost_minor', 1000))
+  jsonb_build_array(jsonb_build_object('product_id', context.product_id, 'variant_id', null, 'purchase_unit_code', 'each', 'quantity', '10', 'unit_cost_minor', 1000)),
+  gen_random_uuid()
 )
 from inventory_integrity_context context;
 update integrity_purchase_context
 set purchase_order_line_id = (select id from public.purchase_order_lines where purchase_order_id = integrity_purchase_context.purchase_order_id);
 select lives_ok(
   format(
-    $$select public.receive_purchase_order(%L, %L, %L::jsonb, 'Received')$$,
+    $$select public.receive_purchase_order(%L, %L, %L::jsonb, 'Received', gen_random_uuid())$$,
     (select organization_id from inventory_integrity_context),
     (select purchase_order_id from integrity_purchase_context),
     jsonb_build_array(jsonb_build_object('purchase_order_line_id', (select purchase_order_line_id from integrity_purchase_context), 'quantity', '10'))
@@ -126,20 +128,52 @@ select is(
   'receipt establishes weighted average cost through the authorized valuation read path'
 );
 
+-- Historic transfers remain receivable during the migration period. The fixture
+-- is created as the database owner because the legacy immediate-shipment RPC is
+-- deliberately unavailable to application roles.
+reset role;
+with transfer_fixture as (
+  insert into public.stock_transfers (
+    organization_id, transfer_number, operation_id, source_store_id, destination_store_id,
+    status, note, transferred_by_employee_id
+  )
+  select context.organization_id, nextval('private.tindio_stock_transfer_number_sequence'), gen_random_uuid(), context.store_id, context.destination_store_id,
+    'in_transit', 'Historic transfer fixture', employee.id
+  from inventory_integrity_context context
+  join public.employees employee on employee.organization_id = context.organization_id and employee.profile_id = '92929292-9292-4929-8929-929292929292'
+  returning id
+)
 update inventory_integrity_context
-set transfer_id = public.ship_stock_transfer(
-  organization_id, store_id, destination_store_id,
-  jsonb_build_array(jsonb_build_object('product_id', product_id, 'variant_id', null, 'quantity', '4')),
-  'Ship four'
-);
+set transfer_id = transfer_fixture.id
+from transfer_fixture;
+insert into public.stock_transfer_lines (
+  organization_id, stock_transfer_id, product_id, variant_id, quantity, unit_cost_minor
+)
+select context.organization_id, context.transfer_id, context.product_id, null, 4, 1000
+from inventory_integrity_context context;
 update inventory_integrity_context
 set transfer_line_id = (select id from public.stock_transfer_lines where stock_transfer_id = inventory_integrity_context.transfer_id);
-select is((select status from public.stock_transfers where id = (select transfer_id from inventory_integrity_context)), 'in_transit', 'shipping creates an in-transit transfer');
-select is((select quantity from public.inventory_levels where store_id = (select store_id from inventory_integrity_context) and product_id = (select product_id from inventory_integrity_context)), 6::numeric, 'shipping reduces source stock');
-select is((select quantity from public.inventory_levels where store_id = (select destination_store_id from inventory_integrity_context) and product_id = (select product_id from inventory_integrity_context)), 0::numeric, 'shipping does not increase destination stock yet');
+select private.apply_inventory_change_v2(
+  (select organization_id from inventory_integrity_context),
+  (select store_id from inventory_integrity_context),
+  (select product_id from inventory_integrity_context),
+  null,
+  -4,
+  'TRANSFER_OUT',
+  (select id from public.employees where organization_id = (select organization_id from inventory_integrity_context) and profile_id = '92929292-9292-4929-8929-929292929292'),
+  'Historic transfer fixture dispatched',
+  'stock_transfer',
+  (select transfer_id from inventory_integrity_context),
+  1000
+);
+set local role authenticated;
+set local request.jwt.claim.sub = '92929292-9292-4929-8929-929292929292';
+select is((select status from public.stock_transfers where id = (select transfer_id from inventory_integrity_context)), 'in_transit', 'historic fixture remains an in-transit transfer');
+select is((select quantity from public.inventory_levels where store_id = (select store_id from inventory_integrity_context) and product_id = (select product_id from inventory_integrity_context)), 6::numeric, 'historic transfer fixture reduces source stock through the ledger');
+select is((select quantity from public.inventory_levels where store_id = (select destination_store_id from inventory_integrity_context) and product_id = (select product_id from inventory_integrity_context)), 0::numeric, 'historic fixture does not increase destination stock yet');
 select lives_ok(
   format(
-    $$select public.receive_stock_transfer(%L, %L, %L::jsonb, 'Receive one')$$,
+    $$select public.receive_stock_transfer(%L, %L, %L::jsonb, 'Receive one', gen_random_uuid())$$,
     (select organization_id from inventory_integrity_context), (select transfer_id from inventory_integrity_context),
     jsonb_build_array(jsonb_build_object('stock_transfer_line_id', (select transfer_line_id from inventory_integrity_context), 'quantity', '1'))
   ),
@@ -149,7 +183,7 @@ select is((select status from public.stock_transfers where id = (select transfer
 select is((select quantity from public.inventory_levels where store_id = (select destination_store_id from inventory_integrity_context) and product_id = (select product_id from inventory_integrity_context)), 1::numeric, 'partial receipt increases only received destination stock');
 select lives_ok(
   format(
-    $$select public.receive_stock_transfer(%L, %L, %L::jsonb, 'Receive rest')$$,
+    $$select public.receive_stock_transfer(%L, %L, %L::jsonb, 'Receive rest', gen_random_uuid())$$,
     (select organization_id from inventory_integrity_context), (select transfer_id from inventory_integrity_context),
     jsonb_build_array(jsonb_build_object('stock_transfer_line_id', (select transfer_line_id from inventory_integrity_context), 'quantity', '3'))
   ),

@@ -6,6 +6,8 @@ const optionalUuid = z
     message: "Select a valid option.",
   });
 
+const operationId = z.uuid("Start the operation again and retry.");
+
 const quantity = z
   .string()
   .trim()
@@ -60,6 +62,7 @@ export const importSuppliersCsvSchema = z.object({
 
 export const createPurchaseOrderSchema = z
   .object({
+    operationId,
     storeId: z.uuid("Select a store."),
     supplierId: z.uuid("Select a supplier."),
     notes: z.string().trim().max(1000),
@@ -72,6 +75,10 @@ export const createPurchaseOrderSchema = z
     lines: z
       .array(
         saleableLine.extend({
+          purchaseUnitCode: z
+            .string()
+            .trim()
+            .regex(/^[A-Za-z0-9][A-Za-z0-9 _-]{0,23}$/, "Select a configured purchase unit."),
           quantity,
           unitCost,
         }),
@@ -91,6 +98,7 @@ export const createPurchaseOrderSchema = z
 
 export const receivePurchaseOrderSchema = z
   .object({
+    operationId,
     purchaseOrderId: z.uuid("Select a purchase order."),
     note: z.string().trim().max(500),
     lines: z
@@ -114,6 +122,11 @@ export const receivePurchaseOrderSchema = z
       });
     }
   });
+
+export const cancelPurchaseOrderSchema = z.object({
+  purchaseOrderId: z.uuid("Select a purchase order."),
+  note: z.string().trim().max(500),
+});
 
 export const completeInventoryCountSchema = z
   .object({
@@ -218,28 +231,33 @@ export const removeInventoryPolicyOverrideSchema = z.object({
 export const createAdjustmentReasonSchema = z.object({
   code: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9_]{1,39}$/, "Use 2–40 letters, numbers, or underscores."),
   name: z.string().trim().min(2, "Enter a reason name.").max(100),
-  movementType: z.enum(["ADJUSTMENT", "DAMAGE", "LOSS"]),
+  movementType: z.enum(["ADJUSTMENT", "DAMAGE", "LOSS", "OPENING_STOCK"]),
 });
 
 export const recordInventoryAdjustmentSchema = z.object({
+  operationId,
   storeId: z.uuid("Select a store."),
   reasonCode: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,39}$/, "Select an adjustment reason."),
   productId: z.uuid("Select an item."),
   variantId: optionalUuid,
   quantityDelta,
-  note: z.string().trim().max(500),
+  note: z.string().trim().min(2, "Explain why this stock is changing.").max(500),
+  approvalRequestId: z.uuid().nullable().optional(),
 });
 
 export const importInventoryAdjustmentsCsvSchema = z.object({
+  operationId,
   storeId: z.uuid("Select a store."),
   reasonCode: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,39}$/, "Select an adjustment reason."),
-  rows: z.array(z.object({ rowNumber: z.number().int().min(2), productId: z.uuid(), variantId: optionalUuid, quantityDelta, note: z.string().trim().max(500) })).min(1).max(500),
+  rows: z.array(z.object({ rowNumber: z.number().int().min(2), productId: z.uuid(), variantId: optionalUuid, quantityDelta, note: z.string().trim().min(2, "Each row needs an explanation.").max(500) })).min(1).max(500),
+  approvalRequestId: z.uuid().nullable().optional(),
 }).superRefine((value, context) => {
   if (!uniqueSaleableLines(value.rows)) context.addIssue({ code: "custom", path: ["rows"], message: "Each item can appear only once in an adjustment import." });
 });
 
 export const receiveStockTransferSchema = z
   .object({
+    operationId,
     stockTransferId: z.uuid("Select a transfer."),
     note: z.string().trim().max(500),
     lines: z

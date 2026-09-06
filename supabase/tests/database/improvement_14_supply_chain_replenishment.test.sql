@@ -26,12 +26,12 @@ select is(
 select ok(to_regprocedure('public.create_supply_chain_warehouse(uuid,uuid,text,text,text)') is not null, 'warehouse routine exists');
 select ok(to_regprocedure('public.update_supplier_lead_time(uuid,uuid,integer)') is not null, 'supplier lead-time routine exists');
 select ok(to_regprocedure('public.upsert_inventory_replenishment_rule(uuid,uuid,uuid,uuid,uuid,numeric,numeric)') is not null, 'replenishment-rule routine exists');
-select ok(to_regprocedure('public.create_stock_request(uuid,uuid,uuid,text,jsonb)') is not null, 'stock-request submission routine exists');
+select ok(to_regprocedure('public.create_stock_request(uuid,uuid,uuid,text,jsonb,uuid)') is not null, 'idempotent stock-request submission routine exists');
 select ok(to_regprocedure('public.approve_stock_request(uuid,uuid,jsonb)') is not null, 'stock-request approval routine exists');
 select ok(to_regprocedure('public.start_stock_request_picking(uuid,uuid)') is not null, 'stock-request picking routine exists');
-select ok(to_regprocedure('public.dispatch_stock_request(uuid,uuid,text)') is not null, 'stock-request dispatch routine exists');
-select ok(to_regprocedure('public.receive_stock_request(uuid,uuid,jsonb,text)') is not null, 'stock-request receiving routine exists');
-select ok(not has_function_privilege('anon', 'public.dispatch_stock_request(uuid,uuid,text)', 'execute'), 'anonymous callers cannot dispatch stock requests');
+select ok(to_regprocedure('public.dispatch_stock_request(uuid,uuid,text,uuid)') is not null, 'idempotent stock-request dispatch routine exists');
+select ok(to_regprocedure('public.receive_stock_request(uuid,uuid,jsonb,text,uuid)') is not null, 'idempotent stock-request receiving routine exists');
+select ok(not has_function_privilege('anon', 'public.dispatch_stock_request(uuid,uuid,text,uuid)', 'execute'), 'anonymous callers cannot dispatch stock requests');
 select ok(not has_table_privilege('authenticated', 'public.stock_requests', 'insert'), 'authenticated callers cannot insert requests directly');
 
 insert into auth.users (id, email, raw_user_meta_data)
@@ -99,7 +99,8 @@ select public.create_purchase_order(
   (select supplier_id from supply_chain_context),
   'Lead-time test purchase order',
   null,
-  jsonb_build_array(jsonb_build_object('product_id', (select product_id from supply_chain_context), 'variant_id', null, 'quantity', '1', 'unit_cost_minor', 1000))
+  jsonb_build_array(jsonb_build_object('product_id', (select product_id from supply_chain_context), 'variant_id', null, 'purchase_unit_code', 'each', 'quantity', '1', 'unit_cost_minor', 1000)),
+  gen_random_uuid()
 );
 select is(
   (select expected_at from public.purchase_orders where id = (select purchase_order_id from lead_time_purchase_context)),
@@ -120,7 +121,8 @@ select is((select target_stock from public.inventory_replenishment_rules), 10::n
 update supply_chain_context
 set request_id = public.create_stock_request(
   organization_id, destination_store_id, warehouse_id, 'Need branch replenishment',
-  jsonb_build_array(jsonb_build_object('product_id', product_id, 'variant_id', null, 'quantity', '10'))
+  jsonb_build_array(jsonb_build_object('product_id', product_id, 'variant_id', null, 'quantity', '10')),
+  gen_random_uuid()
 );
 update supply_chain_context
 set request_line_id = (select id from public.stock_request_lines where stock_request_id = supply_chain_context.request_id);
@@ -141,7 +143,7 @@ select public.start_stock_request_picking((select organization_id from supply_ch
 select is((select status from public.stock_requests where id = (select request_id from supply_chain_context)), 'picking', 'picking is an explicit intermediate state');
 
 update supply_chain_context
-set transfer_id = public.dispatch_stock_request(organization_id, request_id, 'Packed and handed to courier');
+set transfer_id = public.dispatch_stock_request(organization_id, request_id, 'Packed and handed to courier', gen_random_uuid());
 update supply_chain_context
 set transfer_line_id = (select id from public.stock_transfer_lines where stock_transfer_id = supply_chain_context.transfer_id);
 select is((select status from public.stock_requests where id = (select request_id from supply_chain_context)), 'dispatched', 'dispatch advances the request');
@@ -151,7 +153,7 @@ select is((select quantity from public.inventory_levels where store_id = (select
 
 select lives_ok(
   format(
-    $$select public.receive_stock_request(%L, %L, %L::jsonb, 'Nine received, one short')$$,
+    $$select public.receive_stock_request(%L, %L, %L::jsonb, 'Nine received, one short', gen_random_uuid())$$,
     (select organization_id from supply_chain_context), (select request_id from supply_chain_context),
     jsonb_build_array(jsonb_build_object('stock_transfer_line_id', (select transfer_line_id from supply_chain_context), 'received_quantity', '9', 'short_quantity', '1', 'discrepancy_note', 'One carton short in transit'))
   ),

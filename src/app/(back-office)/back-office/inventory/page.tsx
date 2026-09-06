@@ -221,7 +221,7 @@ export async function InventoryWorkspacePage({
   searchParams,
   workspace,
 }: InventoryWorkspacePageProps & { workspace: Extract<InventoryWorkspace, "control" | "purchasing"> }) {
-  const context = await requireBackOfficePermission(["inventory.view", "inventory.count", "inventory.manage"]);
+  const context = await requireBackOfficePermission(["inventory.view", "inventory.adjust", "inventory.count", "inventory.manage"]);
   const parameters = await searchParams;
   const rawRequestedTab = Array.isArray(parameters.tab) ? parameters.tab[0] : parameters.tab;
   if (rawRequestedTab === "stock") {
@@ -231,8 +231,9 @@ export async function InventoryWorkspacePage({
     redirect(`/back-office/replenishment?${query.toString()}`);
   }
   const canManage = hasPermission(context, "inventory.manage");
+  const canAdjust = hasPermission(context, "inventory.adjust") || canManage;
   const canCount = hasPermission(context, "inventory.count") || canManage;
-  const canViewInventory = hasPermission(context, "inventory.view") || canCount;
+  const canViewInventory = hasPermission(context, "inventory.view") || canAdjust || canCount;
   const selectedStore = parameters.store;
   const purchaseOrder = Array.isArray(parameters.purchaseOrder) ? parameters.purchaseOrder[0] : parameters.purchaseOrder;
   const legacyPurchasingTab = rawRequestedTab === "purchasing"
@@ -266,6 +267,7 @@ export async function InventoryWorkspacePage({
   const requestedTab = resolveInventoryTab(parameters.tab, workspace);
   const canOpenRequestedTab = canManage
     || (canViewInventory && ["overview", "health", "activity"].includes(requestedTab))
+    || (canAdjust && requestedTab === "adjustments")
     || (canCount && requestedTab === "counts");
   const activeTab = workspace === "purchasing" || canOpenRequestedTab ? requestedTab : "activity";
   // CANDIDATE_FOR_REMOVAL: retained while the legacy stock query parameter is
@@ -331,6 +333,15 @@ export async function InventoryWorkspacePage({
         .eq("organization_id", organizationId)
         .order("created_at", { ascending: false })
         .limit(30)
+      : null;
+  const productUnitsQuery = canManage
+    ? supabase
+        .from("product_units")
+        .select("product_id, unit_code, unit_name, factor_to_base, is_base, is_purchase_unit")
+        .eq("organization_id", organizationId)
+        .order("is_purchase_unit", { ascending: false })
+        .order("is_base", { ascending: false })
+        .order("unit_name", { ascending: true })
     : null;
   const inventoryPoliciesQuery = canManage
     ? supabase
@@ -396,6 +407,7 @@ export async function InventoryWorkspacePage({
     categoriesResult,
     productsResult,
     variantsResult,
+    productUnitsResult,
     settingsResult,
     levelsResult,
     valuationResult,
@@ -439,6 +451,7 @@ export async function InventoryWorkspacePage({
       .eq("organization_id", organizationId)
       .eq("is_active", true)
       .order("sort_order", { ascending: true }),
+    productUnitsQuery ?? Promise.resolve({ data: [], error: null }),
     settingsQuery,
     levelsQuery,
     valuationQuery,
@@ -474,7 +487,7 @@ export async function InventoryWorkspacePage({
     purchaseOrdersQuery ?? Promise.resolve({ data: [], error: null }),
     inventoryPoliciesQuery ?? Promise.resolve({ data: [], error: null }),
     inventoryPolicyDefaultsQuery ?? Promise.resolve({ data: [], error: null }),
-    canManage
+    canAdjust
       ? supabase
           .from("inventory_adjustment_reasons")
           .select("code, name, movement_type")
@@ -485,7 +498,7 @@ export async function InventoryWorkspacePage({
     canManage
       ? supabase
           .from("stock_transfers")
-          .select("id, source_store_id, destination_store_id, status, note")
+          .select("id, transfer_number, stock_request_id, source_store_id, destination_store_id, status, note")
           .eq("organization_id", organizationId)
           .in("status", ["in_transit", "partially_received"])
       : Promise.resolve({ data: [], error: null }),
@@ -520,6 +533,7 @@ export async function InventoryWorkspacePage({
     categoriesResult,
     productsResult,
     variantsResult,
+    productUnitsResult,
     settingsResult,
     levelsResult,
     valuationResult,
@@ -547,6 +561,7 @@ export async function InventoryWorkspacePage({
   const categories = categoriesResult.data ?? [];
   const products = productsResult.data ?? [];
   const variants = variantsResult.data ?? [];
+  const productUnits = productUnitsResult.data ?? [];
   const settings = (settingsResult.data ?? []).filter((setting) => visibleStore(setting.store_id));
   const levels = (levelsResult.data ?? []).filter((level) => visibleStore(level.store_id));
   const inventoryValuation = (valuationResult.data ?? []).filter((entry) => visibleStore(entry.store_id));
@@ -563,14 +578,14 @@ export async function InventoryWorkspacePage({
     purchaseOrderIds.length
       ? supabase
           .from("purchase_order_lines")
-          .select("id, purchase_order_id, product_id, variant_id, product_name_snapshot, variant_name_snapshot, unit_snapshot, ordered_quantity, received_quantity")
+          .select("id, purchase_order_id, product_id, variant_id, product_name_snapshot, variant_name_snapshot, unit_snapshot, purchase_unit_code_snapshot, purchase_unit_factor_to_base, ordered_quantity, received_quantity")
           .eq("organization_id", organizationId)
           .in("purchase_order_id", purchaseOrderIds)
       : Promise.resolve({ data: [], error: null }),
     purchaseOrderIds.length
       ? supabase
           .from("goods_receipts")
-          .select("id, purchase_order_id, store_id, note, received_at")
+          .select("id, receipt_number, purchase_order_id, store_id, note, received_at")
           .eq("organization_id", organizationId)
           .in("purchase_order_id", purchaseOrderIds)
           .order("received_at", { ascending: false })
@@ -579,7 +594,7 @@ export async function InventoryWorkspacePage({
     countIds.length
       ? supabase
           .from("inventory_count_lines")
-          .select("id, inventory_count_id, product_id, variant_id, expected_quantity, counted_quantity, product_name_snapshot, variant_name_snapshot, category_name_snapshot, sku_snapshot, barcode_snapshot, unit_snapshot, line_sort_order")
+          .select("id, inventory_count_id, product_id, variant_id, expected_quantity, reconciled_expected_quantity, counted_quantity, counted_at, product_name_snapshot, variant_name_snapshot, category_name_snapshot, sku_snapshot, barcode_snapshot, unit_snapshot, line_sort_order")
           .eq("organization_id", organizationId)
           .in("inventory_count_id", countIds)
           .order("line_sort_order", { ascending: true })
@@ -760,7 +775,7 @@ export async function InventoryWorkspacePage({
     canManage && goodsReceiptSourceIds.length
       ? supabase
           .from("goods_receipts")
-          .select("id, purchase_order_id")
+          .select("id, purchase_order_id, receipt_number")
           .eq("organization_id", organizationId)
           .in("id", goodsReceiptSourceIds)
       : Promise.resolve({ data: [], error: null }),
@@ -776,6 +791,17 @@ export async function InventoryWorkspacePage({
   const sourceDocumentError = [adjustmentDocumentsResult, countDocumentsResult, goodsReceiptDocumentsResult, transferDocumentsResult].find((result) => result.error)?.error;
   if (sourceDocumentError) {
     throw new Error(`Unable to load inventory source documents: ${sourceDocumentError.message}`);
+  }
+  const purchaseUnitsByProduct = new Map<string, Array<{ code: string; factorToBase: number; name: string }>>();
+  for (const productUnit of productUnits) {
+    if (!productUnit.is_purchase_unit && !productUnit.is_base) continue;
+    const configuredUnits = purchaseUnitsByProduct.get(productUnit.product_id) ?? [];
+    configuredUnits.push({
+      code: productUnit.unit_code,
+      factorToBase: Number(productUnit.factor_to_base),
+      name: productUnit.unit_name,
+    });
+    purchaseUnitsByProduct.set(productUnit.product_id, configuredUnits);
   }
   const items = products.flatMap<InventorySaleableItem>((product) => {
     const storeIds = settings
@@ -824,6 +850,11 @@ export async function InventoryWorkspacePage({
       ? variantById.get(item.variantId)?.sku ?? null
       : productById.get(item.productId)?.sku ?? null,
     unit: productById.get(item.productId)?.unit ?? "units",
+    purchaseUnits: purchaseUnitsByProduct.get(item.productId) ?? [{
+      code: (productById.get(item.productId)?.unit ?? "each").trim().toLowerCase(),
+      factorToBase: 1,
+      name: productById.get(item.productId)?.unit ?? "each",
+    }],
     quantitiesByStore:
       quantitiesBySaleable.get(`${item.productId}|${item.variantId ?? ""}`) ?? {},
   }));
@@ -876,7 +907,9 @@ export async function InventoryWorkspacePage({
         barcode: line.barcode_snapshot,
         unit: line.unit_snapshot,
         expectedQuantity: Number(line.expected_quantity),
+        reconciledExpectedQuantity: line.reconciled_expected_quantity === null ? null : Number(line.reconciled_expected_quantity),
         countedQuantity: line.counted_quantity === null ? null : Number(line.counted_quantity),
+        countedAt: line.counted_at,
       };
     }),
   }));
@@ -937,6 +970,7 @@ export async function InventoryWorkspacePage({
     note: receipt.note,
     purchaseOrderId: receipt.purchase_order_id,
     purchaseOrderNumber: purchaseOrderNumberById.get(receipt.purchase_order_id) ?? 0,
+    receiptNumber: Number(receipt.receipt_number),
     receivedAt: receipt.received_at,
     storeName: storeNames.get(receipt.store_id) ?? "Inactive store",
   }));
@@ -951,6 +985,8 @@ export async function InventoryWorkspacePage({
   const inTransitTransfers = stockTransfers
     .map((transfer) => ({
       id: transfer.id,
+      transferNumber: Number(transfer.transfer_number),
+      stockRequestId: transfer.stock_request_id,
       sourceStoreName: storeNames.get(transfer.source_store_id) ?? "Inactive store",
       destinationStoreName: storeNames.get(transfer.destination_store_id) ?? "Inactive store",
       note: transfer.note,
@@ -966,6 +1002,10 @@ export async function InventoryWorkspacePage({
         })),
     }))
     .filter((transfer) => transfer.lines.length > 0);
+  // The restock-request workflow is the only normal path for new transfers.
+  // Keep historical direct transfers receivable without allowing a generic
+  // receipt to bypass shortage/discrepancy recording for request-linked stock.
+  const legacyInTransitTransfers = inTransitTransfers.filter((transfer) => !transfer.stockRequestId);
   const policiesByStore = Object.fromEntries(
     inventoryPolicies.map((policy) => [
       policy.store_id,
@@ -1010,7 +1050,7 @@ export async function InventoryWorkspacePage({
   for (const receipt of goodsReceiptDocumentsResult.data ?? []) {
     sourceDocumentReferences.set(`goods_receipt:${receipt.id}`, {
       href: `${purchasingTabHref("receiving")}&purchaseOrder=${receipt.purchase_order_id}`,
-      label: `Receiving GR-${receipt.id.slice(0, 8).toUpperCase()}`,
+      label: `Receiving GR-${String(receipt.receipt_number).padStart(6, "0")}`,
     });
   }
   for (const transfer of transferDocumentsResult.data ?? []) {
@@ -1254,7 +1294,7 @@ export async function InventoryWorkspacePage({
   const inventoryHealthTransfers = inTransitTransfers.map((transfer) => ({
     href: inventoryTabHref("transfers"),
     id: transfer.id,
-    label: transfer.note || `Transfer ${transfer.id.slice(0, 8).toUpperCase()}`,
+    label: transfer.note || `Transfer TR-${String(transfer.transferNumber).padStart(6, "0")}`,
     remainingQuantity: transfer.lines.reduce((total, line) => total + Math.max(0, line.quantity - line.receivedQuantity), 0),
     route: `${transfer.sourceStoreName} → ${transfer.destinationStoreName}`,
     status: transfer.status,
@@ -1303,6 +1343,7 @@ export async function InventoryWorkspacePage({
 
       <InventoryWorkspaceNavigation
         activeTab={activeTab}
+        canAdjust={canAdjust}
         canCount={canCount}
         canManage={canManage}
         canView={canViewInventory}
@@ -1334,6 +1375,7 @@ export async function InventoryWorkspacePage({
           <Link className="text-sm font-medium text-primary hover:underline" href={stockLevelsHref()}>View stock levels</Link>
           <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("health")}>Review Stock Health</Link>
           <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("activity")}>View activity</Link>
+          {canAdjust ? <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("adjustments")}>Stock adjustments</Link> : null}
           {canCount ? <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("counts")}>Inventory counts</Link> : null}
           {canManage ? <Link className="text-sm font-medium text-primary hover:underline" href={`${inventoryTabHref("overview")}&configuration=1`}>Inventory configuration</Link> : null}
         </CardContent>
@@ -1380,7 +1422,7 @@ export async function InventoryWorkspacePage({
               policies={policiesByStore}
               organizationDefaultPolicy={organizationDefaultPolicy}
               canManageOrganizationDefault={canManageOrganizationDefault}
-              adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
+              adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" | "OPENING_STOCK" }))}
               inTransitTransfers={inTransitTransfers}
               composites={compositeProducts}
               sections={["safeguards"]}
@@ -1426,14 +1468,14 @@ export async function InventoryWorkspacePage({
           policies={policiesByStore}
           organizationDefaultPolicy={organizationDefaultPolicy}
           canManageOrganizationDefault={canManageOrganizationDefault}
-          adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
+          adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" | "OPENING_STOCK" }))}
           inTransitTransfers={inTransitTransfers}
           composites={compositeProducts}
           sections={["supplier-returns"]}
         />
       ) : null}
 
-      {activeTab === "adjustments" && canManage ? (
+      {activeTab === "adjustments" && canAdjust ? (
         <InventoryIntegrityWorkflows
           stores={stores.map(({ id, name }) => ({ id, name }))}
           items={advancedItems}
@@ -1441,7 +1483,8 @@ export async function InventoryWorkspacePage({
           policies={policiesByStore}
           organizationDefaultPolicy={organizationDefaultPolicy}
           canManageOrganizationDefault={canManageOrganizationDefault}
-          adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
+          canManageAdjustmentReasons={canManage}
+          adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" | "OPENING_STOCK" }))}
           inTransitTransfers={inTransitTransfers}
           composites={compositeProducts}
           sections={["adjustments"]}
@@ -1498,18 +1541,18 @@ export async function InventoryWorkspacePage({
             awaitingReceiptCount={inTransitTransfers.length}
             replenishmentHref={`/back-office/replenishment?tab=requests${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}`}
           />
-          <InventoryIntegrityWorkflows
+          {legacyInTransitTransfers.length ? <InventoryIntegrityWorkflows
             stores={stores.map(({ id, name }) => ({ id, name }))}
             items={advancedItems}
             suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
             policies={policiesByStore}
             organizationDefaultPolicy={organizationDefaultPolicy}
             canManageOrganizationDefault={canManageOrganizationDefault}
-            adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
-            inTransitTransfers={inTransitTransfers}
+            adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" | "OPENING_STOCK" }))}
+            inTransitTransfers={legacyInTransitTransfers}
             composites={compositeProducts}
             sections={["transfer-receipt"]}
-          />
+          /> : null}
         </>
       ) : null}
 
@@ -1521,7 +1564,7 @@ export async function InventoryWorkspacePage({
           policies={policiesByStore}
           organizationDefaultPolicy={organizationDefaultPolicy}
           canManageOrganizationDefault={canManageOrganizationDefault}
-          adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
+          adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" | "OPENING_STOCK" }))}
           inTransitTransfers={inTransitTransfers}
           composites={compositeProducts}
           sections={["production"]}

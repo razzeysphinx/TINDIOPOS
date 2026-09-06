@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const uuid = z.uuid("Choose a valid record.");
+const operationId = z.uuid("Start the operation again and retry.");
 
 const positiveQuantity = z
   .string()
@@ -65,6 +66,7 @@ export const upsertReplenishmentRuleSchema = z
 
 export const createStockRequestSchema = z
   .object({
+    operationId,
     requestingStoreId: uuid,
     sourceWarehouseId: uuid,
     note: z.string().trim().max(500),
@@ -101,11 +103,13 @@ export const approveStockRequestSchema = z
 export const requestIdentifierSchema = z.object({ stockRequestId: uuid });
 
 export const dispatchStockRequestSchema = requestIdentifierSchema.extend({
+  operationId,
   note: z.string().trim().max(500),
 });
 
 export const receiveStockRequestSchema = z
   .object({
+    operationId,
     stockRequestId: uuid,
     note: z.string().trim().max(500),
     lines: z

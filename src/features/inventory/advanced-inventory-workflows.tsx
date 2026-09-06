@@ -37,7 +37,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { requestManagerApprovalAction } from "@/features/approvals/actions";
+import { ManagerApprovalDialog } from "@/features/approvals/manager-approval-dialog";
 import {
+  cancelPurchaseOrderAction,
   completeInventoryCountAction,
   createPurchaseOrderAction,
   createSupplierAction,
@@ -60,6 +63,7 @@ export type AdvancedInventoryItem = {
   storeIds: string[];
   quantitiesByStore: Record<string, number>;
   identifiers: string[];
+  purchaseUnits: Array<{ code: string; factorToBase: number; name: string }>;
 };
 
 export type AdvancedInventorySupplier = {
@@ -98,13 +102,14 @@ export type AdvancedGoodsReceipt = {
   note: string | null;
   purchaseOrderId: string;
   purchaseOrderNumber: number;
+  receiptNumber: number;
   receivedAt: string;
   storeName: string;
 };
 
 type StoreOption = { id: string; name: string };
 type SaleableDraft = { productId: string; variantId: string; quantity: string };
-type PurchaseDraft = SaleableDraft & { unitCost: string };
+type PurchaseDraft = SaleableDraft & { purchaseUnitCode: string; unitCost: string };
 type CountDraft = { productId: string; variantId: string; countedQuantity: string };
 type CountReview = {
   lines: Array<{
@@ -136,6 +141,38 @@ const ALL_ADVANCED_INVENTORY_SECTIONS: readonly AdvancedInventorySection[] = [
   "counts",
   "transfers",
 ];
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function pendingOperationId(scope: string, payload?: unknown) {
+  const storageKey = `tindio:inventory-operation:${scope}`;
+  const existing = window.sessionStorage.getItem(storageKey);
+  if (payload === undefined) {
+    if (existing && UUID_PATTERN.test(existing)) return existing;
+
+    const operationId = globalThis.crypto.randomUUID();
+    window.sessionStorage.setItem(storageKey, operationId);
+    return operationId;
+  }
+
+  const fingerprint = JSON.stringify(payload);
+  if (existing) {
+    try {
+      const stored = JSON.parse(existing) as { fingerprint?: unknown; id?: unknown };
+      if (stored.fingerprint === fingerprint && typeof stored.id === "string" && UUID_PATTERN.test(stored.id)) return stored.id;
+    } catch {
+      // A pre-existing legacy operation id is safe to replace because this is a new payload.
+    }
+  }
+
+  const operationId = globalThis.crypto.randomUUID();
+  window.sessionStorage.setItem(storageKey, JSON.stringify({ fingerprint, id: operationId }));
+  return operationId;
+}
+
+function clearPendingOperation(scope: string) {
+  window.sessionStorage.removeItem(`tindio:inventory-operation:${scope}`);
+}
 
 export function AdvancedInventoryWorkflows({
   stores,
@@ -194,6 +231,7 @@ export function AdvancedInventoryWorkflows({
   const emptyPurchaseLine = (): PurchaseDraft => ({
     productId: firstItem?.productId ?? "",
     variantId: firstItem?.variantId ?? "",
+    purchaseUnitCode: firstItem?.purchaseUnits[0]?.code ?? "",
     quantity: "1",
     unitCost: "0.00",
   });
@@ -305,7 +343,9 @@ export function AdvancedInventoryWorkflows({
     event.preventDefault();
     setPurchaseResult(null);
     void runAction("purchase", async () => {
+      const operationScope = "purchase-order";
       const result = await createPurchaseOrderAction({
+        operationId: pendingOperationId(operationScope),
         storeId: purchaseStoreId,
         supplierId: purchaseSupplierId,
         expectedAt: purchaseExpectedAt,
@@ -314,6 +354,7 @@ export function AdvancedInventoryWorkflows({
       });
       finish(result, setPurchaseResult);
       if (result.ok) {
+        clearPendingOperation(operationScope);
         setPurchaseNotes("");
         setPurchaseExpectedAt("");
         setPurchaseLines([emptyPurchaseLine()]);
@@ -332,7 +373,9 @@ export function AdvancedInventoryWorkflows({
     if (!selectedReceiptOrder) return;
     setReceiptResult(null);
     void runAction("receipt", async () => {
+      const operationScope = `goods-receipt:${selectedReceiptOrder.id}`;
       const result = await receivePurchaseOrderAction({
+        operationId: pendingOperationId(operationScope),
         purchaseOrderId: selectedReceiptOrder.id,
         note: receiptNote,
         lines: selectedReceiptOrder.lines
@@ -340,7 +383,10 @@ export function AdvancedInventoryWorkflows({
           .filter((line) => Number(line.quantity) > 0),
       });
       finish(result, setReceiptResult);
-      if (result.ok) setReceiptNote("");
+      if (result.ok) {
+        clearPendingOperation(operationScope);
+        setReceiptNote("");
+      }
     });
   }
 
@@ -769,7 +815,7 @@ export function AdvancedInventoryWorkflows({
 }
 
 type InventoryCsvKind = "count" | "purchase" | "adjustment";
-type InventoryCsvRow = { rowNumber: number; itemCode: string; productId: string; variantId: string; quantity: string; unitCost: string; note: string };
+type InventoryCsvRow = { rowNumber: number; itemCode: string; productId: string; variantId: string; purchaseUnitCode: string; quantity: string; unitCost: string; note: string };
 
 function InventoryCsvTools({
   stores, items, suppliers, adjustmentReasons,
@@ -784,8 +830,14 @@ function InventoryCsvTools({
   const [storeId, setStoreId] = useState(stores[0]?.id ?? "");
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? "");
   const [reasonCode, setReasonCode] = useState(adjustmentReasons[0]?.code ?? "");
-  const [note, setNote] = useState(""); const [expectedAt, setExpectedAt] = useState("");
-  const [rows, setRows] = useState<InventoryCsvRow[]>([]); const [filename, setFilename] = useState(""); const [errors, setErrors] = useState<string[]>([]); const [result, setResult] = useState<string | null>(null); const [isPending, startTransition] = useTransition();
+  const [note, setNote] = useState("");
+  const [expectedAt, setExpectedAt] = useState("");
+  const [rows, setRows] = useState<InventoryCsvRow[]>([]);
+  const [filename, setFilename] = useState("");
+  const [errors, setErrors] = useState<string[]>([]);
+  const [result, setResult] = useState<string | null>(null);
+  const [adjustmentApprovalRequestId, setAdjustmentApprovalRequestId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
   const headers = kind === "count" ? ["item_code", "counted_quantity"] : kind === "purchase" ? ["item_code", "quantity", "unit_cost"] : ["item_code", "quantity_delta", "note"];
 
   function downloadTemplate() {
@@ -794,7 +846,7 @@ function InventoryCsvTools({
   }
 
   async function chooseFile(file: File | undefined) {
-    setRows([]); setErrors([]); setResult(null); setFilename(file?.name ?? "");
+    setRows([]); setErrors([]); setResult(null); setFilename(file?.name ?? ""); setAdjustmentApprovalRequestId(null);
     if (!file) return;
     if (file.size > 1024 * 1024) { setErrors(["Choose a CSV file smaller than 1 MB."]); return; }
     const records = parseCsvRecords(await file.text()); if (typeof records === "string") { setErrors([records]); return; }
@@ -812,21 +864,122 @@ function InventoryCsvTools({
       if (kind === "count" && !/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity)) errors.push(`Row ${rowNumber}: counted_quantity must be non-negative with up to 3 decimals.`);
       if (kind === "purchase" && (!/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0 || !/^\d{1,8}(?:\.\d{1,2})?$/.test(unitCost))) errors.push(`Row ${rowNumber}: quantity and unit_cost must be valid positive values.`);
       if (kind === "adjustment" && (!/^-?\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) === 0)) errors.push(`Row ${rowNumber}: quantity_delta must be non-zero with up to 3 decimals.`);
-      if (!itemCode || matches.length !== 1 || (kind === "count" && !/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity)) || (kind === "purchase" && (!/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0 || !/^\d{1,8}(?:\.\d{1,2})?$/.test(unitCost))) || (kind === "adjustment" && (!/^-?\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) === 0))) return;
-      parsedRows.push({ rowNumber, itemCode, productId: matches[0].productId, variantId: matches[0].variantId ?? "", quantity, unitCost, note: rowNote });
+      if (kind === "adjustment" && (rowNote.length < 2 || rowNote.length > 500)) errors.push(`Row ${rowNumber}: note must explain the adjustment in 2–500 characters.`);
+      if (!itemCode || matches.length !== 1 || (kind === "count" && !/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity)) || (kind === "purchase" && (!/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0 || !/^\d{1,8}(?:\.\d{1,2})?$/.test(unitCost))) || (kind === "adjustment" && (!/^-?\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) === 0 || rowNote.length < 2 || rowNote.length > 500))) return;
+      parsedRows.push({ rowNumber, itemCode, productId: matches[0].productId, variantId: matches[0].variantId ?? "", purchaseUnitCode: matches[0].purchaseUnits[0]?.code ?? "", quantity, unitCost, note: rowNote });
     });
     if (parsedRows.length > 500) errors.push("Import at most 500 rows at a time."); if (!parsedRows.length && !errors.length) errors.push("Add at least one data row.");
     if (errors.length) { setErrors(errors); return; } setRows(parsedRows);
   }
 
+  function adjustmentImportPayload() {
+    return {
+      storeId,
+      reasonCode,
+      rows: rows.map((row) => ({
+        rowNumber: row.rowNumber,
+        productId: row.productId,
+        variantId: row.variantId,
+        quantityDelta: row.quantity,
+        note: row.note,
+      })),
+    };
+  }
+
+  function adjustmentApprovalPayload(operationId: string) {
+    return {
+      store_id: storeId,
+      reason_code: reasonCode,
+      operation_id: operationId,
+      rows: rows.map((row) => ({
+        row_number: row.rowNumber,
+        product_id: row.productId,
+        variant_id: row.variantId || null,
+        quantity_delta: Number(row.quantity),
+        note: row.note.trim(),
+      })),
+    };
+  }
+
+  async function executeAdjustmentImport(approvalRequestId: string | null) {
+    const payload = adjustmentImportPayload();
+    const operationScope = "inventory-adjustment:csv-import";
+    const response = await importInventoryAdjustmentsCsvAction({
+      ...payload,
+      operationId: pendingOperationId(operationScope, payload),
+      approvalRequestId,
+    });
+    setResult(response.message);
+    if (response.ok) {
+      clearPendingOperation(operationScope);
+      setAdjustmentApprovalRequestId(null);
+      setRows([]);
+      setFilename("");
+      router.refresh();
+    }
+  }
+
   function confirmImport() {
-    setResult(null); startTransition(async () => {
-      const response = kind === "count" ? await completeInventoryCountAction({ storeId, note, lines: rows.map((row) => ({ productId: row.productId, variantId: row.variantId, countedQuantity: row.quantity })) }) : kind === "purchase" ? await createPurchaseOrderAction({ storeId, supplierId, expectedAt, notes: note, lines: rows.map((row) => ({ productId: row.productId, variantId: row.variantId, quantity: row.quantity, unitCost: row.unitCost })) }) : await importInventoryAdjustmentsCsvAction({ storeId, reasonCode, rows: rows.map((row) => ({ rowNumber: row.rowNumber, productId: row.productId, variantId: row.variantId, quantityDelta: row.quantity, note: row.note || note })) });
-      setResult(response.message); if (response.ok) { setRows([]); setFilename(""); router.refresh(); }
+    setResult(null);
+    startTransition(async () => {
+      if (kind === "adjustment") {
+        const payload = adjustmentImportPayload();
+        const operationId = pendingOperationId("inventory-adjustment:csv-import", payload);
+        const approval = await requestManagerApprovalAction({
+          operationCode: "inventory.adjust",
+          reason: `CSV inventory adjustment import: ${rows.length} row${rows.length === 1 ? "" : "s"}.`,
+          payload: adjustmentApprovalPayload(operationId),
+        });
+        if (!approval.ok) {
+          setResult(approval.message);
+          return;
+        }
+        if (approval.decision === "APPROVAL_REQUIRED") {
+          setAdjustmentApprovalRequestId(approval.data.approvalRequestId);
+          setResult(approval.message);
+          return;
+        }
+        await executeAdjustmentImport(null);
+        return;
+      }
+
+      const operationScope = "purchase-order-import";
+      const response = kind === "count"
+        ? await completeInventoryCountAction({ storeId, note, lines: rows.map((row) => ({ productId: row.productId, variantId: row.variantId, countedQuantity: row.quantity })) })
+        : await createPurchaseOrderAction({ operationId: pendingOperationId(operationScope), storeId, supplierId, expectedAt, notes: note, lines: rows.map((row) => ({ productId: row.productId, variantId: row.variantId, purchaseUnitCode: row.purchaseUnitCode, quantity: row.quantity, unitCost: row.unitCost })) });
+      setResult(response.message);
+      if (response.ok) {
+        if (kind === "purchase") clearPendingOperation(operationScope);
+        setRows([]);
+        setFilename("");
+        router.refresh();
+      }
     });
   }
 
-  return <Card><CardHeader><CardTitle>Inventory CSV</CardTitle><CardDescription>Preview and confirm one controlled inventory operation. This never writes stock projections directly.</CardDescription></CardHeader><CardContent className="space-y-3"><div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-sm font-medium">Operation<select className={selectClassName} onChange={(event) => { setKind(event.target.value as InventoryCsvKind); setRows([]); setErrors([]); setFilename(""); }} value={kind}><option value="count">Complete inventory count</option><option value="purchase">Create purchase order</option><option value="adjustment">Post stock adjustments</option></select></label><label className="grid gap-1 text-sm font-medium">Store<select className={selectClassName} onChange={(event) => setStoreId(event.target.value)} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label></div>{kind === "purchase" ? <div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-sm font-medium">Supplier<select className={selectClassName} onChange={(event) => setSupplierId(event.target.value)} value={supplierId}>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label><label className="grid gap-1 text-sm font-medium">Expected date<Input onChange={(event) => setExpectedAt(event.target.value)} type="date" value={expectedAt} /></label></div> : null}{kind === "adjustment" ? <label className="grid gap-1 text-sm font-medium">Adjustment reason<select className={selectClassName} onChange={(event) => setReasonCode(event.target.value)} value={reasonCode}>{adjustmentReasons.map((reason) => <option key={reason.code} value={reason.code}>{reason.name}</option>)}</select></label> : null}{kind !== "adjustment" ? <Input onChange={(event) => setNote(event.target.value)} placeholder={kind === "count" ? "Optional count note" : "Optional purchase order note"} value={note} /> : null}<div className="flex flex-wrap items-end gap-3"><div className="grid min-w-0 flex-1 gap-1 sm:min-w-56"><Label htmlFor="inventory-csv-file">Import file</Label><Input accept=".csv,text/csv" id="inventory-csv-file" onChange={(event) => void chooseFile(event.target.files?.[0])} type="file" /></div><Button onClick={downloadTemplate} type="button" variant="outline"><Download /> Template</Button></div>{errors.length ? <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><p className="font-medium">Fix the CSV before importing.</p><ul className="mt-1 list-disc pl-5">{errors.slice(0, 4).map((error) => <li key={error}>{error}</li>)}</ul></div> : null}{rows.length ? <div className="overflow-hidden rounded-lg border"><div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 text-sm"><span>{filename}: {rows.length} valid row{rows.length === 1 ? "" : "s"}</span><Button disabled={isPending || (kind === "purchase" && !supplierId) || (kind === "adjustment" && !reasonCode)} onClick={confirmImport} size="sm" type="button">{isPending ? <LoaderCircle className="animate-spin" /> : <Upload />} Confirm import</Button></div><div className="max-h-48 overflow-auto"><table className="w-full text-left text-sm"><thead className="sticky top-0 bg-background text-muted-foreground"><tr><th className="px-3 py-2">Row</th><th className="px-3 py-2">Item code</th><th className="px-3 py-2">Quantity</th></tr></thead><tbody>{rows.slice(0, 20).map((row) => <tr className="border-t" key={row.rowNumber}><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2">{row.itemCode}</td><td className="px-3 py-2">{row.quantity}</td></tr>)}</tbody></table></div></div> : null}{result ? <p aria-live="polite" className="text-sm text-muted-foreground">{result}</p> : null}</CardContent></Card>;
+  return <>
+    <Card>
+      <CardHeader><CardTitle>Inventory CSV</CardTitle><CardDescription>Preview and confirm one controlled inventory operation. This never writes stock projections directly.</CardDescription></CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm font-medium">Operation<select className={selectClassName} onChange={(event) => { setKind(event.target.value as InventoryCsvKind); setRows([]); setErrors([]); setFilename(""); setAdjustmentApprovalRequestId(null); }} value={kind}><option value="count">Complete inventory count</option><option value="purchase">Create purchase order</option><option value="adjustment">Post stock adjustments</option></select></label>
+          <label className="grid gap-1 text-sm font-medium">Store<select className={selectClassName} onChange={(event) => { setStoreId(event.target.value); setAdjustmentApprovalRequestId(null); }} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label>
+        </div>
+        {kind === "purchase" ? <div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-sm font-medium">Supplier<select className={selectClassName} onChange={(event) => setSupplierId(event.target.value)} value={supplierId}>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label><label className="grid gap-1 text-sm font-medium">Expected date<Input onChange={(event) => setExpectedAt(event.target.value)} type="date" value={expectedAt} /></label></div> : null}
+        {kind === "adjustment" ? <label className="grid gap-1 text-sm font-medium">Adjustment reason<select className={selectClassName} onChange={(event) => { setReasonCode(event.target.value); setAdjustmentApprovalRequestId(null); }} value={reasonCode}>{adjustmentReasons.map((reason) => <option key={reason.code} value={reason.code}>{reason.name}</option>)}</select></label> : null}
+        {kind === "adjustment" ? <p className="text-sm text-muted-foreground">Each CSV row must include a specific 2–500 character note explaining the adjustment.</p> : <Input onChange={(event) => setNote(event.target.value)} placeholder={kind === "count" ? "Optional count note" : "Optional purchase order note"} value={note} />}
+        <div className="flex flex-wrap items-end gap-3"><div className="grid min-w-0 flex-1 gap-1 sm:min-w-56"><Label htmlFor="inventory-csv-file">Import file</Label><Input accept=".csv,text/csv" id="inventory-csv-file" onChange={(event) => void chooseFile(event.target.files?.[0])} type="file" /></div><Button onClick={downloadTemplate} type="button" variant="outline"><Download /> Template</Button></div>
+        {errors.length ? <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><p className="font-medium">Fix the CSV before importing.</p><ul className="mt-1 list-disc pl-5">{errors.slice(0, 4).map((error) => <li key={error}>{error}</li>)}</ul></div> : null}
+        {rows.length ? <div className="overflow-hidden rounded-lg border"><div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 text-sm"><span>{filename}: {rows.length} valid row{rows.length === 1 ? "" : "s"}</span><Button disabled={isPending || (kind === "purchase" && !supplierId) || (kind === "adjustment" && !reasonCode)} onClick={confirmImport} size="sm" type="button">{isPending ? <LoaderCircle className="animate-spin" /> : <Upload />} Confirm import</Button></div><div className="max-h-48 overflow-auto"><table className="w-full text-left text-sm"><thead className="sticky top-0 bg-background text-muted-foreground"><tr><th className="px-3 py-2">Row</th><th className="px-3 py-2">Item code</th><th className="px-3 py-2">Quantity</th></tr></thead><tbody>{rows.slice(0, 20).map((row) => <tr className="border-t" key={row.rowNumber}><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2">{row.itemCode}</td><td className="px-3 py-2">{row.quantity}</td></tr>)}</tbody></table></div></div> : null}
+        {result ? <p aria-live="polite" className="text-sm text-muted-foreground">{result}</p> : null}
+      </CardContent>
+    </Card>
+    {adjustmentApprovalRequestId ? <ManagerApprovalDialog approvalRequestId={adjustmentApprovalRequestId} onApproved={() => {
+      const requestId = adjustmentApprovalRequestId;
+      setAdjustmentApprovalRequestId(null);
+      startTransition(async () => { await executeAdjustmentImport(requestId); });
+    }} onCancel={() => setAdjustmentApprovalRequestId(null)} operationLabel="Inventory adjustment import" /> : null}
+  </>;
 }
 
 function DraftPurchaseLines({
@@ -845,16 +998,30 @@ function DraftPurchaseLines({
   return (
     <DraftList title="Order items" onAdd={() => onChange([...lines, onAdd()])}>
       {lines.map((line, index) => (
-        <div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_7rem_7rem_auto] sm:items-end" key={`${index}-${line.productId}-${line.variantId}`}>
+        <div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[minmax(12rem,1fr)_8rem_7rem_8rem_auto] sm:items-end" key={`${index}-${line.productId}-${line.variantId}`}>
           <ItemSelect
             label="Item"
             items={items}
             productId={line.productId}
             variantId={line.variantId}
-            onChange={(item) => onChange(lines.map((current, lineIndex) => lineIndex === index ? { ...current, ...item } : current))}
+            onChange={(item) => {
+              const selectedItem = items.find((candidate) => candidate.productId === item.productId && (candidate.variantId ?? "") === item.variantId);
+              onChange(lines.map((current, lineIndex) => lineIndex === index ? { ...current, ...item, purchaseUnitCode: selectedItem?.purchaseUnits[0]?.code ?? "" } : current));
+            }}
           />
+          <Field label="Purchase unit">
+            <select
+              className={selectClassName}
+              value={line.purchaseUnitCode}
+              onChange={(event) => onChange(lines.map((current, lineIndex) => lineIndex === index ? { ...current, purchaseUnitCode: event.target.value } : current))}
+            >
+              {(items.find((item) => item.productId === line.productId && (item.variantId ?? "") === line.variantId)?.purchaseUnits ?? []).map((unit) => (
+                <option key={unit.code} value={unit.code}>{unit.name}</option>
+              ))}
+            </select>
+          </Field>
           <Field label="Quantity"><Input inputMode="decimal" value={line.quantity} onChange={(event) => onChange(lines.map((current, lineIndex) => lineIndex === index ? { ...current, quantity: event.target.value } : current))} /></Field>
-          <Field label={`Unit cost (${currencyCode})`}><Input inputMode="decimal" value={line.unitCost} onChange={(event) => onChange(lines.map((current, lineIndex) => lineIndex === index ? { ...current, unitCost: event.target.value } : current))} /></Field>
+          <Field label={`Cost / unit (${currencyCode})`}><Input inputMode="decimal" value={line.unitCost} onChange={(event) => onChange(lines.map((current, lineIndex) => lineIndex === index ? { ...current, unitCost: event.target.value } : current))} /></Field>
           <RemoveLine disabled={lines.length === 1} onRemove={() => onChange(lines.filter((_, lineIndex) => lineIndex !== index))} />
         </div>
       ))}
@@ -968,7 +1135,14 @@ function PurchaseOrdersCard({
                     <td className="px-3 py-3 align-top"><PurchaseOrderStatus status={order.status} /></td>
                     <td className="px-3 py-3 align-top text-muted-foreground">{order.expectedAt ? formatPurchaseDate(order.expectedAt) : "Not scheduled"}</td>
                     <td className="px-3 py-3 text-right align-top">{canViewCosts ? formatMoney(order.totalCostMinor, currencyCode) : "Restricted"}</td>
-                    <td className="px-3 py-3 text-right align-top">{receivable ? <Button onClick={() => onReceive(order)} size="sm" type="button" variant="outline">Receive</Button> : null}</td>
+                    <td className="px-3 py-3 text-right align-top">
+                      {receivable ? (
+                        <div className="flex justify-end gap-2">
+                          <Button onClick={() => onReceive(order)} size="sm" type="button" variant="outline">Receive</Button>
+                          <CancelPurchaseOrderButton order={order} />
+                        </div>
+                      ) : null}
+                    </td>
                   </tr>
                 );
               })}
@@ -999,6 +1173,58 @@ function PurchaseOrderStatus({ status }: { status: AdvancedPurchaseOrder["status
   return <span className={className}>{labels[status]}</span>;
 }
 
+function CancelPurchaseOrderButton({ order }: { order: AdvancedPurchaseOrder }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [result, setResult] = useState<WorkflowResult | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function cancelOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setResult(null);
+    startTransition(async () => {
+      const nextResult = await cancelPurchaseOrderAction({ purchaseOrderId: order.id, note });
+      setResult(nextResult);
+      if (nextResult.ok) {
+        setOpen(false);
+        setNote("");
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (!nextOpen) setResult(null); }}>
+      <DialogTrigger className="inline-flex h-8 items-center justify-center rounded-md border border-destructive/30 px-3 text-xs font-medium text-destructive transition-colors hover:bg-destructive/5">
+        Cancel
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Cancel purchase order #{order.orderNumber}?</DialogTitle>
+          <DialogDescription>
+            This stops future receiving. Goods already received remain in stock and in the inventory ledger.
+          </DialogDescription>
+        </DialogHeader>
+        <form className="space-y-4" onSubmit={cancelOrder}>
+          <DialogBody>
+            <Field label="Cancellation note">
+              <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional reason for the audit trail" />
+            </Field>
+            <ResultMessage result={result} />
+          </DialogBody>
+          <DialogFooter className="border-t px-4 py-4 sm:px-6">
+            <Button disabled={isPending} type="submit" variant="destructive">
+              {isPending ? <LoaderCircle className="animate-spin" /> : null}
+              Cancel purchase order
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog.Root>
+  );
+}
+
 function RecentReceiptsCard({ receipts }: { receipts: AdvancedGoodsReceipt[] }) {
   return (
     <WorkflowCard
@@ -1011,7 +1237,8 @@ function RecentReceiptsCard({ receipts }: { receipts: AdvancedGoodsReceipt[] }) 
           {receipts.map((receipt) => (
             <article className="flex flex-wrap items-start justify-between gap-3 px-3 py-3" key={receipt.id}>
               <div>
-                <p className="font-medium">PO #{receipt.purchaseOrderNumber}</p>
+                <p className="font-medium">GR-{String(receipt.receiptNumber).padStart(6, "0")}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Purchase order #{receipt.purchaseOrderNumber}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{receipt.storeName} · {formatPurchaseDate(receipt.receivedAt, true)}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{receipt.lines.map((line) => `${formatQuantity(line.quantity)} ${line.unit} ${line.label}`).join(" · ")}</p>
                 {receipt.note ? <p className="mt-1 text-xs text-muted-foreground">{receipt.note}</p> : null}

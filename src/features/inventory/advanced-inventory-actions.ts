@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { moneyInputToMinor } from "@/features/catalog/catalog-money";
 import {
   completeInventoryCountSchema,
+  cancelPurchaseOrderSchema,
   createInventoryCountDraftSchema,
   createAdjustmentReasonSchema,
   createPurchaseOrderSchema,
@@ -72,6 +73,20 @@ async function requireInventoryCounter() {
 
   if (!hasPermission(context, "inventory.count") && !hasPermission(context, "inventory.manage")) {
     return { context, error: "You do not have permission to perform inventory counts." };
+  }
+
+  return { context, error: null };
+}
+
+async function requireInventoryAdjuster() {
+  const context = await requireBusinessContext();
+
+  if (!context.features.inventory) {
+    return { context, error: "Inventory is disabled for this business." };
+  }
+
+  if (!hasPermission(context, "inventory.adjust")) {
+    return { context, error: "You do not have permission to adjust inventory." };
   }
 
   return { context, error: null };
@@ -168,6 +183,7 @@ export async function createPurchaseOrderAction(
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("create_purchase_order", {
     target_organization_id: context.organization.id,
+    target_operation_id: parsed.data.operationId,
     target_store_id: parsed.data.storeId,
     target_supplier_id: parsed.data.supplierId,
     target_notes: parsed.data.notes,
@@ -175,6 +191,7 @@ export async function createPurchaseOrderAction(
     target_lines: parsed.data.lines.map((line) => ({
       product_id: line.productId,
       variant_id: line.variantId || null,
+      purchase_unit_code: line.purchaseUnitCode,
       quantity: line.quantity,
       unit_cost_minor: moneyInputToMinor(line.unitCost),
     })) as Json,
@@ -188,6 +205,7 @@ export async function createPurchaseOrderAction(
   }
 
   revalidatePath("/back-office/inventory");
+  revalidatePath("/back-office/purchasing");
   return { ok: true, message: "Purchase order created.", data: { purchaseOrderId: data } };
 }
 
@@ -204,6 +222,7 @@ export async function receivePurchaseOrderAction(
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("receive_purchase_order", {
     target_organization_id: context.organization.id,
+    target_operation_id: parsed.data.operationId,
     target_purchase_order_id: parsed.data.purchaseOrderId,
     target_note: parsed.data.note,
     target_lines: parsed.data.lines.map((line) => ({
@@ -217,7 +236,34 @@ export async function receivePurchaseOrderAction(
   }
 
   revalidatePath("/back-office/inventory");
+  revalidatePath("/back-office/purchasing");
   return { ok: true, message: "Goods received and stock updated.", data: { receiptId: data } };
+}
+
+export async function cancelPurchaseOrderAction(
+  input: unknown,
+): Promise<AdvancedInventoryActionResult<{ purchaseOrderId: string }>> {
+  const { context, error: permissionError } = await requireInventoryManager();
+  if (permissionError) return { ok: false, message: permissionError };
+  if (!context.features.purchase_orders) return { ok: false, message: "Purchase orders are disabled for this business." };
+
+  const parsed = cancelPurchaseOrderSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("cancel_purchase_order", {
+    target_organization_id: context.organization.id,
+    target_purchase_order_id: parsed.data.purchaseOrderId,
+    target_note: parsed.data.note,
+  });
+
+  if (error || !data) {
+    return { ok: false, message: databaseMessage(error?.code, "TINDIO could not cancel this purchase order.") };
+  }
+
+  revalidatePath("/back-office/inventory");
+  revalidatePath("/back-office/purchasing");
+  return { ok: true, message: "Purchase order cancelled. Recorded stock was not changed.", data: { purchaseOrderId: data } };
 }
 
 export async function completeInventoryCountAction(
@@ -370,25 +416,14 @@ export async function transferStockAction(
   const parsed = transferStockSchema.safeParse(input);
   if (!parsed.success) return validationError();
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("ship_stock_transfer", {
-    target_organization_id: context.organization.id,
-    target_source_store_id: parsed.data.sourceStoreId,
-    target_destination_store_id: parsed.data.destinationStoreId,
-    target_note: parsed.data.note,
-    target_lines: parsed.data.lines.map((line) => ({
-      product_id: line.productId,
-      variant_id: line.variantId || null,
-      quantity: line.quantity,
-    })) as Json,
-  });
-
-  if (error || !data) {
-    return { ok: false, message: databaseMessage(error?.code, "TINDIO could not ship this transfer.") };
-  }
-
-  revalidatePath("/back-office/inventory");
-  return { ok: true, message: "Transfer shipped. Receive it at the destination store.", data: { transferId: data } };
+  // CANDIDATE_FOR_REMOVAL: this legacy server action is retained for source
+  // compatibility only. The public immediate-shipment RPC is intentionally
+  // revoked so every new transfer follows the request → approval → dispatch
+  // lifecycle in Restock items.
+  return {
+    ok: false,
+    message: "Create a stock request from Restock items. Stock leaves its source only when that approved request is dispatched.",
+  };
 }
 
 export async function updateInventoryPolicyAction(
@@ -472,13 +507,13 @@ export async function createAdjustmentReasonAction(
 export async function recordInventoryAdjustmentV2Action(
   input: unknown,
 ): Promise<AdvancedInventoryActionResult<{ movementId: string }>> {
-  const { context, error: permissionError } = await requireInventoryManager();
+  const { context, error: permissionError } = await requireInventoryAdjuster();
   if (permissionError) return { ok: false, message: permissionError };
   const parsed = recordInventoryAdjustmentSchema.safeParse(input);
   if (!parsed.success) return validationError();
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("record_inventory_adjustment_v2", {
+  const { data, error } = await supabase.rpc("record_inventory_adjustment", {
     target_organization_id: context.organization.id,
     target_store_id: parsed.data.storeId,
     target_product_id: parsed.data.productId,
@@ -486,6 +521,8 @@ export async function recordInventoryAdjustmentV2Action(
     target_quantity_delta: Number(parsed.data.quantityDelta),
     target_reason_code: parsed.data.reasonCode,
     target_note: parsed.data.note,
+    target_operation_id: parsed.data.operationId,
+    target_approval_request_id: parsed.data.approvalRequestId ?? null,
   });
   if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not post the stock adjustment.") };
   revalidatePath("/back-office/inventory");
@@ -493,7 +530,7 @@ export async function recordInventoryAdjustmentV2Action(
 }
 
 export async function importInventoryAdjustmentsCsvAction(input: unknown): Promise<AdvancedInventoryActionResult<{ importedCount: number }>> {
-  const { context, error: permissionError } = await requireInventoryManager();
+  const { context, error: permissionError } = await requireInventoryAdjuster();
   if (permissionError) return { ok: false, message: permissionError };
   const parsed = importInventoryAdjustmentsCsvSchema.safeParse(input);
   if (!parsed.success) return validationError();
@@ -502,7 +539,9 @@ export async function importInventoryAdjustmentsCsvAction(input: unknown): Promi
     target_organization_id: context.organization.id,
     target_store_id: parsed.data.storeId,
     target_reason_code: parsed.data.reasonCode,
-    target_rows: parsed.data.rows.map((row) => ({ row_number: row.rowNumber, product_id: row.productId, variant_id: row.variantId || "", quantity_delta: row.quantityDelta, note: row.note })) as Json,
+    target_rows: parsed.data.rows.map((row) => ({ row_number: row.rowNumber, product_id: row.productId, variant_id: row.variantId || null, quantity_delta: Number(row.quantityDelta), note: row.note })) as Json,
+    target_operation_id: parsed.data.operationId,
+    target_approval_request_id: parsed.data.approvalRequestId ?? null,
   });
   if (error || data === null) return { ok: false, message: error?.message?.startsWith("CSV row") ? error.message : databaseMessage(error?.code, "TINDIO could not import these inventory adjustments.") };
   revalidatePath("/back-office/inventory");
@@ -523,6 +562,7 @@ export async function receiveStockTransferAction(
     target_organization_id: context.organization.id,
     target_stock_transfer_id: parsed.data.stockTransferId,
     target_note: parsed.data.note,
+    target_operation_id: parsed.data.operationId,
     target_lines: parsed.data.lines.map((line) => ({ stock_transfer_line_id: line.stockTransferLineId, quantity: line.quantity })) as Json,
   });
   if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not receive this transfer.") };

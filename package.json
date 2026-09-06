@@ -28,6 +28,8 @@
     "test:inventory-health": "node --test scripts/inventory-health-awareness-check.mjs",
     "test:inventory-transfers": "node --test scripts/inventory-transfer-chain-check.mjs",
     "test:inventory-accountability": "node --test scripts/inventory-accountability-forensics-check.mjs",
+    "test:inventory-ledger-integrity": "node --test scripts/inventory-ledger-integrity-check.mjs",
+    "test:inventory-controlled-adjustments": "node --test scripts/inventory-controlled-adjustments-check.mjs",
     "test:inventory-action-pending": "node --test scripts/inventory-action-pending-check.mjs",
     "test:production-readiness": "node --test scripts/phase-9-production-readiness-check.mjs",
     "test:auth-passwords": "node --test scripts/auth-password-experience-check.mjs",

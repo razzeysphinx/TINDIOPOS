@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUnsavedChanges } from "@/components/unsaved-changes/unsaved-changes-provider";
+import { ManagerApprovalDialog } from "@/features/approvals/manager-approval-dialog";
+import { requestManagerApprovalAction } from "@/features/approvals/actions";
 import {
   createAdjustmentReasonAction,
   produceCompositeAction,
@@ -27,7 +29,7 @@ const selectClassName =
 type StoreOption = { id: string; name: string };
 type SupplierOption = { id: string; name: string; isActive: boolean };
 type NegativeStockPolicy = "allow" | "warn" | "block";
-type AdjustmentReason = { code: string; name: string; movementType: "ADJUSTMENT" | "DAMAGE" | "LOSS" };
+type AdjustmentReason = { code: string; name: string; movementType: "ADJUSTMENT" | "DAMAGE" | "LOSS" | "OPENING_STOCK" };
 type Transfer = {
   id: string;
   sourceStoreName: string;
@@ -46,6 +48,7 @@ type AdjustmentReview = {
   quantityDelta: string;
   reasonCode: string;
   reasonName: string;
+  movementType: AdjustmentReason["movementType"];
   storeId: string;
   storeName: string;
   unit: string;
@@ -74,6 +77,7 @@ export function InventoryIntegrityWorkflows({
   policies,
   organizationDefaultPolicy,
   canManageOrganizationDefault,
+  canManageAdjustmentReasons = false,
   adjustmentReasons,
   inTransitTransfers,
   composites,
@@ -85,6 +89,7 @@ export function InventoryIntegrityWorkflows({
   policies: Record<string, NegativeStockPolicy>;
   organizationDefaultPolicy: NegativeStockPolicy;
   canManageOrganizationDefault: boolean;
+  canManageAdjustmentReasons?: boolean;
   adjustmentReasons: AdjustmentReason[];
   inTransitTransfers: Transfer[];
   composites: CompositeOption[];
@@ -121,7 +126,7 @@ export function InventoryIntegrityWorkflows({
   });
   const [reasonCode, setReasonCode] = useState("");
   const [reasonName, setReasonName] = useState("");
-  const [reasonType, setReasonType] = useState<"ADJUSTMENT" | "DAMAGE" | "LOSS">("ADJUSTMENT");
+  const [reasonType, setReasonType] = useState<AdjustmentReason["movementType"]>("ADJUSTMENT");
   const [reasonResult, setReasonResult] = useState<Result | null>(null);
   const [adjustmentStoreId, setAdjustmentStoreId] = useState(firstStoreId);
   const [adjustmentReasonCode, setAdjustmentReasonCode] = useState(adjustmentReasons[0]?.code ?? "");
@@ -131,6 +136,7 @@ export function InventoryIntegrityWorkflows({
   const [adjustmentNote, setAdjustmentNote] = useState("");
   const [adjustmentResult, setAdjustmentResult] = useState<Result | null>(null);
   const [adjustmentReview, setAdjustmentReview] = useState<AdjustmentReview | null>(null);
+  const [adjustmentApprovalRequestId, setAdjustmentApprovalRequestId] = useState<string | null>(null);
   const [transferId, setTransferId] = useState(inTransitTransfers[0]?.id ?? "");
   const [transferNote, setTransferNote] = useState("");
   const [transferQuantities, setTransferQuantities] = useState<Record<string, string>>(() => receiptDraft(inTransitTransfers[0]));
@@ -220,6 +226,7 @@ export function InventoryIntegrityWorkflows({
     setAdjustmentVariantId(firstItemForStore?.variantId ?? "");
     setAdjustmentReview(null);
     setAdjustmentResult(null);
+    setAdjustmentApprovalRequestId(null);
   }
 
   function chooseTransfer(nextId: string) {
@@ -275,6 +282,7 @@ export function InventoryIntegrityWorkflows({
   function reviewAdjustment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAdjustmentResult(null);
+    setAdjustmentApprovalRequestId(null);
     const quantityDelta = Number(adjustmentQuantity);
     const store = stores.find((candidate) => candidate.id === adjustmentStoreId);
 
@@ -294,6 +302,7 @@ export function InventoryIntegrityWorkflows({
       quantityDelta: adjustmentQuantity,
       reasonCode: selectedAdjustmentReason.code,
       reasonName: selectedAdjustmentReason.name,
+      movementType: selectedAdjustmentReason.movementType,
       storeId: adjustmentStoreId,
       storeName: store.name,
       unit: selectedAdjustmentItem.unit,
@@ -301,22 +310,67 @@ export function InventoryIntegrityWorkflows({
     });
   }
 
+  function adjustmentActionPayload(review: AdjustmentReview) {
+    return {
+      storeId: review.storeId,
+      reasonCode: review.reasonCode,
+      productId: review.productId,
+      variantId: review.variantId,
+      quantityDelta: review.quantityDelta,
+      note: review.note,
+    };
+  }
+
+  function adjustmentApprovalPayload(review: AdjustmentReview) {
+    return {
+      store_id: review.storeId,
+      product_id: review.productId,
+      variant_id: review.variantId || null,
+      quantity_delta: Number(review.quantityDelta),
+      reason_code: review.reasonCode,
+      movement_type: review.movementType,
+      note: review.note.trim(),
+    };
+  }
+
+  async function executeReviewedAdjustment(approvalRequestId: string | null) {
+    if (!adjustmentReview) return;
+    const payload = adjustmentActionPayload(adjustmentReview);
+    const operationScope = "inventory-adjustment:record";
+    const operationId = pendingOperationId(operationScope, payload);
+    const result = await recordInventoryAdjustmentV2Action({
+      ...payload,
+      operationId,
+      approvalRequestId,
+    });
+    complete(result, setAdjustmentResult);
+    if (result.ok) {
+      clearPendingOperation(operationScope);
+      setAdjustmentNote("");
+      setAdjustmentReview(null);
+      setAdjustmentApprovalRequestId(null);
+    }
+  }
+
   function postReviewedAdjustment() {
     if (!adjustmentReview) return;
     startAdjustmentTransition(async () => {
-      const result = await recordInventoryAdjustmentV2Action({
-        storeId: adjustmentReview.storeId,
-        reasonCode: adjustmentReview.reasonCode,
-        productId: adjustmentReview.productId,
-        variantId: adjustmentReview.variantId,
-        quantityDelta: adjustmentReview.quantityDelta,
-        note: adjustmentReview.note,
+      const payload = adjustmentActionPayload(adjustmentReview);
+      const approval = await requestManagerApprovalAction({
+        operationCode: "inventory.adjust",
+        reason: adjustmentReview.note,
+        payload: adjustmentApprovalPayload(adjustmentReview),
       });
-      complete(result, setAdjustmentResult);
-      if (result.ok) {
-        setAdjustmentNote("");
-        setAdjustmentReview(null);
+      if (!approval.ok) {
+        setAdjustmentResult({ ok: false, message: approval.message });
+        return;
       }
+      if (approval.decision === "APPROVAL_REQUIRED") {
+        setAdjustmentApprovalRequestId(approval.data.approvalRequestId);
+        setAdjustmentResult({ ok: true, message: approval.message });
+        return;
+      }
+      await executeReviewedAdjustment(null);
     });
   }
 
@@ -324,15 +378,23 @@ export function InventoryIntegrityWorkflows({
     event.preventDefault();
     if (!selectedTransfer) return;
     startTransferTransition(async () => {
-      const result = await receiveStockTransferAction({
+      const payload = {
         stockTransferId: selectedTransfer.id,
         note: transferNote,
         lines: selectedTransfer.lines
           .map((line) => ({ stockTransferLineId: line.id, quantity: transferQuantities[line.id] ?? "" }))
           .filter((line) => Number(line.quantity) > 0),
+      };
+      const operationScope = `legacy-transfer-receipt:${selectedTransfer.id}`;
+      const result = await receiveStockTransferAction({
+        ...payload,
+        operationId: pendingOperationId(operationScope, payload),
       });
       complete(result, setTransferResult);
-      if (result.ok) setTransferNote("");
+      if (result.ok) {
+        clearPendingOperation(operationScope);
+        setTransferNote("");
+      }
     });
   }
 
@@ -409,23 +471,28 @@ export function InventoryIntegrityWorkflows({
 
         {showAdjustments ? <WorkflowCard title="Adjustment reasons" description="Create controlled reasons, then post an adjustment with the selected reason code." icon={<AlertTriangle aria-hidden="true" />}>
           <div className="space-y-5">
-            <form className="grid gap-3 sm:grid-cols-2" onSubmit={submitReason} noValidate>
+            {canManageAdjustmentReasons ? <form className="grid gap-3 sm:grid-cols-2" onSubmit={submitReason} noValidate>
               <Field label="Code"><Input value={reasonCode} onChange={(event) => setReasonCode(event.target.value.toUpperCase())} placeholder="DAMAGE" /></Field>
               <Field label="Name"><Input value={reasonName} onChange={(event) => setReasonName(event.target.value)} placeholder="Damaged goods" /></Field>
-              <Field label="Movement type"><select className={selectClassName} value={reasonType} onChange={(event) => setReasonType(event.target.value as typeof reasonType)}><option value="ADJUSTMENT">Adjustment</option><option value="DAMAGE">Damage</option><option value="LOSS">Loss</option></select></Field>
+              <Field label="Movement type"><select className={selectClassName} value={reasonType} onChange={(event) => setReasonType(event.target.value as typeof reasonType)}><option value="ADJUSTMENT">Adjustment</option><option value="DAMAGE">Damage</option><option value="LOSS">Loss</option><option value="OPENING_STOCK">Opening stock</option></select></Field>
               <div className="flex items-end"><Button disabled={isReasonPending} type="submit">{isReasonPending ? <><LoaderCircle className="animate-spin" />Adding reason...</> : <><Settings2 />Add reason</>}</Button></div>
               <div className="sm:col-span-2"><ResultMessage result={reasonResult} /></div>
-            </form>
+            </form> : <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">Your role can post controlled adjustments using active reasons, but only inventory managers can create or change the reason list.</p>}
             {adjustmentReasons.length && adjustmentItems.length ? <><form className="grid gap-3 sm:grid-cols-2" onSubmit={reviewAdjustment} noValidate>
               <Field label="Store"><select className={selectClassName} value={adjustmentStoreId} onChange={(event) => chooseAdjustmentStore(event.target.value)}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></Field>
               <Field label="Reason"><select className={selectClassName} value={adjustmentReasonCode} onChange={(event) => { setAdjustmentReasonCode(event.target.value); setAdjustmentReview(null); }}>{adjustmentReasons.map((reason) => <option key={reason.code} value={reason.code}>{reason.name} ({reason.code})</option>)}</select></Field>
               <ItemSelect label="Item" items={adjustmentItems} productId={adjustmentProductId} variantId={adjustmentVariantId} onChange={(value) => { chooseItem(value, setAdjustmentProductId, setAdjustmentVariantId); setAdjustmentReview(null); }} />
               <Field label="Quantity change"><Input inputMode="decimal" value={adjustmentQuantity} onChange={(event) => { setAdjustmentQuantity(event.target.value); setAdjustmentReview(null); }} placeholder="Use - for a reduction" /></Field>
-              <Field className="sm:col-span-2" label="Reason / notes"><Input value={adjustmentNote} onChange={(event) => { setAdjustmentNote(event.target.value); setAdjustmentReview(null); }} placeholder="Optional supporting note" /></Field>
+              <Field className="sm:col-span-2" label="Explanation"><Input value={adjustmentNote} onChange={(event) => { setAdjustmentNote(event.target.value); setAdjustmentReview(null); setAdjustmentApprovalRequestId(null); }} placeholder="Required: explain why stock is changing" /></Field>
               <div className="sm:col-span-2"><Button disabled={isAdjustmentPending} type="submit"><AlertTriangle /> Review adjustment</Button></div>
             </form>
-            {adjustmentReview ? <AdjustmentReviewCard policy={policies[adjustmentReview.storeId] ?? organizationDefaultPolicy} pending={isAdjustmentPending} review={adjustmentReview} onBack={() => setAdjustmentReview(null)} onPost={postReviewedAdjustment} /> : null}
+            {adjustmentReview ? <AdjustmentReviewCard policy={policies[adjustmentReview.storeId] ?? organizationDefaultPolicy} pending={isAdjustmentPending} review={adjustmentReview} onBack={() => { setAdjustmentReview(null); setAdjustmentApprovalRequestId(null); }} onPost={postReviewedAdjustment} /> : null}
             <ResultMessage result={adjustmentResult} /></> : <Empty message="Create a reason and make a tracked item available in a store to post controlled adjustments." />}
+            {adjustmentApprovalRequestId ? <ManagerApprovalDialog approvalRequestId={adjustmentApprovalRequestId} onApproved={() => {
+              const requestId = adjustmentApprovalRequestId;
+              setAdjustmentApprovalRequestId(null);
+              startAdjustmentTransition(async () => { await executeReviewedAdjustment(requestId); });
+            }} onCancel={() => setAdjustmentApprovalRequestId(null)} operationLabel="Inventory adjustment" /> : null}
           </div>
         </WorkflowCard> : null}
 
@@ -548,6 +615,29 @@ function Empty({ message }: { message: string }) {
 
 function receiptDraft(transfer: Transfer | undefined) {
   return Object.fromEntries((transfer?.lines ?? []).map((line) => [line.id, String(line.quantity - line.receivedQuantity)]));
+}
+
+function pendingOperationId(scope: string, payload: unknown) {
+  const storageKey = `tindio:inventory-operation:${scope}`;
+  const fingerprint = JSON.stringify(payload);
+  const stored = globalThis.sessionStorage.getItem(storageKey);
+
+  if (stored) {
+    try {
+      const candidate = JSON.parse(stored) as { fingerprint?: string; id?: string };
+      if (candidate.fingerprint === fingerprint && typeof candidate.id === "string") return candidate.id;
+    } catch {
+      // Replace malformed session-only retry metadata.
+    }
+  }
+
+  const id = globalThis.crypto.randomUUID();
+  globalThis.sessionStorage.setItem(storageKey, JSON.stringify({ fingerprint, id }));
+  return id;
+}
+
+function clearPendingOperation(scope: string) {
+  globalThis.sessionStorage.removeItem(`tindio:inventory-operation:${scope}`);
 }
 
 function formatQuantity(value: number) {

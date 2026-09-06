@@ -117,6 +117,7 @@ export async function createStockRequestAction(input: unknown): Promise<SupplyCh
     target_requesting_store_id: parsed.data.requestingStoreId,
     target_source_warehouse_id: parsed.data.sourceWarehouseId,
     target_note: parsed.data.note,
+    target_operation_id: parsed.data.operationId,
     target_lines: parsed.data.lines.map((line) => ({
       product_id: line.productId,
       variant_id: line.variantId || null,
@@ -172,6 +173,7 @@ export async function dispatchStockRequestAction(input: unknown): Promise<Supply
     target_organization_id: context.organization.id,
     target_stock_request_id: parsed.data.stockRequestId,
     target_note: parsed.data.note,
+    target_operation_id: parsed.data.operationId,
   });
   if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not dispatch this request.") };
   refreshSupplyChain();
@@ -188,6 +190,7 @@ export async function receiveStockRequestAction(input: unknown): Promise<SupplyC
     target_organization_id: context.organization.id,
     target_stock_request_id: parsed.data.stockRequestId,
     target_note: parsed.data.note,
+    target_operation_id: parsed.data.operationId,
     target_lines: parsed.data.lines.map((line) => ({
       stock_transfer_line_id: line.stockTransferLineId,
       received_quantity: line.receivedQuantity,

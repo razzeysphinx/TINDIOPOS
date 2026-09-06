@@ -10,6 +10,39 @@ async function source(relativePath) {
   return readFile(path.join(repositoryRoot, relativePath), "utf8");
 }
 
+const [phaseTwoMigration, phaseTwoDatabaseTest] = await Promise.all([
+  source("supabase/migrations/20260906070329_purchase_order_receiving_operation_integrity.sql"),
+  source("supabase/tests/database/inventory_purchase_order_receiving_integrity.test.sql"),
+]);
+
+test("Phase 2 gives purchase orders and goods receipts durable operation identity", () => {
+  assert.match(phaseTwoMigration, /purchase_orders_organization_operation_unique/);
+  assert.match(phaseTwoMigration, /goods_receipts_organization_operation_unique/);
+  assert.match(phaseTwoMigration, /receipt_number bigint/);
+  assert.match(phaseTwoMigration, /target_operation_id uuid/);
+  assert.match(phaseTwoMigration, /This operation ID is already assigned to a different goods receipt request/);
+  assert.match(phaseTwoMigration, /drop function if exists public\.receive_purchase_order\(uuid, uuid, jsonb, text\)/);
+});
+
+test("Phase 2 keeps purchase-unit conversion and receiving on the canonical ledger", () => {
+  assert.match(phaseTwoMigration, /purchase_unit_factor_to_base numeric\(14,3\)/);
+  assert.match(phaseTwoMigration, /product_unit\.is_purchase_unit or product_unit\.is_base/);
+  assert.match(phaseTwoMigration, /base_quantity_received := quantity_received \* po_line\.purchase_unit_factor_to_base/);
+  assert.match(phaseTwoMigration, /private\.apply_inventory_change_v2/);
+  assert.match(phaseTwoMigration, /Every order item must be an active tracked item available in the receiving store/);
+  assert.match(phaseTwoMigration, /public\.cancel_purchase_order/);
+});
+
+test("Phase 2 database coverage verifies no stock on ordering, retries, partial/full receiving, cancellation, scope, and authorization", () => {
+  assert.match(phaseTwoDatabaseTest, /Creating a purchase order changed on-hand inventory/);
+  assert.match(phaseTwoDatabaseTest, /Partial receiving or its idempotent replay is incorrect/);
+  assert.match(phaseTwoDatabaseTest, /Full receiving did not post exactly two canonical receipt movements/);
+  assert.match(phaseTwoDatabaseTest, /Cancelling a purchase order changed stock/);
+  assert.match(phaseTwoDatabaseTest, /Receiving-store product availability was not enforced/);
+  assert.match(phaseTwoDatabaseTest, /Unauthenticated purchase-order creation was not denied/);
+  assert.match(phaseTwoDatabaseTest, /ROLLBACK_PHASE_2_PURCHASING_TEST/);
+});
+
 test("Phase 6 organizes the existing purchasing actions into orders, receiving, and suppliers", async () => {
   const workflow = await source("src/features/inventory/advanced-inventory-workflows.tsx");
 

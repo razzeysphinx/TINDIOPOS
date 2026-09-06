@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(36);
+select plan(40);
 
 select has_table('public', 'suppliers', 'suppliers table exists');
 select has_table('public', 'purchase_orders', 'purchase orders table exists');
@@ -31,13 +31,19 @@ select ok(
   'inventory movements accept Phase 9 ledger types'
 );
 select ok(to_regprocedure('public.create_supplier(uuid,text,text,text,text,text,text)') is not null, 'supplier creation routine exists');
-select ok(to_regprocedure('public.create_purchase_order(uuid,uuid,uuid,text,date,jsonb)') is not null, 'purchase order routine exists');
-select ok(to_regprocedure('public.receive_purchase_order(uuid,uuid,jsonb,text)') is not null, 'goods receipt routine exists');
-select ok(to_regprocedure('public.complete_inventory_count(uuid,uuid,text,jsonb)') is not null, 'inventory count routine exists');
-select ok(to_regprocedure('public.transfer_stock(uuid,uuid,uuid,jsonb,text)') is not null, 'stock transfer routine exists');
+select ok(to_regprocedure('public.create_purchase_order(uuid,uuid,uuid,text,date,jsonb,uuid)') is not null, 'purchase order routine exists');
+select ok(to_regprocedure('public.receive_purchase_order(uuid,uuid,jsonb,text,uuid)') is not null, 'goods receipt routine exists');
+select ok(to_regprocedure('public.complete_inventory_count(uuid,uuid,text,jsonb)') is not null, 'legacy one-step count routine remains for migration compatibility');
+select ok(to_regprocedure('public.transfer_stock(uuid,uuid,uuid,jsonb,text)') is not null, 'legacy immediate-transfer routine remains for migration compatibility');
+select ok(to_regprocedure('public.create_inventory_count_draft(uuid,uuid,text)') is not null, 'inventory count draft routine exists');
+select ok(to_regprocedure('public.save_inventory_count_line(uuid,uuid,uuid,uuid,numeric)') is not null, 'inventory count line-save routine exists');
+select ok(to_regprocedure('public.submit_inventory_count_for_review(uuid,uuid)') is not null, 'inventory count review routine exists');
+select ok(to_regprocedure('public.post_inventory_count(uuid,uuid)') is not null, 'inventory count post routine exists');
 select ok(not has_function_privilege('anon', 'public.create_supplier(uuid,text,text,text,text,text,text)', 'execute'), 'anonymous callers cannot create suppliers');
 select ok(not has_table_privilege('authenticated', 'public.suppliers', 'insert'), 'authenticated callers cannot insert suppliers directly');
 select ok(not has_table_privilege('authenticated', 'public.purchase_orders', 'insert'), 'authenticated callers cannot insert purchase orders directly');
+select ok(not has_function_privilege('authenticated', 'public.complete_inventory_count(uuid,uuid,text,jsonb)', 'execute'), 'application roles cannot bypass count review with the legacy one-step count routine');
+select ok(not has_function_privilege('authenticated', 'public.transfer_stock(uuid,uuid,uuid,jsonb,text)', 'execute'), 'application roles cannot bypass transfer approval with the legacy immediate-transfer routine');
 
 insert into auth.users (id, email, raw_user_meta_data)
 values ('91919191-9191-4919-8919-919191919191', 'inventory-owner@tindio.test', '{"full_name":"Inventory Owner"}'::jsonb);
@@ -50,7 +56,8 @@ create temporary table inventory_phase_9_context (
   product_id uuid,
   supplier_id uuid,
   purchase_order_id uuid,
-  purchase_order_line_id uuid
+  purchase_order_line_id uuid,
+  inventory_count_id uuid
 );
 
 grant select, insert, update on inventory_phase_9_context to authenticated;
@@ -114,7 +121,8 @@ set purchase_order_id = public.create_purchase_order(
   supplier_id,
   'First delivery',
   null,
-  jsonb_build_array(jsonb_build_object('product_id', product_id, 'variant_id', null, 'quantity', '10', 'unit_cost_minor', 1000))
+  jsonb_build_array(jsonb_build_object('product_id', product_id, 'variant_id', null, 'purchase_unit_code', 'each', 'quantity', '10', 'unit_cost_minor', 1000)),
+  gen_random_uuid()
 );
 
 select is((select status from public.purchase_orders where id = (select purchase_order_id from inventory_phase_9_context)), 'ordered', 'new purchase order is committed as ordered');
@@ -128,7 +136,7 @@ select is((select ordered_quantity from public.purchase_order_lines where id = (
 
 select lives_ok(
   format(
-    $$select public.receive_purchase_order(%L, %L, %L::jsonb, 'Delivered complete')$$,
+    $$select public.receive_purchase_order(%L, %L, %L::jsonb, 'Delivered complete', gen_random_uuid())$$,
     (select organization_id from inventory_phase_9_context),
     (select purchase_order_id from inventory_phase_9_context),
     jsonb_build_array(jsonb_build_object('purchase_order_line_id', (select purchase_order_line_id from inventory_phase_9_context), 'quantity', '10'))
@@ -144,14 +152,37 @@ select is(
 select is((select status from public.purchase_orders where id = (select purchase_order_id from inventory_phase_9_context)), 'received', 'fully received order is marked received');
 select is((select count(*) from public.goods_receipt_lines), 1::bigint, 'receipt line is recorded');
 
+update inventory_phase_9_context
+set inventory_count_id = public.create_inventory_count_draft(organization_id, store_id, 'Cycle count');
 select lives_ok(
   format(
-    $$select public.complete_inventory_count(%L, %L, 'Cycle count', %L::jsonb)$$,
+    $$select public.save_inventory_count_line(%L, %L, %L, null, 7)$$,
     (select organization_id from inventory_phase_9_context),
-    (select store_id from inventory_phase_9_context),
-    jsonb_build_array(jsonb_build_object('product_id', (select product_id from inventory_phase_9_context), 'variant_id', null, 'counted_quantity', '7'))
+    (select inventory_count_id from inventory_phase_9_context),
+    (select product_id from inventory_phase_9_context)
   ),
-  'inventory count succeeds'
+  'inventory count document saves a counted line'
+);
+select is(
+  (select product_name_snapshot from public.inventory_count_lines where inventory_count_id = (select inventory_count_id from inventory_phase_9_context)),
+  'Phase 9 Tracked Item',
+  'count line keeps the required item snapshot'
+);
+select lives_ok(
+  format(
+    $$select public.submit_inventory_count_for_review(%L, %L)$$,
+    (select organization_id from inventory_phase_9_context),
+    (select inventory_count_id from inventory_phase_9_context)
+  ),
+  'inventory count document is submitted for review'
+);
+select lives_ok(
+  format(
+    $$select public.post_inventory_count(%L, %L)$$,
+    (select organization_id from inventory_phase_9_context),
+    (select inventory_count_id from inventory_phase_9_context)
+  ),
+  'reviewed inventory count posts successfully'
 );
 select is(
   (select quantity from public.inventory_levels where store_id = (select store_id from inventory_phase_9_context) and product_id = (select product_id from inventory_phase_9_context)),
@@ -163,49 +194,6 @@ select is(
   (-3)::numeric,
   'count ledger records only the variance'
 );
-
-select lives_ok(
-  format(
-    $$select public.transfer_stock(%L, %L, %L, %L::jsonb, 'Rebalance stores')$$,
-    (select organization_id from inventory_phase_9_context),
-    (select store_id from inventory_phase_9_context),
-    (select destination_store_id from inventory_phase_9_context),
-    jsonb_build_array(jsonb_build_object('product_id', (select product_id from inventory_phase_9_context), 'variant_id', null, 'quantity', '2'))
-  ),
-  'stock transfer succeeds'
-);
-select is(
-  (select quantity from public.inventory_levels where store_id = (select store_id from inventory_phase_9_context) and product_id = (select product_id from inventory_phase_9_context)),
-  5::numeric,
-  'transfer decreases source stock'
-);
-select is(
-  (select quantity from public.inventory_levels where store_id = (select destination_store_id from inventory_phase_9_context) and product_id = (select product_id from inventory_phase_9_context)),
-  2::numeric,
-  'transfer increases destination stock'
-);
-select is(
-  (select sum(quantity_delta) from public.inventory_movements where movement_type in ('TRANSFER_OUT', 'TRANSFER_IN')),
-  0::numeric,
-  'transfer ledger remains balanced'
-);
-
-create or replace function pg_temp.insufficient_transfer_is_rejected() returns boolean language plpgsql as $$
-begin
-  perform public.transfer_stock(
-    (select organization_id from inventory_phase_9_context),
-    (select store_id from inventory_phase_9_context),
-    (select destination_store_id from inventory_phase_9_context),
-    jsonb_build_array(jsonb_build_object('product_id', (select product_id from inventory_phase_9_context), 'variant_id', null, 'quantity', '6')),
-    'Too much stock'
-  );
-  return false;
-exception when check_violation then
-  return true;
-end;
-$$;
-
-select ok(pg_temp.insufficient_transfer_is_rejected(), 'transfer rejects more stock than the source holds');
 
 select * from finish();
 rollback;

@@ -100,21 +100,20 @@ test("Phase 3 prepares one ordered, resumable inventory-count document per store
   assert.match(migration, /expected_quantity, null, product_name/);
 });
 
-test("Phase 3 keeps expected stock authoritative and posts only the snapshotted variance", async () => {
-  const migration = await source("supabase/migrations/20260905090100_inventory_count_preparation.sql");
+test("Phase 4 keeps the preparation snapshot immutable and posts only the reconciled variance", async () => {
+  const migration = await source("supabase/migrations/20260906121112_inventory_count_concurrent_reconciliation.sql");
 
-  assert.match(migration, /variance := line\.counted_quantity - line\.expected_quantity/);
+  assert.match(migration, /variance := line\.counted_quantity - line\.reconciled_expected_quantity/);
+  assert.match(migration, /set counted_quantity = target_counted_quantity,\s+reconciled_expected_quantity = current_reconciled_expected_quantity/);
+  assert.match(migration, /private\.inventory_count_actor/);
   assert.match(migration, /private\.apply_inventory_change_v2/);
-  assert.match(migration, /set counted_quantity = target_counted_quantity/);
   assert.doesNotMatch(migration, /set\s+quantity\s*=\s*(target_)?counted/i);
-  assert.match(migration, /inventory\.count/);
-  assert.match(migration, /private\.has_store_read_scope/);
 });
 
 test("Blind count print and CSV omit expected and variance columns", async () => {
   const workspace = await source("src/features/inventory/inventory-count-workspace.tsx");
 
   assert.match(workspace, /document\.countMode === "blind" \? \["Item", "Category", "SKU", "Barcode", "Unit", "Counted"\]/);
-  assert.match(workspace, /document\.countMode === "standard" \? <th>Expected<\/th> : null/);
+  assert.match(workspace, /document\.countMode === "standard" \? <>\s*<th>Snapshot<\/th>\s*<th>Reconciled<\/th>/);
   assert.match(workspace, /Expected quantities stay hidden/);
 });

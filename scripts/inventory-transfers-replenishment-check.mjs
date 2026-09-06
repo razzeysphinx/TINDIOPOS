@@ -50,6 +50,26 @@ test("Phase 7 preserves the existing bounded, permission-gated transfer RPC life
   assert.doesNotMatch(legacyActions, /from\("inventory_levels"\)\.update/);
 });
 
+test("Phase 3 makes transfer commands retry-safe and keeps request receipts canonical", async () => {
+  const supplyChainActions = await source("src/features/inventory/supply-chain-actions.ts");
+  const supplyChainWorkflows = await source("src/features/inventory/supply-chain-workflows.tsx");
+  const legacyActions = await source("src/features/inventory/advanced-inventory-actions.ts");
+  const inventoryPage = await source("src/app/(back-office)/back-office/inventory/page.tsx");
+  const migration = await source("supabase/migrations/20260906074121_transfer_lifecycle_operation_integrity.sql");
+  const legacyGuardMigration = await source("supabase/migrations/20260906081000_inventory_count_snapshots_and_legacy_command_guard.sql");
+
+  assert.match(supplyChainActions, /target_operation_id: parsed\.data\.operationId/);
+  assert.match(supplyChainWorkflows, /pendingOperationId\(operationScope, payload\)/);
+  assert.match(supplyChainWorkflows, /transfer TR-\$\{String\(request\.transferNumber\)\.padStart\(6, "0"\)\}/);
+  assert.match(legacyActions, /Create a stock request from Restock items/);
+  assert.match(inventoryPage, /legacyInTransitTransfers/);
+  assert.match(migration, /stock_requests_organization_operation_unique/);
+  assert.match(migration, /stock_transfers_organization_number_unique/);
+  assert.match(migration, /Receive replenishment transfers from the stock request workflow/);
+  assert.match(migration, /revoke execute on function public\.ship_stock_transfer[\s\S]*from authenticated/);
+  assert.match(legacyGuardMigration, /revoke execute on function public\.transfer_stock[\s\S]*from authenticated/);
+});
+
 test("Phase 7 store filtering keeps authorized source warehouses available for transfer requests", async () => {
   const replenishmentPage = await source("src/app/(back-office)/back-office/replenishment/page.tsx");
 

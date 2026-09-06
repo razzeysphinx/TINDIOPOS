@@ -18,6 +18,7 @@ export type InventoryWorkspace = "control" | "restock" | "purchasing";
 
 type InventoryWorkspaceNavigationProps = {
   activeTab: InventoryControlTab | StockRestockTab | PurchasingTab;
+  canAdjust?: boolean;
   canCount?: boolean;
   canManage: boolean;
   canView?: boolean;
@@ -70,6 +71,7 @@ function tabHref(workspace: InventoryWorkspace, tab: string, storeId?: string | 
  */
 export function InventoryWorkspaceNavigation({
   activeTab,
+  canAdjust = false,
   canCount = false,
   canManage,
   canView = false,
@@ -78,7 +80,12 @@ export function InventoryWorkspaceNavigation({
   workspace,
 }: InventoryWorkspaceNavigationProps) {
   const visibleControlItems = inventoryControlItems.filter((item) => {
-    if (!canManage && !(canView && (item.id === "overview" || item.id === "health" || item.id === "activity")) && !(canCount && item.id === "counts")) return false;
+    if (
+      !canManage
+      && !(canView && (item.id === "overview" || item.id === "health" || item.id === "activity"))
+      && !(canAdjust && item.id === "adjustments")
+      && !(canCount && item.id === "counts")
+    ) return false;
     return item.id !== "production" || canUseProduction;
   });
   const visiblePurchasingItems = purchasingItems.filter(() => canManage);

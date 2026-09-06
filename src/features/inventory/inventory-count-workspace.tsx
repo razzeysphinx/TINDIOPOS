@@ -47,7 +47,9 @@ type CountLine = {
   barcode: string | null;
   unit: string;
   expectedQuantity: number;
+  reconciledExpectedQuantity: number | null;
   countedQuantity: number | null;
+  countedAt: string | null;
 };
 type CountDocument = {
   id: string;
@@ -259,9 +261,9 @@ function CountDetailDrawer({ document, items, message, onCancel, onPost, onSaveL
   const selectedLine = document.lines.find((line) => itemKey(line) === productKey) ?? null;
   const selectedItem = selectedLine ?? items.find((item) => itemKey(item) === productKey) ?? null;
   const unexpectedItems = items.filter((item) => !document.lines.some((line) => itemKey(line) === itemKey(item)));
-  const matched = document.lines.filter((line) => line.countedQuantity !== null && line.countedQuantity === line.expectedQuantity).length;
-  const short = document.lines.filter((line) => line.countedQuantity !== null && line.countedQuantity < line.expectedQuantity).length;
-  const over = document.lines.filter((line) => line.countedQuantity !== null && line.countedQuantity > line.expectedQuantity).length;
+  const matched = document.lines.filter((line) => line.countedQuantity !== null && line.countedQuantity === reconciliationExpected(line)).length;
+  const short = document.lines.filter((line) => line.countedQuantity !== null && line.countedQuantity < reconciliationExpected(line)).length;
+  const over = document.lines.filter((line) => line.countedQuantity !== null && line.countedQuantity > reconciliationExpected(line)).length;
 
   const saveLine = async () => {
     if (!selectedItem || quantity === "") return;
@@ -292,10 +294,10 @@ function CountDetailDrawer({ document, items, message, onCancel, onPost, onSaveL
       </form> : null}
 
       <section aria-labelledby="count-sheet-title">
-        <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="font-medium" id="count-sheet-title">Count sheet</h3><p className="mt-1 text-sm text-muted-foreground">Prepared items remain in their saved order. {document.countMode === "blind" ? "Expected quantities stay hidden." : "Expected, physical, and variance values are shown."}</p></div><div className="flex gap-2"><Button onClick={print} size="sm" type="button" variant="outline"><Printer />Print</Button><Button onClick={() => downloadCountCsv(document)} size="sm" type="button" variant="outline"><Download />CSV</Button></div></div>
-        <div className="mt-3 overflow-x-auto rounded-xl border"><table className="w-full min-w-[34rem] text-sm"><thead className="bg-muted/30 text-left text-xs text-muted-foreground"><tr><th className="px-3 py-2">Item</th><th className="px-3 py-2">SKU / barcode</th>{document.countMode === "standard" ? <th className="px-3 py-2 text-right">Expected</th> : null}<th className="px-3 py-2 text-right">Counted</th>{document.countMode === "standard" ? <th className="px-3 py-2 text-right">Variance</th> : null}</tr></thead><tbody className="divide-y">{document.lines.map((line) => {
-          const variance = line.countedQuantity === null ? null : line.countedQuantity - line.expectedQuantity;
-          return <tr key={line.id}><td className="px-3 py-2"><span className="font-medium">{line.label}</span><span className="block text-xs text-muted-foreground">{line.categoryName}</span></td><td className="px-3 py-2 text-muted-foreground">{line.sku || line.barcode || "—"}</td>{document.countMode === "standard" ? <td className="px-3 py-2 text-right">{formatQuantity(line.expectedQuantity)}</td> : null}<td className="px-3 py-2 text-right">{line.countedQuantity === null ? <span className="text-muted-foreground">Not counted</span> : formatQuantity(line.countedQuantity)}</td>{document.countMode === "standard" ? <td className="px-3 py-2 text-right">{variance === null ? "—" : `${variance > 0 ? "+" : ""}${formatQuantity(variance)}`}</td> : null}</tr>;
+        <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="font-medium" id="count-sheet-title">Count sheet</h3><p className="mt-1 text-sm text-muted-foreground">Prepared items remain in their saved order. {document.countMode === "blind" ? "Expected quantities stay hidden." : "The snapshot remains historical; reconciliation reflects authoritative stock when each physical quantity was saved."}</p></div><div className="flex gap-2"><Button onClick={print} size="sm" type="button" variant="outline"><Printer />Print</Button><Button onClick={() => downloadCountCsv(document)} size="sm" type="button" variant="outline"><Download />CSV</Button></div></div>
+        <div className="mt-3 overflow-x-auto rounded-xl border"><table className="w-full min-w-[42rem] text-sm"><thead className="bg-muted/30 text-left text-xs text-muted-foreground"><tr><th className="px-3 py-2">Item</th><th className="px-3 py-2">SKU / barcode</th>{document.countMode === "standard" ? <><th className="px-3 py-2 text-right">Snapshot</th><th className="px-3 py-2 text-right">Reconciled</th></> : null}<th className="px-3 py-2 text-right">Counted</th>{document.countMode === "standard" ? <th className="px-3 py-2 text-right">Variance</th> : null}</tr></thead><tbody className="divide-y">{document.lines.map((line) => {
+          const variance = line.countedQuantity === null || line.reconciledExpectedQuantity === null ? null : line.countedQuantity - line.reconciledExpectedQuantity;
+          return <tr key={line.id}><td className="px-3 py-2"><span className="font-medium">{line.label}</span><span className="block text-xs text-muted-foreground">{line.categoryName}</span></td><td className="px-3 py-2 text-muted-foreground">{line.sku || line.barcode || "—"}</td>{document.countMode === "standard" ? <><td className="px-3 py-2 text-right">{formatQuantity(line.expectedQuantity)}</td><td className="px-3 py-2 text-right">{line.reconciledExpectedQuantity === null ? <span className="text-muted-foreground">Not reconciled</span> : formatQuantity(line.reconciledExpectedQuantity)}</td></> : null}<td className="px-3 py-2 text-right">{line.countedQuantity === null ? <span className="text-muted-foreground">Not counted</span> : formatQuantity(line.countedQuantity)}</td>{document.countMode === "standard" ? <td className="px-3 py-2 text-right">{variance === null ? "—" : `${variance > 0 ? "+" : ""}${formatQuantity(variance)}`}</td> : null}</tr>;
         })}</tbody></table></div>
       </section>
       <ResultMessage result={message} />
@@ -311,16 +313,16 @@ function CountDetailDrawer({ document, items, message, onCancel, onPost, onSaveL
 function CountPrintDocument({ document }: { document: CountDocument }) {
   return <article className="hidden" data-inventory-count-print-document>
     <header data-inventory-print-header><p>TINDIO INVENTORY COUNT</p><h1>{formatReference(document.countNumber)}</h1><dl><div><dt>Store</dt><dd>{document.storeName}</dd></div><div><dt>Mode</dt><dd className="capitalize">{document.countMode}</dd></div><div><dt>Scope</dt><dd>{formatScope(document.scopeType)}</dd></div><div><dt>Prepared order</dt><dd>{formatSort(document.sortMode)}</dd></div></dl></header>
-    <table data-inventory-print-table><thead><tr><th>Item</th><th>Category</th><th>SKU / barcode</th>{document.countMode === "standard" ? <th>Expected</th> : null}<th>Counted</th></tr></thead><tbody>{document.lines.map((line) => <tr key={line.id}><td>{line.label}<br /><span>{line.unit}</span></td><td>{line.categoryName}</td><td>{line.sku || line.barcode || "—"}</td>{document.countMode === "standard" ? <td>{formatQuantity(line.expectedQuantity)}</td> : null}<td>{line.countedQuantity === null ? "________________" : formatQuantity(line.countedQuantity)}</td></tr>)}</tbody></table>
+    <table data-inventory-print-table><thead><tr><th>Item</th><th>Category</th><th>SKU / barcode</th>{document.countMode === "standard" ? <><th>Snapshot</th><th>Reconciled</th></> : null}<th>Counted</th>{document.countMode === "standard" ? <th>Variance</th> : null}</tr></thead><tbody>{document.lines.map((line) => { const variance = line.countedQuantity === null || line.reconciledExpectedQuantity === null ? null : line.countedQuantity - line.reconciledExpectedQuantity; return <tr key={line.id}><td>{line.label}<br /><span>{line.unit}</span></td><td>{line.categoryName}</td><td>{line.sku || line.barcode || "—"}</td>{document.countMode === "standard" ? <><td>{formatQuantity(line.expectedQuantity)}</td><td>{line.reconciledExpectedQuantity === null ? "—" : formatQuantity(line.reconciledExpectedQuantity)}</td></> : null}<td>{line.countedQuantity === null ? "________________" : formatQuantity(line.countedQuantity)}</td>{document.countMode === "standard" ? <td>{variance === null ? "—" : `${variance > 0 ? "+" : ""}${formatQuantity(variance)}`}</td> : null}</tr>; })}</tbody></table>
   </article>;
 }
 
 function downloadCountCsv(document: CountDocument) {
-  const headers = document.countMode === "blind" ? ["Item", "Category", "SKU", "Barcode", "Unit", "Counted"] : ["Item", "Category", "SKU", "Barcode", "Unit", "Expected", "Counted", "Variance"];
+  const headers = document.countMode === "blind" ? ["Item", "Category", "SKU", "Barcode", "Unit", "Counted"] : ["Item", "Category", "SKU", "Barcode", "Unit", "Snapshot expected", "Reconciled expected", "Counted", "Variance"];
   const rows = document.lines.map((line) => {
     const base: Array<string | number> = [line.label, line.categoryName, line.sku ?? "", line.barcode ?? "", line.unit];
     if (document.countMode === "blind") return [...base, line.countedQuantity ?? ""];
-    return [...base, line.expectedQuantity, line.countedQuantity ?? "", line.countedQuantity === null ? "" : line.countedQuantity - line.expectedQuantity];
+    return [...base, line.expectedQuantity, line.reconciledExpectedQuantity ?? "", line.countedQuantity ?? "", line.countedQuantity === null || line.reconciledExpectedQuantity === null ? "" : line.countedQuantity - line.reconciledExpectedQuantity];
   });
   const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
   const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
@@ -334,6 +336,7 @@ function downloadCountCsv(document: CountDocument) {
 function documentBodyCleanup() { window.document.body.removeAttribute("data-print-mode"); }
 function csvCell(value: string | number) { return `"${String(value).replaceAll('"', '""')}"`; }
 function itemKey(item: Pick<Item, "productId" | "variantId"> | Pick<CountLine, "productId" | "variantId">) { return `${item.productId}|${item.variantId ?? ""}`; }
+function reconciliationExpected(line: CountLine) { return line.reconciledExpectedQuantity ?? line.expectedQuantity; }
 function Field({ children, label }: { children: ReactNode; label: string }) { return <label className="grid gap-1.5 text-sm font-medium"><span>{label}</span>{children}</label>; }
 function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border bg-muted/20 p-3"><p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p><p className="mt-1 text-lg font-semibold">{value}</p></div>; }
 function ResultMessage({ result }: { result: string | null }) { return result ? <p aria-live="polite" className="text-sm text-muted-foreground">{result}</p> : null; }

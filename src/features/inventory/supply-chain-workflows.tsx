@@ -69,6 +69,7 @@ export type ReplenishmentRule = {
 export type SupplyChainRequest = {
   id: string;
   requestNumber: number;
+  transferNumber: number | null;
   status: "requested" | "approved" | "picking" | "dispatched" | "partially_received" | "received" | "received_with_discrepancy" | "cancelled";
   requestingStoreName: string;
   warehouseName: string;
@@ -287,14 +288,20 @@ export function SupplyChainWorkflows({
   function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void runAction("request", async () => {
-      const result = await createStockRequestAction({
+      const payload = {
         requestingStoreId: requestStoreId,
         sourceWarehouseId: requestWarehouseId,
         note: requestNote,
         lines: requestLines,
+      };
+      const operationScope = "stock-request:create";
+      const result = await createStockRequestAction({
+        ...payload,
+        operationId: pendingOperationId(operationScope, payload),
       });
       finish(result, setRequestResult);
       if (result.ok) {
+        clearPendingOperation(operationScope);
         setRequestNote("");
         setRequestLines([emptyRequestLine(requestItems[0])]);
       }
@@ -313,10 +320,16 @@ export function SupplyChainWorkflows({
   }
 
   function dispatchRequest(request: SupplyChainRequest) {
-    void runAction(`workflow:${request.id}`, async () => finishWorkflow(request.id, await dispatchStockRequestAction({
-      stockRequestId: request.id,
-      note: dispatchNotes[request.id] ?? "",
-    })));
+    const payload = { stockRequestId: request.id, note: dispatchNotes[request.id] ?? "" };
+    const operationScope = `stock-request:dispatch:${request.id}`;
+    void runAction(`workflow:${request.id}`, async () => {
+      const result = await dispatchStockRequestAction({
+        ...payload,
+        operationId: pendingOperationId(operationScope, payload),
+      });
+      finishWorkflow(request.id, result);
+      if (result.ok) clearPendingOperation(operationScope);
+    });
   }
 
   function receiveRequest(request: SupplyChainRequest) {
@@ -332,11 +345,16 @@ export function SupplyChainWorkflows({
         };
       })
       .filter((line) => Number(line.receivedQuantity) + Number(line.shortQuantity) > 0);
-    void runAction(`workflow:${request.id}`, async () => finishWorkflow(request.id, await receiveStockRequestAction({
-      stockRequestId: request.id,
-      note: receiptNotes[request.id] ?? "",
-      lines,
-    })));
+    const payload = { stockRequestId: request.id, note: receiptNotes[request.id] ?? "", lines };
+    const operationScope = `stock-request:receive:${request.id}`;
+    void runAction(`workflow:${request.id}`, async () => {
+      const result = await receiveStockRequestAction({
+        ...payload,
+        operationId: pendingOperationId(operationScope, payload),
+      });
+      finishWorkflow(request.id, result);
+      if (result.ok) clearPendingOperation(operationScope);
+    });
   }
 
   return (
@@ -465,7 +483,7 @@ function StockRequestCard({ request, isPending, dispatchNote, receiptNote, resul
   const canReceive = request.status === "dispatched" || request.status === "partially_received";
   const unresolvedQuantity = request.lines.reduce((total, line) => total + Math.max(0, line.dispatchedQuantity - line.receivedQuantity - line.shortQuantity), 0);
   const discrepancyQuantity = request.lines.reduce((total, line) => total + line.shortQuantity, 0);
-  return <Card><CardHeader className="flex-row items-start justify-between gap-4"><div><CardTitle>Request #{request.requestNumber}</CardTitle><CardDescription className="mt-1">{request.warehouseName} → {request.requestingStoreName} · submitted {formatDate(request.requestedAt)}</CardDescription></div><Badge variant={request.status === "received_with_discrepancy" ? "secondary" : "outline"}>{statusLabel(request.status)}</Badge></CardHeader><CardContent className="space-y-4">
+  return <Card><CardHeader className="flex-row items-start justify-between gap-4"><div><CardTitle>Request #{request.requestNumber}</CardTitle><CardDescription className="mt-1">{request.warehouseName} → {request.requestingStoreName} · submitted {formatDate(request.requestedAt)}{request.transferNumber ? ` · transfer TR-${String(request.transferNumber).padStart(6, "0")}` : ""}</CardDescription></div><Badge variant={request.status === "received_with_discrepancy" ? "secondary" : "outline"}>{statusLabel(request.status)}</Badge></CardHeader><CardContent className="space-y-4">
     {request.note ? <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">{request.note}</p> : null}
     <TransferTimeline request={request} />
     {unresolvedQuantity > 0 || discrepancyQuantity > 0 ? <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><div><p className="font-medium">Transfer requires attention</p><p className="mt-1 text-xs">{unresolvedQuantity > 0 ? `${formatQuantity(unresolvedQuantity)} units remain in transit. ` : ""}{discrepancyQuantity > 0 ? `${formatQuantity(discrepancyQuantity)} units were recorded short and remain in the audit trail.` : ""}</p></div></div> : null}
@@ -526,6 +544,29 @@ function Empty({ message }: { message: string }) {
 
 function emptyRequestLine(item: SupplyChainItem | undefined): RequestDraft {
   return { productId: item?.productId ?? "", variantId: item?.variantId ?? "", quantity: "1" };
+}
+
+function pendingOperationId(scope: string, payload: unknown) {
+  const storageKey = `tindio:inventory-operation:${scope}`;
+  const fingerprint = JSON.stringify(payload);
+  const stored = globalThis.sessionStorage.getItem(storageKey);
+
+  if (stored) {
+    try {
+      const candidate = JSON.parse(stored) as { fingerprint?: string; id?: string };
+      if (candidate.fingerprint === fingerprint && typeof candidate.id === "string") return candidate.id;
+    } catch {
+      // Replace only malformed browser-session state; no business data is stored here.
+    }
+  }
+
+  const id = globalThis.crypto.randomUUID();
+  globalThis.sessionStorage.setItem(storageKey, JSON.stringify({ fingerprint, id }));
+  return id;
+}
+
+function clearPendingOperation(scope: string) {
+  globalThis.sessionStorage.removeItem(`tindio:inventory-operation:${scope}`);
 }
 
 function itemKey(item: Pick<SupplyChainItem, "productId" | "variantId">) {

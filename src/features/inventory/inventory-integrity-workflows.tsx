@@ -8,13 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useUnsavedChanges } from "@/components/unsaved-changes/unsaved-changes-provider";
 import {
   createAdjustmentReasonAction,
   produceCompositeAction,
   receiveStockTransferAction,
   recordInventoryAdjustmentV2Action,
+  removeInventoryPolicyOverrideAction,
   returnToSupplierAction,
   updateInventoryPolicyAction,
+  updateOrganizationInventoryPolicyAction,
 } from "@/features/inventory/advanced-inventory-actions";
 import type { AdvancedInventoryItem } from "@/features/inventory/advanced-inventory-workflows";
 
@@ -23,6 +26,7 @@ const selectClassName =
 
 type StoreOption = { id: string; name: string };
 type SupplierOption = { id: string; name: string; isActive: boolean };
+type NegativeStockPolicy = "allow" | "warn" | "block";
 type AdjustmentReason = { code: string; name: string; movementType: "ADJUSTMENT" | "DAMAGE" | "LOSS" };
 type Transfer = {
   id: string;
@@ -68,6 +72,8 @@ export function InventoryIntegrityWorkflows({
   items,
   suppliers,
   policies,
+  organizationDefaultPolicy,
+  canManageOrganizationDefault,
   adjustmentReasons,
   inTransitTransfers,
   composites,
@@ -76,14 +82,18 @@ export function InventoryIntegrityWorkflows({
   stores: StoreOption[];
   items: AdvancedInventoryItem[];
   suppliers: SupplierOption[];
-  policies: Record<string, "allow" | "warn" | "block">;
+  policies: Record<string, NegativeStockPolicy>;
+  organizationDefaultPolicy: NegativeStockPolicy;
+  canManageOrganizationDefault: boolean;
   adjustmentReasons: AdjustmentReason[];
   inTransitTransfers: Transfer[];
   composites: CompositeOption[];
   sections?: readonly InventoryIntegritySection[];
 }) {
   const router = useRouter();
-  const [isPolicyPending, startPolicyTransition] = useTransition();
+  const [isDefaultPolicyPending, startDefaultPolicyTransition] = useTransition();
+  const [isOverridePolicyPending, startOverridePolicyTransition] = useTransition();
+  const [isRemoveOverridePending, startRemoveOverrideTransition] = useTransition();
   const [isReasonPending, startReasonTransition] = useTransition();
   const [isAdjustmentPending, startAdjustmentTransition] = useTransition();
   const [isTransferPending, startTransferTransition] = useTransition();
@@ -91,9 +101,24 @@ export function InventoryIntegrityWorkflows({
   const [isProductionPending, startProductionTransition] = useTransition();
   const firstStoreId = stores[0]?.id ?? "";
   const firstItem = items[0];
-  const [policyStoreId, setPolicyStoreId] = useState(firstStoreId);
-  const [policy, setPolicy] = useState<"allow" | "warn" | "block">(policies[firstStoreId] ?? "block");
-  const [policyResult, setPolicyResult] = useState<Result | null>(null);
+  const [defaultPolicy, setDefaultPolicy] = useState<NegativeStockPolicy>(organizationDefaultPolicy);
+  const [defaultPolicyResult, setDefaultPolicyResult] = useState<Result | null>(null);
+  const [isOverrideEditorOpen, setIsOverrideEditorOpen] = useState(false);
+  const [overrideStoreId, setOverrideStoreId] = useState(firstStoreId);
+  const [overridePolicy, setOverridePolicy] = useState<NegativeStockPolicy>(policies[firstStoreId] ?? organizationDefaultPolicy);
+  const [overrideResult, setOverrideResult] = useState<Result | null>(null);
+  const [removingOverrideStoreId, setRemovingOverrideStoreId] = useState<string | null>(null);
+  const persistedOverridePolicy = policies[overrideStoreId] ?? organizationDefaultPolicy;
+  const hasUnsavedPolicyChanges = defaultPolicy !== organizationDefaultPolicy
+    || (isOverrideEditorOpen && overridePolicy !== persistedOverridePolicy);
+  const { requestNavigation: requestPolicyChange } = useUnsavedChanges({
+    copy: {
+      title: "Discard unsaved stock policy changes?",
+      description: "The policy changes you entered have not been saved. Leaving or changing stores will discard them.",
+    },
+    isDirty: hasUnsavedPolicyChanges,
+    isSaving: isDefaultPolicyPending || isOverridePolicyPending || isRemoveOverridePending,
+  });
   const [reasonCode, setReasonCode] = useState("");
   const [reasonName, setReasonName] = useState("");
   const [reasonType, setReasonType] = useState<"ADJUSTMENT" | "DAMAGE" | "LOSS">("ADJUSTMENT");
@@ -148,9 +173,34 @@ export function InventoryIntegrityWorkflows({
     if (result.ok) router.refresh();
   }
 
-  function choosePolicyStore(storeId: string) {
-    setPolicyStoreId(storeId);
-    setPolicy(policies[storeId] ?? "block");
+  function openOverrideEditor(storeId = firstStoreId) {
+    setOverrideStoreId(storeId);
+    setOverridePolicy(policies[storeId] ?? organizationDefaultPolicy);
+    setOverrideResult(null);
+    setIsOverrideEditorOpen(true);
+  }
+
+  function requestOverrideEditor(storeId = firstStoreId) {
+    if (isOverrideEditorOpen && storeId !== overrideStoreId) {
+      requestPolicyChange(() => openOverrideEditor(storeId));
+      return;
+    }
+    openOverrideEditor(storeId);
+  }
+
+  function chooseOverrideStore(storeId: string) {
+    setOverrideStoreId(storeId);
+    setOverridePolicy(policies[storeId] ?? organizationDefaultPolicy);
+    setOverrideResult(null);
+  }
+
+  function requestOverrideStoreChange(storeId: string) {
+    if (storeId === overrideStoreId) return;
+    requestPolicyChange(() => chooseOverrideStore(storeId));
+  }
+
+  function requestCloseOverrideEditor() {
+    requestPolicyChange(() => setIsOverrideEditorOpen(false));
   }
 
   function chooseItem(
@@ -178,9 +228,36 @@ export function InventoryIntegrityWorkflows({
     setTransferQuantities(receiptDraft(transfer));
   }
 
-  function submitPolicy(event: FormEvent<HTMLFormElement>) {
+  function submitDefaultPolicy(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    startPolicyTransition(async () => complete(await updateInventoryPolicyAction({ storeId: policyStoreId, negativeStockPolicy: policy }), setPolicyResult));
+    startDefaultPolicyTransition(async () => complete(
+      await updateOrganizationInventoryPolicyAction({ negativeStockPolicy: defaultPolicy }),
+      setDefaultPolicyResult,
+    ));
+  }
+
+  function submitOverridePolicy(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    startOverridePolicyTransition(async () => complete(
+      await updateInventoryPolicyAction({ storeId: overrideStoreId, negativeStockPolicy: overridePolicy }),
+      setOverrideResult,
+    ));
+  }
+
+  function removeOverride(storeId = overrideStoreId) {
+    setRemovingOverrideStoreId(storeId);
+    startRemoveOverrideTransition(async () => {
+      try {
+        const result = await removeInventoryPolicyOverrideAction({ storeId });
+        complete(result, setOverrideResult);
+        if (result.ok) {
+          setOverridePolicy(organizationDefaultPolicy);
+          setIsOverrideEditorOpen(false);
+        }
+      } finally {
+        setRemovingOverrideStoreId(null);
+      }
+    });
   }
 
   function submitReason(event: FormEvent<HTMLFormElement>) {
@@ -289,20 +366,46 @@ export function InventoryIntegrityWorkflows({
         <p className="mt-1 text-sm text-muted-foreground">Set stock safeguards and record traceable operations without silently changing balances.</p>
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
-        {showSafeguards ? <WorkflowCard title="Negative-stock safeguard" description="Choose what TINDIO should do when a sale would use more stock than is currently recorded." icon={<Settings2 aria-hidden="true" />}>
-          {stores.length ? <form className="space-y-3" onSubmit={submitPolicy} noValidate>
-            <Field label="Store"><select className={selectClassName} value={policyStoreId} onChange={(event) => choosePolicyStore(event.target.value)}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></Field>
-            <Field label="When a sale would use more stock than is recorded"><select className={selectClassName} value={policy} onChange={(event) => setPolicy(event.target.value as typeof policy)}><option value="block">Block the sale</option><option value="warn">Warn cashier, but allow sale</option><option value="allow">Allow sale without warning</option></select></Field>
-            <p className="text-sm leading-6 text-muted-foreground">
-              {policy === "block"
-                ? "The cashier cannot continue to payment until the cart is corrected."
-                : policy === "warn"
-                  ? "The item can be added normally. Before payment, TINDIO warns the cashier so they can review the cart or proceed anyway."
-                  : "The cashier can continue normally even if recorded stock becomes negative."}
-            </p>
-            <SubmitRow pending={isPolicyPending} pendingLabel="Saving safeguard..." result={policyResult} label="Save safeguard" icon={<Settings2 />} />
-          </form> : <Empty message="Create a store before setting stock safeguards." />}
-        </WorkflowCard> : null}
+        {showSafeguards ? <div className="xl:col-span-2"><WorkflowCard title="Negative Stock Policy" description="Set one default for the organization. Add an override only when a store needs different checkout behavior." icon={<Settings2 aria-hidden="true" />}>
+          {stores.length ? <div className="space-y-6">
+            <form className="rounded-xl border bg-muted/20 p-4" onSubmit={submitDefaultPolicy} noValidate>
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                <div className="space-y-3">
+                  <Field label="Default policy for all stores"><PolicySelect disabled={!canManageOrganizationDefault} value={defaultPolicy} onChange={setDefaultPolicy} /></Field>
+                  <p className="text-sm leading-6 text-muted-foreground">Applies automatically to every store unless that store has an override.</p>
+                  <PolicyDescription policy={defaultPolicy} />
+                </div>
+                {canManageOrganizationDefault ? <div className="space-y-2"><Button disabled={isDefaultPolicyPending} type="submit">{isDefaultPolicyPending ? <><LoaderCircle className="animate-spin" />Saving default...</> : <><Settings2 />Save default</>}</Button><ResultMessage result={defaultPolicyResult} /></div> : <p className="max-w-sm text-sm text-muted-foreground">Your access is limited to store overrides. An organization-wide manager controls the default.</p>}
+              </div>
+            </form>
+
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div><h3 className="font-medium">Store overrides</h3><p className="mt-1 text-sm text-muted-foreground">Optional. Stores without an override inherit the organization default.</p></div>
+                <Button onClick={() => requestOverrideEditor()} type="button" variant="outline"><Settings2 />Add store override</Button>
+              </div>
+              <div className="overflow-x-auto rounded-xl border">
+                <table className="w-full min-w-[42rem] text-left text-sm">
+                  <thead className="border-b bg-muted/30 text-xs text-muted-foreground"><tr><th className="px-3 py-2 font-medium">Store</th><th className="px-3 py-2 font-medium">Effective policy</th><th className="px-3 py-2 font-medium">Source</th><th className="px-3 py-2 text-right font-medium">Action</th></tr></thead>
+                  <tbody className="divide-y">
+                    {stores.map((store) => {
+                      const override = policies[store.id];
+                      const effectivePolicy = override ?? organizationDefaultPolicy;
+                      return <tr key={store.id}><td className="px-3 py-3 font-medium">{store.name}</td><td className="px-3 py-3"><PolicyBadge policy={effectivePolicy} /></td><td className="px-3 py-3 text-muted-foreground">{override ? "Store override" : "Organization default"}</td><td className="px-3 py-3 text-right"><div className="flex justify-end gap-2">{override ? <><Button onClick={() => requestOverrideEditor(store.id)} size="sm" type="button" variant="outline">Edit override</Button><Button disabled={isRemoveOverridePending && removingOverrideStoreId === store.id} onClick={() => removeOverride(store.id)} size="sm" type="button" variant="destructive">{isRemoveOverridePending && removingOverrideStoreId === store.id ? "Removing..." : "Remove override"}</Button></> : <Button onClick={() => requestOverrideEditor(store.id)} size="sm" type="button" variant="outline">Add override</Button>}</div></td></tr>;
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {isOverrideEditorOpen ? <form className="grid gap-3 rounded-xl border border-dashed p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end" onSubmit={submitOverridePolicy} noValidate>
+                <Field label="Store"><select className={selectClassName} value={overrideStoreId} onChange={(event) => requestOverrideStoreChange(event.target.value)}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></Field>
+                <Field label="Policy"><PolicySelect value={overridePolicy} onChange={setOverridePolicy} /></Field>
+                <div className="flex flex-wrap gap-2"><Button disabled={isOverridePolicyPending} type="submit">{isOverridePolicyPending ? <><LoaderCircle className="animate-spin" />Saving override...</> : <><Settings2 />Save override</>}</Button>{policies[overrideStoreId] ? <Button disabled={isRemoveOverridePending && removingOverrideStoreId === overrideStoreId} onClick={() => removeOverride()} type="button" variant="destructive">{isRemoveOverridePending && removingOverrideStoreId === overrideStoreId ? "Removing..." : "Remove override"}</Button> : null}<Button onClick={requestCloseOverrideEditor} type="button" variant="ghost">Cancel</Button></div>
+                <div className="md:col-span-3"><PolicyDescription policy={overridePolicy} /><ResultMessage result={overrideResult} /></div>
+              </form> : null}
+            </div>
+          </div> : <Empty message="Create a store before setting stock safeguards." />}
+        </WorkflowCard></div> : null}
 
         {showAdjustments ? <WorkflowCard title="Adjustment reasons" description="Create controlled reasons, then post an adjustment with the selected reason code." icon={<AlertTriangle aria-hidden="true" />}>
           <div className="space-y-5">
@@ -321,7 +424,7 @@ export function InventoryIntegrityWorkflows({
               <Field className="sm:col-span-2" label="Reason / notes"><Input value={adjustmentNote} onChange={(event) => { setAdjustmentNote(event.target.value); setAdjustmentReview(null); }} placeholder="Optional supporting note" /></Field>
               <div className="sm:col-span-2"><Button disabled={isAdjustmentPending} type="submit"><AlertTriangle /> Review adjustment</Button></div>
             </form>
-            {adjustmentReview ? <AdjustmentReviewCard policy={policies[adjustmentReview.storeId] ?? "block"} pending={isAdjustmentPending} review={adjustmentReview} onBack={() => setAdjustmentReview(null)} onPost={postReviewedAdjustment} /> : null}
+            {adjustmentReview ? <AdjustmentReviewCard policy={policies[adjustmentReview.storeId] ?? organizationDefaultPolicy} pending={isAdjustmentPending} review={adjustmentReview} onBack={() => setAdjustmentReview(null)} onPost={postReviewedAdjustment} /> : null}
             <ResultMessage result={adjustmentResult} /></> : <Empty message="Create a reason and make a tracked item available in a store to post controlled adjustments." />}
           </div>
         </WorkflowCard> : null}
@@ -397,6 +500,33 @@ function WorkflowCard({ title, description, icon, children }: { title: string; d
 
 function Field({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) {
   return <div className={`grid gap-1.5 ${className}`}><Label>{label}</Label>{children}</div>;
+}
+
+function PolicySelect({ disabled = false, value, onChange }: { disabled?: boolean; value: NegativeStockPolicy; onChange: (value: NegativeStockPolicy) => void }) {
+  return <select className={selectClassName} disabled={disabled} value={value} onChange={(event) => onChange(event.target.value as NegativeStockPolicy)}>
+    <option value="block">Block the sale</option>
+    <option value="warn">Warn cashier, but allow sale</option>
+    <option value="allow">Allow sale without warning</option>
+  </select>;
+}
+
+function PolicyBadge({ policy }: { policy: NegativeStockPolicy }) {
+  const label = policy === "block" ? "Block" : policy === "warn" ? "Warn" : "Allow";
+  const className = policy === "block"
+    ? "bg-destructive/10 text-destructive"
+    : policy === "warn"
+      ? "bg-amber-500/10 text-amber-800 dark:text-amber-300"
+      : "bg-primary/10 text-primary";
+  return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${className}`}>{label}</span>;
+}
+
+function PolicyDescription({ policy }: { policy: NegativeStockPolicy }) {
+  const description = policy === "block"
+    ? "Block: the cashier cannot continue to payment until the cart is corrected."
+    : policy === "warn"
+      ? "Warn: the cashier is warned at Charge and may review or proceed using the existing POS workflow."
+      : "Allow: the cashier can continue normally even when recorded stock becomes negative.";
+  return <p className="text-sm leading-6 text-muted-foreground">{description}</p>;
 }
 
 function ItemSelect({ label, items, productId, variantId, onChange }: { label: string; items: AdvancedInventoryItem[]; productId: string; variantId: string; onChange: (value: string) => void }) {

@@ -28,11 +28,11 @@ test("Phase 7 keeps replenishment suggestions source-aware and non-automatic", a
   const workflow = await source("src/features/inventory/supply-chain-workflows.tsx");
 
   assert.match(workflow, /function ReplenishmentRecommendations/);
-  assert.match(workflow, /Suggested transfer source/);
+  assert.match(workflow, /Suggested internal source/);
   assert.match(workflow, /Prepare transfer request/);
   assert.match(workflow, /Plan supplier purchase/);
   assert.match(workflow, /never create a transfer or purchase order automatically/);
-  assert.match(workflow, /if \(!rule\.preferredWarehouseId\) return/);
+  assert.match(workflow, /if \(!rule\.recommendedWarehouseId\) return/);
 });
 
 test("Phase 7 preserves the existing bounded, permission-gated transfer RPC lifecycle", async () => {

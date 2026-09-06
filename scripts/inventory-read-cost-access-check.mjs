@@ -10,7 +10,7 @@ async function source(relativePath) {
   return readFile(path.join(repositoryRoot, relativePath), "utf8");
 }
 
-test("Phase 8 permits inventory read access without exposing mutation workspaces", async () => {
+test("Inventory read and count access do not expose unrelated mutation workspaces", async () => {
   const [inventoryPage, stockRestockPage, navigation] = await Promise.all([
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
     source("src/app/(back-office)/back-office/replenishment/page.tsx"),
@@ -19,16 +19,18 @@ test("Phase 8 permits inventory read access without exposing mutation workspaces
   const layout = await source("src/app/(back-office)/back-office/layout.tsx");
   const dal = await source("src/lib/auth/dal.ts");
 
-  assert.match(inventoryPage, /requireBackOfficePermission\(\["inventory\.view", "inventory\.manage"\]\)/);
-  assert.match(inventoryPage, /const activeTab = workspace === "purchasing" \|\| canManage \|\| requestedTab === "activity"/);
+  assert.match(inventoryPage, /requireBackOfficePermission\(\["inventory\.view", "inventory\.count", "inventory\.manage"\]\)/);
+  assert.match(inventoryPage, /const canOpenRequestedTab = canManage\s+\|\| \(canViewInventory && \["overview", "health", "activity"\]\.includes\(requestedTab\)\)\s+\|\| \(canCount && requestedTab === "counts"\);/);
+  assert.match(inventoryPage, /const activeTab = workspace === "purchasing" \|\| canOpenRequestedTab \? requestedTab : "activity";/);
   assert.match(inventoryPage, /if \(workspace === "purchasing" && !canManage\)/);
   assert.match(inventoryPage, /redirect\(`\/back-office\/inventory\?\$\{query\.toString\(\)\}`\)/);
   assert.match(stockRestockPage, /if \(!canManage && activeTab !== "levels"\)/);
-  assert.match(navigation, /!canManage && item\.id !== "activity"/);
+  assert.match(navigation, /canView && \(item\.id === "overview" \|\| item\.id === "health" \|\| item\.id === "activity"\)/);
+  assert.match(navigation, /canCount && item\.id === "counts"/);
   assert.match(navigation, /canManage \|\| item\.id === "levels"/);
-  assert.match(layout, /permission === "inventory\.view" \|\| permission === "inventory\.manage"/);
-  assert.match(dal, /"inventory\.view",\n  "inventory\.manage"/);
-  assert.match(dal, /hasAnyPermission\(context, \["inventory\.view", "inventory\.manage"\]\)/);
+  assert.match(layout, /permission === "inventory\.view" \|\| permission === "inventory\.count" \|\| permission === "inventory\.manage"/);
+  assert.match(dal, /"inventory\.view",\n  "inventory\.count",\n  "inventory\.manage"/);
+  assert.match(dal, /hasAnyPermission\(context, \["inventory\.view", "inventory\.count", "inventory\.manage"\]\)/);
 });
 
 test("Phase 8 never serializes raw inventory cost fields to client workspaces", async () => {

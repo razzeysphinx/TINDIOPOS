@@ -241,7 +241,7 @@ const navigationGroups: NavigationGroup[] = [
       },
       {
         href: "/back-office/advanced-sales",
-        label: "Advanced sales",
+        label: "Discounts & Taxes",
         icon: Settings2,
         isVisible: (access) => access.canManageAdvancedSales === true,
       },

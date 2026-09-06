@@ -5,15 +5,17 @@ import { ChevronDown, Download, FileSpreadsheet, LoaderCircle, Printer } from "l
 import { useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
+import type { BusinessReportSection } from "@/features/reports/report-sections";
 import { cn } from "@/lib/utils";
 
 type CsvExport = {
-  id: "sales" | "inventory" | "employees" | "payments" | "registers" | "customers" | "security";
+  id: "sales" | "inventory" | "employees" | "payments" | "registers" | "customers" | "products" | "security";
   label: string;
 };
 
 const csvExports: CsvExport[] = [
   { id: "sales", label: "Sales" },
+  { id: "products", label: "Products" },
   { id: "inventory", label: "Inventory" },
   { id: "employees", label: "Employees" },
   { id: "payments", label: "Payments" },
@@ -21,6 +23,16 @@ const csvExports: CsvExport[] = [
   { id: "customers", label: "Customers" },
   { id: "security", label: "Security / audit log" },
 ];
+
+const sectionExportIds: Record<BusinessReportSection, CsvExport["id"][]> = {
+  overview: ["sales"],
+  sales: ["sales", "payments"],
+  products: ["products"],
+  inventory: ["inventory"],
+  operations: ["registers"],
+  "team-customers": ["employees", "customers"],
+  "security-accountability": ["security"],
+};
 
 function filenameFromDisposition(value: string | null, fallback: string) {
   const match = value?.match(/filename="?([^";]+)"?/i);
@@ -45,9 +57,16 @@ const menuItemClassName = "flex min-h-9 w-full items-center gap-2 rounded-lg px-
  * Presentation only: the existing report export route remains responsible for
  * validating permissions, dates, and store scope before returning any data.
  */
-export function ReportExportActions({ exportQuery }: { exportQuery: string }) {
+export function ReportExportActions({
+  exportQuery,
+  section = "overview",
+}: {
+  exportQuery: string;
+  section?: BusinessReportSection;
+}) {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const activeExports = csvExports.filter((item) => sectionExportIds[section].includes(item.id));
 
   async function exportCsv(item: CsvExport) {
     if (busyAction === item.id) return;
@@ -98,7 +117,7 @@ export function ReportExportActions({ exportQuery }: { exportQuery: string }) {
 
     try {
       document.body.dataset.printMode = "report";
-      document.title = "TINDIO business report";
+      document.title = `TINDIO ${section.replaceAll("-", " ")} report`;
       window.addEventListener("afterprint", cleanup, { once: true });
       window.print();
       window.setTimeout(cleanup, 1000);
@@ -120,7 +139,7 @@ export function ReportExportActions({ exportQuery }: { exportQuery: string }) {
         <MenuSurface>
           <Menu.Group>
             <Menu.GroupLabel className="px-2.5 pb-1 pt-1.5 text-[0.68rem] font-semibold tracking-[0.1em] text-muted-foreground uppercase">
-              Business report
+              Current report section
             </Menu.GroupLabel>
             <Menu.Item
               className={menuItemClassName}
@@ -149,7 +168,7 @@ export function ReportExportActions({ exportQuery }: { exportQuery: string }) {
             <Menu.GroupLabel className="px-2.5 pb-1 pt-1.5 text-[0.68rem] font-semibold tracking-[0.1em] text-muted-foreground uppercase">
               Raw data for spreadsheets
             </Menu.GroupLabel>
-            {csvExports.map((item) => {
+            {activeExports.map((item) => {
               const isBusy = busyAction === item.id;
               return (
                 <Menu.Item

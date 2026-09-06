@@ -22,12 +22,14 @@ import {
   TrendingUp,
   Warehouse,
 } from "lucide-react";
+import Link from "next/link";
 
 import { ContextHelp } from "@/components/back-office/context-help";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
 import { inventoryActivityLabel } from "@/features/inventory/inventory-activity-copy";
 import type { ReportSnapshot } from "@/features/reports/reporting";
+import { businessReportSectionLabels, type BusinessReportSection } from "@/features/reports/report-sections";
 
 const chartColors = [
   "var(--chart-1)",
@@ -150,10 +152,12 @@ function ReportPrintTable({
 function ReportPrintDocument({
   context,
   currencyCode,
+  section,
   snapshot,
 }: {
   context: ReportPrintContext;
   currencyCode: string;
+  section?: BusinessReportSection;
   snapshot: ReportSnapshot;
 }) {
   const { summary } = snapshot;
@@ -179,12 +183,27 @@ function ReportPrintDocument({
     formatQuantity(employee.transaction_count),
     formatMinorMoney(employee.sales_minor, currencyCode),
   ]);
+  const registerRows = snapshot.sales_by_register.map((register) => [
+    register.name,
+    formatQuantity(register.transaction_count),
+    formatMinorMoney(register.sales_minor, currencyCode),
+  ]);
+  const customerRows = snapshot.sales_by_customer.slice(0, 12).map((customer) => [
+    customer.name,
+    formatQuantity(customer.transaction_count),
+    formatMinorMoney(customer.sales_minor, currencyCode),
+  ]);
+  const auditRows = snapshot.security.events.map((event) => [
+    event.event_type.replaceAll("_", " "),
+    formatQuantity(event.event_count),
+  ]);
+  const includes = (...sections: BusinessReportSection[]) => !section || sections.includes(section);
 
   return (
     <article className="hidden" data-report-print-document>
       <header data-report-print-header>
         <p>TINDIO</p>
-        <h1>Business summary</h1>
+        <h1>{section ? `${businessReportSectionLabels[section]} report` : "Business summary"}</h1>
         <dl>
           <div><dt>Business</dt><dd>{context.organizationName}</dd></div>
           <div><dt>Store scope</dt><dd>{context.storeName}</dd></div>
@@ -192,7 +211,7 @@ function ReportPrintDocument({
         </dl>
       </header>
 
-      <section data-report-print-section>
+      {includes("overview", "sales") ? <section data-report-print-section>
         <h2>Sales summary</h2>
         <dl data-report-print-totals>
           <div><dt>Gross sales</dt><dd>{formatMinorMoney(summary.gross_sales_minor, currencyCode)}</dd></div>
@@ -202,29 +221,33 @@ function ReportPrintDocument({
           <div><dt>Net sales</dt><dd>{formatMinorMoney(summary.net_sales_minor, currencyCode)}</dd></div>
           <div><dt>Transactions</dt><dd>{formatQuantity(summary.transaction_count)}</dd></div>
         </dl>
-      </section>
+      </section> : null}
 
-      <section data-report-print-section>
+      {includes("overview", "sales") ? <section data-report-print-section>
         <h2>Payment summary</h2>
         {paymentRows.length > 0 ? <ReportPrintTable columns={["Method", "Type", "Payments", "Amount"]} rows={paymentRows} /> : <p>No captured payments in this period.</p>}
-      </section>
+      </section> : null}
 
-      <section data-report-print-section>
+      {includes("operations") ? <section data-report-print-section>
         <h2>Store performance</h2>
         {storeRows.length > 0 ? <ReportPrintTable columns={["Store", "Transactions", "Sales"]} rows={storeRows} /> : <p>No completed sales in this period.</p>}
-      </section>
+        <h2>Register performance</h2>
+        {registerRows.length > 0 ? <ReportPrintTable columns={["Register", "Transactions", "Sales"]} rows={registerRows} /> : <p>No register sales in this period.</p>}
+      </section> : null}
 
-      <section data-report-print-section>
+      {includes("overview", "products") ? <section data-report-print-section>
         <h2>Top products</h2>
         {productRows.length > 0 ? <ReportPrintTable columns={["Product", "Units sold", "Net sales"]} rows={productRows} /> : <p>No products were sold in this period.</p>}
-      </section>
+      </section> : null}
 
-      <section data-report-print-section>
+      {includes("team-customers") ? <section data-report-print-section>
         <h2>Employee performance</h2>
         {employeeRows.length > 0 ? <ReportPrintTable columns={["Employee", "Transactions", "Sales"]} rows={employeeRows} /> : <p>No employee sales in this period.</p>}
-      </section>
+        <h2>Customer spend</h2>
+        {customerRows.length > 0 ? <ReportPrintTable columns={["Customer", "Transactions", "Sales"]} rows={customerRows} /> : <p>No customer-linked sales in this period.</p>}
+      </section> : null}
 
-      <section data-report-print-section>
+      {includes("overview", "inventory") ? <section data-report-print-section>
         <h2>Inventory health</h2>
         <dl data-report-print-totals>
           <div><dt>Tracked stock positions</dt><dd>{formatQuantity(snapshot.inventory.stock_item_count)}</dd></div>
@@ -232,7 +255,18 @@ function ReportPrintDocument({
           <div><dt>Low stock</dt><dd>{formatQuantity(snapshot.inventory.low_stock_count)}</dd></div>
           <div><dt>Out of stock</dt><dd>{formatQuantity(snapshot.inventory.out_of_stock_count)}</dd></div>
         </dl>
-      </section>
+      </section> : null}
+
+      {includes("security-accountability") ? <section data-report-print-section>
+        <h2>Security & accountability</h2>
+        <dl data-report-print-totals>
+          <div><dt>Refunds</dt><dd>{formatQuantity(snapshot.security.refund_count)}</dd></div>
+          <div><dt>Voids</dt><dd>{formatQuantity(snapshot.security.void_count)}</dd></div>
+          <div><dt>Cash discrepancies</dt><dd>{formatQuantity(snapshot.security.cash_discrepancy_count)}</dd></div>
+          <div><dt>Manual inventory changes</dt><dd>{formatQuantity(snapshot.security.manual_inventory_change_count)}</dd></div>
+        </dl>
+        {auditRows.length > 0 ? <ReportPrintTable columns={["Audit event", "Records"]} rows={auditRows} /> : <p>No security-relevant audit records in this period.</p>}
+      </section> : null}
     </article>
   );
 }
@@ -242,11 +276,15 @@ export function ReportingOverview({
   currencyCode,
   mode,
   printContext,
+  section,
+  navigationQuery = "",
 }: {
   snapshot: ReportSnapshot;
   currencyCode: string;
   mode: "dashboard" | "reports";
   printContext?: ReportPrintContext;
+  section?: BusinessReportSection;
+  navigationQuery?: string;
 }) {
   const { summary } = snapshot;
   const salesByDay = snapshot.sales_by_day.map((day) => ({
@@ -264,9 +302,13 @@ export function ReportingOverview({
     net: product.net_sales_minor / 100,
   }));
   const unitName = currencyCode.toUpperCase();
+  const activeSection = section ?? "overview";
+  const showExecutive = mode !== "reports" || activeSection === "overview" || activeSection === "sales";
+  const showOverview = mode !== "reports" || activeSection === "overview";
   return (
     <>
     <div className="space-y-8" data-report-screen>
+      {showExecutive ? <>
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Report summary">
         <MetricCard
           detail={`${summary.transaction_count} completed transaction${summary.transaction_count === 1 ? "" : "s"}`}
@@ -432,7 +474,9 @@ export function ReportingOverview({
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
+      </> : null}
+
+      {showOverview ? <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
         <Card>
           <CardHeader>
             <CardTitle>Top products</CardTitle>
@@ -509,9 +553,11 @@ export function ReportingOverview({
             )}
           </CardContent>
         </Card>
-      </section>
+      </section> : null}
 
-      {mode === "reports" ? (
+      {mode === "reports" && section ? <BusinessReportDetails currencyCode={currencyCode} navigationQuery={navigationQuery} section={section} snapshot={snapshot} /> : null}
+
+      {mode === "reports" && !section ? (
         <section className="space-y-5">
           <SectionTitle
             description={`Compare the teams, stores, categories, and stock activity behind the headline figures. This screen uses ${unitName}.`}
@@ -648,9 +694,55 @@ export function ReportingOverview({
         </section>
       ) : null}
     </div>
-    {printContext ? <ReportPrintDocument context={printContext} currencyCode={currencyCode} snapshot={snapshot} /> : null}
+    {printContext ? <ReportPrintDocument context={printContext} currencyCode={currencyCode} section={section} snapshot={snapshot} /> : null}
     </>
   );
+}
+
+function reportSectionHref(navigationQuery: string, section: BusinessReportSection) {
+  const query = new URLSearchParams(navigationQuery);
+  query.set("section", section);
+  return `/back-office/reports?${query.toString()}`;
+}
+
+function BusinessReportDetails({
+  currencyCode,
+  navigationQuery,
+  section,
+  snapshot,
+}: {
+  currencyCode: string;
+  navigationQuery: string;
+  section: BusinessReportSection;
+  snapshot: ReportSnapshot;
+}) {
+  const { summary } = snapshot;
+
+  if (section === "overview") {
+    return <section className="space-y-4"><SectionTitle description="Follow the signals that need an operational review. Each card keeps the selected date range and store scope." title="Needs attention" /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Link className="rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50" href={reportSectionHref(navigationQuery, "inventory")}><MetricCard detail="Review in Inventory Control when action is needed" icon={TrendingDown} label="Negative stock" tone="negative" value={formatQuantity(snapshot.inventory.negative_stock_count)} /></Link><Link className="rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50" href={reportSectionHref(navigationQuery, "inventory")}><MetricCard detail="Low and out-of-stock positions" icon={Warehouse} label="Stock attention" tone="negative" value={formatQuantity(snapshot.inventory.low_stock_count + snapshot.inventory.out_of_stock_count)} /></Link><Link className="rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50" href={reportSectionHref(navigationQuery, "security-accountability")}><MetricCard detail="Closed shifts with a recorded difference" icon={CircleDollarSign} label="Cash discrepancy" tone={snapshot.security.cash_discrepancy_absolute_minor > 0 ? "negative" : "default"} value={formatQuantity(snapshot.security.cash_discrepancy_count)} /></Link><Link className="rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50" href={reportSectionHref(navigationQuery, "security-accountability")}><MetricCard detail="Refunds and approval-sensitive activity" icon={ReceiptText} label="Refunds & controls" tone="negative" value={formatQuantity(snapshot.security.refund_count + snapshot.security.manager_approval_count)} /></Link></div></section>;
+  }
+
+  if (section === "sales") {
+    return <section className="space-y-5"><SectionTitle description="Review the financial activity behind the sales summary, including payment methods and selling times." title="Sales details" /><div className="grid gap-4 xl:grid-cols-2"><BreakdownCard columns={["Payment method", "Type", "Payments", "Amount"]} empty="No captured payments in this period." rows={snapshot.payments.map((payment) => [payment.name, payment.type, formatQuantity(payment.payment_count), formatMinorMoney(payment.amount_minor, currencyCode)])} title="Payment breakdown" /><BreakdownCard columns={["Hour", "Transactions", "Sales"]} empty="No completed sales in this period." rows={snapshot.sales_by_hour.map((hour) => [hour.label, formatQuantity(hour.transaction_count), formatMinorMoney(hour.sales_minor, currencyCode)])} title="Sales by hour" /><BreakdownCard columns={["Category", "Items sold", "Sales"]} empty="No category sales in this period." rows={snapshot.sales_by_category.map((category) => [category.name, formatQuantity(category.quantity_sold), formatMinorMoney(category.sales_minor, currencyCode)])} title="Sales by category" /></div></section>;
+  }
+
+  if (section === "products") {
+    return <section className="space-y-5"><SectionTitle description="See which Catalog products and categories are contributing to sales. Product administration remains in Catalog." title="Product performance" /><div className="grid gap-4 xl:grid-cols-2"><BreakdownCard columns={["Product", "Sold", "Refunded", "Net sales"]} empty="No product sales in this period." rows={snapshot.top_products.map((product) => [product.name, formatQuantity(product.quantity_sold), formatQuantity(product.quantity_refunded), formatMinorMoney(product.net_sales_minor, currencyCode)])} title="Top products" /><BreakdownCard columns={["Category", "Items sold", "Sales"]} empty="No category sales in this period." rows={snapshot.sales_by_category.map((category) => [category.name, formatQuantity(category.quantity_sold), formatMinorMoney(category.sales_minor, currencyCode)])} title="Sales by category" /></div></section>;
+  }
+
+  if (section === "inventory") {
+    return <section className="space-y-5"><div className="flex flex-wrap items-end justify-between gap-3"><SectionTitle description="Read-only inventory analytics from authoritative stock and movement records. Use Inventory Control to make operational changes." title="Inventory health" /><Link className="text-sm font-medium text-primary underline-offset-4 hover:underline" href="/back-office/inventory">Review in Inventory Control</Link></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><MetricCard detail="At or below the configured threshold" icon={TrendingDown} label="Low stock" tone="negative" value={formatQuantity(snapshot.inventory.low_stock_count)} /><MetricCard detail="Tracked positions with no units" icon={Warehouse} label="Out of stock" tone="negative" value={formatQuantity(snapshot.inventory.out_of_stock_count)} /><MetricCard detail="Positions below zero need attention" icon={TrendingDown} label="Negative stock" tone="negative" value={formatQuantity(snapshot.inventory.negative_stock_count)} /><MetricCard detail="On hand without a sale in 90 days" icon={TrendingDown} label="Dead stock" value={formatQuantity(snapshot.inventory.dead_stock_count)} /><MetricCard detail={`${snapshot.inventory.activity.purchase_receipt_count} receipts · ${snapshot.inventory.activity.transfer_count} transfers`} icon={Warehouse} label="Manual changes" value={formatQuantity(snapshot.inventory.activity.manual_adjustment_count)} /></div><div className="grid gap-4 xl:grid-cols-2"><BreakdownCard columns={["Item", "Units sold", "Net sales"]} empty="Fast-moving products will appear after completed sales." rows={snapshot.inventory.fast_movers.map((product) => [product.name, formatQuantity(product.quantity_sold), formatMinorMoney(product.net_sales_minor, currencyCode)])} title="Fast movers" /><BreakdownCard columns={["Item", "On hand", "Units sold"]} empty="Slow-moving stocked items will appear here." rows={snapshot.inventory.slow_movers.map((product) => [product.name, formatQuantity(product.quantity_on_hand), formatQuantity(product.quantity_sold)])} title="Slow movers" /><BreakdownCard columns={["Stock activity", "Records", "Quantity change"]} empty="No inventory movements in this period." rows={snapshot.inventory.movement_by_type.map((movement) => [inventoryActivityLabel(movement.movement_type), formatQuantity(movement.movement_count), formatQuantity(movement.quantity_delta)])} title="Inventory movement" /></div></section>;
+  }
+
+  if (section === "operations") {
+    return <section className="space-y-5"><SectionTitle description="Compare branch and register performance using completed sales in the selected scope." title="Operations" /><div className="grid gap-4 xl:grid-cols-2"><BreakdownCard columns={["Store", "Transactions", "Sales"]} empty="No store sales in this period." rows={snapshot.sales_by_store.map((store) => [store.name, formatQuantity(store.transaction_count), formatMinorMoney(store.sales_minor, currencyCode)])} title="Store performance" /><BreakdownCard columns={["Register", "Transactions", "Sales"]} empty="No register sales in this period." rows={snapshot.sales_by_register.map((register) => [register.name, formatQuantity(register.transaction_count), formatMinorMoney(register.sales_minor, currencyCode)])} title="Register performance" /></div></section>;
+  }
+
+  if (section === "team-customers") {
+    return <section className="space-y-5"><SectionTitle description="Review employee sales contribution and customer-linked spend without changing team or customer records." title="Team & Customers" /><div className="grid gap-4 xl:grid-cols-2"><BreakdownCard columns={["Employee", "Transactions", "Sales"]} empty="No employee sales in this period." rows={snapshot.sales_by_employee.map((employee) => [employee.name, formatQuantity(employee.transaction_count), formatMinorMoney(employee.sales_minor, currencyCode)])} title="Employee performance" /><BreakdownCard columns={["Customer", "Transactions", "Sales"]} empty="No customer-linked sales in this period." rows={snapshot.sales_by_customer.map((customer) => [customer.name, formatQuantity(customer.transaction_count), formatMinorMoney(customer.sales_minor, currencyCode)])} title="Customer spend" /></div></section>;
+  }
+
+  return <section className="space-y-5"><SectionTitle description="Review sensitive or accountable activity from refunds, approval audits, shift closures, and inventory movements." title="Security & Accountability" /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard detail={`${snapshot.security.refund_count} refunds · ${snapshot.security.void_count} voids`} icon={TrendingDown} label="Refunds & voids" tone="negative" value={formatMinorMoney(summary.refunds_minor, currencyCode)} /><MetricCard detail={`${snapshot.security.high_discount_count} high discounts · ${snapshot.security.price_override_count} price overrides`} icon={ReceiptText} label="Discount controls" value={formatQuantity(snapshot.security.manager_approval_count)} /><MetricCard detail={`${formatQuantity(snapshot.security.cash_discrepancy_count)} closed shifts with a difference`} icon={CircleDollarSign} label="Cash discrepancy" tone={snapshot.security.cash_discrepancy_absolute_minor > 0 ? "negative" : "default"} value={formatMinorMoney(snapshot.security.cash_discrepancy_absolute_minor, currencyCode)} /><MetricCard detail="Manual adjustments, damage, loss, and counts" icon={Warehouse} label="Inventory changes" value={formatQuantity(snapshot.security.manual_inventory_change_count)} /></div><div className="grid gap-4 xl:grid-cols-2"><BreakdownCard columns={["Audit event", "Records"]} empty="No security-relevant audit records in this period." rows={snapshot.security.events.map((event) => [event.event_type.replaceAll("_", " "), formatQuantity(event.event_count)])} title="Audit events" /></div></section>;
 }
 
 function BreakdownCard({

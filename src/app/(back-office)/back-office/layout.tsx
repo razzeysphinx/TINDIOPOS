@@ -10,6 +10,7 @@ import {
 } from "@/components/back-office/back-office-workspace-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { UnsavedChangesProvider } from "@/components/unsaved-changes/unsaved-changes-provider";
 import { signOutAction } from "@/features/auth/actions";
 import { OrganizationSwitcher } from "@/features/organization-readiness/organization-switcher";
 import { requireBackOfficeContext } from "@/lib/auth/dal";
@@ -48,7 +49,8 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
   };
 
   return (
-    <BackOfficeWorkspaceShell
+    <UnsavedChangesProvider>
+      <BackOfficeWorkspaceShell
       displayName={displayName}
       employeeNumber={context.employee.employee_number}
       header={(
@@ -89,10 +91,11 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
         </header>
       )}
       navigationAccess={navigationAccess}
-    >
-      <main className="mx-auto w-full max-w-7xl px-4 py-6 print:max-w-none print:px-0 print:py-0 sm:px-6 sm:py-8 lg:px-8">
-        {children}
-      </main>
-    </BackOfficeWorkspaceShell>
+      >
+        <main className="mx-auto w-full max-w-7xl px-4 py-6 print:max-w-none print:px-0 print:py-0 sm:px-6 sm:py-8 lg:px-8">
+          {children}
+        </main>
+      </BackOfficeWorkspaceShell>
+    </UnsavedChangesProvider>
   );
 }

@@ -1568,6 +1568,42 @@ export type Database = {
           },
         ]
       }
+      inventory_policy_defaults: {
+        Row: {
+          negative_stock_policy: string
+          organization_id: string
+          updated_at: string
+          updated_by_employee_id: string | null
+        }
+        Insert: {
+          negative_stock_policy?: string
+          organization_id: string
+          updated_at?: string
+          updated_by_employee_id?: string | null
+        }
+        Update: {
+          negative_stock_policy?: string
+          organization_id?: string
+          updated_at?: string
+          updated_by_employee_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_policy_defaults_employee_organization_fkey"
+            columns: ["updated_by_employee_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "inventory_policy_defaults_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_replenishment_rules: {
         Row: {
           created_at: string
@@ -6168,6 +6204,34 @@ export type Database = {
         Args: { target_organization_id: string }
         Returns: { id: string; name: string }[]
       }
+      get_inventory_count_awareness: {
+        Args: { target_organization_id: string }
+        Returns: {
+          count_number: number | null
+          counted_quantity: number | null
+          expected_quantity: number | null
+          inventory_count_id: string | null
+          last_counted_at: string | null
+          product_id: string
+          store_id: string
+          variant_id: string | null
+        }[]
+      }
+      get_inventory_health_awareness: {
+        Args: { target_organization_id: string }
+        Returns: {
+          count_number: number | null
+          count_recommended: boolean
+          counted_quantity: number | null
+          days_since_count: number | null
+          expected_quantity: number | null
+          inventory_count_id: string | null
+          last_counted_at: string | null
+          product_id: string
+          store_id: string
+          variant_id: string | null
+        }[]
+      }
       save_inventory_count_line: {
         Args: {
           target_counted_quantity: number
@@ -7320,6 +7384,20 @@ export type Database = {
       update_inventory_policy: {
         Args: {
           target_negative_stock_policy: string
+          target_organization_id: string
+          target_store_id: string
+        }
+        Returns: undefined
+      }
+      update_organization_inventory_policy: {
+        Args: {
+          target_negative_stock_policy: string
+          target_organization_id: string
+        }
+        Returns: undefined
+      }
+      remove_inventory_policy_override: {
+        Args: {
           target_organization_id: string
           target_store_id: string
         }

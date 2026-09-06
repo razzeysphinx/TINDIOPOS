@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 
 export type InventoryControlTab =
   | "overview"
+  | "health"
   | "activity"
   | "adjustments"
   | "counts"
@@ -19,6 +20,7 @@ type InventoryWorkspaceNavigationProps = {
   activeTab: InventoryControlTab | StockRestockTab | PurchasingTab;
   canCount?: boolean;
   canManage: boolean;
+  canView?: boolean;
   canUseProduction?: boolean;
   storeId?: string | null;
   workspace: InventoryWorkspace;
@@ -31,6 +33,7 @@ type InventoryNavigationItem = {
 
 const inventoryControlItems: readonly InventoryNavigationItem[] = [
   { id: "overview", label: "Overview" },
+  { id: "health", label: "Stock Health" },
   { id: "activity", label: "Inventory activity" },
   { id: "adjustments", label: "Stock adjustments" },
   { id: "counts", label: "Inventory counts" },
@@ -69,12 +72,13 @@ export function InventoryWorkspaceNavigation({
   activeTab,
   canCount = false,
   canManage,
+  canView = false,
   canUseProduction = false,
   storeId,
   workspace,
 }: InventoryWorkspaceNavigationProps) {
   const visibleControlItems = inventoryControlItems.filter((item) => {
-    if (!canManage && item.id !== "activity" && !(canCount && item.id === "counts")) return false;
+    if (!canManage && !(canView && (item.id === "overview" || item.id === "health" || item.id === "activity")) && !(canCount && item.id === "counts")) return false;
     return item.id !== "production" || canUseProduction;
   });
   const visiblePurchasingItems = purchasingItems.filter(() => canManage);

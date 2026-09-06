@@ -2,7 +2,25 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(10);
+select plan(22);
+
+select has_table(
+  'public',
+  'inventory_policy_defaults',
+  'organization-level negative-stock policy defaults exist'
+);
+select ok(
+  to_regprocedure('public.update_organization_inventory_policy(uuid,text)') is not null,
+  'organization-level policy routine exists'
+);
+select ok(
+  to_regprocedure('public.remove_inventory_policy_override(uuid,uuid)') is not null,
+  'store-override removal routine exists'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.inventory_policy_defaults', 'insert'),
+  'authenticated callers cannot write organization defaults directly'
+);
 
 select ok(
   to_regprocedure('public.validate_pos_cart_stock(uuid,uuid,uuid,jsonb)') is not null,
@@ -14,11 +32,17 @@ select ok(
 );
 
 insert into auth.users (id, email, raw_user_meta_data)
-values (
-  '814d8863-8d97-43dd-885e-563168c7c952',
-  'stock-preflight-owner@tindio.test',
-  '{"full_name":"Stock Preflight Owner"}'::jsonb
-);
+values
+  (
+    '814d8863-8d97-43dd-885e-563168c7c952',
+    'stock-preflight-owner@tindio.test',
+    '{"full_name":"Stock Preflight Owner"}'::jsonb
+  ),
+  (
+    '815d8863-8d97-43dd-885e-563168c7c952',
+    'stock-preflight-scoped-manager@tindio.test',
+    '{"full_name":"Stock Preflight Scoped Manager"}'::jsonb
+  );
 
 create temporary table stock_preflight_context (
   organization_id uuid not null,
@@ -70,6 +94,65 @@ select is(
   'missing store policy safely defaults to block'
 )
 from stock_preflight_context;
+
+select public.update_organization_inventory_policy(organization_id, 'warn')
+from stock_preflight_context;
+select is(
+  (
+    select negative_stock_policy
+    from public.inventory_policy_defaults
+    where organization_id = (select organization_id from stock_preflight_context)
+  ),
+  'warn',
+  'the organization default is persisted once for the organization'
+);
+select is(
+  public.validate_pos_cart_stock(
+    organization_id, store_id, register_id,
+    jsonb_build_array(jsonb_build_object(
+      'product_id', tracked_product_id, 'variant_id', null, 'quantity', 1
+    ))
+  ) ->> 'policy',
+  'warn',
+  'a store without an override inherits the organization default'
+)
+from stock_preflight_context;
+select public.update_inventory_policy(organization_id, store_id, 'block')
+from stock_preflight_context;
+select is(
+  public.validate_pos_cart_stock(
+    organization_id, store_id, register_id,
+    jsonb_build_array(jsonb_build_object(
+      'product_id', tracked_product_id, 'variant_id', null, 'quantity', 1
+    ))
+  ) ->> 'policy',
+  'block',
+  'a store override wins over the organization default'
+)
+from stock_preflight_context;
+select public.remove_inventory_policy_override(organization_id, store_id)
+from stock_preflight_context;
+select is(
+  public.validate_pos_cart_stock(
+    organization_id, store_id, register_id,
+    jsonb_build_array(jsonb_build_object(
+      'product_id', tracked_product_id, 'variant_id', null, 'quantity', 1
+    ))
+  ) ->> 'policy',
+  'warn',
+  'removing the override immediately returns the store to its inherited policy'
+)
+from stock_preflight_context;
+select is(
+  (
+    select count(*)
+    from public.audit_logs audit
+    where audit.organization_id = (select organization_id from stock_preflight_context)
+      and audit.event_type in ('INVENTORY_POLICY_DEFAULT_UPDATED', 'INVENTORY_POLICY_OVERRIDE_REMOVED')
+  ),
+  2::bigint,
+  'default changes and override removal retain an authoritative audit trail'
+);
 
 select is(
   jsonb_array_length(public.validate_pos_cart_stock(
@@ -170,6 +253,53 @@ from stock_preflight_context;
 select ok(
   to_regprocedure('public.get_checkout_stock_warning(uuid,uuid,uuid)') is not null,
   'post-payment warning can be scoped to the completed sale'
+);
+
+reset role;
+insert into public.employees (organization_id, profile_id, employee_number, job_title)
+select organization_id, '815d8863-8d97-43dd-885e-563168c7c952', 'STOCK-SCOPED-001', 'Scoped inventory manager'
+from stock_preflight_context;
+insert into public.roles (organization_id, name, code, is_system)
+select organization_id, 'Scoped inventory manager', 'scoped_inventory_manager', false
+from stock_preflight_context;
+insert into public.role_permissions (organization_id, role_id, permission_code)
+select context.organization_id, role.id, 'inventory.manage'
+from stock_preflight_context context
+join public.roles role
+  on role.organization_id = context.organization_id
+ and role.code = 'scoped_inventory_manager';
+insert into public.employee_roles (organization_id, employee_id, role_id)
+select employee.organization_id, employee.id, role.id
+from public.employees employee
+join stock_preflight_context context on context.organization_id = employee.organization_id
+join public.roles role
+  on role.organization_id = employee.organization_id
+ and role.code = 'scoped_inventory_manager'
+where employee.profile_id = '815d8863-8d97-43dd-885e-563168c7c952';
+insert into public.employee_stores (organization_id, employee_id, store_id)
+select employee.organization_id, employee.id, context.store_id
+from public.employees employee
+join stock_preflight_context context on context.organization_id = employee.organization_id
+where employee.profile_id = '815d8863-8d97-43dd-885e-563168c7c952';
+
+set local role authenticated;
+set local request.jwt.claim.sub = '815d8863-8d97-43dd-885e-563168c7c952';
+select throws_ok(
+  format(
+    $$select public.update_organization_inventory_policy(%L, 'block')$$,
+    (select organization_id from stock_preflight_context)
+  ),
+  '42501',
+  'Organization-wide inventory policy permission is required.',
+  'a store-scoped inventory manager cannot change the organization default'
+);
+select lives_ok(
+  format(
+    $$select public.update_inventory_policy(%L, %L, 'block')$$,
+    (select organization_id from stock_preflight_context),
+    (select store_id from stock_preflight_context)
+  ),
+  'a scoped inventory manager can still save an override for an assigned store'
 );
 
 select * from finish();

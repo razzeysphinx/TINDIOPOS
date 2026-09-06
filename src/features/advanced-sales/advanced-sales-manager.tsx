@@ -66,19 +66,37 @@ export function AdvancedSalesManager({
     return (
       <Card>
         <CardContent className="py-6 text-sm text-muted-foreground">
-          You can view advanced sales settings, but product-management access is required to change them.
+          You can view sales settings, but product-management access is required to change them.
         </CardContent>
       </Card>
     );
   }
 
+  const hasRelatedSellingConfiguration = features.dining || features.open_tickets || features.modifiers;
+
   return (
-    <div className="grid gap-5 xl:grid-cols-2">
-      <DiscountSettings discounts={discounts} />
-      <TaxSettings taxRates={taxRates} />
-      {features.dining ? <DiningSettings diningOptions={diningOptions} /> : null}
-      {features.open_tickets ? <TicketTemplateSettings diningOptions={diningOptions.filter((option) => option.isActive)} ticketTemplates={ticketTemplates} /> : null}
-      {features.modifiers ? <ModifierSettings modifierGroups={modifierGroups} products={products} /> : null}
+    <div className="space-y-8">
+      <section aria-labelledby="discounts-and-taxes-title" className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold" id="discounts-and-taxes-title">Discounts & Taxes</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Configure the checkout discounts and tax rates used during sales.</p>
+        </div>
+        <div className="grid gap-5 xl:grid-cols-2">
+          <DiscountSettings discounts={discounts} />
+          <TaxSettings taxRates={taxRates} />
+        </div>
+      </section>
+      {hasRelatedSellingConfiguration ? <section aria-labelledby="related-selling-configuration-title" className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold" id="related-selling-configuration-title">Related selling configuration</h2>
+          <p className="mt-1 text-sm text-muted-foreground">These optional features support service flow, open tickets, and product choices. They remain separate from discounts and tax rules.</p>
+        </div>
+        <div className="grid gap-5 xl:grid-cols-2">
+          {features.dining ? <DiningSettings diningOptions={diningOptions} /> : null}
+          {features.open_tickets ? <TicketTemplateSettings diningOptions={diningOptions.filter((option) => option.isActive)} ticketTemplates={ticketTemplates} /> : null}
+          {features.modifiers ? <ModifierSettings modifierGroups={modifierGroups} products={products} /> : null}
+        </div>
+      </section> : null}
     </div>
   );
 }

@@ -18,6 +18,8 @@ export type InventoryActivityRow = {
   quantityBefore: number;
   quantityDelta: number;
   reason: string | null;
+  /** The original operator-entered narrative, distinct from a controlled reason code. */
+  note: string | null;
   referenceHref: string | null;
   referenceLabel: string | null;
   storeName: string;
@@ -70,6 +72,7 @@ export function InventoryActivityList({ currencyCode, rows }: { currencyCode: st
           <Detail label="Store" value={selectedMovement.storeName} />
           <Detail label="When" value={formatDate(selectedMovement.createdAt)} />
           <Detail label="Why" value={selectedMovement.reason || readableMovementType(selectedMovement.movementType)} />
+          <Detail label="Note" value={selectedMovement.note || "No note recorded"} />
           <Detail label="Who" value={selectedMovement.actorName || "Employee details are restricted"} />
           {selectedMovement.referenceLabel ? <div><p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Source document</p>{selectedMovement.referenceHref ? <Link className="mt-1 inline-flex text-sm font-medium text-primary hover:underline" href={selectedMovement.referenceHref}>{selectedMovement.referenceLabel}</Link> : <p className="mt-1 text-sm">{selectedMovement.referenceLabel}</p>}</div> : null}
           {selectedMovement.valueDeltaMinor !== undefined && selectedMovement.unitCostMinor !== undefined ? <section className="border-t pt-5"><p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Cost context</p><p className="mt-1 text-sm">{formatMoney(selectedMovement.valueDeltaMinor, currencyCode)} value change · {formatMoney(selectedMovement.unitCostMinor, currencyCode)} unit cost</p></section> : null}

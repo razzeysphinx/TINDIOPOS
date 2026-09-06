@@ -19,7 +19,9 @@ import {
   saveInventoryCountLineSchema,
   returnToSupplierSchema,
   transferStockSchema,
+  removeInventoryPolicyOverrideSchema,
   updateInventoryPolicySchema,
+  updateOrganizationInventoryPolicySchema,
   updateSupplierSchema,
 } from "@/features/inventory/advanced-inventory-schema";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
@@ -405,7 +407,46 @@ export async function updateInventoryPolicyAction(
   });
   if (error) return { ok: false, message: databaseMessage(error.code, "TINDIO could not update the stock policy.") };
   revalidatePath("/back-office/inventory");
-  return { ok: true, message: "Negative-stock policy updated." };
+  return { ok: true, message: "Store policy override saved." };
+}
+
+export async function updateOrganizationInventoryPolicyAction(
+  input: unknown,
+): Promise<AdvancedInventoryActionResult> {
+  const { context, error: permissionError } = await requireInventoryManager();
+  if (permissionError) return { ok: false, message: permissionError };
+  if (!hasPermission(context, "stores.manage")) {
+    return { ok: false, message: "You do not have permission to set the policy for every store." };
+  }
+  const parsed = updateOrganizationInventoryPolicySchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("update_organization_inventory_policy", {
+    target_organization_id: context.organization.id,
+    target_negative_stock_policy: parsed.data.negativeStockPolicy,
+  });
+  if (error) return { ok: false, message: databaseMessage(error.code, "TINDIO could not update the default stock policy.") };
+  revalidatePath("/back-office/inventory");
+  return { ok: true, message: "Default policy saved for all stores." };
+}
+
+export async function removeInventoryPolicyOverrideAction(
+  input: unknown,
+): Promise<AdvancedInventoryActionResult> {
+  const { context, error: permissionError } = await requireInventoryManager();
+  if (permissionError) return { ok: false, message: permissionError };
+  const parsed = removeInventoryPolicyOverrideSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("remove_inventory_policy_override", {
+    target_organization_id: context.organization.id,
+    target_store_id: parsed.data.storeId,
+  });
+  if (error) return { ok: false, message: databaseMessage(error.code, "TINDIO could not remove the store override.") };
+  revalidatePath("/back-office/inventory");
+  return { ok: true, message: "Store override removed. This store now inherits the default policy." };
 }
 
 export async function createAdjustmentReasonAction(

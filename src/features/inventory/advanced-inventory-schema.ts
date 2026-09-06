@@ -207,6 +207,14 @@ export const updateInventoryPolicySchema = z.object({
   negativeStockPolicy: z.enum(["allow", "warn", "block"]),
 });
 
+export const updateOrganizationInventoryPolicySchema = z.object({
+  negativeStockPolicy: z.enum(["allow", "warn", "block"]),
+});
+
+export const removeInventoryPolicyOverrideSchema = z.object({
+  storeId: z.uuid("Select a store override."),
+});
+
 export const createAdjustmentReasonSchema = z.object({
   code: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9_]{1,39}$/, "Use 2–40 letters, numbers, or underscores."),
   name: z.string().trim().min(2, "Enter a reason name.").max(100),

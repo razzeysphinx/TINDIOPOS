@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReportFilterForm } from "@/features/reports/report-filter-form";
+import { BusinessReportsNavigation } from "@/features/reports/business-reports-navigation";
 import { loadReportStores } from "@/features/reports/data";
 import {
   canQueryReportingScope,
@@ -12,8 +13,10 @@ import {
   hasAuthorizedReportStoreSelection,
   hasOrganizationReportingScope,
   resolveScopedReportFilter,
+  reportQueryString,
 } from "@/features/reports/reporting";
 import { ReportingOverview } from "@/features/reports/reporting-overview";
+import { resolveBusinessReportSection } from "@/features/reports/report-sections";
 import { requireBackOfficePermission } from "@/lib/auth/dal";
 
 export const metadata = { title: "Reports" };
@@ -21,7 +24,7 @@ export const metadata = { title: "Reports" };
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ start?: string | string[]; end?: string | string[]; store?: string | string[] }>;
+  searchParams: Promise<{ start?: string | string[]; end?: string | string[]; store?: string | string[]; section?: string | string[] }>;
 }) {
   const context = await requireBackOfficePermission("reports.view");
 
@@ -52,6 +55,7 @@ export default async function ReportsPage({
   }
 
   const filter = resolveScopedReportFilter(context, parameters);
+  const section = resolveBusinessReportSection(typeof parameters.section === "string" ? parameters.section : undefined);
   const [snapshot, stores] = await Promise.all([
     getReportingSnapshot(context, filter, "reports"),
     loadReportStores(context),
@@ -64,18 +68,21 @@ export default async function ReportsPage({
     <div className="space-y-8">
       <PageHeader
         eyebrow="Business intelligence"
-        title="Reports"
+        title="Business Reports"
         description={hasOrganizationScope
-          ? "Review completed sales, payments, team performance, and inventory activity for the selected period."
-          : "Review completed sales, payments, team performance, and inventory activity for an assigned store."}
+          ? "Understand sales, products, stock, operations, customers, team performance, and accountability for the selected period."
+          : "Understand sales, products, stock, operations, customers, team performance, and accountability for your assigned stores."}
         action={<Badge variant="secondary">{hasOrganizationScope ? "Organization reports" : "Assigned-store reports"}</Badge>}
+        breadcrumbs={[{ href: "/back-office", label: "Back Office" }, { label: "Reports" }, { label: "Business reports" }]}
       />
+      <BusinessReportsNavigation activeSection={section} filterQuery={reportQueryString(filter)} />
       <ReportFilterForm
         action="/back-office/reports"
         allowAllStores={hasOrganizationScope}
         filter={filter}
         showExports
         stores={stores}
+        section={section}
       />
       <ReportingOverview
         currencyCode={context.organization.currency_code}
@@ -87,6 +94,8 @@ export default async function ReportsPage({
           storeName: selectedStoreName,
           timezone: context.organization.timezone,
         }}
+        navigationQuery={reportQueryString(filter)}
+        section={section}
         snapshot={snapshot}
       />
     </div>

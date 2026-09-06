@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
-import { ContextHelp } from "@/components/back-office/context-help";
 import { PageHeader } from "@/components/back-office/page-header";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -23,6 +22,12 @@ import type { InventorySaleableItem } from "@/features/catalog/catalog-forms";
 import { InventoryIntegrityWorkflows } from "@/features/inventory/inventory-integrity-workflows";
 import { InventoryActivityList } from "@/features/inventory/inventory-activity-list";
 import { InventoryCountWorkspace } from "@/features/inventory/inventory-count-workspace";
+import {
+  InventoryControlTower,
+  InventoryHealthWorkspace,
+  type InventoryHealthIssue,
+  type InventoryHealthSeverity,
+} from "@/features/inventory/inventory-health-workspace";
 import { SupplyChainWorkflows, type ReplenishmentRule } from "@/features/inventory/supply-chain-workflows";
 import {
   InventoryProductDetail,
@@ -47,6 +52,7 @@ export const metadata = { title: "Inventory" };
 
 const INVENTORY_CONTROL_TABS: readonly { id: InventoryControlTab; label: string }[] = [
   { id: "overview", label: "Overview" },
+  { id: "health", label: "Stock Health" },
   { id: "activity", label: "Activity" },
   { id: "adjustments", label: "Stock adjustments" },
   { id: "counts", label: "Counts" },
@@ -77,6 +83,7 @@ export type InventoryWorkspacePageProps = {
     movementType?: string | string[];
     purchaseOrder?: string | string[];
     status?: string | string[];
+    severity?: string | string[];
     store?: string;
     tab?: string | string[];
     to?: string | string[];
@@ -124,6 +131,11 @@ function resolveDate(value: string | string[] | undefined) {
 function resolveMovementType(value: string | string[] | undefined) {
   const candidate = Array.isArray(value) ? value[0] : value;
   return MOVEMENT_TYPES.includes(candidate as (typeof MOVEMENT_TYPES)[number]) ? candidate as (typeof MOVEMENT_TYPES)[number] : null;
+}
+
+function resolveHealthSeverity(value: string | string[] | undefined): InventoryHealthSeverity | "all" {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate === "critical" || candidate === "warning" || candidate === "information" ? candidate : "all";
 }
 
 async function loadInventoryItemActivity({
@@ -219,6 +231,7 @@ export async function InventoryWorkspacePage({
   }
   const canManage = hasPermission(context, "inventory.manage");
   const canCount = hasPermission(context, "inventory.count") || canManage;
+  const canViewInventory = hasPermission(context, "inventory.view") || canCount;
   const selectedStore = parameters.store;
   const purchaseOrder = Array.isArray(parameters.purchaseOrder) ? parameters.purchaseOrder[0] : parameters.purchaseOrder;
   const legacyPurchasingTab = rawRequestedTab === "purchasing"
@@ -250,9 +263,10 @@ export async function InventoryWorkspacePage({
   }
 
   const requestedTab = resolveInventoryTab(parameters.tab, workspace);
-  const activeTab = workspace === "purchasing" || canManage || requestedTab === "activity" || (canCount && requestedTab === "counts")
-    ? requestedTab
-    : "activity";
+  const canOpenRequestedTab = canManage
+    || (canViewInventory && ["overview", "health", "activity"].includes(requestedTab))
+    || (canCount && requestedTab === "counts");
+  const activeTab = workspace === "purchasing" || canOpenRequestedTab ? requestedTab : "activity";
   // CANDIDATE_FOR_REMOVAL: retained while the legacy stock query parameter is
   // still accepted for backwards-compatible deep links to Stock & Restock.
   const initialStockStatus = resolveInventoryStockStatus(parameters.status);
@@ -323,7 +337,14 @@ export async function InventoryWorkspacePage({
         .select("store_id, negative_stock_policy")
         .eq("organization_id", organizationId)
     : null;
-  const recentMovementsQuery = activeTab === "activity"
+  const inventoryPolicyDefaultsQuery = canManage
+    ? supabase
+        .from("inventory_policy_defaults")
+        .select("negative_stock_policy")
+        .eq("organization_id", organizationId)
+        .limit(1)
+    : null;
+  const recentMovementsQuery = ["overview", "health", "activity"].includes(activeTab)
     ? supabase
         .from("inventory_movements")
         .select(
@@ -337,7 +358,7 @@ export async function InventoryWorkspacePage({
   if (activityFrom) recentMovementsQuery?.gte("created_at", `${activityFrom}T00:00:00.000Z`);
   if (activityTo) recentMovementsQuery?.lt("created_at", `${activityTo}T23:59:59.999Z`);
   if (activityMovementType) recentMovementsQuery?.eq("movement_type", activityMovementType);
-  const inventoryCountsQuery = canCount && activeTab === "counts"
+  const inventoryCountsQuery = canCount && ["overview", "health", "counts"].includes(activeTab)
     ? supabase
         .from("inventory_counts")
         .select("id, count_number, store_id, status, note, started_at, completed_at, updated_at, count_mode, scope_type, scope_reference_id, sort_mode, include_zero_stock")
@@ -345,6 +366,18 @@ export async function InventoryWorkspacePage({
         .in("status", ["draft", "in_progress", "ready_for_review", "posted", "cancelled", "open", "completed"])
         .order("started_at", { ascending: false })
         .limit(25)
+    : null;
+  const countAwarenessQuery = workspace === "control"
+    ? supabase.rpc("get_inventory_health_awareness", { target_organization_id: organizationId })
+    : null;
+  const offlineInventoryIssuesQuery = hasPermission(context, "devices.manage") && ["overview", "health"].includes(activeTab)
+    ? supabase
+        .from("offline_sync_events")
+        .select("id, store_id, store_name_snapshot, state, conflict_type")
+        .eq("organization_id", organizationId)
+        .in("state", ["CONFLICT", "FAILED"])
+        .order("last_attempt_at", { ascending: false })
+        .limit(50)
     : null;
 
   if (scopedStoreIds) {
@@ -369,6 +402,7 @@ export async function InventoryWorkspacePage({
     suppliersResult,
     purchaseOrdersResult,
     inventoryPoliciesResult,
+    inventoryPolicyDefaultsResult,
     adjustmentReasonsResult,
     stockTransfersResult,
     stockTransferLinesResult,
@@ -376,6 +410,8 @@ export async function InventoryWorkspacePage({
     inventoryCountsResult,
     warehousesResult,
     countSuppliersResult,
+    countAwarenessResult,
+    offlineInventoryIssuesResult,
   ] = await Promise.all([
     supabase
       .from("stores")
@@ -436,6 +472,7 @@ export async function InventoryWorkspacePage({
       : Promise.resolve({ data: [], error: null }),
     purchaseOrdersQuery ?? Promise.resolve({ data: [], error: null }),
     inventoryPoliciesQuery ?? Promise.resolve({ data: [], error: null }),
+    inventoryPolicyDefaultsQuery ?? Promise.resolve({ data: [], error: null }),
     canManage
       ? supabase
           .from("inventory_adjustment_reasons")
@@ -473,6 +510,8 @@ export async function InventoryWorkspacePage({
     canCount && activeTab === "counts"
       ? supabase.rpc("get_inventory_count_suppliers", { target_organization_id: organizationId })
       : Promise.resolve({ data: [], error: null }),
+    countAwarenessQuery ?? Promise.resolve({ data: [], error: null }),
+    offlineInventoryIssuesQuery ?? Promise.resolve({ data: [], error: null }),
   ]);
 
   const error = [
@@ -487,12 +526,15 @@ export async function InventoryWorkspacePage({
     suppliersResult,
     purchaseOrdersResult,
     inventoryPoliciesResult,
+    inventoryPolicyDefaultsResult,
     adjustmentReasonsResult,
     stockTransfersResult,
     stockTransferLinesResult,
     replenishmentRulesResult,
     inventoryCountsResult,
     countSuppliersResult,
+    countAwarenessResult,
+    offlineInventoryIssuesResult,
   ].find((result) => result.error)?.error;
 
   if (error) {
@@ -512,6 +554,8 @@ export async function InventoryWorkspacePage({
   const purchaseOrders = (purchaseOrdersResult.data ?? []).filter((order) => visibleStore(order.store_id));
   const inventoryCounts = (inventoryCountsResult.data ?? []).filter((count) => visibleStore(count.store_id));
   const countSuppliers = countSuppliersResult.data ?? [];
+  const countAwareness = (countAwarenessResult.data ?? []).filter((entry) => visibleStore(entry.store_id));
+  const offlineInventoryIssues = (offlineInventoryIssuesResult.data ?? []).filter((entry) => visibleStore(entry.store_id));
   const purchaseOrderIds = purchaseOrders.map((order) => order.id);
   const countIds = inventoryCounts.map((count) => count.id);
   const [purchaseOrderLinesResult, goodsReceiptsResult, countLinesResult] = await Promise.all([
@@ -587,6 +631,8 @@ export async function InventoryWorkspacePage({
     purchaseOrderLineCostRows.map((line) => [line.id, Number(line.unit_cost_minor)]),
   );
   const inventoryPolicies = (inventoryPoliciesResult.data ?? []).filter((policy) => visibleStore(policy.store_id));
+  const organizationDefaultPolicy = (inventoryPolicyDefaultsResult.data?.[0]?.negative_stock_policy as "allow" | "warn" | "block" | undefined) ?? "block";
+  const canManageOrganizationDefault = canManage && storeScope.canAccessAllStores;
   const adjustmentReasons = adjustmentReasonsResult.data ?? [];
   const stockTransfers = (stockTransfersResult.data ?? []).filter((transfer) => visibleStore(transfer.source_store_id) || visibleStore(transfer.destination_store_id));
   const stockTransferLines = stockTransferLinesResult.data ?? [];
@@ -637,11 +683,8 @@ export async function InventoryWorkspacePage({
   }
 
   const detailMovements = detailMovementsResult.data ?? [];
-  const activityActorSource = selectedDetailLevel
-    ? detailMovements
-    : activeTab === "activity"
-      ? movements
-      : [];
+  const activityMovements = selectedDetailLevel ? detailMovements : movements;
+  const activityActorSource = selectedDetailLevel || activeTab === "activity" ? activityMovements : [];
   const actorEmployeeIds = [...new Set(activityActorSource.map((movement) => movement.actor_employee_id))];
   const employeesResult = hasPermission(context, "employees.manage") && actorEmployeeIds.length
     ? await supabase
@@ -689,6 +732,50 @@ export async function InventoryWorkspacePage({
     actorNames.set(employee.id, profileNames.get(employee.profile_id) || employee.employee_number);
   }
   const receiptBySaleId = new Map((receiptsResult.data ?? []).map((receipt) => [receipt.sale_id, receipt]));
+  const movementSourceIds = (sourceType: string) => [...new Set(
+    activityMovements
+      .filter((movement) => movement.source_type === sourceType && movement.source_id && UUID_PATTERN.test(movement.source_id))
+      .map((movement) => movement.source_id as string),
+  )];
+  const adjustmentSourceIds = movementSourceIds("inventory_adjustment");
+  const countSourceIds = movementSourceIds("inventory_count");
+  const goodsReceiptSourceIds = movementSourceIds("goods_receipt");
+  const transferSourceIds = movementSourceIds("stock_transfer");
+  const [adjustmentDocumentsResult, countDocumentsResult, goodsReceiptDocumentsResult, transferDocumentsResult] = await Promise.all([
+    canManage && adjustmentSourceIds.length
+      ? supabase
+          .from("inventory_adjustments")
+          .select("id, adjustment_number")
+          .eq("organization_id", organizationId)
+          .in("id", adjustmentSourceIds)
+      : Promise.resolve({ data: [], error: null }),
+    canCount && countSourceIds.length
+      ? supabase
+          .from("inventory_counts")
+          .select("id, count_number")
+          .eq("organization_id", organizationId)
+          .in("id", countSourceIds)
+      : Promise.resolve({ data: [], error: null }),
+    canManage && goodsReceiptSourceIds.length
+      ? supabase
+          .from("goods_receipts")
+          .select("id, purchase_order_id")
+          .eq("organization_id", organizationId)
+          .in("id", goodsReceiptSourceIds)
+      : Promise.resolve({ data: [], error: null }),
+    canManage && transferSourceIds.length
+      ? supabase
+          .from("stock_transfers")
+          .select("id")
+          .eq("organization_id", organizationId)
+          .in("id", transferSourceIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  const sourceDocumentError = [adjustmentDocumentsResult, countDocumentsResult, goodsReceiptDocumentsResult, transferDocumentsResult].find((result) => result.error)?.error;
+  if (sourceDocumentError) {
+    throw new Error(`Unable to load inventory source documents: ${sourceDocumentError.message}`);
+  }
   const items = products.flatMap<InventorySaleableItem>((product) => {
     const storeIds = settings
       .filter(
@@ -906,6 +993,41 @@ export async function InventoryWorkspacePage({
     `/back-office/inventory?tab=${tab}${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}`;
   const purchasingTabHref = (tab: PurchasingTab) =>
     `/back-office/purchasing?tab=${tab}${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}`;
+  const sourceDocumentReferences = new Map<string, { href: string | null; label: string }>();
+  for (const adjustment of adjustmentDocumentsResult.data ?? []) {
+    sourceDocumentReferences.set(`inventory_adjustment:${adjustment.id}`, {
+      href: null,
+      label: `Adjustment SA-${String(adjustment.adjustment_number).padStart(6, "0")}`,
+    });
+  }
+  for (const count of countDocumentsResult.data ?? []) {
+    sourceDocumentReferences.set(`inventory_count:${count.id}`, {
+      href: null,
+      label: `Count IC-${String(count.count_number).padStart(6, "0")}`,
+    });
+  }
+  for (const receipt of goodsReceiptDocumentsResult.data ?? []) {
+    sourceDocumentReferences.set(`goods_receipt:${receipt.id}`, {
+      href: `${purchasingTabHref("receiving")}&purchaseOrder=${receipt.purchase_order_id}`,
+      label: `Receiving GR-${receipt.id.slice(0, 8).toUpperCase()}`,
+    });
+  }
+  for (const transfer of transferDocumentsResult.data ?? []) {
+    sourceDocumentReferences.set(`stock_transfer:${transfer.id}`, {
+      href: null,
+      label: `Transfer TR-${transfer.id.slice(0, 8).toUpperCase()}`,
+    });
+  }
+  const sourceReferenceForMovement = (movement: typeof activityMovements[number]) => {
+    const receipt = movement.source_id ? receiptBySaleId.get(movement.source_id) : undefined;
+    if (receipt) return { href: `/back-office/receipts/${receipt.id}`, label: `Receipt ${receipt.receipt_number}` };
+    return movement.source_id
+      ? sourceDocumentReferences.get(`${movement.source_type}:${movement.source_id}`) ?? {
+          href: null,
+          label: formatInventorySourceReference(movement.source_type),
+        }
+      : { href: null, label: formatInventorySourceReference(movement.source_type) };
+  };
   const purchasingSectionLabels: Record<PurchasingTab, string> = {
     "purchase-orders": "Purchase orders",
     receiving: "Receiving",
@@ -913,6 +1035,7 @@ export async function InventoryWorkspacePage({
     "supplier-returns": "Supplier returns",
   };
   const controlSectionLabels: Partial<Record<InventoryControlTab, string>> = {
+    health: "Stock Health",
     adjustments: "Stock adjustments",
     counts: "Inventory counts",
     production: "Production",
@@ -965,6 +1088,9 @@ export async function InventoryWorkspacePage({
       variantName: variant?.name ?? null,
     }];
   });
+  const countAwarenessByPosition = new Map(
+    countAwareness.map((entry) => [`${entry.store_id}|${entry.product_id}|${entry.variant_id ?? ""}`, entry]),
+  );
   // CANDIDATE_FOR_REMOVAL: retained source data for the previous Inventory
   // stock-list surface. Stock & Restock now owns that workspace.
   void stockRows;
@@ -973,9 +1099,23 @@ export async function InventoryWorkspacePage({
     ? variantById.get(selectedDetailLevel.variant_id)
     : undefined;
   const inventoryDetail: InventoryProductDetailData | null = selectedDetailLevel && selectedDetailProduct
-    ? {
+    ? (() => {
+        const positionKey = `${selectedDetailLevel.store_id}|${selectedDetailLevel.product_id}|${selectedDetailLevel.variant_id ?? ""}`;
+        const lastCount = countAwarenessByPosition.get(positionKey);
+        const incomingQuantity = purchaseOrders
+          .filter((order) => order.store_id === selectedDetailLevel.store_id && ["draft", "ordered", "partially_received"].includes(order.status))
+          .flatMap((order) => purchaseOrderLinesByOrder.get(order.id) ?? [])
+          .filter((line) => line.product_id === selectedDetailLevel.product_id && line.variant_id === selectedDetailLevel.variant_id)
+          .reduce((total, line) => total + Math.max(0, Number(line.ordered_quantity) - Number(line.received_quantity)), 0);
+        const inTransitQuantity = stockTransfers
+          .filter((transfer) => transfer.destination_store_id === selectedDetailLevel.store_id)
+          .flatMap((transfer) => transferLinesByTransfer.get(transfer.id) ?? [])
+          .filter((line) => line.product_id === selectedDetailLevel.product_id && line.variant_id === selectedDetailLevel.variant_id)
+          .reduce((total, line) => total + Math.max(0, Number(line.quantity) - Number(line.received_quantity)), 0);
+
+        return {
         activity: detailMovements.map((movement) => {
-          const receipt = movement.source_id ? receiptBySaleId.get(movement.source_id) : undefined;
+          const sourceReference = sourceReferenceForMovement(movement);
           return {
             actorName: actorNames.get(movement.actor_employee_id) ?? null,
             createdAt: movement.created_at,
@@ -984,9 +1124,9 @@ export async function InventoryWorkspacePage({
             quantityAfter: Number(movement.quantity_after),
             quantityBefore: Number(movement.quantity_before),
             quantityDelta: Number(movement.quantity_delta),
-            reason: movement.reason_code ?? movement.reason,
-            referenceHref: receipt ? `/back-office/receipts/${receipt.id}` : null,
-            referenceLabel: receipt ? `Receipt ${receipt.receipt_number}` : formatInventorySourceReference(movement.source_type),
+            reason: movement.reason_code ?? movement.reason ?? "No reason recorded",
+            referenceHref: sourceReference.href,
+            referenceLabel: sourceReference.label,
             storeName: storeNames.get(movement.store_id) ?? "Unavailable store",
           };
         }),
@@ -999,9 +1139,18 @@ export async function InventoryWorkspacePage({
           reorderPoint: reorderPoints.get(`${selectedDetailLevel.store_id}|${selectedDetailLevel.product_id}|${selectedDetailLevel.variant_id ?? ""}`) ?? null,
         }),
         fullActivityHref: inventoryDetailHref(selectedDetailLevel.id),
+        countHref: canCount ? inventoryTabHref("counts") : null,
+        incomingQuantity,
         isAvailable: availability.get(`${selectedDetailLevel.product_id}|${selectedDetailLevel.store_id}`) === true,
         productName: selectedDetailProduct.name,
-        purchasingHref: purchasingTabHref("purchase-orders"),
+        inTransitQuantity,
+        lastCount: lastCount?.last_counted_at && lastCount.count_number !== null && lastCount.expected_quantity !== null && lastCount.counted_quantity !== null ? {
+          countedAt: lastCount.last_counted_at,
+          countedQuantity: Number(lastCount.counted_quantity),
+          countNumber: Number(lastCount.count_number),
+          expectedQuantity: Number(lastCount.expected_quantity),
+        } : null,
+        purchasingHref: canManage ? purchasingTabHref("purchase-orders") : null,
         quantity: Number(selectedDetailLevel.quantity),
         reorderPoint: reorderPoints.get(`${selectedDetailLevel.store_id}|${selectedDetailLevel.product_id}|${selectedDetailLevel.variant_id ?? ""}`) ?? null,
         sku: selectedDetailVariant?.sku ?? selectedDetailProduct.sku,
@@ -1020,10 +1169,11 @@ export async function InventoryWorkspacePage({
           })
           .sort((left, right) => left.storeName.localeCompare(right.storeName)),
         unit: selectedDetailProduct.unit,
+        transferHref: canManage ? inventoryTabHref("transfers") : null,
         variantName: selectedDetailVariant?.name ?? null,
-      }
+        };
+      })()
     : null;
-  const activityMovements = selectedDetailLevel ? detailMovements : movements;
   const activityItemLabel = selectedDetailProduct
     ? `${selectedDetailProduct.name}${selectedDetailVariant ? ` / ${selectedDetailVariant.name}` : ""}`
     : null;
@@ -1052,7 +1202,7 @@ export async function InventoryWorkspacePage({
     const product = productById.get(movement.product_id);
     const variant = movement.variant_id ? variantById.get(movement.variant_id) : undefined;
     const movementCost = movementCostById.get(movement.id);
-    const receipt = movement.source_id ? receiptBySaleId.get(movement.source_id) : undefined;
+    const sourceReference = sourceReferenceForMovement(movement);
 
     return {
       actorName: actorNames.get(movement.actor_employee_id) ?? null,
@@ -1064,8 +1214,9 @@ export async function InventoryWorkspacePage({
       quantityBefore: Number(movement.quantity_before),
       quantityDelta: Number(movement.quantity_delta),
       reason: movement.reason_code ?? movement.reason,
-      referenceHref: receipt ? `/back-office/receipts/${receipt.id}` : null,
-      referenceLabel: receipt ? `Receipt ${receipt.receipt_number}` : formatInventorySourceReference(movement.source_type),
+      note: movement.reason,
+      referenceHref: sourceReference.href,
+      referenceLabel: sourceReference.label,
       storeName: storeNames.get(movement.store_id) ?? "Unavailable store",
       unit: product?.unit ?? "units",
       ...(canViewCosts && movementCost ? {
@@ -1074,6 +1225,69 @@ export async function InventoryWorkspacePage({
       } : {}),
     };
   });
+  const inventoryHealthIssues: InventoryHealthIssue[] = [];
+
+  for (const row of stockRows) {
+    const condition = getInventoryStockCondition({ quantity: row.quantity, reorderPoint: row.reorderPoint });
+    if (condition === "negative") {
+      inventoryHealthIssues.push({ detail: `${formatQuantity(row.quantity)} ${row.unit} on hand. Review its movement history before correcting it.`, href: row.detailHref, id: `negative:${row.id}`, itemName: row.variantName ? `${row.productName} / ${row.variantName}` : row.productName, issueType: "Negative stock", severity: "critical", storeId: row.storeId, storeName: row.storeName });
+    } else if (condition === "low") {
+      inventoryHealthIssues.push({ detail: `${formatQuantity(row.quantity)} ${row.unit} on hand against a ${formatQuantity(row.reorderPoint ?? 0)} reorder level.`, href: row.detailHref, id: `low:${row.id}`, itemName: row.variantName ? `${row.productName} / ${row.variantName}` : row.productName, issueType: "Low stock", severity: "warning", storeId: row.storeId, storeName: row.storeName });
+    }
+
+    const latestCount = countAwarenessByPosition.get(`${row.storeId}|${row.productId}|${row.variantId ?? ""}`);
+    if (!latestCount?.last_counted_at) {
+      inventoryHealthIssues.push({ detail: "No completed physical count is recorded for this stock position.", href: row.detailHref, id: `never-counted:${row.id}`, itemName: row.variantName ? `${row.productName} / ${row.variantName}` : row.productName, issueType: "Never physically counted", severity: "warning", storeId: row.storeId, storeName: row.storeName });
+    } else if (latestCount.count_recommended) {
+      inventoryHealthIssues.push({ detail: `Last physically counted ${latestCount.days_since_count ?? 0} days ago. The 30-day marker is awareness only, not an enforced policy.`, href: row.detailHref, id: `stale-count:${row.id}`, itemName: row.variantName ? `${row.productName} / ${row.variantName}` : row.productName, issueType: "Stale physical count", severity: "warning", storeId: row.storeId, storeName: row.storeName });
+    }
+    if (latestCount?.counted_quantity !== null && latestCount?.counted_quantity !== undefined && latestCount.expected_quantity !== null && Number(latestCount.counted_quantity) !== Number(latestCount.expected_quantity)) {
+      inventoryHealthIssues.push({ detail: `Latest count expected ${formatQuantity(Number(latestCount.expected_quantity))} and found ${formatQuantity(Number(latestCount.counted_quantity))}.`, href: row.detailHref, id: `count-variance:${row.id}`, itemName: row.variantName ? `${row.productName} / ${row.variantName}` : row.productName, issueType: "Count variance", severity: "warning", storeId: row.storeId, storeName: row.storeName });
+    }
+  }
+
+  for (const count of inventoryCounts.filter((entry) => entry.status === "ready_for_review")) {
+    inventoryHealthIssues.push({ detail: `Inventory count IC-${String(count.count_number).padStart(6, "0")} is complete and waiting for authorized review and posting.`, href: inventoryTabHref("counts"), id: `count-review:${count.id}`, itemName: `IC-${String(count.count_number).padStart(6, "0")}`, issueType: "Count awaiting review", severity: "information", storeId: count.store_id, storeName: storeNames.get(count.store_id) ?? "Inactive store" });
+  }
+
+  const inventoryHealthTransfers = inTransitTransfers.map((transfer) => ({
+    href: inventoryTabHref("transfers"),
+    id: transfer.id,
+    label: transfer.note || `Transfer ${transfer.id.slice(0, 8).toUpperCase()}`,
+    remainingQuantity: transfer.lines.reduce((total, line) => total + Math.max(0, line.quantity - line.receivedQuantity), 0),
+    route: `${transfer.sourceStoreName} → ${transfer.destinationStoreName}`,
+    status: transfer.status,
+  }));
+  for (const transfer of inventoryHealthTransfers.filter((entry) => entry.status === "partially_received")) {
+    inventoryHealthIssues.push({ detail: `${formatQuantity(transfer.remainingQuantity)} units remain unresolved after partial receiving.`, href: transfer.href, id: `transfer:${transfer.id}`, itemName: transfer.label, issueType: "Transfer discrepancy", severity: "warning", storeId: null, storeName: transfer.route });
+  }
+  const inventorySyncConflictsByStore = new Map<string, { count: number; storeId: string | null; storeName: string }>();
+  for (const event of offlineInventoryIssues.filter((entry) => entry.conflict_type === "INVENTORY_CONFLICT")) {
+    const key = event.store_id ?? event.store_name_snapshot;
+    const current = inventorySyncConflictsByStore.get(key);
+    inventorySyncConflictsByStore.set(key, {
+      count: (current?.count ?? 0) + 1,
+      storeId: event.store_id,
+      storeName: event.store_name_snapshot,
+    });
+  }
+  for (const [storeKey, conflict] of inventorySyncConflictsByStore) {
+    inventoryHealthIssues.push({ detail: `${conflict.count} offline inventory operation${conflict.count === 1 ? " requires" : "s require"} reconciliation in Offline Sync. No stock correction is applied here.`, href: "/back-office/offline-sync", id: `sync:${storeKey}`, itemName: "Inventory sync conflict", issueType: "Inventory sync conflict", severity: "critical", storeId: conflict.storeId, storeName: conflict.storeName });
+  }
+
+  const healthIssuesByStore = new Map<string, number>();
+  for (const issue of inventoryHealthIssues) if (issue.storeId) healthIssuesByStore.set(issue.storeId, (healthIssuesByStore.get(issue.storeId) ?? 0) + 1);
+  const inventoryHealthStores = stores.map((store) => {
+    const storeCountAges = countAwareness.filter((entry) => entry.store_id === store.id && entry.days_since_count !== null).map((entry) => entry.days_since_count as number);
+    return {
+      daysSinceLastCount: storeCountAges.sort((left, right) => left - right)[0] ?? null,
+      issueCount: healthIssuesByStore.get(store.id) ?? 0,
+      name: store.name,
+      openTransferCount: inTransitTransfers.filter((transfer) => transfer.sourceStoreName === store.name || transfer.destinationStoreName === store.name).length,
+      storeId: store.id,
+    };
+  });
+  inventoryHealthIssues.sort((left, right) => ({ critical: 0, warning: 1, information: 2 })[left.severity] - ({ critical: 0, warning: 1, information: 2 })[right.severity] || left.itemName.localeCompare(right.itemName));
 
   return (
     <div className="space-y-8">
@@ -1095,6 +1309,7 @@ export async function InventoryWorkspacePage({
         activeTab={activeTab}
         canCount={canCount}
         canManage={canManage}
+        canView={canViewInventory}
         canUseProduction={context.features.production}
         storeId={storeScope.selectedStoreId}
         workspace={workspace}
@@ -1108,56 +1323,31 @@ export async function InventoryWorkspacePage({
         />
       ) : null}
 
-      {activeTab === "overview" ? (
-        <section className="space-y-4" aria-labelledby="inventory-health-title">
-          <div>
-            <h2 className="flex items-center gap-2 text-lg font-semibold" id="inventory-health-title">Your stock <ContextHelp label="What is stock health?">A quick view of the items that need action, before you open detailed stock records.</ContextHelp></h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Start with the items and operational work that need attention now.
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <InventoryMetricCard
-              href={stockLevelsHref()}
-              label="Tracked items"
-              detail="Available across the selected stores"
-              value={items.length}
-            />
-            <InventoryMetricCard
-              href={stockLevelsHref("attention")}
-              label="Needs attention"
-              detail={`${outOfStockCount} out of stock · ${negativeStockCount} negative`}
-              value={needsAttentionCount}
-            />
-            <InventoryMetricCard
-              href={purchasingTabHref("purchase-orders")}
-              label="Awaiting receiving"
-              detail="Open or partially received purchase orders"
-              value={receivableOrders.length}
-            />
-            <InventoryMetricCard
-              href={inventoryTabHref("transfers")}
-              label="Transfers awaiting receipt"
-              detail="Shipped stock not yet fully received"
-              value={inTransitTransfers.length}
-            />
-          </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Simple first</CardTitle>
-              <CardDescription>
-                Use Stock Levels for current balances, Activity for recent changes, and operational documents only when work needs to be done.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              <Link className="text-sm font-medium text-primary hover:underline" href={stockLevelsHref()}>View stock levels</Link>
-              <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("activity")}>View activity</Link>
-              <Link className="text-sm font-medium text-primary hover:underline" href="/back-office/replenishment?tab=needs-restocking">Needs restocking</Link>
-              {canManage ? <Link className="text-sm font-medium text-primary hover:underline" href={`${inventoryTabHref("overview")}&configuration=1`}>Inventory configuration</Link> : null}
-            </CardContent>
-          </Card>
-        </section>
-      ) : null}
+      {activeTab === "overview" ? <InventoryControlTower
+        healthHref={inventoryTabHref("health")}
+        issues={inventoryHealthIssues}
+        recentActivity={activityRows.map((row) => ({ href: row.referenceHref, id: row.id, label: row.productName, quantityDelta: row.quantityDelta, storeName: row.storeName }))}
+        stores={inventoryHealthStores}
+        transfers={inventoryHealthTransfers}
+        transfersHref={inventoryTabHref("transfers")}
+      /> : null}
+
+      {activeTab === "overview" ? <Card>
+        <CardHeader><CardTitle>Needs attention and shortcuts</CardTitle><CardDescription>Use Stock Levels for current balances, Activity for recent changes, and Stock Health for investigation. {needsAttentionCount} current stock position{needsAttentionCount === 1 ? " needs" : "s need"} attention: {negativeStockCount} negative and {outOfStockCount} out of stock.</CardDescription></CardHeader>
+        <CardContent className="flex flex-wrap gap-x-4 gap-y-2">
+          <Link className="text-sm font-medium text-primary hover:underline" href={stockLevelsHref()}>View stock levels</Link>
+          <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("health")}>Review Stock Health</Link>
+          <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("activity")}>View activity</Link>
+          {canCount ? <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("counts")}>Inventory counts</Link> : null}
+          {canManage ? <Link className="text-sm font-medium text-primary hover:underline" href={`${inventoryTabHref("overview")}&configuration=1`}>Inventory configuration</Link> : null}
+        </CardContent>
+      </Card> : null}
+
+      {activeTab === "health" ? <InventoryHealthWorkspace
+        initialSeverity={resolveHealthSeverity(parameters.severity)}
+        issues={inventoryHealthIssues}
+        stores={stores.map(({ id, name }) => ({ id, name }))}
+      /> : null}
 
       {activeTab === "overview" && canManage && showConfiguration ? (
         <section aria-labelledby="inventory-configuration-title" className="space-y-4">
@@ -1192,6 +1382,8 @@ export async function InventoryWorkspacePage({
               items={advancedItems}
               suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
               policies={policiesByStore}
+              organizationDefaultPolicy={organizationDefaultPolicy}
+              canManageOrganizationDefault={canManageOrganizationDefault}
               adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
               inTransitTransfers={inTransitTransfers}
               composites={compositeProducts}
@@ -1235,6 +1427,8 @@ export async function InventoryWorkspacePage({
           items={advancedItems}
           suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
           policies={policiesByStore}
+          organizationDefaultPolicy={organizationDefaultPolicy}
+          canManageOrganizationDefault={canManageOrganizationDefault}
           adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
           inTransitTransfers={inTransitTransfers}
           composites={compositeProducts}
@@ -1248,6 +1442,8 @@ export async function InventoryWorkspacePage({
           items={advancedItems}
           suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
           policies={policiesByStore}
+          organizationDefaultPolicy={organizationDefaultPolicy}
+          canManageOrganizationDefault={canManageOrganizationDefault}
           adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
           inTransitTransfers={inTransitTransfers}
           composites={compositeProducts}
@@ -1310,6 +1506,8 @@ export async function InventoryWorkspacePage({
             items={advancedItems}
             suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
             policies={policiesByStore}
+            organizationDefaultPolicy={organizationDefaultPolicy}
+            canManageOrganizationDefault={canManageOrganizationDefault}
             adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
             inTransitTransfers={inTransitTransfers}
             composites={compositeProducts}
@@ -1324,6 +1522,8 @@ export async function InventoryWorkspacePage({
           items={advancedItems}
           suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
           policies={policiesByStore}
+          organizationDefaultPolicy={organizationDefaultPolicy}
+          canManageOrganizationDefault={canManageOrganizationDefault}
           adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" }))}
           inTransitTransfers={inTransitTransfers}
           composites={compositeProducts}
@@ -1572,7 +1772,8 @@ function InventoryValuationSummary({
   );
 }
 
-function InventoryMetricCard({
+/** CANDIDATE_FOR_REMOVAL: retained while the Phase 4 control-tower metrics complete visual QA. */
+export function InventoryMetricCard({
   href,
   label,
   detail,

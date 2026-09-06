@@ -41,9 +41,18 @@ export type InventoryProductDetailData = {
   closeHref: string;
   condition: InventoryStockCondition;
   fullActivityHref: string;
+  countHref: string | null;
+  incomingQuantity: number;
   isAvailable: boolean;
   productName: string;
-  purchasingHref: string;
+  inTransitQuantity: number;
+  lastCount: {
+    countedAt: string;
+    countedQuantity: number;
+    countNumber: number;
+    expectedQuantity: number;
+  } | null;
+  purchasingHref: string | null;
   quantity: number;
   reorderPoint: number | null;
   sku: string | null;
@@ -55,6 +64,7 @@ export type InventoryProductDetailData = {
     reorderPoint: number | null;
     storeName: string;
   }>;
+  transferHref: string | null;
   unit: string;
   variantName: string | null;
 };
@@ -76,8 +86,12 @@ export function InventoryProductDetail({ detail }: { detail: InventoryProductDet
         <DialogBody className="space-y-6">
           <section aria-labelledby="inventory-detail-summary" className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-medium" id="inventory-detail-summary">Summary</h2><DetailConditionBadge condition={detail.condition} /></div>
+            {detail.condition === "negative" ? <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">Negative stock needs investigation before correction. Review the contributing activity and last physical count below; TINDIO will still enforce this store&apos;s existing negative-stock policy.</p> : null}
             <dl className="grid gap-3 rounded-xl border bg-muted/20 p-4 sm:grid-cols-2">
               <SummaryMetric label="On hand" value={`${formatQuantity(detail.quantity)} ${detail.unit}`} />
+              <SummaryMetric label="Incoming" value={`${formatQuantity(detail.incomingQuantity)} ${detail.unit}`} />
+              <SummaryMetric label="In transit" value={`${formatQuantity(detail.inTransitQuantity)} ${detail.unit}`} />
+              <SummaryMetric label="Last counted" value={detail.lastCount ? formatDate(detail.lastCount.countedAt) : "Never"} />
               <SummaryMetric label="Selling availability" value={detail.isAvailable ? "Available" : "Off"} />
               <SummaryMetric label="Reorder level" value={detail.reorderPoint === null ? "Not configured" : `${formatQuantity(detail.reorderPoint)} ${detail.unit}`} />
               <SummaryMetric label="Store" value={detail.storeName} />
@@ -85,8 +99,15 @@ export function InventoryProductDetail({ detail }: { detail: InventoryProductDet
             {detail.sku || detail.barcode ? <p className="text-xs text-muted-foreground">{detail.sku ? `SKU: ${detail.sku}` : null}{detail.sku && detail.barcode ? " · " : null}{detail.barcode ? `Barcode: ${detail.barcode}` : null}</p> : null}
             <div className="flex flex-wrap gap-2">
               <Link className={buttonVariants({ size: "sm", variant: "outline" })} href={detail.fullActivityHref}>View full activity</Link>
+              {detail.countHref ? <Link className={buttonVariants({ size: "sm", variant: "outline" })} href={detail.countHref}>Start count</Link> : null}
               {detail.adjustmentHref ? <Link className={buttonVariants({ size: "sm", variant: "outline" })} href={detail.adjustmentHref}>Adjust stock</Link> : null}
+              {detail.transferHref ? <Link className={buttonVariants({ size: "sm", variant: "outline" })} href={detail.transferHref}>Create transfer</Link> : null}
             </div>
+          </section>
+
+          <section aria-labelledby="inventory-detail-count" className="space-y-3">
+            <h2 className="font-medium" id="inventory-detail-count">Last physical count</h2>
+            {detail.lastCount ? <dl className="grid gap-3 rounded-xl border bg-muted/20 p-4 sm:grid-cols-3"><SummaryMetric label="Count" value={`IC-${String(detail.lastCount.countNumber).padStart(6, "0")}`} /><SummaryMetric label="Expected" value={`${formatQuantity(detail.lastCount.expectedQuantity)} ${detail.unit}`} /><SummaryMetric label="Counted" value={`${formatQuantity(detail.lastCount.countedQuantity)} ${detail.unit}`} /></dl> : <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">This stock position has no completed physical count yet.</p>}
           </section>
 
           <section aria-labelledby="inventory-detail-stores" className="space-y-3">
@@ -101,11 +122,11 @@ export function InventoryProductDetail({ detail }: { detail: InventoryProductDet
             {detail.activity.length ? <div className="space-y-3">{detail.activity.map((activity) => <ActivityEntry activity={activity} key={activity.id} />)}</div> : <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">No inventory activity has been recorded for this item yet.</p>}
           </section>
 
-          <section aria-labelledby="inventory-detail-purchasing" className="rounded-xl border bg-muted/20 p-4">
+          {detail.purchasingHref ? <section aria-labelledby="inventory-detail-purchasing" className="rounded-xl border bg-muted/20 p-4">
             <h2 className="font-medium" id="inventory-detail-purchasing">Purchasing</h2>
             <p className="mt-1 text-sm text-muted-foreground">Purchase orders and receiving remain in the existing Purchasing workspace.</p>
             <Link className="mt-3 inline-flex text-sm font-medium text-primary hover:underline" href={detail.purchasingHref}>Open purchasing</Link>
-          </section>
+          </section> : null}
         </DialogBody>
       </DialogContent>
     </Dialog.Root>

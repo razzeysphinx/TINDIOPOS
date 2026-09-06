@@ -19,6 +19,7 @@ const exportKindSchema = z.enum([
   "payments",
   "registers",
   "customers",
+  "products",
   "security",
 ]);
 
@@ -50,6 +51,11 @@ function rowsForExport(kind: z.infer<typeof exportKindSchema>, storeSnapshots: S
           [store.id, store.name, "Inventory valuation (minor units)", snapshot.inventory.inventory_valuation_minor ?? ""],
           ...snapshot.inventory.movement_by_type.map((movement) => [store.id, store.name, `Movement: ${movement.movement_type}`, movement.quantity_delta]),
         ]),
+      ];
+    case "products":
+      return [
+        ["store_id", "store_name", "product_id", "variant_id", "product", "quantity_sold", "quantity_refunded", "net_sales_minor"],
+        ...storeSnapshots.flatMap(({ store, snapshot }) => snapshot.top_products.map((product) => [store.id, store.name, product.product_id, product.variant_id ?? "", product.name, product.quantity_sold, product.quantity_refunded, product.net_sales_minor])),
       ];
     case "employees":
       return [

@@ -3,8 +3,10 @@
 import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
 import { useMemo, useState } from "react";
 import {
+  AlertTriangle,
   CheckCircle2,
   ClipboardCheck,
+  Clock3,
   LoaderCircle,
   PackageCheck,
   Plus,
@@ -45,6 +47,7 @@ export type SupplyChainItem = {
   unit: string;
   storeIds: string[];
   quantitiesByStore: Record<string, number>;
+  inTransitByStore?: Record<string, number>;
 };
 export type ReplenishmentRule = {
   id: string;
@@ -59,6 +62,9 @@ export type ReplenishmentRule = {
   currentQuantity: number;
   storeName: string;
   warehouseName: string | null;
+  recommendedWarehouseId?: string | null;
+  recommendedWarehouseName?: string | null;
+  recommendedSourceQuantity?: number;
 };
 export type SupplyChainRequest = {
   id: string;
@@ -68,6 +74,11 @@ export type SupplyChainRequest = {
   warehouseName: string;
   note: string | null;
   requestedAt: string;
+  approvedAt: string | null;
+  pickedAt: string | null;
+  dispatchedAt: string | null;
+  receivedAt: string | null;
+  updatedAt: string;
   lines: Array<{
     id: string;
     transferLineId: string | null;
@@ -79,6 +90,7 @@ export type SupplyChainRequest = {
     dispatchedQuantity: number;
     receivedQuantity: number;
     shortQuantity: number;
+    discrepancies: Array<{ note: string; quantity: number; reportedAt: string }>;
   }>;
 };
 export type InboundPurchaseOrder = {
@@ -216,11 +228,11 @@ export function SupplyChainWorkflows({
   }
 
   function applyRuleSuggestion(rule: ReplenishmentRule) {
-    if (!rule.preferredWarehouseId) return;
+    if (!rule.recommendedWarehouseId) return;
     const suggested = Math.max(0, rule.targetStock - rule.currentQuantity);
     setRequestStoreId(rule.storeId);
-    setRequestWarehouseId(rule.preferredWarehouseId ?? "");
-    setRequestLines([{ productId: rule.productId, variantId: rule.variantId ?? "", quantity: String(suggested || 1) }]);
+    setRequestWarehouseId(rule.recommendedWarehouseId);
+    setRequestLines([{ productId: rule.productId, variantId: rule.variantId ?? "", quantity: String(Math.min(suggested || 1, rule.recommendedSourceQuantity ?? Math.max(suggested, 1))) }]);
     setRequestResult(null);
   }
 
@@ -372,7 +384,15 @@ export function SupplyChainWorkflows({
               <Field label="Requesting store"><select className={selectClassName} value={requestStoreId} onChange={(event) => setRequestStoreId(event.target.value)}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></Field>
               <Field label="Source warehouse"><select className={selectClassName} value={requestWarehouseId} onChange={(event) => setRequestWarehouseId(event.target.value)}><option value="">Choose a warehouse</option>{eligibleRequestWarehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.code} · {warehouse.name}</option>)}</select></Field>
             </div>
-            <DraftRequestLines lines={requestLines} items={requestItems} onAdd={() => setRequestLines((lines) => [...lines, emptyRequestLine(requestItems[0])])} onChange={setRequestLines} onSelect={selectRequestItem} />
+            <DraftRequestLines
+              destinationStoreId={requestStoreId}
+              items={requestItems}
+              lines={requestLines}
+              onAdd={() => setRequestLines((lines) => [...lines, emptyRequestLine(requestItems[0])])}
+              onChange={setRequestLines}
+              onSelect={selectRequestItem}
+              sourceStoreId={warehouses.find((warehouse) => warehouse.id === requestWarehouseId)?.storeId ?? null}
+            />
             <Field label="Request note"><Input value={requestNote} onChange={(event) => setRequestNote(event.target.value)} placeholder="Optional reason or delivery note" /></Field>
             <SubmitRow pending={isActionPending("request")} result={requestResult} label="Submit for approval" icon={<Send />} />
           </form> : <Empty message="You need two stock locations, a designated warehouse, and a tracked item at the requesting store." />}
@@ -420,8 +440,8 @@ function ReplenishmentRecommendations({
       {rules.length ? <div className="grid gap-3 lg:grid-cols-2">{rules.map((rule) => {
         const suggestedQuantity = Math.max(0, rule.targetStock - rule.currentQuantity);
         const needsReorder = rule.currentQuantity <= rule.reorderPoint;
-        const canPrepareTransfer = needsReorder && suggestedQuantity > 0 && Boolean(rule.preferredWarehouseId && rule.warehouseName);
-        return <Card key={rule.id} size="sm"><CardContent className="flex flex-wrap items-center justify-between gap-3 py-4"><div><p className="font-medium">{rule.label}</p><p className="mt-1 text-xs text-muted-foreground">{rule.storeName} · on hand {formatQuantity(rule.currentQuantity)} {rule.unit} · reorder {formatQuantity(rule.reorderPoint)} · target {formatQuantity(rule.targetStock)}</p>{needsReorder ? <p className="mt-1 text-xs text-muted-foreground">{rule.warehouseName ? `Suggested transfer source: ${rule.warehouseName}` : "No warehouse source is configured. Plan supplier replenishment or set a preferred warehouse."}</p> : null}</div><div className="flex flex-wrap items-center gap-2"><Badge variant={needsReorder ? "secondary" : "outline"}>{needsReorder ? rule.warehouseName ? `Transfer ${formatQuantity(suggestedQuantity)}` : "Plan supplier replenishment" : "Above reorder point"}</Badge>{canPrepareTransfer ? <Button size="sm" type="button" variant="outline" onClick={() => onPrepareTransfer(rule)}>Prepare transfer request</Button> : null}{needsReorder && !rule.warehouseName ? <Link className={buttonVariants({ size: "sm", variant: "outline" })} href="/back-office/purchasing?tab=purchase-orders">Plan supplier purchase</Link> : null}</div></CardContent></Card>;
+        const canPrepareTransfer = needsReorder && suggestedQuantity > 0 && Boolean(rule.recommendedWarehouseId && rule.recommendedWarehouseName && (rule.recommendedSourceQuantity ?? 0) > 0);
+        return <Card key={rule.id} size="sm"><CardContent className="flex flex-wrap items-center justify-between gap-3 py-4"><div><p className="font-medium">{rule.label}</p><p className="mt-1 text-xs text-muted-foreground">{rule.storeName} · on hand {formatQuantity(rule.currentQuantity)} {rule.unit} · reorder {formatQuantity(rule.reorderPoint)} · target {formatQuantity(rule.targetStock)}</p>{needsReorder ? <p className="mt-1 text-xs text-muted-foreground">{rule.recommendedWarehouseName ? `Suggested internal source: ${rule.recommendedWarehouseName} · ${formatQuantity(rule.recommendedSourceQuantity ?? 0)} ${rule.unit} on hand` : "No authorized internal source currently has stock. Plan supplier replenishment or configure another warehouse."}</p> : null}</div><div className="flex flex-wrap items-center gap-2"><Badge variant={needsReorder ? "secondary" : "outline"}>{needsReorder ? rule.recommendedWarehouseName ? `Request ${formatQuantity(Math.min(suggestedQuantity, rule.recommendedSourceQuantity ?? 0))}` : "Plan supplier replenishment" : "Above reorder point"}</Badge>{canPrepareTransfer ? <Button size="sm" type="button" variant="outline" onClick={() => onPrepareTransfer(rule)}>Prepare transfer request</Button> : null}{needsReorder && !rule.recommendedWarehouseName ? <Link className={buttonVariants({ size: "sm", variant: "outline" })} href="/back-office/purchasing?tab=purchase-orders">Plan supplier purchase</Link> : null}</div></CardContent></Card>;
       })}</div> : <Empty message="Save a reorder point and target stock rule to see replenishment suggestions." />}
     </section>
   );
@@ -443,12 +463,16 @@ function StockRequestCard({ request, isPending, dispatchNote, receiptNote, resul
   onReceive: () => void;
 }) {
   const canReceive = request.status === "dispatched" || request.status === "partially_received";
+  const unresolvedQuantity = request.lines.reduce((total, line) => total + Math.max(0, line.dispatchedQuantity - line.receivedQuantity - line.shortQuantity), 0);
+  const discrepancyQuantity = request.lines.reduce((total, line) => total + line.shortQuantity, 0);
   return <Card><CardHeader className="flex-row items-start justify-between gap-4"><div><CardTitle>Request #{request.requestNumber}</CardTitle><CardDescription className="mt-1">{request.warehouseName} → {request.requestingStoreName} · submitted {formatDate(request.requestedAt)}</CardDescription></div><Badge variant={request.status === "received_with_discrepancy" ? "secondary" : "outline"}>{statusLabel(request.status)}</Badge></CardHeader><CardContent className="space-y-4">
     {request.note ? <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">{request.note}</p> : null}
+    <TransferTimeline request={request} />
+    {unresolvedQuantity > 0 || discrepancyQuantity > 0 ? <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><div><p className="font-medium">Transfer requires attention</p><p className="mt-1 text-xs">{unresolvedQuantity > 0 ? `${formatQuantity(unresolvedQuantity)} units remain in transit. ` : ""}{discrepancyQuantity > 0 ? `${formatQuantity(discrepancyQuantity)} units were recorded short and remain in the audit trail.` : ""}</p></div></div> : null}
     <div className="divide-y rounded-lg border">{request.lines.map((line) => {
       const remaining = Math.max(0, line.dispatchedQuantity - line.receivedQuantity - line.shortQuantity);
       const draft = receiptValue(request.id, line);
-      return <div className="grid gap-2 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center" key={line.id}><div><p className="font-medium">{line.label}</p><p className="mt-1 text-xs text-muted-foreground">Requested {formatQuantity(line.requestedQuantity)} · approved {formatQuantity(line.approvedQuantity)} · picked {formatQuantity(line.pickedQuantity)} · dispatched {formatQuantity(line.dispatchedQuantity)} · received {formatQuantity(line.receivedQuantity)}{line.shortQuantity ? ` · short ${formatQuantity(line.shortQuantity)}` : ""} {line.unit}</p></div>{canReceive && line.transferLineId && remaining > 0 ? <div className="grid gap-2 sm:grid-cols-3"><Field label="Received now"><Input inputMode="decimal" value={draft.receivedQuantity} onChange={(event) => onReceiptChange(request.id, line.id, { receivedQuantity: event.target.value }, draft)} /></Field><Field label="Short"><Input inputMode="decimal" value={draft.shortQuantity} onChange={(event) => onReceiptChange(request.id, line.id, { shortQuantity: event.target.value }, draft)} /></Field><Field label="Short reason"><Input value={draft.discrepancyNote} onChange={(event) => onReceiptChange(request.id, line.id, { discrepancyNote: event.target.value }, draft)} placeholder="If short" /></Field></div> : <span className="text-xs text-muted-foreground">{remaining > 0 ? `${formatQuantity(remaining)} awaiting dispatch` : "Accounted for"}</span>}</div>;
+      return <div className="grid gap-2 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center" key={line.id}><div><p className="font-medium">{line.label}</p><p className="mt-1 text-xs text-muted-foreground">Requested {formatQuantity(line.requestedQuantity)} · approved {formatQuantity(line.approvedQuantity)} · picked {formatQuantity(line.pickedQuantity)} · sent {formatQuantity(line.dispatchedQuantity)} · received {formatQuantity(line.receivedQuantity)}{line.shortQuantity ? ` · short ${formatQuantity(line.shortQuantity)}` : ""} {line.unit}</p>{line.discrepancies.map((discrepancy) => <p className="mt-1 text-xs text-amber-700 dark:text-amber-300" key={`${discrepancy.reportedAt}-${discrepancy.note}`}>Short {formatQuantity(discrepancy.quantity)} · {discrepancy.note} · {formatDate(discrepancy.reportedAt)}</p>)}</div>{canReceive && line.transferLineId && remaining > 0 ? <div className="grid gap-2 sm:grid-cols-3"><Field label="Received now"><Input inputMode="decimal" value={draft.receivedQuantity} onChange={(event) => onReceiptChange(request.id, line.id, { receivedQuantity: event.target.value }, draft)} /></Field><Field label="Short"><Input inputMode="decimal" value={draft.shortQuantity} onChange={(event) => onReceiptChange(request.id, line.id, { shortQuantity: event.target.value }, draft)} /></Field><Field label="Short reason"><Input value={draft.discrepancyNote} onChange={(event) => onReceiptChange(request.id, line.id, { discrepancyNote: event.target.value }, draft)} placeholder="Required when short" /></Field></div> : <span className="text-xs text-muted-foreground">{remaining > 0 ? `${formatQuantity(remaining)} in transit` : "Accounted for"}</span>}</div>;
     })}</div>
     {request.status === "requested" ? <SubmitRow pending={isPending} result={result} label="Approve requested quantities" icon={<CheckCircle2 />} onClick={onApprove} /> : null}
     {request.status === "approved" ? <SubmitRow pending={isPending} result={result} label="Start picking" icon={<ClipboardCheck />} onClick={onStartPicking} /> : null}
@@ -457,8 +481,26 @@ function StockRequestCard({ request, isPending, dispatchNote, receiptNote, resul
   </CardContent></Card>;
 }
 
-function DraftRequestLines({ lines, items, onAdd, onChange, onSelect }: { lines: RequestDraft[]; items: SupplyChainItem[]; onAdd: () => void; onChange: (lines: RequestDraft[]) => void; onSelect: (index: number, value: string) => void }) {
-  return <div className="space-y-2"><div className="flex items-center justify-between gap-2"><p className="text-sm font-medium">Requested items</p><Button size="sm" type="button" variant="outline" onClick={onAdd}><Plus /> Add item</Button></div>{lines.map((line, index) => <div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_8rem_auto] sm:items-end" key={`${index}-${line.productId}-${line.variantId}`}><Field label="Item"><select className={selectClassName} value={`${line.productId}|${line.variantId}`} onChange={(event) => onSelect(index, event.target.value)}>{items.map((item) => <option key={itemKey(item)} value={itemKey(item)}>{item.label}</option>)}</select></Field><Field label="Quantity"><Input inputMode="decimal" value={line.quantity} onChange={(event) => onChange(lines.map((current, lineIndex) => lineIndex === index ? { ...current, quantity: event.target.value } : current))} /></Field><Button aria-label="Remove requested item" disabled={lines.length === 1} size="sm" type="button" variant="ghost" onClick={() => onChange(lines.filter((_, lineIndex) => lineIndex !== index))}>Remove</Button></div>)}</div>;
+function TransferTimeline({ request }: { request: SupplyChainRequest }) {
+  const stages = [
+    { label: "Requested", at: request.requestedAt },
+    { label: "Approved", at: request.approvedAt },
+    { label: "Picked", at: request.pickedAt },
+    { label: "Sent", at: request.dispatchedAt },
+    { label: request.status === "partially_received" ? "Receipt progress" : "Received", at: request.receivedAt ?? (request.status === "partially_received" ? request.updatedAt : null) },
+  ];
+  return <ol className="grid gap-2 sm:grid-cols-5" aria-label={`Transfer timeline for request ${request.requestNumber}`}>{stages.map((stage) => <li className={stage.at ? "rounded-lg border bg-secondary/40 p-2" : "rounded-lg border border-dashed p-2 text-muted-foreground"} key={stage.label}><span className="flex items-center gap-1.5 text-xs font-medium"><Clock3 className="size-3.5" aria-hidden="true" />{stage.label}</span><span className="mt-1 block text-[11px]">{stage.at ? formatDate(stage.at) : "Not reached"}</span></li>)}</ol>;
+}
+
+function DraftRequestLines({ lines, items, destinationStoreId, sourceStoreId, onAdd, onChange, onSelect }: { lines: RequestDraft[]; items: SupplyChainItem[]; destinationStoreId: string; sourceStoreId: string | null; onAdd: () => void; onChange: (lines: RequestDraft[]) => void; onSelect: (index: number, value: string) => void }) {
+  return <div className="space-y-2"><div className="flex items-center justify-between gap-2"><p className="text-sm font-medium">Requested items</p><Button size="sm" type="button" variant="outline" onClick={onAdd}><Plus /> Add item</Button></div>{lines.map((line, index) => {
+    const item = items.find((candidate) => candidate.productId === line.productId && (candidate.variantId ?? "") === line.variantId);
+    return <div className="grid gap-3 rounded-lg border p-3" key={`${index}-${line.productId}-${line.variantId}`}><div className="grid gap-2 sm:grid-cols-[1fr_8rem_auto] sm:items-end"><Field label="Item"><select className={selectClassName} value={`${line.productId}|${line.variantId}`} onChange={(event) => onSelect(index, event.target.value)}>{items.map((option) => <option key={itemKey(option)} value={itemKey(option)}>{option.label}</option>)}</select></Field><Field label="Quantity"><Input inputMode="decimal" value={line.quantity} onChange={(event) => onChange(lines.map((current, lineIndex) => lineIndex === index ? { ...current, quantity: event.target.value } : current))} /></Field><Button aria-label="Remove requested item" disabled={lines.length === 1} size="sm" type="button" variant="ghost" onClick={() => onChange(lines.filter((_, lineIndex) => lineIndex !== index))}>Remove</Button></div><dl className="grid gap-2 text-xs min-[430px]:grid-cols-3"><StockPosition label="Source on hand" value={sourceStoreId ? item?.quantitiesByStore[sourceStoreId] ?? 0 : null} unit={item?.unit} /><StockPosition label="Destination on hand" value={item?.quantitiesByStore[destinationStoreId] ?? 0} unit={item?.unit} /><StockPosition label="In transit" value={item?.inTransitByStore?.[destinationStoreId] ?? 0} unit={item?.unit} /></dl></div>;
+  })}</div>;
+}
+
+function StockPosition({ label, value, unit }: { label: string; value: number | null; unit?: string }) {
+  return <div className="rounded-md bg-muted/50 p-2"><dt className="text-muted-foreground">{label}</dt><dd className="mt-1 font-medium">{value === null ? "Choose source" : `${formatQuantity(value)} ${unit ?? "units"}`}</dd></div>;
 }
 
 function WorkflowCard({ icon, title, description, children }: { icon: ReactNode; title: string; description: string; children: ReactNode }) {

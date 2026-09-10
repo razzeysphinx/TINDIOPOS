@@ -35,6 +35,8 @@ export type ReceiptRefund = {
     quantity: number;
     unit: string;
     lineTotalMinor: number;
+    /** Missing values are historical records, which predate explicit disposition and defaulted to restock. */
+    returnedToStock?: boolean;
   }>;
 };
 
@@ -250,6 +252,11 @@ export function ReceiptDocument({
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {formatReceiptDate(refund.completedAt, timezone)} · {refund.reason}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {refund.items.some((item) => item.returnedToStock !== false)
+                    ? "Inventory return recorded for eligible items"
+                    : "No inventory return recorded"}
                 </p>
                 {refund.items.map((item) => (
                   <p className="mt-1 text-xs text-muted-foreground" key={item.id}>

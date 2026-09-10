@@ -22,6 +22,7 @@ test("receipt quick view uses an authorized, canonical on-demand data loader", (
   assert.match(source.action, /loadAuthorizedReceiptDetail\(context, parsed\.data\.receiptId\)/);
   assert.match(source.detail, /\.eq\("organization_id", context\.organization\.id\)/);
   assert.match(source.detail, /if \(!hasStoreAccess\(context, sale\.store_id\)\) return null/);
+  assert.match(source.detail, /hasPermission\(context, "sales\.refund"\) \|\| hasPermission\(context, "approvals\.request"\)/);
   assert.match(source.detail, /deliveryRecipientEmail: customerEmailResult\.data\?\.email \?\? null/);
   assert.match(source.detail, /\.from\("customers"\)\s*\.select\("email"\)/);
   assert.match(source.route, /loadAuthorizedReceiptDetail\(context, receiptId\)/);
@@ -51,7 +52,7 @@ test("receipt list opens a right drawer without retaining a View button", () => 
   assert.match(source.drawer, /Payment methods:/);
   assert.doesNotMatch(source.drawer, /Loading receipt…/, "Receipt rows must remain stable while the drawer loads");
   assert.match(source.drawer, /md:hidden/, "Mobile receipts must use a compact card layout instead of the wide table");
-  assert.match(source.drawer, /<BackOfficeDetailDrawer closeLabel="Close receipt quick view" width="compact">/);
+  assert.match(source.drawer, /<BackOfficeDetailDrawer closeLabel="Close receipt quick view" width=\{drawerMode === "receipt" \? "compact" : "standard"\}>/);
   assert.match(source.detailDrawer, /side="right"/);
   assert.match(source.detailDrawer, /"flex h-dvh max-h-none max-w-none flex-col rounded-none"/);
   assert.match(source.drawer, /<DialogBody className="min-h-0 max-h-none flex-1">/);
@@ -76,7 +77,11 @@ test("quick-view errors, printing, compact digital delivery, and refunds remain 
   assert.match(source.delivery, /Enter an email address\./);
   assert.match(source.delivery, /Enter a valid email address\./);
   assert.match(source.delivery, /\{isPending \? "Sending\.\.\." : "Send receipt"\}/);
-  assert.match(source.drawer, /\?refund=1#refund/);
+  assert.doesNotMatch(source.drawer, /\?refund=1#refund/);
+  assert.match(source.drawer, /setDrawerMode\("refund"\)/);
+  assert.match(source.drawer, /<RefundForm/);
+  assert.match(source.drawer, /onBackToReceipt=\{returnToUpdatedReceipt\}/);
+  assert.match(source.drawer, /onWorkflowModeChange=\{setDrawerMode\}/);
   assert.doesNotMatch(source.drawer, /Open full receipt/);
   assert.match(source.drawer, /requestId\.current !== currentRequest/);
 });

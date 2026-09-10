@@ -38,7 +38,8 @@ test("Back Office retains the responsive, permission-aware navigation boundary",
   assert.match(backOfficeLayout, /fixed inset-x-0 top-0/);
   assert.match(backOfficeLayout, /const canUsePos = context\.permissions\.includes\("pos\.access"\)/);
   assert.match(backOfficeNavigation, /isVisible: \(access: BackOfficeNavigationAccess\) => boolean/);
-  assert.match(backOfficeNavigation, /<details/);
+  assert.match(backOfficeNavigation, /function useNavigationAccordion/);
+  assert.doesNotMatch(backOfficeNavigation, /<details/);
   assert.match(backOfficeNavigation, /group\.items\.filter\(\(item\) => !item\.isVisible \|\| item\.isVisible\(access\)\)/);
   assert.match(workspaceAccessCheck, /Cashier deep links named in the Phase 1 audit have server permission gates/);
 });

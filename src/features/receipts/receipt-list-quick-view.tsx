@@ -1,12 +1,11 @@
 "use client";
 
-import { AtSign, RotateCcw } from "lucide-react";
-import Link from "next/link";
+import { ArrowLeft, AtSign, RotateCcw } from "lucide-react";
 import { useRef, useState, useTransition } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { BackOfficeDetailDrawer } from "@/components/back-office/back-office-detail-drawer";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogBody,
@@ -22,7 +21,7 @@ import type { ReceiptDetailData, ReceiptRefundStatus } from "@/features/receipts
 import { ReceiptDeliveryForm } from "@/features/receipts/receipt-delivery-form";
 import { ReceiptDocument } from "@/features/receipts/receipt-document";
 import { ReceiptPrintButton } from "@/features/receipts/receipt-print-button";
-import { cn } from "@/lib/utils";
+import { RefundForm, type ReceiptRefundWorkflowMode } from "@/features/receipts/refund-form";
 
 export type ReceiptListQuickViewItem = {
   canRefund: boolean;
@@ -83,6 +82,7 @@ export function ReceiptListQuickView({
   const [selectedReceiptId, setSelectedReceiptId] = useState<string | null>(null);
   const [isDigitalReceiptOpen, setIsDigitalReceiptOpen] = useState(false);
   const [digitalReceiptNotice, setDigitalReceiptNotice] = useState<string | null>(null);
+  const [drawerMode, setDrawerMode] = useState<"receipt" | ReceiptRefundWorkflowMode>("receipt");
   const requestId = useRef(0);
   const digitalReceiptButtonRef = useRef<HTMLButtonElement>(null);
   const lastFocusedReceiptTargetId = useRef<string | null>(null);
@@ -93,6 +93,7 @@ export function ReceiptListQuickView({
     lastFocusedReceiptTargetId.current = focusTargetId;
     setSelectedReceiptId(receiptId);
     setDetail(null);
+    setDrawerMode("receipt");
     setLoadError(false);
     setIsDigitalReceiptOpen(false);
     setDigitalReceiptNotice(null);
@@ -116,6 +117,7 @@ export function ReceiptListQuickView({
     setDigitalReceiptNotice(null);
     setLoadError(false);
     setDetail(null);
+    setDrawerMode("receipt");
     const focusTargetId = lastFocusedReceiptTargetId.current;
     if (focusTargetId) {
       window.requestAnimationFrame(() => document.getElementById(focusTargetId)?.focus());
@@ -125,6 +127,14 @@ export function ReceiptListQuickView({
   const closeDigitalReceipt = () => {
     setIsDigitalReceiptOpen(false);
     window.requestAnimationFrame(() => digitalReceiptButtonRef.current?.focus());
+  };
+
+  const returnToUpdatedReceipt = () => {
+    if (!selectedReceiptId) return;
+    openReceipt(
+      selectedReceiptId,
+      lastFocusedReceiptTargetId.current ?? `receipt-open-${selectedReceiptId}`,
+    );
   };
 
   return (
@@ -208,10 +218,35 @@ export function ReceiptListQuickView({
       </div>
 
       <Dialog.Root onOpenChange={(open) => { if (!open) closeDrawer(); }} open={isDrawerOpen}>
-        <BackOfficeDetailDrawer closeLabel="Close receipt quick view" width="compact">
+        <BackOfficeDetailDrawer closeLabel="Close receipt quick view" width={drawerMode === "receipt" ? "compact" : "standard"}>
           <DialogHeader className="shrink-0">
-            <DialogTitle>{detail ? `Receipt #${detail.receipt.number}` : "Receipt details"}</DialogTitle>
-            {detail ? (
+            {drawerMode !== "receipt" && detail ? (
+              <div className="flex min-w-0 items-start gap-2">
+                <Button
+                  aria-label={`Back to receipt #${detail.receipt.number}`}
+                  className="mt-0.5 size-9 shrink-0"
+                  onClick={returnToUpdatedReceipt}
+                  size="icon"
+                  type="button"
+                  variant="ghost"
+                >
+                  <ArrowLeft aria-hidden="true" />
+                </Button>
+                <div className="min-w-0">
+                  <DialogTitle>
+                    {drawerMode === "refund-review"
+                      ? "Review refund"
+                      : drawerMode === "refund-success"
+                        ? "Refund completed"
+                        : `Refund receipt #${detail.receipt.number}`}
+                  </DialogTitle>
+                  <DialogDescription className="mt-1 truncate">
+                    {detail.sale.storeName} · {detail.sale.registerName} · Receipt #{detail.receipt.number}
+                  </DialogDescription>
+                </div>
+              </div>
+            ) : <DialogTitle>{detail ? `Receipt #${detail.receipt.number}` : "Receipt details"}</DialogTitle>}
+            {drawerMode === "receipt" && detail ? (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Badge variant={receiptStatusVariant(detail.refundStatus)}>{receiptStatusLabel(detail.refundStatus)}</Badge>
                 <span className="text-sm text-muted-foreground">{detail.sale.storeName} · {detail.sale.registerName}</span>
@@ -220,16 +255,30 @@ export function ReceiptListQuickView({
             {digitalReceiptNotice ? <p aria-live="polite" className="mt-3 rounded-lg bg-primary/10 px-3 py-2 text-sm text-primary" role="status">{digitalReceiptNotice}</p> : null}
           </DialogHeader>
           <DialogBody className="min-h-0 max-h-none flex-1">
-            {isLoading ? <ReceiptQuickViewSkeleton /> : null}
-            {!isLoading && loadError ? (
+            {drawerMode === "receipt" && isLoading ? <ReceiptQuickViewSkeleton /> : null}
+            {drawerMode === "receipt" && !isLoading && loadError ? (
               <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
                 <p className="font-medium text-foreground">We couldn&apos;t load this receipt.</p>
                 <Button className="mt-4" onClick={() => { if (selectedReceiptId) openReceipt(selectedReceiptId); }} type="button" variant="outline">Try again</Button>
               </div>
             ) : null}
-            {!isLoading && detail ? <ReceiptSurface detail={detail} timezone={timezone} /> : null}
+            {drawerMode === "receipt" && !isLoading && detail ? <ReceiptSurface detail={detail} timezone={timezone} /> : null}
+            {drawerMode !== "receipt" && detail ? (
+              <RefundForm
+                currencyCode={detail.sale.currencyCode}
+                items={detail.refundFormItems}
+                onBackToReceipt={returnToUpdatedReceipt}
+                onWorkflowModeChange={setDrawerMode}
+                originalTotalMinor={detail.sale.totalMinor}
+                paymentMethods={detail.refundPaymentMethods}
+                presentation="drawer"
+                receiptId={detail.receipt.id}
+                receiptNumber={detail.receipt.number}
+                saleId={detail.sale.id}
+              />
+            ) : null}
           </DialogBody>
-          {detail ? (
+          {drawerMode === "receipt" && detail ? (
             <DialogFooter className="shrink-0 justify-end border-t px-4 py-3 sm:px-6 print:hidden">
               {detail.canReprint ? <ReceiptPrintButton printMode="receipt" /> : null}
               {detail.canReprint ? (
@@ -239,10 +288,10 @@ export function ReceiptListQuickView({
                 </Button>
               ) : null}
               {detail.canRefund && detail.refundStatus !== "refunded" ? (
-                <Link className={cn(buttonVariants({ variant: "destructive" }))} href={`/back-office/receipts/${detail.receipt.id}?refund=1#refund`}>
+                <Button onClick={() => setDrawerMode("refund")} type="button" variant="destructive">
                   <RotateCcw aria-hidden="true" />
                   Refund
-                </Link>
+                </Button>
               ) : null}
             </DialogFooter>
           ) : null}

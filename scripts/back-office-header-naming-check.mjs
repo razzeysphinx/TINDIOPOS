@@ -30,18 +30,33 @@ test("the application header keeps the current page title at every width", () =>
 
 test("sidebar and breadcrumbs use the simplified Back Office vocabulary", () => {
   for (const label of [
-    "Business Reports",
-    "Shift Reports",
+    "Business",
+    "Shifts",
     "Receipts",
     "Stock Control",
+    "Customers",
+    "Roles",
+    "Attendance",
+    "Approvals & Audit",
+    "Devices",
+    "Sync",
+    "Payments",
+  ]) {
+    assert.match(navigation, new RegExp(`label: "${label}"`));
+  }
+  for (const fullLabel of [
+    "Business Reports",
+    "Shift Reports",
+    "Kitchen display",
     "Customers & Loyalty",
     "Roles & Access",
     "Time & Attendance",
-    "Approvals & Audit",
     "POS Devices",
     "Offline Sync",
+    "Payment methods",
+    "Receipt settings",
   ]) {
-    assert.match(navigation, new RegExp(`label: "${label}"`));
+    assert.match(navigation, new RegExp(`(?:breadcrumbLabel|pageTitle): "${fullLabel}"`));
   }
   assert.doesNotMatch(navigation, /label: "Receipts & returns"/);
   assert.doesNotMatch(navigation, /label: "Inventory Control"/);

@@ -39,6 +39,11 @@ assert.match(posPage, /No receipts yet\./, "empty history has useful copy");
 assert.match(receiptMigration, /normalized_query ~ '\^#\?\[0-9\]\+\$'/, "receipt search accepts hash and zero-padded numbers");
 
 assert.match(refundForm, /Purchased · refunded · available/, "refund lines show purchased/refunded/available quantities");
+assert.match(refundForm, /Review refund/, "refunds require a deliberate review step");
+assert.match(refundForm, /Confirm \$\{formatMinorMoney\(totalMinor, currencyCode\)\} refund/, "review confirmation names the exact refund amount");
+assert.match(refundForm, /Return eligible refunded items to inventory/, "the physical stock-return choice is explicit");
+assert.match(refundForm, /return_to_stock: returnToStock/, "approval payload preserves physical-return intent");
+assert.doesNotMatch(refundForm, /window\.confirm/, "refund confirmation uses the review step rather than a browser prompt");
 assert.match(refundForm, /Approve with PIN/, "pending refunds offer nearby PIN approval");
 assert.match(approvalDialog, /Request approval/, "pending refunds can remain for remote approval");
 assert.match(refundForm, /window\.sessionStorage/, "the exact pending draft survives closing and reopening");
@@ -50,6 +55,7 @@ assert.match(securityPage, /<ApprovalRequestActions/, "authorized Back Office us
 
 assert.match(refundAction, /\.rpc\("refund_sale"/, "refund completion still uses the canonical RPC");
 assert.match(refundAction, /target_idempotency_key/, "refund completion remains idempotent");
+assert.match(refundAction, /return_to_stock: item\.returnToStock/, "refund action sends the explicit stock-return disposition");
 assert.match(receiptMigration, /private\.authorize_sensitive_operation/, "completion reuses scoped approval authorization");
 assert.match(receiptMigration, /private\.validate_refund_approval_payload/, "approval validates the exact receipt and lines");
 assert.match(receiptMigration, /create or replace function public\.decide_manager_approval/, "remote decisions use a server-authorized RPC");

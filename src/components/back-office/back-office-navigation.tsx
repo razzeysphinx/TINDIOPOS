@@ -667,7 +667,6 @@ function getActiveNavigationGroupId(pathname: string, groups: NavigationGroup[])
  */
 function useNavigationAccordion(pathname: string, groups: NavigationGroup[]) {
   const activeGroupId = getActiveNavigationGroupId(pathname, groups);
-  const groupIds = `,${groups.map((group) => group.id).join(",")},`;
   const previousPathname = useRef(pathname);
   const [openGroupId, setOpenGroupId] = useState<string | null>(() => activeGroupId);
 
@@ -677,16 +676,6 @@ function useNavigationAccordion(pathname: string, groups: NavigationGroup[]) {
     previousPathname.current = pathname;
     setOpenGroupId(activeGroupId);
   }, [activeGroupId, pathname]);
-
-  useEffect(() => {
-    setOpenGroupId((currentGroupId) => {
-      if (currentGroupId && groupIds.includes(`,${currentGroupId},`)) {
-        return currentGroupId;
-      }
-
-      return activeGroupId;
-    });
-  }, [activeGroupId, groupIds]);
 
   return {
     openGroupId,

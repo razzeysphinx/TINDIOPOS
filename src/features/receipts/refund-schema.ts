@@ -3,6 +3,9 @@ import { z } from "zod";
 const refundItemSchema = z.object({
   saleItemId: z.uuid(),
   quantity: z.number().int().min(1).max(10000),
+  // Older clients omitted this field and retain the historical restock
+  // behavior. New refund workflows always choose explicitly.
+  returnToStock: z.boolean().optional().default(true),
 });
 
 export const refundSaleSchema = z.object({

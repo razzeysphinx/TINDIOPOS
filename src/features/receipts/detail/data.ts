@@ -134,7 +134,7 @@ export async function loadAuthorizedReceiptDetail(
     ? await Promise.all([
         supabase
           .from("refund_items")
-          .select("id, refund_id, sale_item_id, product_name_snapshot, variant_name_snapshot, quantity, unit_snapshot, line_total_minor")
+          .select("id, refund_id, sale_item_id, product_name_snapshot, variant_name_snapshot, quantity, unit_snapshot, line_total_minor, returned_to_stock")
           .eq("organization_id", context.organization.id)
           .in("refund_id", refundIds)
           .order("created_at", { ascending: true }),
@@ -157,7 +157,12 @@ export async function loadAuthorizedReceiptDetail(
     );
   }
 
-  const canRefund = hasPermission(context, "sales.refund") && hasStoreAccess(context, sale.store_id);
+  // A restricted employee can prepare the exact same request through the
+  // established manager-approval path. The RPC still verifies the approval,
+  // employee, organization, and store scope before it posts a refund.
+  const canRefund = (
+    hasPermission(context, "sales.refund") || hasPermission(context, "approvals.request")
+  ) && hasStoreAccess(context, sale.store_id);
   const canReprint = hasPermission(context, "receipts.reprint");
   const canRecordExchange = canRefund && hasPermission(context, "sales.create");
   const exchanges = exchangesResult.data ?? [];
@@ -277,6 +282,7 @@ export async function loadAuthorizedReceiptDetail(
           quantity: item.quantity,
           unit: item.unit_snapshot,
           lineTotalMinor: item.line_total_minor,
+          returnedToStock: item.returned_to_stock,
         })),
     };
   });

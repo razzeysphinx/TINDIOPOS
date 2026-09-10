@@ -213,7 +213,9 @@ export default async function ReceiptsPage({
       const hasRefundableQuantity = hasRefundableQuantityBySale.get(receipt.sale_id) ?? false;
       const fullyRefunded = refundedMinor > 0 && !hasRefundableQuantity;
       return {
-        canRefund: sale !== null && hasPermission(context, "sales.refund") && hasStoreAccess(context, sale.store_id),
+        canRefund: sale !== null
+          && (hasPermission(context, "sales.refund") || hasPermission(context, "approvals.request"))
+          && hasStoreAccess(context, sale.store_id),
         cashierName: sale?.cashier_name_snapshot ?? "Cashier unavailable",
         currencyCode: sale?.currency_code ?? context.organization.currency_code,
         fullReceiptHref: `/back-office/receipts/${receipt.id}`,

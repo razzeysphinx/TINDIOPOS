@@ -22,7 +22,10 @@ test("Back Office keeps one reporting destination for the existing reporting wor
   const reports = navigationGroup(navigation, "Reports");
 
   assert.match(reports, /href: "\/back-office\/reports"/);
-  assert.match(reports, /label: "Business reports"/);
+  assert.match(reports, /label: "Business"/);
+  assert.match(reports, /pageTitle: "Business Reports"/);
+  assert.match(reports, /label: "Shifts"/);
+  assert.match(reports, /pageTitle: "Shift Reports"/);
   assert.match(reports, /href: "\/back-office\/shifts"/);
   assert.doesNotMatch(reports, /href: "\/back-office\/reports\//);
 });
@@ -32,7 +35,7 @@ test("Sales keeps receipt and return work together without adding a duplicate ro
   const sales = navigationGroup(navigation, "Sales");
 
   assert.match(sales, /href: "\/back-office\/receipts"/);
-  assert.match(sales, /label: "Receipts & returns"/);
+  assert.match(sales, /label: "Receipts"/);
   assert.doesNotMatch(sales, /Kitchen display/);
   assert.doesNotMatch(navigation, /href: "\/back-office\/open-tickets"/);
 });
@@ -49,8 +52,9 @@ test("Settings labels expose the existing profile/features and advanced-sales su
   const navigation = await source("src/components/back-office/back-office-navigation.tsx");
   const settings = navigationGroup(navigation, "Settings");
 
-  assert.match(settings, /label: "Business profile & features"/);
-  assert.match(settings, /label: "Advanced sales"/);
+  assert.match(settings, /label: "Business"/);
+  assert.match(settings, /pageTitle: "Business profile & features"/);
+  assert.match(settings, /label: "Discounts & Taxes"/);
 });
 
 test("navigation remains permission-aware and Inventory uses three sibling workspaces", async () => {
@@ -65,7 +69,7 @@ test("navigation remains permission-aware and Inventory uses three sibling works
 
   assert.match(navigation, /isVisible: \(access: BackOfficeNavigationAccess\) => boolean;/);
   const inventoryGroup = navigationGroup(navigation, "Inventory");
-  for (const label of ["Inventory Control", "Stock & Restock", "Purchasing"]) {
+  for (const label of ["Stock Control", "Stock & Restock", "Purchasing"]) {
     assert.match(inventoryGroup, new RegExp(`label: "${label}"`));
   }
   for (const href of ["/back-office/inventory", "/back-office/replenishment?tab=levels", "/back-office/purchasing?tab=purchase-orders"]) {
@@ -101,24 +105,28 @@ test("shared Back Office shell defaults to section-only navigation and expands f
   ]);
 
   assert.match(navigation, /collapsed = false/);
-  assert.match(navigation, /<Tooltip content=\{label\} side="right">/);
+  assert.match(navigation, /<Tooltip content=\{navigationLabel\} side="right">/);
   assert.match(navigation, /ExpandableNavigationGroup/);
   assert.match(navigation, /onNavigate=\{mobile \? onNavigate : undefined\}/);
   assert.match(navigation, /min-h-0 flex-1 overflow-y-auto/);
-  assert.match(navigation, /type NavigationGroup = \{\s+icon: LucideIcon;/);
+  assert.match(navigation, /type NavigationGroup = \{\s+id: string;\s+icon: LucideIcon;/);
   assert.match(navigation, /function CollapsedNavigationSection/);
   assert.match(navigation, /function CollapsedNavigation/);
   assert.match(navigation, /<CollapsedNavigation/);
   assert.match(navigation, /createPortal\(/);
   assert.match(navigation, /document\.addEventListener\("pointerdown", closeWhenClickingOutside\)/);
-  assert.match(navigation, /const openGroupLabel = openGroupState\?\.pathname === pathname \? openGroupState\.label : null;/);
-  assert.match(navigation, /const toggleGroup = \(groupLabel: string\) =>/);
-  assert.match(navigation, /setOpenGroupState\(\{ label: groupLabel, pathname \}\)/);
+  assert.match(navigation, /const openGroupId = openGroupState\?\.pathname === pathname \? openGroupState\.id : null;/);
+  assert.match(navigation, /const toggleGroup = \(groupId: string\) =>/);
+  assert.match(navigation, /setOpenGroupState\(\{ id: groupId, pathname \}\)/);
   assert.match(navigation, /active=\{group\.items\.some\(\(item\) => isCurrentRoute\(pathname, item\.href\)\)\}/);
-  assert.match(shell, /const \[isCollapsed, setIsCollapsed\] = useState\(true\);/);
+  assert.match(navigation, /function useNavigationAccordion/);
+  assert.match(navigation, /aria-expanded=\{isOpen\}/);
+  assert.doesNotMatch(navigation, /<details/);
+  assert.match(shell, /const \[isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed\] = useState\(true\);/);
+  assert.match(shell, /const \[isMobileNavigationOpen, setIsMobileNavigationOpen\] = useState\(false\);/);
   assert.match(shell, /export function BackOfficeHeaderControls/);
   assert.match(shell, /<Menu aria-hidden="true" \/>/);
-  assert.match(shell, /aria-expanded=\{!isCollapsed\}/);
+  assert.match(shell, /aria-expanded=\{isNavigationExpanded\}/);
   assert.match(shell, /getBackOfficePageTitle\(pathname\)/);
   assert.match(shell, /export function BackOfficeMobileNavigation/);
   assert.match(shell, /lg:grid-cols-\[5rem_minmax\(0,1fr\)\]/);
@@ -128,11 +136,13 @@ test("shared Back Office shell defaults to section-only navigation and expands f
   assert.match(shell, /min-h-\[calc\(100svh-3\.5rem\)\]/);
   assert.match(shell, /lg:top-14 lg:flex lg:h-\[calc\(100svh-3\.5rem\)\]/);
   assert.doesNotMatch(shell, /TindioMark/);
-  assert.match(shell, /<BackOfficeNavigation \{\.\.\.navigationAccess\} collapsed=\{isCollapsed\} \/>/);
+  assert.match(shell, /<Dialog\.Root modal onOpenChange=\{setIsMobileNavigationOpen\} open=\{isMobileNavigationOpen\}>/);
+  assert.match(shell, /side="left"/);
+  assert.match(shell, /<BackOfficeNavigation \{\.\.\.navigationAccess\} collapsed=\{isDesktopSidebarCollapsed\} \/>/);
   assert.match(layout, /<BackOfficeWorkspaceShell/);
   assert.match(layout, /header=\{\(/);
   assert.match(layout, /<BackOfficeHeaderControls \/>/);
-  assert.match(layout, /<BackOfficeMobileNavigation navigationAccess=\{navigationAccess\} \/>/);
+  assert.match(layout, /<BackOfficeMobileNavigation[\s\S]*navigationAccess=\{navigationAccess\}/);
   assert.match(layout, /className="flex h-14 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8"/);
   assert.doesNotMatch(layout, /mx-auto flex min-h-15 w-full max-w-7xl/);
   assert.match(layout, /fixed inset-x-0 top-0/);

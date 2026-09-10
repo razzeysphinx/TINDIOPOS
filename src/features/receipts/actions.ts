@@ -70,6 +70,7 @@ export async function refundSaleAction(input: unknown): Promise<RefundSaleAction
     target_items: data.items.map((item) => ({
       sale_item_id: item.saleItemId,
       quantity: item.quantity,
+      return_to_stock: item.returnToStock,
     })) as Json,
     ...(data.approvalRequestId
       ? { target_approval_request_id: data.approvalRequestId }

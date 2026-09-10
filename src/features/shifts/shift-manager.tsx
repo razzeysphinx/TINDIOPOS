@@ -1299,10 +1299,6 @@ function ShiftAuditDetail({
       </> : <p className="text-sm text-muted-foreground">No cash movements recorded.</p>}
     </ShiftReportSection>
 
-    {detail.audit.lifecycle.length > 0 ? <ShiftReportSection title="Shift timeline">
-      {detail.audit.lifecycle.map((event) => <div className="border-b py-2.5 last:border-b-0" key={`${event.eventType}-${event.createdAt}`}><p className="font-medium">{event.eventType === "SHIFT_OPENED" ? "Shift opened" : "Shift closed"}</p><p className="mt-1 text-xs text-muted-foreground">{formatShiftTime(event.createdAt, timezone)} · {event.actor}{event.reason ? ` · ${event.reason}` : ""}</p></div>)}
-    </ShiftReportSection> : null}
-
     {detail.shift.closingNote || detail.shift.openingNote ? <ShiftReportSection title="Shift notes">
       {detail.shift.openingNote ? <ShiftReportRow label="Opening note" value={detail.shift.openingNote} /> : null}
       {detail.shift.closingNote ? <ShiftReportRow label="Closing note" value={detail.shift.closingNote} /> : null}

@@ -87,7 +87,11 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
               </form>
             </div>
           </div>
-          <BackOfficeMobileNavigation navigationAccess={navigationAccess} />
+          <BackOfficeMobileNavigation
+            displayName={displayName}
+            employeeNumber={context.employee.employee_number}
+            navigationAccess={navigationAccess}
+          />
         </header>
       )}
       navigationAccess={navigationAccess}

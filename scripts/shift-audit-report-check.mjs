@@ -43,6 +43,7 @@ assert.doesNotMatch(manager, /<th[^>]*>Print<\/th>/, "Printing must not occupy a
 assert.match(manager, /aria-label="Shift report actions"/, "Printing must be available from the selected report action menu");
 assert.match(manager, /Starting cash \+ cash sales − cash refunds \+ paid in − paid out/, "Expected cash must explain the authoritative formula");
 assert.match(manager, /Print shift report/, "The selected report action menu must expose printing with a clear label");
+assert.doesNotMatch(manager, /<ShiftReportSection title="Shift timeline">/, "The redundant Shift timeline presentation must not be rendered in the shift report drawer");
 assert.match(quickViewAction, /requireBackOfficePermission\(\["shifts\.view_history", "settings\.manage"\]\)/, "Quick view must enforce the existing server-side permission boundary");
 assert.match(quickViewAction, /loadShiftAuditReport\(context, parsed\.data\.shiftId\)/, "Quick view must reuse the canonical detail loader");
 assert.match(detailPage, /requireBackOfficePermission\(\["shifts\.view_history", "settings\.manage"\]\)/, "Direct report routes must require an existing Back Office permission");

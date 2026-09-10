@@ -3951,6 +3951,7 @@ export type Database = {
           product_name_snapshot: string
           quantity: number
           refund_id: string
+          returned_to_stock: boolean
           sale_item_id: string
           sku_snapshot: string | null
           unit_price_minor: number
@@ -3967,6 +3968,7 @@ export type Database = {
           product_name_snapshot: string
           quantity: number
           refund_id: string
+          returned_to_stock?: boolean
           sale_item_id: string
           sku_snapshot?: string | null
           unit_price_minor: number
@@ -3983,6 +3985,7 @@ export type Database = {
           product_name_snapshot?: string
           quantity?: number
           refund_id?: string
+          returned_to_stock?: boolean
           sale_item_id?: string
           sku_snapshot?: string | null
           unit_price_minor?: number

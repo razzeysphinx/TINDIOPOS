@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(34);
+select plan(39);
 
 select has_table('public', 'refunds', 'refunds table exists');
 select has_table('public', 'refund_items', 'refund items table exists');
@@ -90,6 +90,7 @@ create temporary table refund_test_context (
   tracked_product_id uuid,
   untracked_product_id uuid,
   sale_id uuid,
+  no_return_sale_id uuid,
   cashier_employee_id uuid
 );
 
@@ -471,6 +472,144 @@ select is(
   ),
   false,
   'POS receipt history marks a fully returned receipt as having no refundable quantity'
+);
+
+-- Refunds remain financial records even when the customer keeps the goods.
+-- The per-line physical-return choice must control only the stock leg.
+update refund_test_context context
+set no_return_sale_id = checkout.sale_id
+from public.checkout_sale(
+  (select organization_id from refund_test_context where label = 'refund'),
+  (select store_id from refund_test_context where label = 'refund'),
+  (select register_id from refund_test_context where label = 'refund'),
+  '49494949-4949-4494-8494-494949494949',
+  jsonb_build_array(
+    jsonb_build_object(
+      'product_id', (select tracked_product_id from refund_test_context where label = 'refund'),
+      'variant_id', null,
+      'quantity', 1
+    )
+  ),
+  jsonb_build_array(
+    jsonb_build_object(
+      'payment_method_id', (
+        select id
+        from public.payment_methods
+        where organization_id = (select organization_id from refund_test_context where label = 'refund')
+          and code = 'CASH'
+      ),
+      'amount_tendered_minor', 1000
+    )
+  )
+) checkout
+where context.label = 'refund';
+
+insert into refund_test_result
+select 'no-return', refund.*
+from public.refund_sale(
+  (select organization_id from refund_test_context where label = 'refund'),
+  (select no_return_sale_id from refund_test_context where label = 'refund'),
+  (
+    select id
+    from public.payment_methods
+    where organization_id = (select organization_id from refund_test_context where label = 'refund')
+      and code = 'CASH'
+  ),
+  '4a4a4a4a-4a4a-44a4-84a4-4a4a4a4a4a4a',
+  'Customer kept the item after refund',
+  null,
+  jsonb_build_array(jsonb_build_object(
+    'sale_item_id', (
+      select id
+      from public.sale_items
+      where sale_id = (select no_return_sale_id from refund_test_context where label = 'refund')
+        and product_id = (select tracked_product_id from refund_test_context where label = 'refund')
+    ),
+    'quantity', 1,
+    'return_to_stock', false
+  ))
+) refund;
+
+select is(
+  (
+    select returned_to_stock
+    from public.refund_items
+    where refund_id = (select refund_id from refund_test_result where label = 'partial')
+  ),
+  true,
+  'omitting return_to_stock preserves the historical stock-return default'
+);
+select is(
+  (
+    select returned_to_stock
+    from public.refund_items
+    where refund_id = (select refund_id from refund_test_result where label = 'no-return')
+  ),
+  false,
+  'refund lines record when goods were not returned to stock'
+);
+select is(
+  (
+    select quantity
+    from public.inventory_levels
+    where organization_id = (select organization_id from refund_test_context where label = 'refund')
+      and store_id = (select store_id from refund_test_context where label = 'refund')
+      and product_id = (select tracked_product_id from refund_test_context where label = 'refund')
+      and variant_id is null
+  ),
+  9.000::numeric,
+  'a financial-only refund does not restore tracked stock'
+);
+select is(
+  (
+    select count(*)
+    from public.inventory_movements
+    where source_id = (select refund_id from refund_test_result where label = 'no-return')
+      and source_type = 'refund'
+      and movement_type = 'REFUND'
+  ),
+  0::bigint,
+  'a financial-only refund creates no REFUND inventory movement'
+);
+
+create or replace function pg_temp.return_to_stock_requires_boolean()
+returns boolean
+language plpgsql
+as $$
+begin
+  perform public.refund_sale(
+    (select organization_id from refund_test_context where label = 'refund'),
+    (select no_return_sale_id from refund_test_context where label = 'refund'),
+    (
+      select id
+      from public.payment_methods
+      where organization_id = (select organization_id from refund_test_context where label = 'refund')
+        and code = 'CASH'
+    ),
+    '4b4b4b4b-4b4b-44b4-84b4-4b4b4b4b4b4b',
+    'Invalid physical return flag',
+    null,
+    jsonb_build_array(jsonb_build_object(
+      'sale_item_id', (
+        select id
+        from public.sale_items
+        where sale_id = (select no_return_sale_id from refund_test_context where label = 'refund')
+          and product_id = (select tracked_product_id from refund_test_context where label = 'refund')
+      ),
+      'quantity', 1,
+      'return_to_stock', 'false'
+    ))
+  );
+  return false;
+exception
+  when check_violation then
+    return true;
+end;
+$$;
+
+select ok(
+  pg_temp.return_to_stock_requires_boolean(),
+  'return_to_stock rejects non-boolean JSON values'
 );
 
 create or replace function pg_temp.excess_refund_is_rejected()

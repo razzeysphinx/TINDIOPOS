@@ -50,6 +50,10 @@ import {
   importInventoryAdjustmentsCsvAction,
 } from "@/features/inventory/advanced-inventory-actions";
 import { SupplierCsvTools } from "@/features/inventory/supplier-csv-tools";
+import {
+  clearInventoryOperationId as clearPendingOperation,
+  getInventoryOperationId as pendingOperationId,
+} from "@/features/inventory/inventory-operation-id";
 import { parseCsvRecords, csvRows } from "@/lib/csv";
 
 const selectClassName =
@@ -141,38 +145,6 @@ const ALL_ADVANCED_INVENTORY_SECTIONS: readonly AdvancedInventorySection[] = [
   "counts",
   "transfers",
 ];
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function pendingOperationId(scope: string, payload?: unknown) {
-  const storageKey = `tindio:inventory-operation:${scope}`;
-  const existing = window.sessionStorage.getItem(storageKey);
-  if (payload === undefined) {
-    if (existing && UUID_PATTERN.test(existing)) return existing;
-
-    const operationId = globalThis.crypto.randomUUID();
-    window.sessionStorage.setItem(storageKey, operationId);
-    return operationId;
-  }
-
-  const fingerprint = JSON.stringify(payload);
-  if (existing) {
-    try {
-      const stored = JSON.parse(existing) as { fingerprint?: unknown; id?: unknown };
-      if (stored.fingerprint === fingerprint && typeof stored.id === "string" && UUID_PATTERN.test(stored.id)) return stored.id;
-    } catch {
-      // A pre-existing legacy operation id is safe to replace because this is a new payload.
-    }
-  }
-
-  const operationId = globalThis.crypto.randomUUID();
-  window.sessionStorage.setItem(storageKey, JSON.stringify({ fingerprint, id: operationId }));
-  return operationId;
-}
-
-function clearPendingOperation(scope: string) {
-  window.sessionStorage.removeItem(`tindio:inventory-operation:${scope}`);
-}
 
 export function AdvancedInventoryWorkflows({
   stores,

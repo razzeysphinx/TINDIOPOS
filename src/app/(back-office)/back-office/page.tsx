@@ -133,6 +133,7 @@ export default async function BackOfficePage({
   const selectedStoreName = selectedStoreId
     ? stores.find((store) => store.id === selectedStoreId)?.name ?? "Selected store"
     : "All stores";
+  const dashboardStateKey = dashboardQueryString(period, selectedStoreId);
 
   return (
     <div className="space-y-5">
@@ -143,7 +144,7 @@ export default async function BackOfficePage({
         showDescription
       />
       <DashboardFilterForm
-        key={dashboardQueryString(period, selectedStoreId)}
+        key={`filters:${dashboardStateKey}`}
         allowAllStores={hasOrganizationScope}
         comparison={period.comparison}
         endDate={period.filter.endDate}
@@ -153,7 +154,7 @@ export default async function BackOfficePage({
         stores={stores}
         timezone={context.organization.timezone}
       />
-      <Suspense fallback={<DashboardSectionsLoading />} key={dashboardQueryString(period, selectedStoreId)}>
+      <Suspense fallback={<DashboardSectionsLoading />} key={`sections:${dashboardStateKey}`}>
         <DashboardSections
           context={context}
           operationsPromise={operationsPromise}

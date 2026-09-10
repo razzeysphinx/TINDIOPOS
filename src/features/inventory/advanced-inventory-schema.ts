@@ -273,6 +273,7 @@ export const receiveStockTransferSchema = z
 
 export const returnToSupplierSchema = z
   .object({
+    operationId,
     storeId: z.uuid("Select a store."),
     supplierId: z.uuid("Select a supplier."),
     note: z.string().trim().max(500),
@@ -285,6 +286,7 @@ export const returnToSupplierSchema = z
   });
 
 export const produceCompositeSchema = z.object({
+  operationId,
   storeId: z.uuid("Select a store."),
   productId: z.uuid("Select a composite item."),
   quantity,

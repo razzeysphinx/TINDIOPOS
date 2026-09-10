@@ -257,9 +257,16 @@ where variant.organization_id = context.organization_id
   and variant.product_id = context.variable_product_id
   and context.label = 'checkout';
 
+select public.create_inventory_adjustment_reason(
+  (select organization_id from checkout_test_context where label = 'checkout'),
+  'OPENING_STOCK',
+  'Opening stock',
+  'OPENING_STOCK'
+);
+
 select lives_ok(
   format(
-    $$select public.adjust_inventory(%L, %L, %L, null, 10, 'OPENING_STOCK', 'Initial coffee stock')$$,
+    $$select public.record_inventory_adjustment(%L, %L, %L, null, 10, 'OPENING_STOCK', 'Initial coffee stock', gen_random_uuid(), null)$$,
     (select organization_id from checkout_test_context where label = 'checkout'),
     (select store_id from checkout_test_context where label = 'checkout'),
     (select simple_product_id from checkout_test_context where label = 'checkout')
@@ -269,7 +276,7 @@ select lives_ok(
 
 select lives_ok(
   format(
-    $$select public.adjust_inventory(%L, %L, %L, %L, 5, 'OPENING_STOCK', 'Initial shirt stock')$$,
+    $$select public.record_inventory_adjustment(%L, %L, %L, %L, 5, 'OPENING_STOCK', 'Initial shirt stock', gen_random_uuid(), null)$$,
     (select organization_id from checkout_test_context where label = 'checkout'),
     (select store_id from checkout_test_context where label = 'checkout'),
     (select variable_product_id from checkout_test_context where label = 'checkout'),

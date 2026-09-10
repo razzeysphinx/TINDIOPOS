@@ -42,6 +42,9 @@ test("business dashboard keeps its server route gate and renders the executive c
   assert.match(dashboardPage, /<DashboardFilterForm/);
   assert.match(dashboardPage, /<OwnerDashboard/);
   assert.match(dashboardPage, /<Suspense/);
+  assert.match(dashboardPage, /const dashboardStateKey = dashboardQueryString\(period, selectedStoreId\)/);
+  assert.match(dashboardPage, /key=\{`filters:\$\{dashboardStateKey\}`\}/);
+  assert.match(dashboardPage, /key=\{`sections:\$\{dashboardStateKey\}`\}/);
   assert.doesNotMatch(dashboardPage, /<DashboardActionGrid/);
   assert.match(ownerDashboard, /title="Executive snapshot"/);
   assert.match(ownerDashboard, /label="Transactions"/);
@@ -51,7 +54,7 @@ test("business dashboard keeps its server route gate and renders the executive c
 test("inventory dashboard reuses the action grid behind its inventory permission gate", () => {
   // View-only inventory users retain the Stock and Activity tabs; management
   // operations remain separately gated by inventory.manage.
-  assert.match(inventoryPage, /requireBackOfficePermission\(\["inventory\.view", "inventory\.manage"\]\)/);
+  assert.match(inventoryPage, /requireBackOfficePermission\(\["inventory\.view", "inventory\.adjust", "inventory\.count", "inventory\.manage"\]\)/);
   assert.match(inventoryPage, /<DashboardActionGrid/);
   assert.match(inventoryPage, /permissions=\{context\.permissions\}/);
   assert.match(inventoryPage, /surface="inventory"/);

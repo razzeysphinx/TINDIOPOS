@@ -1,6 +1,10 @@
 -- Rollback-safe verification for Phase 1 ledger metadata and immutability.
 -- This script does not leave a test movement behind.
 
+begin;
+create extension if not exists pgtap with schema extensions;
+select plan(1);
+
 do $body$
 declare
   candidate record;
@@ -155,3 +159,7 @@ begin
   end if;
 end;
 $body$;
+
+select pass('inventory ledger metadata and append-only integrity verification completed');
+select * from finish();
+rollback;

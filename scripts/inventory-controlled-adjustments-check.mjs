@@ -11,7 +11,10 @@ async function source(relativePath) {
 }
 
 test("controlled adjustments use one approval-aware, idempotent command", async () => {
-  const migration = await source("supabase/migrations/20260906125656_controlled_inventory_adjustments.sql");
+  const [migration, correction] = await Promise.all([
+    source("supabase/migrations/20260906125656_controlled_inventory_adjustments.sql"),
+    source("supabase/migrations/20260906131442_fix_controlled_adjustment_number_variable.sql"),
+  ]);
 
   assert.match(migration, /create or replace function private\.record_inventory_adjustment\(/);
   assert.match(migration, /private\.authorize_sensitive_operation\(/);
@@ -21,6 +24,8 @@ test("controlled adjustments use one approval-aware, idempotent command", async 
   assert.match(migration, /Opening stock can only be recorded once/);
   assert.match(migration, /private\.record_inventory_adjustment_v2\(uuid,uuid,uuid,uuid,numeric,text,text\),/);
   assert.match(migration, /CANDIDATE_FOR_REMOVAL: superseded by public\.record_inventory_adjustment/);
+  assert.match(correction, /created_adjustment_number bigint/);
+  assert.match(correction, /returning id, adjustment_number into adjustment_id, created_adjustment_number/);
 });
 
 test("the adjustment interface requires a review, explanation, and scoped capability", async () => {
@@ -41,10 +46,15 @@ test("the adjustment interface requires a review, explanation, and scoped capabi
   assert.match(actions, /rpc\("record_inventory_adjustment"/);
 });
 
-test("CSV adjustment retries use a payload-specific operation identity", async () => {
-  const workflow = await source("src/features/inventory/advanced-inventory-workflows.tsx");
+test("CSV adjustment retries use the shared payload-specific operation identity", async () => {
+  const [workflow, operationId] = await Promise.all([
+    source("src/features/inventory/advanced-inventory-workflows.tsx"),
+    source("src/features/inventory/inventory-operation-id.ts"),
+  ]);
 
-  assert.match(workflow, /function pendingOperationId\(scope: string, payload\?: unknown\)/);
+  assert.match(workflow, /getInventoryOperationId as pendingOperationId/);
+  assert.match(operationId, /export function getInventoryOperationId\(scope: string, payload\?: unknown\)/);
+  assert.match(operationId, /stored\.fingerprint === fingerprint/);
   assert.match(workflow, /CSV inventory adjustment import/);
   assert.match(workflow, /Each CSV row must include a specific 2/);
   assert.match(workflow, /operation_id: operationId/);

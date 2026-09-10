@@ -82,8 +82,8 @@ set product_id = public.create_catalog_product(
 select public.create_inventory_adjustment_reason(
   (select organization_id from supply_chain_context), 'SEED', 'Opening supply chain stock', 'ADJUSTMENT'
 );
-select public.record_inventory_adjustment_v2(
-  (select organization_id from supply_chain_context), (select source_store_id from supply_chain_context), (select product_id from supply_chain_context), null, 10, 'SEED', 'Seed warehouse stock'
+select public.record_inventory_adjustment(
+  (select organization_id from supply_chain_context), (select source_store_id from supply_chain_context), (select product_id from supply_chain_context), null, 10, 'SEED', 'Seed warehouse stock', gen_random_uuid(), null
 );
 
 update supply_chain_context

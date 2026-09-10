@@ -62,8 +62,8 @@ set product_id = public.create_catalog_product(
   organization_id, null, 'Transfer Operation Item', 'Transfer lifecycle test item', 'simple', 'TRANSFER-OPERATION-ITEM', '480000099501', 2500, 1000, true, 'each', array[source_store_id, destination_store_id], '[]'::jsonb
 );
 select public.create_inventory_adjustment_reason((select organization_id from transfer_operation_context), 'SEED', 'Opening transfer stock', 'ADJUSTMENT');
-select public.record_inventory_adjustment_v2(
-  (select organization_id from transfer_operation_context), (select source_store_id from transfer_operation_context), (select product_id from transfer_operation_context), null, 4, 'SEED', 'Seed transfer source'
+select public.record_inventory_adjustment(
+  (select organization_id from transfer_operation_context), (select source_store_id from transfer_operation_context), (select product_id from transfer_operation_context), null, 4, 'SEED', 'Seed transfer source', gen_random_uuid(), null
 );
 update transfer_operation_context
 set warehouse_id = public.create_supply_chain_warehouse(organization_id, source_store_id, 'TRANSFER-SOURCE', 'Transfer source warehouse', 'Dispatch stock');

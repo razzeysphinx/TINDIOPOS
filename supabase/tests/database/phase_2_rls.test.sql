@@ -134,14 +134,16 @@ returns boolean
 language plpgsql
 as $$
 begin
-  perform public.adjust_inventory(
+  perform public.record_inventory_adjustment(
     (select organization_id from catalog_test_context where label = 'catalog'),
     (select store_id from catalog_test_context where label = 'catalog'),
     (select product_id from catalog_test_context where label = 'catalog'),
     null,
     1,
     'OPENING_STOCK',
-    'Duplicate opening stock'
+    'Duplicate opening stock',
+    gen_random_uuid(),
+    null
   );
 
   return false;
@@ -237,14 +239,16 @@ returns boolean
 language plpgsql
 as $$
 begin
-  perform public.adjust_inventory(
+  perform public.record_inventory_adjustment(
     (select organization_id from catalog_test_context where label = 'catalog'),
     (select store_id from catalog_test_context where label = 'catalog'),
     (select product_id from catalog_test_context where label = 'catalog'),
     null,
     1,
     'ADJUSTMENT',
-    'Unauthorized adjustment'
+    'Unauthorized adjustment',
+    gen_random_uuid(),
+    null
   );
 
   return false;
@@ -361,6 +365,19 @@ set variable_product_id = public.create_catalog_product(
 )
 where label = 'catalog';
 
+select public.create_inventory_adjustment_reason(
+  (select organization_id from catalog_test_context where label = 'catalog'),
+  'OPENING_STOCK',
+  'Opening stock',
+  'OPENING_STOCK'
+);
+select public.create_inventory_adjustment_reason(
+  (select organization_id from catalog_test_context where label = 'catalog'),
+  'ADJUSTMENT',
+  'Inventory correction',
+  'ADJUSTMENT'
+);
+
 select is((select count(*) from public.categories), 1::bigint, 'owner sees their category');
 select is((select count(*) from public.products), 2::bigint, 'owner sees both products');
 select is((select count(*) from public.product_variants), 2::bigint, 'variable product creates variants');
@@ -416,7 +433,7 @@ select is(
 
 select lives_ok(
   format(
-    $$select public.adjust_inventory(%L, %L, %L, null, 10.5, 'OPENING_STOCK', 'Initial delivery')$$,
+    $$select public.record_inventory_adjustment(%L, %L, %L, null, 10.5, 'OPENING_STOCK', 'Initial delivery', gen_random_uuid(), null)$$,
     (select organization_id from catalog_test_context where label = 'catalog'),
     (select store_id from catalog_test_context where label = 'catalog'),
     (select product_id from catalog_test_context where label = 'catalog')
@@ -439,7 +456,7 @@ select is(
 );
 select lives_ok(
   format(
-    $$select public.adjust_inventory(%L, %L, %L, null, -2.25, 'ADJUSTMENT', 'Damaged units')$$,
+    $$select public.record_inventory_adjustment(%L, %L, %L, null, -2.25, 'ADJUSTMENT', 'Damaged units', gen_random_uuid(), null)$$,
     (select organization_id from catalog_test_context where label = 'catalog'),
     (select store_id from catalog_test_context where label = 'catalog'),
     (select product_id from catalog_test_context where label = 'catalog')

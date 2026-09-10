@@ -4,13 +4,14 @@ import test from "node:test";
 
 const source = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-const [inventoryPage, stockView, productDetail, storeScope, workspaceNavigation, activityList] = await Promise.all([
+const [inventoryPage, stockView, productDetail, storeScope, workspaceNavigation, activityList, viewToggle] = await Promise.all([
   source("../src/app/(back-office)/back-office/inventory/page.tsx"),
   source("../src/features/inventory/inventory-stock-view.tsx"),
   source("../src/features/inventory/inventory-product-detail.tsx"),
   source("../src/lib/server/back-office-store-scope.ts"),
   source("../src/features/inventory/inventory-workspace-navigation.tsx"),
   source("../src/features/inventory/inventory-activity-list.tsx"),
+  source("../src/components/back-office/view-toggle.tsx"),
 ]);
 
 test("Phase 10 keeps Inventory understandable, responsive, and keyboard-addressable", () => {
@@ -19,8 +20,9 @@ test("Phase 10 keeps Inventory understandable, responsive, and keyboard-addressa
   assert.match(workspaceNavigation, /Stock levels/);
   assert.match(inventoryPage, /Use Stock Levels for current balances, Activity for recent changes/);
   assert.match(inventoryPage, /Needs attention/);
-  assert.match(stockView, /aria-label="List view"/);
-  assert.match(stockView, /aria-label="Grid view"/);
+  assert.match(stockView, /<GridListViewToggle onChange=\{updateLayout\} value=\{layout\} \/>/);
+  assert.match(viewToggle, /aria-label="List view"/);
+  assert.match(viewToggle, /aria-label="Grid view"/);
   assert.match(stockView, /<div className="space-y-3 lg:hidden">/);
   assert.match(stockView, /<Card className="hidden lg:block">/);
   assert.match(stockView, /No stock levels yet/);

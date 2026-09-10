@@ -121,7 +121,7 @@ export default async function ReplenishmentPage({
       : Promise.resolve({ data: [], error: null }),
     supabase.from("stock_transfers").select("id, stock_request_id, destination_store_id, status, transfer_number").eq("organization_id", organizationId).in("status", ["in_transit", "partially_received"]),
     purchaseOrderIds.length
-      ? supabase.from("purchase_order_lines").select("purchase_order_id, ordered_quantity, received_quantity").eq("organization_id", organizationId).in("purchase_order_id", purchaseOrderIds)
+      ? supabase.from("purchase_order_lines").select("purchase_order_id, product_id, variant_id, ordered_quantity, received_quantity").eq("organization_id", organizationId).in("purchase_order_id", purchaseOrderIds)
       : Promise.resolve({ data: [], error: null }),
     requestIds.length
       ? supabase.from("stock_request_discrepancies").select("stock_request_id, stock_request_line_id, short_quantity, note, reported_at").eq("organization_id", organizationId).in("stock_request_id", requestIds).order("reported_at", { ascending: true })
@@ -162,6 +162,18 @@ export default async function ReplenishmentPage({
     const quantities = inTransitBySaleable.get(key) ?? {};
     quantities[transfer.destination_store_id] = (quantities[transfer.destination_store_id] ?? 0) + remaining;
     inTransitBySaleable.set(key, quantities);
+  }
+  const incomingPurchaseBySaleable = new Map<string, Record<string, number>>();
+  const purchaseOrderById = new Map(purchaseOrders.map((order) => [order.id, order]));
+  for (const line of purchaseOrderLinesResult.data ?? []) {
+    const purchaseOrder = purchaseOrderById.get(line.purchase_order_id);
+    if (!purchaseOrder) continue;
+    const remaining = Math.max(0, Number(line.ordered_quantity) - Number(line.received_quantity));
+    if (remaining === 0) continue;
+    const key = `${line.product_id}|${line.variant_id ?? ""}`;
+    const quantities = incomingPurchaseBySaleable.get(key) ?? {};
+    quantities[purchaseOrder.store_id] = (quantities[purchaseOrder.store_id] ?? 0) + remaining;
+    incomingPurchaseBySaleable.set(key, quantities);
   }
   const availability = new Map(settings.map((setting) => [`${setting.product_id}|${setting.store_id}`, setting.is_available]));
   const restockIntentions = new Map(settings.map((setting) => [`${setting.product_id}|${setting.store_id}`, setting.restock_policy]));
@@ -220,6 +232,8 @@ export default async function ReplenishmentPage({
       label: item?.label ?? `${product?.name ?? "Unavailable product"}${variant ? ` / ${variant.name}` : ""}`,
       unit: item?.unit ?? product?.unit ?? "units",
       currentQuantity: item?.quantitiesByStore[rule.store_id] ?? 0,
+      incomingPurchaseQuantity: incomingPurchaseBySaleable.get(`${rule.product_id}|${rule.variant_id ?? ""}`)?.[rule.store_id] ?? 0,
+      inTransitQuantity: inTransitBySaleable.get(`${rule.product_id}|${rule.variant_id ?? ""}`)?.[rule.store_id] ?? 0,
       storeName: storeNames.get(rule.store_id) ?? "Inactive store",
       warehouseName: rule.preferred_warehouse_id ? warehouseNames.get(rule.preferred_warehouse_id) ?? "Unavailable warehouse" : null,
       recommendedWarehouseId: recommendedSource?.id ?? null,

@@ -21,6 +21,10 @@ import {
   updateInventoryPolicyAction,
   updateOrganizationInventoryPolicyAction,
 } from "@/features/inventory/advanced-inventory-actions";
+import {
+  clearInventoryOperationId as clearPendingOperation,
+  getInventoryOperationId as pendingOperationId,
+} from "@/features/inventory/inventory-operation-id";
 import type { AdvancedInventoryItem } from "@/features/inventory/advanced-inventory-workflows";
 
 const selectClassName =
@@ -355,7 +359,6 @@ export function InventoryIntegrityWorkflows({
   function postReviewedAdjustment() {
     if (!adjustmentReview) return;
     startAdjustmentTransition(async () => {
-      const payload = adjustmentActionPayload(adjustmentReview);
       const approval = await requestManagerApprovalAction({
         operationCode: "inventory.adjust",
         reason: adjustmentReview.note,
@@ -401,23 +404,33 @@ export function InventoryIntegrityWorkflows({
   function submitSupplierReturn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     startSupplierReturnTransition(async () => {
-      const result = await returnToSupplierAction({
+      const operationScope = "supplier-return:post";
+      const payload = {
         storeId: returnStoreId,
         supplierId: returnSupplierId,
         note: returnNote,
         lines: [{ productId: returnProductId, variantId: returnVariantId, quantity: returnQuantity }],
-      });
+      };
+      const result = await returnToSupplierAction({ ...payload, operationId: pendingOperationId(operationScope, payload) });
       complete(result, setReturnResult);
-      if (result.ok) setReturnNote("");
+      if (result.ok) {
+        clearPendingOperation(operationScope);
+        setReturnNote("");
+      }
     });
   }
 
   function submitProduction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     startProductionTransition(async () => {
-      const result = await produceCompositeAction({ storeId: productionStoreId, productId: compositeId, quantity: productionQuantity, note: productionNote });
+      const operationScope = "production:post";
+      const payload = { storeId: productionStoreId, productId: compositeId, quantity: productionQuantity, note: productionNote };
+      const result = await produceCompositeAction({ ...payload, operationId: pendingOperationId(operationScope, payload) });
       complete(result, setProductionResult);
-      if (result.ok) setProductionNote("");
+      if (result.ok) {
+        clearPendingOperation(operationScope);
+        setProductionNote("");
+      }
     });
   }
 
@@ -615,29 +628,6 @@ function Empty({ message }: { message: string }) {
 
 function receiptDraft(transfer: Transfer | undefined) {
   return Object.fromEntries((transfer?.lines ?? []).map((line) => [line.id, String(line.quantity - line.receivedQuantity)]));
-}
-
-function pendingOperationId(scope: string, payload: unknown) {
-  const storageKey = `tindio:inventory-operation:${scope}`;
-  const fingerprint = JSON.stringify(payload);
-  const stored = globalThis.sessionStorage.getItem(storageKey);
-
-  if (stored) {
-    try {
-      const candidate = JSON.parse(stored) as { fingerprint?: string; id?: string };
-      if (candidate.fingerprint === fingerprint && typeof candidate.id === "string") return candidate.id;
-    } catch {
-      // Replace malformed session-only retry metadata.
-    }
-  }
-
-  const id = globalThis.crypto.randomUUID();
-  globalThis.sessionStorage.setItem(storageKey, JSON.stringify({ fingerprint, id }));
-  return id;
-}
-
-function clearPendingOperation(scope: string) {
-  globalThis.sessionStorage.removeItem(`tindio:inventory-operation:${scope}`);
 }
 
 function formatQuantity(value: number) {

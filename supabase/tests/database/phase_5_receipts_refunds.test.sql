@@ -178,9 +178,16 @@ set untracked_product_id = public.create_catalog_product(
 )
 where label = 'refund';
 
+select public.create_inventory_adjustment_reason(
+  (select organization_id from refund_test_context where label = 'refund'),
+  'OPENING_STOCK',
+  'Opening stock',
+  'OPENING_STOCK'
+);
+
 select lives_ok(
   format(
-    $$select public.adjust_inventory(%L, %L, %L, null, 10, 'OPENING_STOCK', 'Initial refund stock')$$,
+    $$select public.record_inventory_adjustment(%L, %L, %L, null, 10, 'OPENING_STOCK', 'Initial refund stock', gen_random_uuid(), null)$$,
     (select organization_id from refund_test_context where label = 'refund'),
     (select store_id from refund_test_context where label = 'refund'),
     (select tracked_product_id from refund_test_context where label = 'refund')

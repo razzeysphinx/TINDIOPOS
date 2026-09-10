@@ -1258,7 +1258,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "inventory_adjustment_import_batches_created_by_employee_organization_fkey"
+            foreignKeyName: "inventory_adjustment_import_batches_employee_organization_fkey"
             columns: ["created_by_employee_id", "organization_id"]
             isOneToOne: false
             referencedRelation: "employees"
@@ -7045,16 +7045,28 @@ export type Database = {
         Args: { target_organization_id: string }
         Returns: Json
       }
-      produce_composite: {
-        Args: {
-          target_note: string
-          target_organization_id: string
-          target_product_id: string
-          target_quantity: number
-          target_store_id: string
-        }
-        Returns: string
-      }
+      produce_composite:
+        | {
+            Args: {
+              target_note: string
+              target_organization_id: string
+              target_product_id: string
+              target_quantity: number
+              target_store_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              target_note: string
+              target_operation_id: string
+              target_organization_id: string
+              target_product_id: string
+              target_quantity: number
+              target_store_id: string
+            }
+            Returns: string
+          }
       provision_customer_display_session: {
         Args: {
           target_access_token_hash: string
@@ -7238,16 +7250,28 @@ export type Database = {
         }
         Returns: string
       }
-      return_to_supplier: {
-        Args: {
-          target_lines: Json
-          target_note: string
-          target_organization_id: string
-          target_store_id: string
-          target_supplier_id: string
-        }
-        Returns: string
-      }
+      return_to_supplier:
+        | {
+            Args: {
+              target_lines: Json
+              target_note: string
+              target_organization_id: string
+              target_store_id: string
+              target_supplier_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              target_lines: Json
+              target_note: string
+              target_operation_id: string
+              target_organization_id: string
+              target_store_id: string
+              target_supplier_id: string
+            }
+            Returns: string
+          }
       revoke_loyalty_card: {
         Args: {
           target_loyalty_card_id: string

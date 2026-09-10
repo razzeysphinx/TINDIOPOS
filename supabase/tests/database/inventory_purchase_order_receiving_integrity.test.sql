@@ -1,5 +1,10 @@
 -- Rollback-safe Phase 2 verification. It exercises the public RPC boundary
 -- with a real owner/employee context; no test organization or stock remains.
+
+begin;
+create extension if not exists pgtap with schema extensions;
+select plan(1);
+
 do $body$
 declare
   profile_id uuid := gen_random_uuid();
@@ -251,3 +256,7 @@ begin
   end;
 end;
 $body$;
+
+select pass('purchase-order receiving integrity verification completed');
+select * from finish();
+rollback;

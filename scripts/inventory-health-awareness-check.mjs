@@ -18,9 +18,10 @@ test("Phase 4 adds an attention-first control tower and Stock Health workspace",
   assert.match(navigation, /Stock Health/);
   assert.match(page, /<InventoryControlTower/);
   assert.match(page, /<InventoryHealthWorkspace/);
-  for (const issue of ["Negative stock", "Low stock", "Count variance", "Stale physical count", "Never physically counted", "Transfer discrepancy", "Inventory sync conflict"]) {
+  for (const issue of ["Negative stock", "Low stock", "Out of stock", "Count variance", "Stale physical count", "Never physically counted", "Transfer discrepancy", "Inventory sync conflict"]) {
     assert.match(page, new RegExp(issue));
   }
+  assert.match(page, /restockPolicy/);
   assert.match(health, /Multi-store stock/);
   assert.match(health, /Transfers in progress/);
   assert.match(health, /Recent inventory activity/);
@@ -56,4 +57,10 @@ test("Phase 4 does not add stock mutation or automatic transfer behavior", () =>
   assert.doesNotMatch(health, /create.*transfer.*action/i);
   assert.doesNotMatch(health, /update.*inventory/i);
   assert.doesNotMatch(migration, /apply_inventory_change|inventory_movements/i);
+});
+
+test("Phase 7 surfaces only actionable zero-stock positions", () => {
+  assert.match(page, /condition === "out_of_stock" && row\.isAvailable/);
+  assert.match(page, /marked Do not restock/);
+  assert.match(page, /no replenishment request is suggested/);
 });

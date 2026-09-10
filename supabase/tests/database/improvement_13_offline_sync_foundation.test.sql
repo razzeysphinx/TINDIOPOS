@@ -137,9 +137,13 @@ set product_id = public.create_catalog_product_v2(
   false
 );
 
+select public.create_inventory_adjustment_reason(
+  (select organization_id from offline_sync_context), 'OPENING_STOCK', 'Opening stock', 'OPENING_STOCK'
+);
+
 select lives_ok(
   format(
-    $$select public.adjust_inventory(%L, %L, %L, null, 5, 'OPENING_STOCK', 'Phase 8 offline replay stock')$$,
+    $$select public.record_inventory_adjustment(%L, %L, %L, null, 5, 'OPENING_STOCK', 'Phase 8 offline replay stock', gen_random_uuid(), null)$$,
     (select organization_id from offline_sync_context),
     (select store_id from offline_sync_context),
     (select product_id from offline_sync_context)

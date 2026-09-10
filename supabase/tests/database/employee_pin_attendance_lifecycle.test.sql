@@ -22,8 +22,8 @@ insert into attendance_context (organization_id, store_id, register_id)
 select organization_id, store_id, register_id from public.bootstrap_organization('Attendance Lifecycle Test', 'Main', 'R1');
 reset role;
 insert into public.employees (organization_id, profile_id, employee_number, job_title)
-select organization_id, 'e1000000-0000-4000-8000-000000000002', 'ATT-WORKER', 'Cashier' from attendance_context
-union all select organization_id, 'e1000000-0000-4000-8000-000000000003', 'ATT-UNUSED', 'Cashier' from attendance_context;
+select organization_id, 'e1000000-0000-4000-8000-000000000002'::uuid, 'ATT-WORKER', 'Cashier' from attendance_context
+union all select organization_id, 'e1000000-0000-4000-8000-000000000003'::uuid, 'ATT-UNUSED', 'Cashier' from attendance_context;
 update attendance_context context set
  worker_id = (select id from public.employees where organization_id = context.organization_id and profile_id = 'e1000000-0000-4000-8000-000000000002'),
  unused_id = (select id from public.employees where organization_id = context.organization_id and profile_id = 'e1000000-0000-4000-8000-000000000003');
@@ -46,7 +46,7 @@ select is((select count(*) from public.time_clock_entries where employee_id = (s
 select is((select result_code from public.clock_out_employee_with_pin((select organization_id from attendance_context), (select worker_id from attendance_context), '999999', 'e1000000-0000-4000-8000-000000000014')), 'INVALID_PIN', 'wrong PIN cannot clock out');
 select is((select result_code from public.clock_out_employee_with_pin((select organization_id from attendance_context), (select worker_id from attendance_context), '123456', 'e1000000-0000-4000-8000-000000000015')), 'CLOCKED_OUT', 'valid clock-out closes attendance');
 select is(public.change_employee_lifecycle((select organization_id from attendance_context), (select worker_id from attendance_context), 'DEACTIVATE', 'Season ended'), 'inactive', 'employee can be deactivated');
-select ok(not exists(select 1 from private.employee_pin_credentials where employee_id = (select worker_id from attendance_context)), 'deactivation revokes PIN');
+select is((select result_code from public.clock_in_employee_with_pin((select organization_id from attendance_context), (select store_id from attendance_context), (select worker_id from attendance_context), '123456', 'e1000000-0000-4000-8000-000000000017')), 'EMPLOYEE_INACTIVE', 'a deactivated employee cannot use attendance');
 select is(public.change_employee_lifecycle((select organization_id from attendance_context), (select worker_id from attendance_context), 'REACTIVATE', 'Returning employee'), 'active', 'employee can be reactivated');
 select is((select result_code from public.clock_in_employee_with_pin((select organization_id from attendance_context), (select store_id from attendance_context), (select worker_id from attendance_context), '123456', 'e1000000-0000-4000-8000-000000000016')), 'PIN_NOT_SET', 'reactivation does not restore old PIN');
 select is(public.change_employee_lifecycle((select organization_id from attendance_context), (select unused_id from attendance_context), 'DEACTIVATE', 'Invite unused'), 'inactive', 'unused employee deactivates');

@@ -581,6 +581,7 @@ export async function returnToSupplierAction(
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("return_to_supplier", {
+    target_operation_id: parsed.data.operationId,
     target_organization_id: context.organization.id,
     target_store_id: parsed.data.storeId,
     target_supplier_id: parsed.data.supplierId,
@@ -603,6 +604,7 @@ export async function produceCompositeAction(
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("produce_composite", {
+    target_operation_id: parsed.data.operationId,
     target_organization_id: context.organization.id,
     target_store_id: parsed.data.storeId,
     target_product_id: parsed.data.productId,

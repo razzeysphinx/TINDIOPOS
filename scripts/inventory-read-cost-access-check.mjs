@@ -19,8 +19,8 @@ test("Inventory read and count access do not expose unrelated mutation workspace
   const layout = await source("src/app/(back-office)/back-office/layout.tsx");
   const dal = await source("src/lib/auth/dal.ts");
 
-  assert.match(inventoryPage, /requireBackOfficePermission\(\["inventory\.view", "inventory\.count", "inventory\.manage"\]\)/);
-  assert.match(inventoryPage, /const canOpenRequestedTab = canManage\s+\|\| \(canViewInventory && \["overview", "health", "activity"\]\.includes\(requestedTab\)\)\s+\|\| \(canCount && requestedTab === "counts"\);/);
+  assert.match(inventoryPage, /requireBackOfficePermission\(\["inventory\.view", "inventory\.adjust", "inventory\.count", "inventory\.manage"\]\)/);
+  assert.match(inventoryPage, /const canOpenRequestedTab = canManage\s+\|\| \(canViewInventory && \["overview", "health", "activity"\]\.includes\(requestedTab\)\)\s+\|\| \(canAdjust && requestedTab === "adjustments"\)\s+\|\| \(canCount && requestedTab === "counts"\);/);
   assert.match(inventoryPage, /const activeTab = workspace === "purchasing" \|\| canOpenRequestedTab \? requestedTab : "activity";/);
   assert.match(inventoryPage, /if \(workspace === "purchasing" && !canManage\)/);
   assert.match(inventoryPage, /redirect\(`\/back-office\/inventory\?\$\{query\.toString\(\)\}`\)/);
@@ -37,7 +37,7 @@ test("Phase 8 never serializes raw inventory cost fields to client workspaces", 
   const inventoryPage = await source("src/app/(back-office)/back-office/inventory/page.tsx");
 
   assert.match(inventoryPage, /from\("inventory_levels"\)\n    \.select\("id, store_id, product_id, variant_id, quantity, updated_at"\)/);
-  assert.match(inventoryPage, /from\("purchase_order_lines"\)\n          \.select\("id, purchase_order_id, product_id, variant_id, product_name_snapshot, variant_name_snapshot, unit_snapshot, ordered_quantity, received_quantity"\)/);
+  assert.match(inventoryPage, /from\("purchase_order_lines"\)\n          \.select\("id, purchase_order_id, product_id, variant_id, product_name_snapshot, variant_name_snapshot, unit_snapshot, purchase_unit_code_snapshot, purchase_unit_factor_to_base, ordered_quantity, received_quantity"\)/);
   assert.match(inventoryPage, /rpc\("get_inventory_valuation"/);
   assert.match(inventoryPage, /rpc\("get_inventory_movement_costs"/);
   assert.match(inventoryPage, /rpc\("get_purchase_order_line_costs"/);

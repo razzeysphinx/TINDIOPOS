@@ -35,6 +35,20 @@ test("Phase 7 keeps replenishment suggestions source-aware and non-automatic", a
   assert.match(workflow, /if \(!rule\.recommendedWarehouseId\) return/);
 });
 
+test("Phase 7 calculates the restock gap from on-hand and confirmed inbound quantities", async () => {
+  const replenishmentPage = await source("src/app/(back-office)/back-office/replenishment/page.tsx");
+  const workflow = await source("src/features/inventory/supply-chain-workflows.tsx");
+
+  assert.match(replenishmentPage, /purchase_order_id, product_id, variant_id, ordered_quantity, received_quantity/);
+  assert.match(replenishmentPage, /incomingPurchaseBySaleable/);
+  assert.match(replenishmentPage, /incomingPurchaseQuantity:/);
+  assert.match(replenishmentPage, /inTransitQuantity:/);
+  assert.match(workflow, /const projectedQuantity = rule\.currentQuantity \+ rule\.incomingPurchaseQuantity \+ rule\.inTransitQuantity/);
+  assert.match(workflow, /const suggestedQuantity = Math\.max\(0, rule\.targetStock - projectedQuantity\)/);
+  assert.match(workflow, /Confirmed incoming stock already covers the target/);
+  assert.match(workflow, /never create a transfer or purchase order automatically/);
+});
+
 test("Phase 7 preserves the existing bounded, permission-gated transfer RPC lifecycle", async () => {
   const actions = await source("src/features/inventory/supply-chain-actions.ts");
   const legacyActions = await source("src/features/inventory/advanced-inventory-actions.ts");

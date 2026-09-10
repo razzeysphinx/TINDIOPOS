@@ -33,6 +33,10 @@ import {
   updateSupplierLeadTimeAction,
   upsertReplenishmentRuleAction,
 } from "@/features/inventory/supply-chain-actions";
+import {
+  clearInventoryOperationId as clearPendingOperation,
+  getInventoryOperationId as pendingOperationId,
+} from "@/features/inventory/inventory-operation-id";
 
 const selectClassName =
   "h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -60,6 +64,8 @@ export type ReplenishmentRule = {
   label: string;
   unit: string;
   currentQuantity: number;
+  incomingPurchaseQuantity: number;
+  inTransitQuantity: number;
   storeName: string;
   warehouseName: string | null;
   recommendedWarehouseId?: string | null;
@@ -230,7 +236,8 @@ export function SupplyChainWorkflows({
 
   function applyRuleSuggestion(rule: ReplenishmentRule) {
     if (!rule.recommendedWarehouseId) return;
-    const suggested = Math.max(0, rule.targetStock - rule.currentQuantity);
+    const suggested = Math.max(0, rule.targetStock - rule.currentQuantity - rule.incomingPurchaseQuantity - rule.inTransitQuantity);
+    if (suggested === 0) return;
     setRequestStoreId(rule.storeId);
     setRequestWarehouseId(rule.recommendedWarehouseId);
     setRequestLines([{ productId: rule.productId, variantId: rule.variantId ?? "", quantity: String(Math.min(suggested || 1, rule.recommendedSourceQuantity ?? Math.max(suggested, 1))) }]);
@@ -456,9 +463,50 @@ function ReplenishmentRecommendations({
         </p>
       </div>
       {rules.length ? <div className="grid gap-3 lg:grid-cols-2">{rules.map((rule) => {
-        const suggestedQuantity = Math.max(0, rule.targetStock - rule.currentQuantity);
+        const projectedQuantity = rule.currentQuantity + rule.incomingPurchaseQuantity + rule.inTransitQuantity;
+        const suggestedQuantity = Math.max(0, rule.targetStock - projectedQuantity);
         const needsReorder = rule.currentQuantity <= rule.reorderPoint;
         const canPrepareTransfer = needsReorder && suggestedQuantity > 0 && Boolean(rule.recommendedWarehouseId && rule.recommendedWarehouseName && (rule.recommendedSourceQuantity ?? 0) > 0);
+        const hasReplenishmentGap = needsReorder && suggestedQuantity > 0;
+        // Replenishment inputs are database numeric fields. Retain the older
+        // display as a defensive fallback only if a malformed value reaches
+        // the client; normal recommendations always use the full projection.
+        if (Number.isFinite(projectedQuantity)) {
+          return (
+            <Card key={rule.id} size="sm">
+              <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+                <div>
+                  <p className="font-medium">{rule.label}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {rule.storeName} · on hand {formatQuantity(rule.currentQuantity)} {rule.unit} · incoming PO {formatQuantity(rule.incomingPurchaseQuantity)} {rule.unit} · in transit {formatQuantity(rule.inTransitQuantity)} {rule.unit} · projected {formatQuantity(projectedQuantity)} {rule.unit} · reorder {formatQuantity(rule.reorderPoint)} · target {formatQuantity(rule.targetStock)}
+                  </p>
+                  {needsReorder ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {hasReplenishmentGap
+                        ? rule.recommendedWarehouseName
+                          ? `Suggested internal source: ${rule.recommendedWarehouseName} · ${formatQuantity(rule.recommendedSourceQuantity ?? 0)} ${rule.unit} on hand`
+                          : "No authorized internal source currently has stock. Plan supplier replenishment or configure another warehouse."
+                        : "Confirmed incoming stock already covers the target. No new restock request is suggested."}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={hasReplenishmentGap ? "secondary" : "outline"}>
+                    {hasReplenishmentGap
+                      ? rule.recommendedWarehouseName
+                        ? `Request ${formatQuantity(Math.min(suggestedQuantity, rule.recommendedSourceQuantity ?? 0))}`
+                        : `Plan ${formatQuantity(suggestedQuantity)}`
+                      : needsReorder
+                        ? "Incoming covers target"
+                        : "Above reorder point"}
+                  </Badge>
+                  {canPrepareTransfer ? <Button size="sm" type="button" variant="outline" onClick={() => onPrepareTransfer(rule)}>Prepare transfer request</Button> : null}
+                  {hasReplenishmentGap && !rule.recommendedWarehouseName ? <Link className={buttonVariants({ size: "sm", variant: "outline" })} href="/back-office/purchasing?tab=purchase-orders">Plan supplier purchase</Link> : null}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        }
         return <Card key={rule.id} size="sm"><CardContent className="flex flex-wrap items-center justify-between gap-3 py-4"><div><p className="font-medium">{rule.label}</p><p className="mt-1 text-xs text-muted-foreground">{rule.storeName} · on hand {formatQuantity(rule.currentQuantity)} {rule.unit} · reorder {formatQuantity(rule.reorderPoint)} · target {formatQuantity(rule.targetStock)}</p>{needsReorder ? <p className="mt-1 text-xs text-muted-foreground">{rule.recommendedWarehouseName ? `Suggested internal source: ${rule.recommendedWarehouseName} · ${formatQuantity(rule.recommendedSourceQuantity ?? 0)} ${rule.unit} on hand` : "No authorized internal source currently has stock. Plan supplier replenishment or configure another warehouse."}</p> : null}</div><div className="flex flex-wrap items-center gap-2"><Badge variant={needsReorder ? "secondary" : "outline"}>{needsReorder ? rule.recommendedWarehouseName ? `Request ${formatQuantity(Math.min(suggestedQuantity, rule.recommendedSourceQuantity ?? 0))}` : "Plan supplier replenishment" : "Above reorder point"}</Badge>{canPrepareTransfer ? <Button size="sm" type="button" variant="outline" onClick={() => onPrepareTransfer(rule)}>Prepare transfer request</Button> : null}{needsReorder && !rule.recommendedWarehouseName ? <Link className={buttonVariants({ size: "sm", variant: "outline" })} href="/back-office/purchasing?tab=purchase-orders">Plan supplier purchase</Link> : null}</div></CardContent></Card>;
       })}</div> : <Empty message="Save a reorder point and target stock rule to see replenishment suggestions." />}
     </section>
@@ -544,29 +592,6 @@ function Empty({ message }: { message: string }) {
 
 function emptyRequestLine(item: SupplyChainItem | undefined): RequestDraft {
   return { productId: item?.productId ?? "", variantId: item?.variantId ?? "", quantity: "1" };
-}
-
-function pendingOperationId(scope: string, payload: unknown) {
-  const storageKey = `tindio:inventory-operation:${scope}`;
-  const fingerprint = JSON.stringify(payload);
-  const stored = globalThis.sessionStorage.getItem(storageKey);
-
-  if (stored) {
-    try {
-      const candidate = JSON.parse(stored) as { fingerprint?: string; id?: string };
-      if (candidate.fingerprint === fingerprint && typeof candidate.id === "string") return candidate.id;
-    } catch {
-      // Replace only malformed browser-session state; no business data is stored here.
-    }
-  }
-
-  const id = globalThis.crypto.randomUUID();
-  globalThis.sessionStorage.setItem(storageKey, JSON.stringify({ fingerprint, id }));
-  return id;
-}
-
-function clearPendingOperation(scope: string) {
-  globalThis.sessionStorage.removeItem(`tindio:inventory-operation:${scope}`);
 }
 
 function itemKey(item: Pick<SupplyChainItem, "productId" | "variantId">) {

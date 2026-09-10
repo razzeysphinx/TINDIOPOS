@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(26);
+select plan(29);
 
 select has_column('public', 'inventory_adjustments', 'operation_id', 'adjustment documents retain a stable operation identity');
 select has_column('public', 'inventory_adjustments', 'import_batch_id', 'CSV adjustment documents retain their import-batch identity');
@@ -18,6 +18,14 @@ select ok(
 select ok(
   not has_function_privilege('authenticated', 'private.record_inventory_adjustment_v2(uuid,uuid,uuid,uuid,numeric,text,text)'::regprocedure, 'execute'),
   'the legacy private V2 adjustment command is not executable by normal users'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.adjust_inventory(uuid,uuid,uuid,uuid,numeric,text,text,uuid)'::regprocedure, 'execute'),
+  'the legacy approval-aware adjustment command is not executable by normal users'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.import_inventory_adjustments_csv(uuid,uuid,text,jsonb)'::regprocedure, 'execute'),
+  'the legacy CSV adjustment import command is not executable by normal users'
 );
 select ok(
   pg_get_functiondef('private.record_inventory_adjustment(uuid,uuid,uuid,uuid,numeric,text,text,uuid,uuid)'::regprocedure) like '%private.authorize_sensitive_operation%',
@@ -151,6 +159,7 @@ select lives_ok(
   ),
   'a custom role with only inventory.adjust and the assigned store can post a controlled adjustment'
 );
+reset role;
 select is(
   (select count(*) from public.inventory_adjustments adjustment join controlled_adjustment_context context on context.organization_id = adjustment.organization_id where adjustment.operation_id = context.operation_id),
   1::bigint,
@@ -166,6 +175,8 @@ select is(
   7::numeric,
   'the ledger records the authoritative quantity after the adjustment'
 );
+set local role authenticated;
+set local request.jwt.claim.sub = '95000000-0000-4000-8000-000000000002';
 select lives_ok(
   format(
     $$select public.record_inventory_adjustment(%L, %L, %L, null, 7, 'PHASE5_DAMAGE', 'Damaged in the stock room.', %L, null)$$,
@@ -176,11 +187,14 @@ select lives_ok(
   ),
   'an exact retry of the same operation is idempotent'
 );
+reset role;
 select is(
   (select count(*) from public.inventory_adjustments adjustment join controlled_adjustment_context context on context.organization_id = adjustment.organization_id where adjustment.operation_id = context.operation_id),
   1::bigint,
   'an exact retry does not duplicate the adjustment header'
 );
+set local role authenticated;
+set local request.jwt.claim.sub = '95000000-0000-4000-8000-000000000002';
 select throws_ok(
   format(
     $$select public.record_inventory_adjustment(%L, %L, %L, null, 8, 'PHASE5_DAMAGE', 'Damaged in the stock room.', %L, null)$$,
@@ -204,6 +218,7 @@ select throws_ok(
   'Provide an adjustment explanation between 2 and 500 characters.',
   'an adjustment requires a clear explanation'
 );
+reset role;
 select is(
   (select count(*) from public.inventory_adjustments adjustment join controlled_adjustment_context context on context.organization_id = adjustment.organization_id),
   1::bigint,
@@ -222,7 +237,7 @@ select throws_ok(
     (select product_id from controlled_adjustment_context)
   ),
   '42501',
-  'Permission is required for this operation.',
+  'Manager approval is required for this operation.',
   'a store-assigned viewer without inventory.adjust cannot post an adjustment'
 );
 
@@ -250,6 +265,7 @@ select lives_ok(
   ),
   'an exact CSV retry is idempotent'
 );
+reset role;
 select is(
   (select count(*) from public.inventory_adjustment_import_batches batch join controlled_adjustment_context context on context.organization_id = batch.organization_id where batch.operation_id = context.import_operation_id),
   1::bigint,
@@ -260,6 +276,8 @@ select is(
   1::bigint,
   'the CSV import creates exactly one linked adjustment document'
 );
+set local role authenticated;
+set local request.jwt.claim.sub = '95000000-0000-4000-8000-000000000002';
 select throws_ok(
   format(
     $$select public.import_inventory_adjustments_csv(%L, %L, 'PHASE5_DAMAGE', jsonb_build_array(jsonb_build_object('row_number', 2, 'product_id', %L::uuid, 'variant_id', null, 'quantity_delta', -3, 'note', 'Different data must not replay.')), %L, null)$$,
@@ -272,6 +290,7 @@ select throws_ok(
   'This adjustment import operation identity was already used for different details.',
   'a CSV batch identity cannot be reused for different row details'
 );
+reset role;
 select is(
   (select quantity from public.inventory_levels level join controlled_adjustment_context context on context.organization_id = level.organization_id and context.store_id = level.store_id and context.product_id = level.product_id),
   5::numeric,
@@ -281,10 +300,26 @@ select ok(
   exists (
     select 1 from public.audit_logs audit join controlled_adjustment_context context on context.organization_id = audit.organization_id
     where audit.event_type = 'INVENTORY_ADJUSTMENTS_IMPORTED'
-      and audit.details ->> 'operation_id' = context.import_operation_id::text
+      and audit.metadata ->> 'operation_id' = context.import_operation_id::text
   ),
   'the CSV import writes an immutable audit record with the operation identity'
 );
+
+set local role authenticated;
+set local request.jwt.claim.sub = '95000000-0000-4000-8000-000000000002';
+select is(
+  (
+    select count(*)
+    from public.inventory_movements movement
+    join controlled_adjustment_context context
+      on context.organization_id = movement.organization_id
+     and context.store_id = movement.store_id
+     and context.product_id = movement.product_id
+  ),
+  2::bigint,
+  'a custom inventory.adjust role can read its assigned store ledger through the same RLS boundary used by Inventory Activity'
+);
+reset role;
 
 select * from finish();
 rollback;

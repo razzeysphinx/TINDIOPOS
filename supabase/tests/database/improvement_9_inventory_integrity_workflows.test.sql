@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(50);
+select plan(57);
 
 select has_table('public', 'inventory_policies', 'inventory policies table exists');
 select has_table('public', 'inventory_adjustment_reasons', 'inventory adjustment reasons table exists');
@@ -34,15 +34,44 @@ select has_column('public', 'inventory_movements', 'unit_cost_minor', 'ledger re
 select has_column('public', 'sale_items', 'cogs_minor', 'sale items retain immutable COGS');
 select ok(to_regprocedure('public.update_inventory_policy(uuid,uuid,text)') is not null, 'negative-stock policy routine exists');
 select ok(to_regprocedure('public.create_inventory_adjustment_reason(uuid,text,text,text)') is not null, 'adjustment reason routine exists');
-select ok(to_regprocedure('public.record_inventory_adjustment_v2(uuid,uuid,uuid,uuid,numeric,text,text)') is not null, 'controlled adjustment routine exists');
+select ok(to_regprocedure('public.record_inventory_adjustment(uuid,uuid,uuid,uuid,numeric,text,text,uuid,uuid)') is not null, 'controlled adjustment routine exists');
 select ok(to_regprocedure('public.ship_stock_transfer(uuid,uuid,uuid,jsonb,text)') is not null, 'legacy immediate-shipment routine is retained for migration compatibility');
 select ok(to_regprocedure('public.receive_stock_transfer(uuid,uuid,jsonb,text,uuid)') is not null, 'idempotent legacy transfer-receipt routine exists');
-select ok(to_regprocedure('public.return_to_supplier(uuid,uuid,uuid,jsonb,text)') is not null, 'supplier return routine exists');
-select ok(to_regprocedure('public.produce_composite(uuid,uuid,uuid,numeric,text)') is not null, 'composite production routine exists');
+select ok(to_regprocedure('public.return_to_supplier(uuid,uuid,uuid,jsonb,text,uuid)') is not null, 'idempotent supplier return routine exists');
+select ok(to_regprocedure('public.produce_composite(uuid,uuid,uuid,numeric,text,uuid)') is not null, 'idempotent composite production routine exists');
 select ok(to_regprocedure('public.get_inventory_valuation(uuid)') is not null, 'inventory valuation routine exists');
 select ok(not has_function_privilege('anon', 'public.ship_stock_transfer(uuid,uuid,uuid,jsonb,text)', 'execute'), 'anonymous callers cannot ship transfers');
 select ok(not has_function_privilege('authenticated', 'public.ship_stock_transfer(uuid,uuid,uuid,jsonb,text)', 'execute'), 'authenticated callers cannot bypass request approval with immediate shipment');
+select ok(not has_function_privilege('authenticated', 'public.return_to_supplier(uuid,uuid,uuid,jsonb,text)', 'execute'), 'authenticated callers cannot post supplier returns through the non-idempotent legacy overload');
+select ok(not has_function_privilege('authenticated', 'public.produce_composite(uuid,uuid,uuid,numeric,text)', 'execute'), 'authenticated callers cannot post production through the non-idempotent legacy overload');
 select ok(not has_table_privilege('authenticated', 'public.inventory_policies', 'insert'), 'authenticated callers cannot insert stock policies directly');
+select ok(
+  exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'supplier_returns'
+      and policyname = 'supplier_returns_select_authorized_scope'
+      and qual like '%has_store_read_scope%'
+  ),
+  'supplier-return headers apply the central store read scope'
+);
+select ok(
+  exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'supplier_return_lines'
+      and policyname = 'supplier_return_lines_select_authorized_scope'
+      and qual like '%has_store_read_scope%'
+  ),
+  'supplier-return lines inherit the originating store scope'
+);
+select ok(
+  exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'production_runs'
+      and policyname = 'production_runs_select_authorized_scope'
+      and qual like '%has_store_read_scope%'
+  ),
+  'production runs apply the central store read scope'
+);
 
 insert into auth.users (id, email, raw_user_meta_data)
 values ('92929292-9292-4929-8929-929292929292', 'integrity-owner@tindio.test', '{"full_name":"Inventory Integrity Owner"}'::jsonb);
@@ -57,7 +86,9 @@ create temporary table inventory_integrity_context (
   transfer_id uuid,
   transfer_line_id uuid,
   component_product_id uuid,
-  composite_product_id uuid
+  composite_product_id uuid,
+  supplier_return_operation_id uuid default gen_random_uuid(),
+  production_operation_id uuid default gen_random_uuid()
 );
 grant select, insert, update on inventory_integrity_context to authenticated;
 
@@ -194,11 +225,24 @@ select is((select quantity from public.inventory_levels where store_id = (select
 
 select lives_ok(
   format(
-    $$select public.return_to_supplier(%L, %L, %L, %L::jsonb, 'Return one')$$,
+    $$select public.return_to_supplier(%L, %L, %L, %L::jsonb, 'Return one', %L)$$,
     (select organization_id from inventory_integrity_context), (select destination_store_id from inventory_integrity_context), (select supplier_id from inventory_integrity_context),
-    jsonb_build_array(jsonb_build_object('product_id', (select product_id from inventory_integrity_context), 'variant_id', null, 'quantity', '1'))
+    jsonb_build_array(jsonb_build_object('product_id', (select product_id from inventory_integrity_context), 'variant_id', null, 'quantity', '1')),
+    (select supplier_return_operation_id from inventory_integrity_context)
   ),
   'supplier return succeeds'
+);
+select is(
+  public.return_to_supplier(
+    (select organization_id from inventory_integrity_context),
+    (select destination_store_id from inventory_integrity_context),
+    (select supplier_id from inventory_integrity_context),
+    jsonb_build_array(jsonb_build_object('product_id', (select product_id from inventory_integrity_context), 'variant_id', null, 'quantity', '1')),
+    'Return one',
+    (select supplier_return_operation_id from inventory_integrity_context)
+  ),
+  (select id from public.supplier_returns where operation_id = (select supplier_return_operation_id from inventory_integrity_context)),
+  'supplier return retry returns the original document'
 );
 select is((select quantity from public.inventory_levels where store_id = (select destination_store_id from inventory_integrity_context) and product_id = (select product_id from inventory_integrity_context)), 3::numeric, 'supplier return reduces destination stock');
 select is((select movement_type from public.inventory_movements where source_type = 'supplier_return' order by created_at desc limit 1), 'SUPPLIER_RETURN', 'supplier return has an accountable ledger movement');
@@ -207,8 +251,8 @@ select public.update_inventory_policy((select organization_id from inventory_int
 select is((select negative_stock_policy from public.inventory_policies where store_id = (select store_id from inventory_integrity_context)), 'block', 'block policy is stored per store');
 create or replace function pg_temp.blocked_negative_adjustment_is_rejected() returns boolean language plpgsql as $$
 begin
-  perform public.record_inventory_adjustment_v2(
-    (select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), (select product_id from inventory_integrity_context), null, -7, 'DAMAGE', 'Too much damage'
+  perform public.record_inventory_adjustment(
+    (select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), (select product_id from inventory_integrity_context), null, -7, 'DAMAGE', 'Too much damage', gen_random_uuid(), null
   );
   return false;
 exception when check_violation then
@@ -218,7 +262,7 @@ $$;
 select ok(pg_temp.blocked_negative_adjustment_is_rejected(), 'block policy rejects a negative stock movement');
 select public.update_inventory_policy((select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), 'warn');
 select lives_ok(
-  $$select public.record_inventory_adjustment_v2((select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), (select product_id from inventory_integrity_context), null, -7, 'DAMAGE', 'Approved warning')$$,
+  $$select public.record_inventory_adjustment((select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), (select product_id from inventory_integrity_context), null, -7, 'DAMAGE', 'Approved warning', gen_random_uuid(), null)$$,
   'warn policy permits an accountable negative movement'
 );
 select is((select quantity from public.inventory_levels where store_id = (select store_id from inventory_integrity_context) and product_id = (select product_id from inventory_integrity_context)), (-1)::numeric, 'warn policy permits the resulting negative projection');
@@ -236,12 +280,24 @@ update public.products set is_composite = true where id = (select composite_prod
 insert into public.product_components (organization_id, product_id, component_product_id, component_variant_id, quantity_per_composite)
 select organization_id, composite_product_id, component_product_id, null, 2 from inventory_integrity_context;
 select lives_ok(
-  $$select public.record_inventory_adjustment_v2((select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), (select component_product_id from inventory_integrity_context), null, 6, 'DAMAGE', 'Seed production component')$$,
+  $$select public.record_inventory_adjustment((select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), (select component_product_id from inventory_integrity_context), null, 6, 'DAMAGE', 'Seed production component', gen_random_uuid(), null)$$,
   'controlled ledger adjustment seeds production components'
 );
 select lives_ok(
-  $$select public.produce_composite((select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), (select composite_product_id from inventory_integrity_context), 2, 'Make two bundles')$$,
+  $$select public.produce_composite((select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), (select composite_product_id from inventory_integrity_context), 2, 'Make two bundles', (select production_operation_id from inventory_integrity_context))$$,
   'composite production succeeds through the existing composite-product bridge'
+);
+select is(
+  public.produce_composite(
+    (select organization_id from inventory_integrity_context),
+    (select store_id from inventory_integrity_context),
+    (select composite_product_id from inventory_integrity_context),
+    2,
+    'Make two bundles',
+    (select production_operation_id from inventory_integrity_context)
+  ),
+  (select id from public.production_runs where operation_id = (select production_operation_id from inventory_integrity_context)),
+  'production retry returns the original run'
 );
 select is((select quantity from public.inventory_levels where store_id = (select store_id from inventory_integrity_context) and product_id = (select component_product_id from inventory_integrity_context)), 2::numeric, 'production consumes the recipe component');
 select is((select quantity from public.inventory_levels where store_id = (select store_id from inventory_integrity_context) and product_id = (select composite_product_id from inventory_integrity_context)), 2::numeric, 'production adds composite output stock');

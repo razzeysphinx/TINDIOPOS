@@ -8,27 +8,33 @@ import {
   SupplyChainWorkflows,
   type InboundPurchaseOrder,
   type ReplenishmentRule,
+  type ReplenishmentSourceOption,
   type SupplyChainItem,
   type SupplyChainRequest,
 } from "@/features/inventory/supply-chain-workflows";
 import {
   InventoryStockView,
+  type InventoryStockRow,
   type InventoryStockStatus,
 } from "@/features/inventory/inventory-stock-view";
 import {
   InventoryWorkspaceNavigation,
   type StockRestockTab,
 } from "@/features/inventory/inventory-workspace-navigation";
+import { hasAnyInventoryCapability, hasInventoryCapability } from "@/features/inventory/inventory-permissions";
 import { resolveBackOfficeStoreScope } from "@/lib/server/back-office-store-scope";
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Stock & Restock" };
 
-const STOCK_RESTOCK_TABS: readonly StockRestockTab[] = ["levels", "needs-restocking", "requests"];
+const STOCK_RESTOCK_TABS: readonly StockRestockTab[] = ["levels", "replenishment"];
 
 function resolveStockRestockTab(value: string | string[] | undefined): StockRestockTab {
   const candidate = Array.isArray(value) ? value[0] : value;
+  // CANDIDATE_FOR_REMOVAL: keep historical links working while the two
+  // previous views are combined in the Replenishment workspace.
+  if (candidate === "needs-restocking" || candidate === "requests") return "replenishment";
   return STOCK_RESTOCK_TABS.includes(candidate as StockRestockTab) ? candidate as StockRestockTab : "levels";
 }
 
@@ -43,11 +49,25 @@ export default async function ReplenishmentPage({
 }: {
   searchParams: Promise<{ detail?: string; status?: string | string[]; store?: string; tab?: string | string[] }>;
 }) {
-  const context = await requireBackOfficePermission(["inventory.view", "inventory.manage"]);
+  const context = await requireBackOfficePermission([
+    "inventory.view",
+    "inventory.manage",
+    "inventory.transfer.create",
+    "inventory.transfer.send",
+    "inventory.transfer.receive",
+  ]);
   const parameters = await searchParams;
   const activeTab = resolveStockRestockTab(parameters.tab);
   const initialStockStatus = resolveStockStatus(parameters.status);
   const canManage = hasPermission(context, "inventory.manage");
+  const canCreateTransfers = hasInventoryCapability(context, "inventory.transfer.create");
+  const canSendTransfers = hasInventoryCapability(context, "inventory.transfer.send");
+  const canReceiveTransfers = hasInventoryCapability(context, "inventory.transfer.receive");
+  const canAccessTransfers = hasAnyInventoryCapability(context, [
+    "inventory.transfer.create",
+    "inventory.transfer.send",
+    "inventory.transfer.receive",
+  ]);
   const storeScope = resolveBackOfficeStoreScope(context, parameters);
   if (storeScope.invalidSelection) notFound();
 
@@ -55,8 +75,8 @@ export default async function ReplenishmentPage({
     return <FeatureState title="Restock items is unavailable" description="An owner or administrator can enable Inventory in Business profile & features." />;
   }
 
-  if (!canManage && activeTab !== "levels") {
-    return <FeatureState title="Restock items access required" description="Your role needs inventory-management access to manage warehouses and stock requests." />;
+  if (!canManage && !canAccessTransfers && activeTab !== "levels") {
+    return <FeatureState title="Restock items access required" description="Your role needs transfer or inventory-management access to work with stock requests." />;
   }
 
   const supabase = await createClient();
@@ -81,7 +101,7 @@ export default async function ReplenishmentPage({
     supabase.from("categories").select("id, name").eq("organization_id", organizationId).eq("is_archived", false).order("name"),
     supabase.from("products").select("id, category_id, name, sku, barcode, product_type, unit, status, track_inventory").eq("organization_id", organizationId).eq("status", "active").eq("track_inventory", true).order("name"),
     supabase.from("product_variants").select("id, product_id, name, sku, barcode, sort_order").eq("organization_id", organizationId).eq("is_active", true).order("sort_order"),
-    supabase.from("product_store_settings").select("product_id, store_id, is_available, restock_policy").eq("organization_id", organizationId),
+    supabase.from("product_store_settings").select("product_id, store_id, is_available, restock_policy, updated_at").eq("organization_id", organizationId),
     supabase.from("inventory_levels").select("id, store_id, product_id, variant_id, quantity, updated_at").eq("organization_id", organizationId),
     supabase.from("supply_chain_warehouses").select("id, store_id, code, name").eq("organization_id", organizationId).eq("is_active", true).order("name"),
     supabase.from("inventory_replenishment_rules").select("id, store_id, product_id, variant_id, preferred_warehouse_id, reorder_point, target_stock").eq("organization_id", organizationId).order("updated_at", { ascending: false }),
@@ -95,17 +115,24 @@ export default async function ReplenishmentPage({
   const firstError = [storesResult, categoriesResult, productsResult, variantsResult, settingsResult, levelsResult, warehousesResult, rulesResult, requestsResult, suppliersResult, purchaseOrdersResult, valuationResult, archivedProductsResult].find((result) => result.error)?.error;
   if (firstError) throw new Error(`Unable to load replenishment: ${firstError.message}`);
 
-  const visibleStore = (storeId: string) => !storeScope.selectedStoreId || storeId === storeScope.selectedStoreId;
-  // The filter narrows recommendations and history. Keep all RLS-authorized stock locations available so a selected destination store can still request from another authorized warehouse.
-  const stores = storesResult.data ?? [];
+  const authorizedStore = (storeId: string) => storeScope.storeIds === null || storeScope.storeIds.includes(storeId);
+  const visibleStore = (storeId: string) => authorizedStore(storeId) && (
+    !storeScope.selectedStoreId || storeId === storeScope.selectedStoreId
+  );
+  // Recommendation destinations honour the active filter. Source assessments
+  // may inspect every store the employee is already authorised to manage so a
+  // selected destination cannot hide a safe internal source.
+  const authorizedStores = (storesResult.data ?? []).filter((store) => authorizedStore(store.id));
+  const stores = authorizedStores.filter((store) => visibleStore(store.id));
   const categories = categoriesResult.data ?? [];
   const products = productsResult.data ?? [];
   const variants = variantsResult.data ?? [];
-  const settings = settingsResult.data ?? [];
-  const levels = levelsResult.data ?? [];
+  const settings = (settingsResult.data ?? []).filter((setting) => authorizedStore(setting.store_id));
+  const levels = (levelsResult.data ?? []).filter((level) => authorizedStore(level.store_id));
   const stockLevels = levels.filter((level) => visibleStore(level.store_id));
-  const warehouses = warehousesResult.data ?? [];
-  const rules = (rulesResult.data ?? []).filter((rule) => visibleStore(rule.store_id));
+  const warehouses = (warehousesResult.data ?? []).filter((warehouse) => authorizedStore(warehouse.store_id));
+  const authorizedRules = (rulesResult.data ?? []).filter((rule) => authorizedStore(rule.store_id));
+  const rules = authorizedRules.filter((rule) => visibleStore(rule.store_id));
   const requests = (requestsResult.data ?? []).filter((request) => visibleStore(request.requesting_store_id));
   const suppliers = suppliersResult.data ?? [];
   const purchaseOrders = (purchaseOrdersResult.data ?? []).filter((order) => visibleStore(order.store_id));
@@ -140,7 +167,7 @@ export default async function ReplenishmentPage({
     : { data: [], error: null };
   if (stockTransferLinesResult.error) throw new Error(`Unable to load transfer receiving details: ${stockTransferLinesResult.error.message}`);
 
-  const storeNames = new Map(stores.map((store) => [store.id, store.name]));
+  const storeNames = new Map(authorizedStores.map((store) => [store.id, store.name]));
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
   const productById = new Map(products.map((product) => [product.id, product]));
   const variantById = new Map(variants.map((variant) => [variant.id, variant]));
@@ -201,26 +228,48 @@ export default async function ReplenishmentPage({
   });
 
   const warehouseNames = new Map(warehouses.map((warehouse) => [warehouse.id, `${warehouse.code} · ${warehouse.name}`]));
-  const replenishmentRules: ReplenishmentRule[] = rules.filter((rule) => (
-    restockIntentions.get(`${rule.product_id}|${rule.store_id}`) !== "do_not_restock"
-  )).map((rule) => {
+  const targetStockByPosition = new Map(
+    authorizedRules.map((rule) => [
+      `${rule.store_id}|${rule.product_id}|${rule.variant_id ?? ""}`,
+      Number(rule.target_stock),
+    ]),
+  );
+  const warehousesByStore = new Map<string, typeof warehouses>();
+  for (const warehouse of warehouses) {
+    const entries = warehousesByStore.get(warehouse.store_id) ?? [];
+    entries.push(warehouse);
+    warehousesByStore.set(warehouse.store_id, entries);
+  }
+  const replenishmentRules: ReplenishmentRule[] = rules.map((rule) => {
     const product = productById.get(rule.product_id);
     const variant = rule.variant_id ? variantById.get(rule.variant_id) : undefined;
     const item = saleableItems.find((candidate) => candidate.productId === rule.product_id && candidate.variantId === rule.variant_id);
-    const sourceCandidates = warehouses
-      .filter((warehouse) => warehouse.store_id !== rule.store_id)
-      .map((warehouse) => ({
-        id: warehouse.id,
-        name: warehouseNames.get(warehouse.id) ?? warehouse.name,
-        quantity: item?.quantitiesByStore[warehouse.store_id] ?? 0,
-      }))
-      .filter((warehouse) => warehouse.quantity > 0)
-      .sort((left, right) => {
-        if (left.id === rule.preferred_warehouse_id) return -1;
-        if (right.id === rule.preferred_warehouse_id) return 1;
-        return right.quantity - left.quantity || left.name.localeCompare(right.name);
+    const sourceOptions: ReplenishmentSourceOption[] = authorizedStores
+      .filter((store) => store.id !== rule.store_id)
+      .map((store) => {
+        const onHandQuantity = item?.quantitiesByStore[store.id] ?? 0;
+        const sourceTargetStock = targetStockByPosition.get(`${store.id}|${rule.product_id}|${rule.variant_id ?? ""}`) ?? null;
+        const sourceWarehouses = warehousesByStore.get(store.id) ?? [];
+        const warehouse = sourceWarehouses.find((candidate) => candidate.id === rule.preferred_warehouse_id)
+          ?? sourceWarehouses[0]
+          ?? null;
+        return {
+          warehouseId: warehouse?.id ?? null,
+          warehouseName: warehouse ? warehouseNames.get(warehouse.id) ?? warehouse.name : null,
+          storeId: store.id,
+          storeName: store.name,
+          onHandQuantity,
+          targetStock: sourceTargetStock,
+          safeExcessQuantity: sourceTargetStock === null ? null : Math.max(0, onHandQuantity - sourceTargetStock),
+        };
       });
-    const recommendedSource = sourceCandidates[0] ?? null;
+    sourceOptions.sort((left, right) => {
+      if (left.warehouseId === rule.preferred_warehouse_id) return -1;
+      if (right.warehouseId === rule.preferred_warehouse_id) return 1;
+      return (right.safeExcessQuantity ?? -1) - (left.safeExcessQuantity ?? -1)
+        || right.onHandQuantity - left.onHandQuantity
+        || left.storeName.localeCompare(right.storeName);
+    });
     return {
       id: rule.id,
       storeId: rule.store_id,
@@ -234,11 +283,10 @@ export default async function ReplenishmentPage({
       currentQuantity: item?.quantitiesByStore[rule.store_id] ?? 0,
       incomingPurchaseQuantity: incomingPurchaseBySaleable.get(`${rule.product_id}|${rule.variant_id ?? ""}`)?.[rule.store_id] ?? 0,
       inTransitQuantity: inTransitBySaleable.get(`${rule.product_id}|${rule.variant_id ?? ""}`)?.[rule.store_id] ?? 0,
+      restockPolicy: restockIntentions.get(`${rule.product_id}|${rule.store_id}`) === "do_not_restock" ? "do_not_restock" as const : "restock" as const,
       storeName: storeNames.get(rule.store_id) ?? "Inactive store",
       warehouseName: rule.preferred_warehouse_id ? warehouseNames.get(rule.preferred_warehouse_id) ?? "Unavailable warehouse" : null,
-      recommendedWarehouseId: recommendedSource?.id ?? null,
-      recommendedWarehouseName: recommendedSource?.name ?? null,
-      recommendedSourceQuantity: recommendedSource?.quantity ?? 0,
+      sourceOptions,
     };
   });
 
@@ -307,37 +355,115 @@ export default async function ReplenishmentPage({
       Number(rule.reorder_point),
     ]),
   );
-  const stockRows = stockLevels.flatMap((level) => {
-    const product = productById.get(level.product_id);
-    const variant = level.variant_id ? variantById.get(level.variant_id) : undefined;
-    const storeName = storeNames.get(level.store_id);
-    if (!product || !storeName) return [];
-    const query = new URLSearchParams({ tab: "activity", detail: level.id });
-    if (storeScope.selectedStoreId) query.set("store", storeScope.selectedStoreId);
-    return [{
+  const stockPositionKey = (storeId: string, productId: string, variantId: string | null) =>
+    `${storeId}|${productId}|${variantId ?? ""}`;
+  const stockDetailHref = ({
+    levelId,
+    productId,
+    storeId,
+    variantId,
+  }: {
+    levelId: string | null;
+    productId: string;
+    storeId: string;
+    variantId: string | null;
+  }) => {
+    const query = new URLSearchParams({ store: storeId, tab: "activity" });
+    if (levelId) query.set("detail", levelId);
+    else {
+      query.set("detailProduct", productId);
+      if (variantId) query.set("detailVariant", variantId);
+    }
+    return `/back-office/inventory?${query.toString()}`;
+  };
+  const stockRowsByPosition = new Map<string, InventoryStockRow>();
+  const makeStockRow = ({
+    levelId,
+    product,
+    quantity,
+    setting,
+    storeId,
+    updatedAt,
+    variant,
+  }: {
+    levelId: string | null;
+    product: (typeof products)[number];
+    quantity: number;
+    setting: (typeof settings)[number] | undefined;
+    storeId: string;
+    updatedAt: string;
+    variant: (typeof variants)[number] | undefined;
+  }) => {
+    const variantId = variant?.id ?? null;
+    return {
       averageCostMinor: canViewCosts
-        ? valuationByStockPosition.get(`${level.store_id}|${level.product_id}|${level.variant_id ?? ""}`) ?? null
+        ? valuationByStockPosition.get(stockPositionKey(storeId, product.id, variantId)) ?? null
         : null,
       barcode: variant?.barcode ?? product.barcode,
       categoryId: product.category_id,
       categoryName: product.category_id ? categoryNames.get(product.category_id) ?? "Uncategorized" : "Uncategorized",
-      detailHref: `/back-office/inventory?${query.toString()}`,
-      id: level.id,
-      isAvailable: availability.get(`${level.product_id}|${level.store_id}`) === true,
-      productId: level.product_id,
+      detailHref: stockDetailHref({ levelId, productId: product.id, storeId, variantId }),
+      id: levelId ?? `uninitialized:${stockPositionKey(storeId, product.id, variantId)}`,
+      isAvailable: availability.get(`${product.id}|${storeId}`) === true,
+      productId: product.id,
       productName: product.name,
-      quantity: Number(level.quantity),
-      reorderPoint: reorderPoints.get(`${level.store_id}|${level.product_id}|${level.variant_id ?? ""}`) ?? null,
-      restockPolicy: restockIntentions.get(`${level.product_id}|${level.store_id}`) === "do_not_restock" ? "do_not_restock" as const : "restock" as const,
+      quantity,
+      reorderPoint: reorderPoints.get(stockPositionKey(storeId, product.id, variantId)) ?? null,
+      restockPolicy: setting?.restock_policy === "do_not_restock" ? "do_not_restock" as const : "restock" as const,
       sku: variant?.sku ?? product.sku,
-      storeId: level.store_id,
-      storeName,
+      storeId,
+      storeName: storeNames.get(storeId) ?? "Inactive store",
       unit: product.unit,
-      updatedAt: level.updated_at,
-      variantId: level.variant_id,
+      updatedAt,
+      variantId,
       variantName: variant?.name ?? null,
-    }];
-  });
+    };
+  };
+
+  // Inventory levels are the canonical projection. A tracked item may be
+  // assigned to a store before its first ledger movement, however; render that
+  // position as zero rather than silently omitting it. This is display-only:
+  // it does not create an inventory_levels row or change a balance.
+  for (const level of stockLevels) {
+    const product = productById.get(level.product_id);
+    const variant = level.variant_id ? variantById.get(level.variant_id) : undefined;
+    if (!product || !storeNames.has(level.store_id)) continue;
+    const positionKey = stockPositionKey(level.store_id, level.product_id, level.variant_id);
+    const setting = settings.find((candidate) => candidate.product_id === level.product_id && candidate.store_id === level.store_id);
+    stockRowsByPosition.set(positionKey, makeStockRow({
+      levelId: level.id,
+      product,
+      quantity: Number(level.quantity),
+      setting,
+      storeId: level.store_id,
+      updatedAt: level.updated_at,
+      variant,
+    }));
+  }
+
+  for (const setting of settings.filter((candidate) => visibleStore(candidate.store_id) && storeNames.has(candidate.store_id))) {
+    const product = productById.get(setting.product_id);
+    if (!product) continue;
+    const saleableVariants = product.product_type === "simple"
+      ? [undefined]
+      : variants.filter((variant) => variant.product_id === product.id);
+
+    for (const variant of saleableVariants) {
+      const positionKey = stockPositionKey(setting.store_id, product.id, variant?.id ?? null);
+      if (stockRowsByPosition.has(positionKey)) continue;
+      stockRowsByPosition.set(positionKey, makeStockRow({
+        levelId: null,
+        product,
+        quantity: 0,
+        setting,
+        storeId: setting.store_id,
+        updatedAt: setting.updated_at,
+        variant,
+      }));
+    }
+  }
+
+  const stockRows = Array.from(stockRowsByPosition.values());
 
   return (
     <div className="space-y-8">
@@ -351,7 +477,7 @@ export default async function ReplenishmentPage({
           { label: "Stock & Restock" },
         ]}
       />
-      <InventoryWorkspaceNavigation activeTab={activeTab} canManage={canManage} storeId={storeScope.selectedStoreId} workspace="restock" />
+      <InventoryWorkspaceNavigation activeTab={activeTab} canManage={canManage} canTransfer={canAccessTransfers} storeId={storeScope.selectedStoreId} workspace="restock" />
       {activeTab === "levels" ? (
         <InventoryStockView
           archivedProductCount={archivedProductsResult.count ?? 0}
@@ -362,29 +488,20 @@ export default async function ReplenishmentPage({
           multiStoreCount={stores.filter((store) => visibleStore(store.id)).length}
           preferenceScope={organizationId}
           rows={stockRows}
+          stores={stores.filter((store) => visibleStore(store.id)).map((store) => ({ id: store.id, name: store.name }))}
         />
       ) : null}
-      {activeTab === "needs-restocking" && canManage ? (
+      {activeTab === "replenishment" && (canManage || canAccessTransfers) ? (
         <SupplyChainWorkflows
+          canCreateTransfers={canCreateTransfers}
+          canReceiveTransfers={canReceiveTransfers}
+          canSendTransfers={canSendTransfers}
           defaultStoreId={storeScope.selectedStoreId}
           inboundPurchaseOrders={inboundPurchaseOrders}
           items={saleableItems}
           requests={supplyChainRequests}
           rules={replenishmentRules}
-          sections={["needs-restocking"]}
-          stores={stores}
-          suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, leadTimeDays: supplier.lead_time_days }))}
-          warehouses={warehouses.map((warehouse) => ({ id: warehouse.id, storeId: warehouse.store_id, code: warehouse.code, name: warehouse.name }))}
-        />
-      ) : null}
-      {activeTab === "requests" && canManage ? (
-        <SupplyChainWorkflows
-          defaultStoreId={storeScope.selectedStoreId}
-          inboundPurchaseOrders={inboundPurchaseOrders}
-          items={saleableItems}
-          requests={supplyChainRequests}
-          rules={replenishmentRules}
-          sections={["requests"]}
+          sections={["needs-restocking", "requests"]}
           stores={stores}
           suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, leadTimeDays: supplier.lead_time_days }))}
           warehouses={warehouses.map((warehouse) => ({ id: warehouse.id, storeId: warehouse.store_id, code: warehouse.code, name: warehouse.name }))}

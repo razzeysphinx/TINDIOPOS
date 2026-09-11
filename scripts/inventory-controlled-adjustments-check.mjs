@@ -28,7 +28,7 @@ test("controlled adjustments use one approval-aware, idempotent command", async 
   assert.match(correction, /returning id, adjustment_number into adjustment_id, created_adjustment_number/);
 });
 
-test("the adjustment interface requires a review, explanation, and scoped capability", async () => {
+test("the adjustment interface requires a review, explanation, and granular scoped capability", async () => {
   const [page, navigation, workflows, actions] = await Promise.all([
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
     source("src/features/inventory/inventory-workspace-navigation.tsx"),
@@ -36,13 +36,19 @@ test("the adjustment interface requires a review, explanation, and scoped capabi
     source("src/features/inventory/advanced-inventory-actions.ts"),
   ]);
 
-  assert.match(page, /hasPermission\(context, "inventory\.adjust"\) \|\| canManage/);
+  assert.match(page, /hasInventoryCapability\(context, "inventory\.adjust\.create"\)/);
+  assert.match(page, /hasInventoryCapability\(context, "inventory\.adjust\.post"\)/);
   assert.match(page, /activeTab === "adjustments" && canAdjust/);
   assert.match(navigation, /canAdjust/);
   assert.match(workflows, />Review adjustment</);
   assert.match(workflows, /Required: explain why stock is changing/);
+  assert.match(workflows, /Receiving, transfers, counts, sales, and refunds retain their own workflows/);
+  assert.match(workflows, /TINDIO locks and recalculates the authoritative stock level/);
   assert.match(workflows, /ManagerApprovalDialog/);
   assert.match(actions, /requireInventoryAdjuster/);
+  assert.match(actions, /hasAnyInventoryCapability\(context, \[/);
+  assert.match(actions, /"inventory\.adjust\.create"/);
+  assert.match(actions, /"inventory\.adjust\.post"/);
   assert.match(actions, /rpc\("record_inventory_adjustment"/);
 });
 

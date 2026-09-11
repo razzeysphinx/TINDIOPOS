@@ -1359,6 +1359,96 @@ export type Database = {
           },
         ]
       }
+      inventory_count_batch_documents: {
+        Row: {
+          created_at: string
+          id: string
+          inventory_count_batch_id: string
+          inventory_count_id: string
+          organization_id: string
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          inventory_count_batch_id: string
+          inventory_count_id: string
+          organization_id: string
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          inventory_count_batch_id?: string
+          inventory_count_id?: string
+          organization_id?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_count_batch_documents_count_organization_fkey"
+            columns: ["inventory_count_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_counts"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "inventory_count_batch_documents_store_organization_fkey"
+            columns: ["store_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      inventory_count_batches: {
+        Row: {
+          batch_number: number
+          created_at: string
+          created_by_employee_id: string
+          id: string
+          name: string
+          note: string | null
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          batch_number?: number
+          created_at?: string
+          created_by_employee_id: string
+          id?: string
+          name: string
+          note?: string | null
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          batch_number?: number
+          created_at?: string
+          created_by_employee_id?: string
+          id?: string
+          name?: string
+          note?: string | null
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_count_batches_employee_organization_fkey"
+            columns: ["created_by_employee_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "inventory_count_batches_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_counts: {
         Row: {
           count_mode: string
@@ -1451,6 +1541,7 @@ export type Database = {
       inventory_levels: {
         Row: {
           average_cost_minor: number
+          cost_is_known: boolean
           id: string
           organization_id: string
           product_id: string
@@ -1461,6 +1552,7 @@ export type Database = {
         }
         Insert: {
           average_cost_minor?: number
+          cost_is_known?: boolean
           id?: string
           organization_id: string
           product_id: string
@@ -1471,6 +1563,7 @@ export type Database = {
         }
         Update: {
           average_cost_minor?: number
+          cost_is_known?: boolean
           id?: string
           organization_id?: string
           product_id?: string
@@ -1513,6 +1606,7 @@ export type Database = {
       inventory_movements: {
         Row: {
           actor_employee_id: string
+          cost_is_known: boolean
           created_at: string
           id: string
           movement_type: string
@@ -1534,6 +1628,7 @@ export type Database = {
         }
         Insert: {
           actor_employee_id: string
+          cost_is_known?: boolean
           created_at?: string
           id?: string
           movement_type: string
@@ -1555,6 +1650,7 @@ export type Database = {
         }
         Update: {
           actor_employee_id?: string
+          cost_is_known?: boolean
           created_at?: string
           id?: string
           movement_type?: string
@@ -3434,6 +3530,7 @@ export type Database = {
       }
       production_runs: {
         Row: {
+          cost_is_known: boolean
           id: string
           note: string | null
           organization_id: string
@@ -3444,6 +3541,7 @@ export type Database = {
           store_id: string
         }
         Insert: {
+          cost_is_known?: boolean
           id?: string
           note?: string | null
           organization_id: string
@@ -3454,6 +3552,7 @@ export type Database = {
           store_id: string
         }
         Update: {
+          cost_is_known?: boolean
           id?: string
           note?: string | null
           organization_id?: string
@@ -5218,6 +5317,7 @@ export type Database = {
           stock_request_line_id: string | null
           stock_transfer_id: string
           unit_cost_minor: number
+          unit_cost_is_known: boolean
           variant_id: string | null
         }
         Insert: {
@@ -5230,6 +5330,7 @@ export type Database = {
           stock_request_line_id?: string | null
           stock_transfer_id: string
           unit_cost_minor?: number
+          unit_cost_is_known?: boolean
           variant_id?: string | null
         }
         Update: {
@@ -5242,6 +5343,7 @@ export type Database = {
           stock_request_line_id?: string | null
           stock_transfer_id?: string
           unit_cost_minor?: number
+          unit_cost_is_known?: boolean
           variant_id?: string | null
         }
         Relationships: [
@@ -6326,9 +6428,29 @@ export type Database = {
         }
         Returns: string
       }
+      create_inventory_count_batch: {
+        Args: {
+          target_count_mode: string
+          target_include_zero_stock: boolean
+          target_name: string
+          target_note: string
+          target_organization_id: string
+          target_sort_mode: string
+          target_store_ids: string[]
+        }
+        Returns: string
+      }
       get_inventory_count_suppliers: {
         Args: { target_organization_id: string }
         Returns: { id: string; name: string }[]
+      }
+      import_inventory_count_lines: {
+        Args: {
+          target_inventory_count_id: string
+          target_organization_id: string
+          target_rows: Json
+        }
+        Returns: number
       }
       get_inventory_count_awareness: {
         Args: { target_organization_id: string }
@@ -6525,6 +6647,17 @@ export type Database = {
           target_movement_type: string
           target_name: string
           target_organization_id: string
+        }
+        Returns: string
+      }
+      create_direct_stock_transfer: {
+        Args: {
+          target_destination_store_id: string
+          target_lines: Json
+          target_note: string
+          target_operation_id: string
+          target_organization_id: string
+          target_source_store_id: string
         }
         Returns: string
       }
@@ -6744,7 +6877,7 @@ export type Database = {
           product_id: string
           quantity: number
           store_id: string
-          value_minor: number
+          value_minor: number | null
           variant_id: string
         }[]
       }
@@ -6846,6 +6979,21 @@ export type Database = {
           unit: string
           variant_id: string
           variant_name: string
+        }[]
+      }
+      get_pos_incoming_stock_transfers: {
+        Args: { target_organization_id: string }
+        Returns: {
+          destination_store_id: string
+          destination_store_name: string
+          lines: Json
+          note: string | null
+          source_store_id: string
+          source_store_name: string
+          status: string
+          stock_request_id: string | null
+          transfer_id: string
+          transfer_number: number
         }[]
       }
       get_pos_open_tickets: {

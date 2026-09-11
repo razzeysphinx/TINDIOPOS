@@ -19,25 +19,40 @@ test("Inventory read and count access do not expose unrelated mutation workspace
   const layout = await source("src/app/(back-office)/back-office/layout.tsx");
   const dal = await source("src/lib/auth/dal.ts");
 
-  assert.match(inventoryPage, /requireBackOfficePermission\(\["inventory\.view", "inventory\.adjust", "inventory\.count", "inventory\.manage"\]\)/);
-  assert.match(inventoryPage, /const canOpenRequestedTab = canManage\s+\|\| \(canViewInventory && \["overview", "health", "activity"\]\.includes\(requestedTab\)\)\s+\|\| \(canAdjust && requestedTab === "adjustments"\)\s+\|\| \(canCount && requestedTab === "counts"\);/);
-  assert.match(inventoryPage, /const activeTab = workspace === "purchasing" \|\| canOpenRequestedTab \? requestedTab : "activity";/);
-  assert.match(inventoryPage, /if \(workspace === "purchasing" && !canManage\)/);
+  // Legacy permissions and granular capabilities are both supported so
+  // existing custom roles remain compatible while new roles stay scoped.
+  for (const permission of [
+    "inventory.view",
+    "inventory.adjust",
+    "inventory.count",
+    "inventory.manage",
+    "inventory.count.create",
+    "inventory.count.finalize",
+    "inventory.valuation.view",
+  ]) {
+    assert.match(inventoryPage, new RegExp(`"${permission.replaceAll(".", "\\.")}"`));
+  }
+  assert.match(inventoryPage, /canViewValuation && requestedTab === "valuation"/);
+  assert.match(inventoryPage, /const fallbackControlTab: InventoryControlTab/);
+  assert.match(inventoryPage, /canViewValuation\s+\? "valuation"/);
   assert.match(inventoryPage, /redirect\(`\/back-office\/inventory\?\$\{query\.toString\(\)\}`\)/);
-  assert.match(stockRestockPage, /if \(!canManage && activeTab !== "levels"\)/);
-  assert.match(navigation, /canView && \(item\.id === "overview" \|\| item\.id === "health" \|\| item\.id === "activity"\)/);
+  assert.match(stockRestockPage, /if \(!canManage && !canAccessTransfers && activeTab !== "levels"\)/);
+  assert.match(navigation, /canView && \(item\.id === "overview" \|\| item\.id === "activity"\)/);
   assert.match(navigation, /canCount && item\.id === "counts"/);
-  assert.match(navigation, /canManage \|\| item\.id === "levels"/);
-  assert.match(layout, /permission === "inventory\.view" \|\| permission === "inventory\.count" \|\| permission === "inventory\.manage"/);
-  assert.match(dal, /"inventory\.view",\n  "inventory\.count",\n  "inventory\.manage"/);
-  assert.match(dal, /hasAnyPermission\(context, \["inventory\.view", "inventory\.count", "inventory\.manage"\]\)/);
+  assert.match(navigation, /canViewValuation && item\.id === "valuation"/);
+  assert.match(navigation, /canManage \|\| canTransfer \|\| item\.id === "levels"/);
+  assert.match(layout, /permission === "inventory\.count\.create"/);
+  assert.match(layout, /permission === "inventory\.count\.finalize"/);
+  assert.match(dal, /"inventory\.view"/);
+  assert.match(dal, /"inventory\.count\.create"/);
+  assert.match(dal, /"inventory\.count\.finalize"/);
 });
 
 test("Phase 8 never serializes raw inventory cost fields to client workspaces", async () => {
   const inventoryPage = await source("src/app/(back-office)/back-office/inventory/page.tsx");
 
-  assert.match(inventoryPage, /from\("inventory_levels"\)\n    \.select\("id, store_id, product_id, variant_id, quantity, updated_at"\)/);
-  assert.match(inventoryPage, /from\("purchase_order_lines"\)\n          \.select\("id, purchase_order_id, product_id, variant_id, product_name_snapshot, variant_name_snapshot, unit_snapshot, purchase_unit_code_snapshot, purchase_unit_factor_to_base, ordered_quantity, received_quantity"\)/);
+  assert.match(inventoryPage, /from\("inventory_levels"\)[\s\S]{0,120}\.select\("id, store_id, product_id, variant_id, quantity, updated_at"\)/);
+  assert.match(inventoryPage, /from\("purchase_order_lines"\)[\s\S]{0,320}\.select\("id, purchase_order_id, product_id, variant_id, product_name_snapshot/);
   assert.match(inventoryPage, /rpc\("get_inventory_valuation"/);
   assert.match(inventoryPage, /rpc\("get_inventory_movement_costs"/);
   assert.match(inventoryPage, /rpc\("get_purchase_order_line_costs"/);

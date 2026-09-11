@@ -28,7 +28,7 @@ test("canonical request lifecycle and discrepancy evidence are visible", () => {
   assert.match(workflows, /Transfer requires attention/);
   assert.match(workflows, /remain in transit/);
   assert.match(workflows, /remain in the audit trail/);
-  assert.match(transferWorkspace, /Destination balances remain unchanged until receipt/);
+  assert.match(transferWorkspace, /destination stock changes only when the receiving store confirms it/);
 });
 
 test("inventory actor follows central store scope without weakening capabilities", () => {
@@ -47,7 +47,7 @@ test("transfer child records inherit parent store scope", () => {
 });
 
 test("restock suggestions require user action and never mutate stock automatically", () => {
-  assert.match(workflows, /Suggested internal source/);
+  assert.match(workflows, /Suggested transfer:/);
   assert.match(workflows, /Prepare transfer request/);
   assert.match(workflows, /never create a transfer or purchase order automatically/);
   assert.doesNotMatch(workflows, /ship_stock_transfer|apply_inventory_change_v2/);

@@ -18,6 +18,10 @@ test("Phase 3 product detail is a progressive-disclosure drawer with summary, st
   assert.match(detail, />Summary</);
   assert.match(detail, />By store</);
   assert.match(detail, />Recent activity</);
+  assert.match(detail, /Incoming purchase orders/);
+  assert.match(detail, /Transfer inbound/);
+  assert.match(detail, /Transfer outbound/);
+  assert.match(detail, /Projected stock/);
   assert.match(detail, />Purchasing</);
   assert.match(detail, />View full activity</);
   assert.match(detail, />Adjust stock</);
@@ -39,6 +43,11 @@ test("Item activity is read from the existing ledger only after an authorized st
   assert.match(inventoryPage, /\.limit\(limit\)/);
   assert.match(inventoryPage, /hasPermission\(context, "receipts\.view"\)/);
   assert.match(inventoryPage, /<InventoryProductDetail detail=\{inventoryDetail\}/);
+  assert.match(inventoryPage, /const selectedDetailPosition: InventoryDetailPosition/);
+  assert.match(inventoryPage, /detailProduct/);
+  assert.match(inventoryPage, /isAssignedToStore/);
+  assert.match(inventoryPage, /outboundTransferQuantity/);
+  assert.match(inventoryPage, /projectedQuantity:/);
 });
 
 test("Phase 3 preserves financial and employee-data boundaries", async () => {

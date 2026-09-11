@@ -46,7 +46,7 @@ test("POS catalogue loading stays server-authorized and page-bounded", () => {
 });
 
 test("Inventory activity stays lazy and bounded instead of loading full history", () => {
-  assert.match(inventoryPage, /const recentMovementsQuery = \["overview", "health", "activity"\]\.includes\(activeTab\)/);
+  assert.match(inventoryPage, /const recentMovementsQuery = \["overview", "activity"\]\.includes\(activeTab\)/);
   assert.match(inventoryPage, /\.limit\(30\)/);
   assert.match(inventoryPage, /const selectedDetailLevel = selectedDetailLevelId/);
   assert.match(inventoryPage, /const detailActivityLimit = activeTab === "activity" \? 50 : 12/);

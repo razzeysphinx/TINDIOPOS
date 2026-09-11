@@ -118,6 +118,30 @@ export type PosTicketAssignee = {
   fullName: string;
 };
 
+/**
+ * A read-only projection of a canonical transfer document for the receiving
+ * POS. Stock changes only through the existing transfer receipt RPCs.
+ */
+export type PosIncomingTransfer = {
+  id: string;
+  transferNumber: number;
+  stockRequestId: string | null;
+  sourceStoreId: string;
+  sourceStoreName: string;
+  destinationStoreId: string;
+  destinationStoreName: string;
+  status: "in_transit" | "partially_received";
+  note: string | null;
+  lines: Array<{
+    id: string;
+    label: string;
+    unit: string;
+    quantity: number;
+    receivedQuantity: number;
+    shortQuantity: number;
+  }>;
+};
+
 export type PosCartLine = PosCatalogItem & {
   quantity: number;
   manualPriceMinor: number | null;

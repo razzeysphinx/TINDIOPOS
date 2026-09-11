@@ -153,6 +153,10 @@ export function AdvancedInventoryWorkflows({
   purchaseOrders,
   receipts,
   currencyCode,
+  canCreatePurchaseOrders = false,
+  canManageSuppliers = false,
+  canReceivePurchaseOrders = false,
+  canUseLegacyCsvTools = false,
   canViewCosts,
   adjustmentReasons,
   initialPurchasingSection = "orders",
@@ -168,6 +172,11 @@ export function AdvancedInventoryWorkflows({
   purchaseOrders: AdvancedPurchaseOrder[];
   receipts?: AdvancedGoodsReceipt[];
   currencyCode: string;
+  canCreatePurchaseOrders?: boolean;
+  canManageSuppliers?: boolean;
+  canReceivePurchaseOrders?: boolean;
+  /** The retained combined CSV tool remains manager-only until its planned replacement. */
+  canUseLegacyCsvTools?: boolean;
   canViewCosts?: boolean;
   adjustmentReasons: Array<{ code: string; name: string }>;
   /** Lets Inventory Control deep-link to one purchasing workflow without duplicating it. */
@@ -427,14 +436,20 @@ export function AdvancedInventoryWorkflows({
     event.preventDefault();
     setTransferResult(null);
     void runAction("transfer", async () => {
-      const result = await transferStockAction({
+      const payload = {
         sourceStoreId,
         destinationStoreId,
         note: transferNote,
         lines: transferLines,
+      };
+      const operationScope = "direct-stock-transfer";
+      const result = await transferStockAction({
+        ...payload,
+        operationId: pendingOperationId(operationScope, payload),
       });
       finish(result, setTransferResult);
       if (result.ok) {
+        clearPendingOperation(operationScope);
         setTransferNote("");
         setTransferLines([emptyTransferLine()]);
       }
@@ -463,13 +478,13 @@ export function AdvancedInventoryWorkflows({
 
       <div className="grid gap-4 xl:grid-cols-2">
         {showPurchasing && purchasingSection === "suppliers" ? <>
-          <SupplierCsvTools />
+          {canManageSuppliers ? <SupplierCsvTools /> : null}
         <WorkflowCard
           title="Supplier management"
           description="Keep procurement contacts available for every purchase order."
           icon={<UserPlus aria-hidden="true" />}
         >
-          <Dialog.Root>
+          {canManageSuppliers ? <Dialog.Root>
             <DialogTrigger render={<Button type="button" />}>
               <UserPlus />
               Add supplier
@@ -536,7 +551,7 @@ export function AdvancedInventoryWorkflows({
           </form>
               </DialogBody>
             </DialogContent>
-          </Dialog.Root>
+          </Dialog.Root> : <p className="text-sm text-muted-foreground">You can review suppliers, but supplier changes require the supplier-management permission.</p>}
           {suppliers.length > 0 ? (
             <div className="mt-5 space-y-2 border-t pt-4">
               <p className="text-sm font-medium">Suppliers</p>
@@ -552,8 +567,8 @@ export function AdvancedInventoryWorkflows({
                     <span className={supplierOption.isActive ? "text-xs text-primary" : "text-xs text-muted-foreground"}>
                       {supplierOption.isActive ? "Active" : "Inactive"}
                     </span>
-                    <EditSupplierDialog supplier={supplierOption} />
-                    {!supplierOption.isActive ? (
+                    {canManageSuppliers ? <EditSupplierDialog supplier={supplierOption} /> : null}
+                    {canManageSuppliers && !supplierOption.isActive ? (
                       <GuardedDeleteDialog
                         recordId={supplierOption.id}
                         recordName={supplierOption.name}
@@ -570,6 +585,8 @@ export function AdvancedInventoryWorkflows({
 
         {showPurchasing && purchasingSection === "orders" ? <>
         <PurchaseOrdersCard
+          canCancel={canCreatePurchaseOrders}
+          canReceive={canReceivePurchaseOrders}
           canViewCosts={Boolean(canViewCosts)}
           currencyCode={currencyCode}
           orders={purchaseOrders}
@@ -583,7 +600,7 @@ export function AdvancedInventoryWorkflows({
             setPurchasingSection("receiving");
           }}
         />
-        <WorkflowCard
+        {canCreatePurchaseOrders ? <WorkflowCard
           title="Create purchase order"
           description="1. Choose the supplier and store. 2. Add expected items. 3. Review, then create the order."
           icon={<Truck aria-hidden="true" />}
@@ -638,12 +655,12 @@ export function AdvancedInventoryWorkflows({
           ) : (
             <EmptyWorkflow message="Purchase-order creation requires the existing cost-view permission." />
           )}
-        </WorkflowCard>
-        {canViewCosts ? <details className="xl:col-span-2 rounded-xl border bg-card"><summary className="cursor-pointer px-4 py-3 text-sm font-medium">Import inventory records</summary><div className="border-t p-4"><InventoryCsvTools stores={stores} items={items} suppliers={activeSuppliers} adjustmentReasons={adjustmentReasons} /></div></details> : null}
+        </WorkflowCard> : null}
+        {canUseLegacyCsvTools && canViewCosts ? <details className="xl:col-span-2 rounded-xl border bg-card"><summary className="cursor-pointer px-4 py-3 text-sm font-medium">Import inventory records</summary><div className="border-t p-4"><InventoryCsvTools stores={stores} items={items} suppliers={activeSuppliers} adjustmentReasons={adjustmentReasons} /></div></details> : null}
         </> : null}
 
         {showPurchasing && purchasingSection === "receiving" ? <>
-        <WorkflowCard
+        {canReceivePurchaseOrders ? <WorkflowCard
           title="Receive purchase order"
           description="1. Choose the open order. 2. Enter what arrived. 3. Review the quantities, then record the receipt."
           icon={<PackageCheck aria-hidden="true" />}
@@ -697,7 +714,7 @@ export function AdvancedInventoryWorkflows({
           ) : (
             <EmptyWorkflow message="Open purchase orders will be available here for partial or complete receiving." />
           )}
-        </WorkflowCard>
+        </WorkflowCard> : null}
         <RecentReceiptsCard receipts={receipts ?? []} />
         </> : null}
 
@@ -739,7 +756,9 @@ export function AdvancedInventoryWorkflows({
           )}
         </WorkflowCard> : null}
 
-        {/* CANDIDATE_FOR_REMOVAL: this immediate-shipment form is retained for source compatibility only. New transfer creation is routed through the approval-aware Replenishment workflow. */}
+        {/* CANDIDATE_FOR_REMOVAL: the shared Transfers tab now owns the
+            canonical direct-transfer UI. Retain this standalone form until
+            historical callers and QA confirm it is no longer referenced. */}
         {showTransfers ? <WorkflowCard
           title="Transfer stock"
           description="Choose the source and destination, add items, then review the transfer before it is recorded."
@@ -1058,11 +1077,15 @@ function PurchasingSectionTabs({
 }
 
 function PurchaseOrdersCard({
+  canCancel,
+  canReceive,
   canViewCosts,
   currencyCode,
   onReceive,
   orders,
 }: {
+  canCancel: boolean;
+  canReceive: boolean;
   canViewCosts: boolean;
   currencyCode: string;
   onReceive: (order: AdvancedPurchaseOrder) => void;
@@ -1108,10 +1131,10 @@ function PurchaseOrdersCard({
                     <td className="px-3 py-3 align-top text-muted-foreground">{order.expectedAt ? formatPurchaseDate(order.expectedAt) : "Not scheduled"}</td>
                     <td className="px-3 py-3 text-right align-top">{canViewCosts ? formatMoney(order.totalCostMinor, currencyCode) : "Restricted"}</td>
                     <td className="px-3 py-3 text-right align-top">
-                      {receivable ? (
+                      {receivable && (canReceive || canCancel) ? (
                         <div className="flex justify-end gap-2">
-                          <Button onClick={() => onReceive(order)} size="sm" type="button" variant="outline">Receive</Button>
-                          <CancelPurchaseOrderButton order={order} />
+                          {canReceive ? <Button onClick={() => onReceive(order)} size="sm" type="button" variant="outline">Receive</Button> : null}
+                          {canCancel ? <CancelPurchaseOrderButton order={order} /> : null}
                         </div>
                       ) : null}
                     </td>

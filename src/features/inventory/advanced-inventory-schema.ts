@@ -19,6 +19,11 @@ const countedQuantity = z
   .trim()
   .regex(/^\d{1,8}(?:\.\d{1,3})?$/, "Use a non-negative quantity with up to 3 decimals.");
 
+const receiptQuantity = z
+  .string()
+  .trim()
+  .regex(/^\d{1,8}(?:\.\d{1,3})?$/, "Use a non-negative quantity with up to 3 decimals.");
+
 const quantityDelta = z
   .string()
   .trim()
@@ -173,6 +178,21 @@ export const createInventoryCountDraftSchema = z
     }
   });
 
+export const createInventoryCountBatchSchema = z
+  .object({
+    name: z.string().trim().min(1, "Enter a batch name.").max(160),
+    note: z.string().trim().max(500),
+    storeIds: z.array(z.uuid("Select a valid store.")).min(2, "Choose at least two stores.").max(50),
+    countMode: z.enum(["standard", "blind"]),
+    sortMode: z.enum(["category_name", "supplier_name", "sku", "barcode", "product_name"]),
+    includeZeroStock: z.boolean(),
+  })
+  .superRefine((value, context) => {
+    if (new Set(value.storeIds).size !== value.storeIds.length) {
+      context.addIssue({ code: "custom", path: ["storeIds"], message: "Each store can appear only once in a batch." });
+    }
+  });
+
 export const saveInventoryCountLineSchema = saleableLine.extend({
   inventoryCountId: z.uuid("Choose an inventory count."),
   countedQuantity,
@@ -183,8 +203,26 @@ export const inventoryCountTransitionSchema = z.object({
   note: z.string().trim().max(500).optional(),
 });
 
+export const importInventoryCountLinesSchema = z.object({
+  inventoryCountId: z.uuid("Choose an inventory count."),
+  rows: z
+    .array(z.object({
+      countLineId: z.uuid("The spreadsheet has an invalid count-line reference."),
+      productId: z.uuid("The spreadsheet has an invalid product reference."),
+      variantId: optionalUuid,
+      countedQuantity: z.number().finite().min(0, "A counted quantity cannot be negative.").max(99_999_999),
+    }))
+    .min(1, "Enter at least one physical quantity before importing.")
+    .max(500, "Import no more than 500 count lines at once."),
+}).superRefine((value, context) => {
+  if (new Set(value.rows.map((row) => row.countLineId)).size !== value.rows.length) {
+    context.addIssue({ code: "custom", path: ["rows"], message: "The spreadsheet contains a duplicate count line." });
+  }
+});
+
 export const transferStockSchema = z
   .object({
+    operationId,
     sourceStoreId: z.uuid("Select a source store."),
     destinationStoreId: z.uuid("Select a destination store."),
     note: z.string().trim().max(500),
@@ -261,13 +299,27 @@ export const receiveStockTransferSchema = z
     stockTransferId: z.uuid("Select a transfer."),
     note: z.string().trim().max(500),
     lines: z
-      .array(z.object({ stockTransferLineId: z.uuid(), quantity }))
+      .array(z.object({
+        stockTransferLineId: z.uuid(),
+        receivedQuantity: receiptQuantity,
+        shortQuantity: receiptQuantity,
+        discrepancyNote: z.string().trim().max(500),
+      }))
       .min(1, "Enter at least one received quantity.")
       .max(100),
   })
   .superRefine((value, context) => {
     if (new Set(value.lines.map((line) => line.stockTransferLineId)).size !== value.lines.length) {
       context.addIssue({ code: "custom", path: ["lines"], message: "Each transfer line can be received once per receipt." });
+    }
+
+    for (const [index, line] of value.lines.entries()) {
+      if (Number(line.receivedQuantity) + Number(line.shortQuantity) <= 0) {
+        context.addIssue({ code: "custom", path: ["lines", index], message: "Enter a received or short quantity." });
+      }
+      if (Number(line.shortQuantity) > 0 && line.discrepancyNote.length < 2) {
+        context.addIssue({ code: "custom", path: ["lines", index, "discrepancyNote"], message: "Explain the shortage or damage." });
+      }
     }
   });
 

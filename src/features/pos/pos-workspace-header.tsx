@@ -4,13 +4,17 @@ import { ShoppingCart, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { OfflineQueueStatus } from "@/features/offline/offline-queue-status";
+import { PosIncomingTransferInbox } from "@/features/pos/pos-incoming-transfer-inbox";
 import { PosOperationalDrawer, type PosOperationalNavigationProps } from "@/features/pos/pos-operational-drawer";
+import type { PosIncomingTransfer } from "@/features/pos/pos-types";
 
 type PosWorkspaceHeaderProps = PosOperationalNavigationProps & {
   canAccessBackOffice: boolean;
   itemCount?: number;
   onCreateCustomer?: () => void;
   onViewCart?: () => void;
+  canReceiveIncomingTransfers?: boolean;
+  incomingTransfers?: PosIncomingTransfer[];
   scope: string;
   title: string;
 };
@@ -19,6 +23,8 @@ export function PosWorkspaceHeader({
   canAccessBackOffice,
   employeeName,
   itemCount,
+  canReceiveIncomingTransfers = false,
+  incomingTransfers = [],
   onCreateCustomer,
   onViewCart,
   organizationName,
@@ -73,6 +79,7 @@ export function PosWorkspaceHeader({
             <span className="sm:hidden">Customer</span>
           </Button>
         ) : null}
+        <PosIncomingTransferInbox enabled={canReceiveIncomingTransfers} transfers={incomingTransfers} />
         <OfflineQueueStatus scope={scope} />
       </div>
     </header>

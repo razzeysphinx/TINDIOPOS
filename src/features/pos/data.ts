@@ -16,6 +16,7 @@ import type {
   PosDiningOption,
   PosLoyaltyProgram,
   PosOpenTicket,
+  PosIncomingTransfer,
   PosPaymentMethod,
   PosRegister,
   PosTaxRate,
@@ -41,6 +42,8 @@ export type PosPageData = {
   initialRecentItems: PosCatalogItem[];
   openTickets: PosOpenTicket[];
   ticketAssignees: PosTicketAssignee[];
+  canReceiveIncomingTransfers: boolean;
+  incomingTransfers: PosIncomingTransfer[];
 };
 
 export type PosReceiptSummary = {
@@ -143,15 +146,44 @@ export function mapPosCatalogItems(
   }));
 }
 
+function finiteQuantity(value: unknown) {
+  const quantity = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(quantity) ? quantity : 0;
+}
+
+function mapIncomingTransferLines(value: Json): PosIncomingTransfer["lines"] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((line) => {
+    if (!line || typeof line !== "object" || Array.isArray(line)) return [];
+    const record = line as Record<string, unknown>;
+    if (typeof record.id !== "string" || typeof record.label !== "string" || typeof record.unit !== "string") return [];
+    return [{
+      id: record.id,
+      label: record.label,
+      unit: record.unit,
+      quantity: finiteQuantity(record.quantity),
+      receivedQuantity: finiteQuantity(record.received_quantity),
+      shortQuantity: finiteQuantity(record.short_quantity),
+    }];
+  });
+}
+
 export async function loadPosWorkspace(
   context: BusinessContext,
 ): Promise<PosPageData> {
   const features = context.features;
   const canAssignTickets = hasPermission(context, "employees.manage");
   const canUseOpenTickets = features.open_tickets && hasPermission(context, "tickets.manage");
+  // This intentionally checks the granular capability directly. Before the
+  // Phase 6 migration is applied, the new inbox RPC does not exist, so POS
+  // stays operational without attempting an unavailable read.
+  const canReceiveIncomingTransfers = features.inventory
+    && features.transfers
+    && hasPermission(context, "inventory.transfer.receive");
   const supabase = await createClient();
   const database = supabase as unknown as { from: (table: string) => any };
-  const [storesResult, categoriesResult, registersResult, paymentMethodsResult, storePaymentMethodsResult, openShiftsResult, loyaltyProgramResult, discountsResult, taxRatesResult, diningOptionsResult, ticketTemplatesResult, customerDisplaySessionsResult, timeClockResult] = await Promise.all([
+  const [storesResult, categoriesResult, registersResult, paymentMethodsResult, storePaymentMethodsResult, openShiftsResult, loyaltyProgramResult, discountsResult, taxRatesResult, diningOptionsResult, ticketTemplatesResult, customerDisplaySessionsResult, timeClockResult, incomingTransfersResult] = await Promise.all([
     supabase
       .from("stores")
       .select("id, name")
@@ -212,6 +244,11 @@ export async function loadPosWorkspace(
           target_organization_id: context.organization.id,
         })
       : Promise.resolve({ data: [], error: null }),
+    canReceiveIncomingTransfers
+      ? supabase.rpc("get_pos_incoming_stock_transfers", {
+          target_organization_id: context.organization.id,
+        })
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   const baseError = [
@@ -228,6 +265,7 @@ export async function loadPosWorkspace(
     ticketTemplatesResult,
     customerDisplaySessionsResult,
     timeClockResult,
+    incomingTransfersResult,
   ].find(
     (result) => result.error,
   )?.error;
@@ -307,6 +345,22 @@ export async function loadPosWorkspace(
     registerId: session.register_id,
     realtimeTopic: session.realtime_topic,
   }));
+  const incomingTransfers: PosIncomingTransfer[] = (incomingTransfersResult.data ?? []).flatMap((transfer) => {
+    const lines = mapIncomingTransferLines(transfer.lines);
+    if (!lines.length || (transfer.status !== "in_transit" && transfer.status !== "partially_received")) return [];
+    return [{
+      id: transfer.transfer_id,
+      transferNumber: Number(transfer.transfer_number),
+      stockRequestId: transfer.stock_request_id,
+      sourceStoreId: transfer.source_store_id,
+      sourceStoreName: transfer.source_store_name,
+      destinationStoreId: transfer.destination_store_id,
+      destinationStoreName: transfer.destination_store_name,
+      status: transfer.status,
+      note: transfer.note,
+      lines,
+    }];
+  });
 
   let initialItems: PosCatalogItem[] = [];
   let initialFavoriteItems: PosCatalogItem[] = [];
@@ -405,6 +459,8 @@ export async function loadPosWorkspace(
     initialRecentItems,
     openTickets,
     ticketAssignees,
+    canReceiveIncomingTransfers,
+    incomingTransfers,
   };
 }
 

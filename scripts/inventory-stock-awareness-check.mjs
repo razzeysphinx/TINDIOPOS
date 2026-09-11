@@ -34,7 +34,7 @@ test("restock intention is durable and only changes recommendation eligibility",
   assert.match(catalogWorkspace, /Do not restock/);
   assert.match(catalogWorkspace, /does not archive the product or change stock history/);
   assert.match(replenishmentPage, /restock_policy/);
-  assert.match(replenishmentPage, /!== "do_not_restock"/);
+  assert.match(replenishmentPage, /=== "do_not_restock"/);
   assert.doesNotMatch(migration, /update public\.inventory_levels/);
   assert.doesNotMatch(migration, /insert into public\.inventory_movements/);
 });

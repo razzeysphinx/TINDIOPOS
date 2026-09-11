@@ -36,11 +36,12 @@ type NegativeStockPolicy = "allow" | "warn" | "block";
 type AdjustmentReason = { code: string; name: string; movementType: "ADJUSTMENT" | "DAMAGE" | "LOSS" | "OPENING_STOCK" };
 type Transfer = {
   id: string;
+  transferNumber: number;
   sourceStoreName: string;
   destinationStoreName: string;
   note: string | null;
   status: "in_transit" | "partially_received";
-  lines: Array<{ id: string; label: string; unit: string; quantity: number; receivedQuantity: number }>;
+  lines: Array<{ id: string; label: string; unit: string; quantity: number; receivedQuantity: number; shortQuantity: number }>;
 };
 type CompositeOption = { id: string; name: string; unit: string; storeIds: string[] };
 type Result = { ok: boolean; message: string };
@@ -82,6 +83,9 @@ export function InventoryIntegrityWorkflows({
   organizationDefaultPolicy,
   canManageOrganizationDefault,
   canManageAdjustmentReasons = false,
+  canPostAdjustments = true,
+  canPostSupplierReturns = false,
+  canReceiveTransfers = true,
   adjustmentReasons,
   inTransitTransfers,
   composites,
@@ -94,6 +98,11 @@ export function InventoryIntegrityWorkflows({
   organizationDefaultPolicy: NegativeStockPolicy;
   canManageOrganizationDefault: boolean;
   canManageAdjustmentReasons?: boolean;
+  /** A preparer may request manager approval; direct posting still needs this capability. */
+  canPostAdjustments?: boolean;
+  /** Supplier-return posting remains a distinct financial and stock capability. */
+  canPostSupplierReturns?: boolean;
+  canReceiveTransfers?: boolean;
   adjustmentReasons: AdjustmentReason[];
   inTransitTransfers: Transfer[];
   composites: CompositeOption[];
@@ -144,6 +153,8 @@ export function InventoryIntegrityWorkflows({
   const [transferId, setTransferId] = useState(inTransitTransfers[0]?.id ?? "");
   const [transferNote, setTransferNote] = useState("");
   const [transferQuantities, setTransferQuantities] = useState<Record<string, string>>(() => receiptDraft(inTransitTransfers[0]));
+  const [transferShortQuantities, setTransferShortQuantities] = useState<Record<string, string>>(() => shortageDraft(inTransitTransfers[0]));
+  const [transferDiscrepancyNotes, setTransferDiscrepancyNotes] = useState<Record<string, string>>({});
   const [transferResult, setTransferResult] = useState<Result | null>(null);
   const [returnStoreId, setReturnStoreId] = useState(firstStoreId);
   const [returnSupplierId, setReturnSupplierId] = useState(suppliers.find((supplier) => supplier.isActive)?.id ?? "");
@@ -162,6 +173,11 @@ export function InventoryIntegrityWorkflows({
   const adjustmentItems = useMemo(() => items.filter((item) => item.storeIds.includes(adjustmentStoreId)), [adjustmentStoreId, items]);
   const selectedAdjustmentItem = adjustmentItems.find((item) => item.productId === adjustmentProductId && (item.variantId ?? "") === adjustmentVariantId);
   const selectedAdjustmentReason = adjustmentReasons.find((reason) => reason.code === adjustmentReasonCode);
+  const currentAdjustmentQuantity = selectedAdjustmentItem?.quantitiesByStore[adjustmentStoreId] ?? 0;
+  const parsedAdjustmentQuantity = Number(adjustmentQuantity);
+  const adjustmentPreviewQuantity = Number.isFinite(parsedAdjustmentQuantity)
+    ? currentAdjustmentQuantity + parsedAdjustmentQuantity
+    : null;
   const returnItems = useMemo(() => items.filter((item) => item.storeIds.includes(returnStoreId)), [items, returnStoreId]);
   const availableComposites = useMemo(() => composites.filter((composite) => composite.storeIds.includes(productionStoreId)), [composites, productionStoreId]);
   const selectedTransfer = inTransitTransfers.find((transfer) => transfer.id === transferId);
@@ -237,6 +253,9 @@ export function InventoryIntegrityWorkflows({
     const transfer = inTransitTransfers.find((item) => item.id === nextId);
     setTransferId(nextId);
     setTransferQuantities(receiptDraft(transfer));
+    setTransferShortQuantities(shortageDraft(transfer));
+    setTransferDiscrepancyNotes({});
+    setTransferResult(null);
   }
 
   function submitDefaultPolicy(event: FormEvent<HTMLFormElement>) {
@@ -385,8 +404,13 @@ export function InventoryIntegrityWorkflows({
         stockTransferId: selectedTransfer.id,
         note: transferNote,
         lines: selectedTransfer.lines
-          .map((line) => ({ stockTransferLineId: line.id, quantity: transferQuantities[line.id] ?? "" }))
-          .filter((line) => Number(line.quantity) > 0),
+          .map((line) => ({
+            stockTransferLineId: line.id,
+            receivedQuantity: transferQuantities[line.id] ?? "0",
+            shortQuantity: transferShortQuantities[line.id] ?? "0",
+            discrepancyNote: transferDiscrepancyNotes[line.id] ?? "",
+          }))
+          .filter((line) => Number(line.receivedQuantity) + Number(line.shortQuantity) > 0),
       };
       const operationScope = `legacy-transfer-receipt:${selectedTransfer.id}`;
       const result = await receiveStockTransferAction({
@@ -496,10 +520,15 @@ export function InventoryIntegrityWorkflows({
               <Field label="Reason"><select className={selectClassName} value={adjustmentReasonCode} onChange={(event) => { setAdjustmentReasonCode(event.target.value); setAdjustmentReview(null); }}>{adjustmentReasons.map((reason) => <option key={reason.code} value={reason.code}>{reason.name} ({reason.code})</option>)}</select></Field>
               <ItemSelect label="Item" items={adjustmentItems} productId={adjustmentProductId} variantId={adjustmentVariantId} onChange={(value) => { chooseItem(value, setAdjustmentProductId, setAdjustmentVariantId); setAdjustmentReview(null); }} />
               <Field label="Quantity change"><Input inputMode="decimal" value={adjustmentQuantity} onChange={(event) => { setAdjustmentQuantity(event.target.value); setAdjustmentReview(null); }} placeholder="Use - for a reduction" /></Field>
+              <p className="rounded-lg border bg-muted/20 px-3 py-2 text-sm text-muted-foreground sm:col-span-2" aria-live="polite">
+                Current stock: <span className="font-medium text-foreground">{formatQuantity(currentAdjustmentQuantity)} {selectedAdjustmentItem?.unit ?? "units"}</span>
+                {adjustmentPreviewQuantity !== null ? <> · Preview after change: <span className="font-medium text-foreground">{formatQuantity(adjustmentPreviewQuantity)} {selectedAdjustmentItem?.unit ?? "units"}</span></> : null}
+              </p>
               <Field className="sm:col-span-2" label="Explanation"><Input value={adjustmentNote} onChange={(event) => { setAdjustmentNote(event.target.value); setAdjustmentReview(null); setAdjustmentApprovalRequestId(null); }} placeholder="Required: explain why stock is changing" /></Field>
+              <p className="text-xs text-muted-foreground sm:col-span-2">Use controlled reasons such as damage, loss, found stock, data correction, opening stock, or another explained correction. Receiving, transfers, counts, sales, and refunds retain their own workflows.</p>
               <div className="sm:col-span-2"><Button disabled={isAdjustmentPending} type="submit"><AlertTriangle /> Review adjustment</Button></div>
             </form>
-            {adjustmentReview ? <AdjustmentReviewCard policy={policies[adjustmentReview.storeId] ?? organizationDefaultPolicy} pending={isAdjustmentPending} review={adjustmentReview} onBack={() => { setAdjustmentReview(null); setAdjustmentApprovalRequestId(null); }} onPost={postReviewedAdjustment} /> : null}
+            {adjustmentReview ? <AdjustmentReviewCard policy={policies[adjustmentReview.storeId] ?? organizationDefaultPolicy} pending={isAdjustmentPending} postLabel={canPostAdjustments ? "Post adjustment" : "Request manager approval"} review={adjustmentReview} onBack={() => { setAdjustmentReview(null); setAdjustmentApprovalRequestId(null); }} onPost={postReviewedAdjustment} /> : null}
             <ResultMessage result={adjustmentResult} /></> : <Empty message="Create a reason and make a tracked item available in a store to post controlled adjustments." />}
             {adjustmentApprovalRequestId ? <ManagerApprovalDialog approvalRequestId={adjustmentApprovalRequestId} onApproved={() => {
               const requestId = adjustmentApprovalRequestId;
@@ -509,17 +538,17 @@ export function InventoryIntegrityWorkflows({
           </div>
         </WorkflowCard> : null}
 
-        {showTransferReceipt ? <WorkflowCard title="Receive stock transfer" description="Receive a shipped transfer in parts or all at once. Destination stock changes only as received." icon={<RotateCcw aria-hidden="true" />}>
-          {inTransitTransfers.length ? <form className="space-y-3" onSubmit={submitTransferReceipt} noValidate>
-            <Field label="Transfer"><select className={selectClassName} value={transferId} onChange={(event) => chooseTransfer(event.target.value)}>{inTransitTransfers.map((transfer) => <option key={transfer.id} value={transfer.id}>{transfer.sourceStoreName} → {transfer.destinationStoreName} ({transfer.status.replace("_", " ")})</option>)}</select></Field>
-            {selectedTransfer?.lines.map((line) => <div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_9rem] sm:items-end" key={line.id}><div><p className="font-medium">{line.label}</p><p className="mt-1 text-xs text-muted-foreground">{formatQuantity(line.quantity - line.receivedQuantity)} {line.unit} remaining</p></div><Field label="Receive now"><Input inputMode="decimal" value={transferQuantities[line.id] ?? ""} onChange={(event) => setTransferQuantities({ ...transferQuantities, [line.id]: event.target.value })} /></Field></div>)}
+        {showTransferReceipt ? <WorkflowCard title="Receive stock transfer" description="Receive a sent transfer in parts or all at once. Destination stock changes only as received; shortages and damage need an explanation." icon={<RotateCcw aria-hidden="true" />}>
+          {!canReceiveTransfers ? <Empty message="Your role can view transfer records but does not have permission to receive stock into this store." /> : inTransitTransfers.length ? <form className="space-y-3" onSubmit={submitTransferReceipt} noValidate>
+            <Field label="Transfer"><select className={selectClassName} value={transferId} onChange={(event) => chooseTransfer(event.target.value)}>{inTransitTransfers.map((transfer) => <option key={transfer.id} value={transfer.id}>TR-{String(transfer.transferNumber).padStart(6, "0")} · {transfer.sourceStoreName} → {transfer.destinationStoreName} ({transfer.status.replace("_", " ")})</option>)}</select></Field>
+            {selectedTransfer?.lines.map((line) => <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_8rem_8rem] sm:items-end" key={line.id}><div><p className="font-medium">{line.label}</p><p className="mt-1 text-xs text-muted-foreground">{formatQuantity(line.quantity - line.receivedQuantity - line.shortQuantity)} {line.unit} remaining</p></div><Field label="Received now"><Input inputMode="decimal" value={transferQuantities[line.id] ?? ""} onChange={(event) => setTransferQuantities({ ...transferQuantities, [line.id]: event.target.value })} /></Field><Field label="Short / damaged"><Input inputMode="decimal" value={transferShortQuantities[line.id] ?? "0"} onChange={(event) => setTransferShortQuantities({ ...transferShortQuantities, [line.id]: event.target.value })} /></Field><Field className="sm:col-span-3" label="Shortage or damage explanation"><Input value={transferDiscrepancyNotes[line.id] ?? ""} onChange={(event) => setTransferDiscrepancyNotes({ ...transferDiscrepancyNotes, [line.id]: event.target.value })} placeholder="Required only when an amount is short or damaged" /></Field></div>)}
             <Field label="Receipt note"><Input value={transferNote} onChange={(event) => setTransferNote(event.target.value)} placeholder="Optional receiving note" /></Field>
             <SubmitRow pending={isTransferPending} result={transferResult} label="Receive transfer" icon={<RotateCcw />} />
           </form> : <Empty message="Shipped transfers will appear here for partial or complete receiving." />}
         </WorkflowCard> : null}
 
         {showSupplierReturns ? <WorkflowCard title="Return to supplier" description="Remove returned stock with an immutable supplier-return ledger entry." icon={<PackageMinus aria-hidden="true" />}>
-          {stores.length && activeSuppliers.length && returnItems.length ? <form className="grid gap-3 sm:grid-cols-2" onSubmit={submitSupplierReturn} noValidate>
+          {!canPostSupplierReturns ? <Empty message="You can review purchasing history, but posting supplier returns requires the supplier-return permission." /> : stores.length && activeSuppliers.length && returnItems.length ? <form className="grid gap-3 sm:grid-cols-2" onSubmit={submitSupplierReturn} noValidate>
             <Field label="Store"><select className={selectClassName} value={returnStoreId} onChange={(event) => setReturnStoreId(event.target.value)}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></Field>
             <Field label="Supplier"><select className={selectClassName} value={returnSupplierId} onChange={(event) => setReturnSupplierId(event.target.value)}>{activeSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></Field>
             <ItemSelect label="Returned item" items={returnItems} productId={returnProductId} variantId={returnVariantId} onChange={(value) => chooseItem(value, setReturnProductId, setReturnVariantId)} />
@@ -548,12 +577,14 @@ function AdjustmentReviewCard({
   onPost,
   pending,
   policy,
+  postLabel,
   review,
 }: {
   onBack: () => void;
   onPost: () => void;
   pending: boolean;
   policy: "allow" | "warn" | "block";
+  postLabel: string;
   review: AdjustmentReview;
 }) {
   const quantityDelta = Number(review.quantityDelta);
@@ -565,7 +596,7 @@ function AdjustmentReviewCard({
       {review.note ? <p className="mt-3 text-sm text-muted-foreground">Notes: {review.note}</p> : null}
       {review.nextQuantity < 0 ? <p className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">This would result in negative stock. The store’s {policy} policy is enforced by the server when posting.</p> : null}
       <p className="mt-3 text-xs text-muted-foreground">The displayed balance is a review preview. TINDIO locks and recalculates the authoritative stock level before creating the movement.</p>
-      <div className="mt-4 flex flex-wrap justify-end gap-2"><Button disabled={pending} onClick={onBack} type="button" variant="outline">Back</Button><Button disabled={pending} onClick={onPost} type="button">{pending ? <LoaderCircle className="animate-spin" /> : <AlertTriangle />} Post adjustment</Button></div>
+      <div className="mt-4 flex flex-wrap justify-end gap-2"><Button disabled={pending} onClick={onBack} type="button" variant="outline">Back</Button><Button disabled={pending} onClick={onPost} type="button">{pending ? <LoaderCircle className="animate-spin" /> : <AlertTriangle />} {postLabel}</Button></div>
     </section>
   );
 }
@@ -627,7 +658,11 @@ function Empty({ message }: { message: string }) {
 }
 
 function receiptDraft(transfer: Transfer | undefined) {
-  return Object.fromEntries((transfer?.lines ?? []).map((line) => [line.id, String(line.quantity - line.receivedQuantity)]));
+  return Object.fromEntries((transfer?.lines ?? []).map((line) => [line.id, String(line.quantity - line.receivedQuantity - line.shortQuantity)]));
+}
+
+function shortageDraft(transfer: Transfer | undefined) {
+  return Object.fromEntries((transfer?.lines ?? []).map((line) => [line.id, "0"]));
 }
 
 function formatQuantity(value: number) {

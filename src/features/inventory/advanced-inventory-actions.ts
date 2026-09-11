@@ -7,12 +7,14 @@ import {
   completeInventoryCountSchema,
   cancelPurchaseOrderSchema,
   createInventoryCountDraftSchema,
+  createInventoryCountBatchSchema,
   createAdjustmentReasonSchema,
   createPurchaseOrderSchema,
   createSupplierSchema,
   importSuppliersCsvSchema,
   importInventoryAdjustmentsCsvSchema,
   inventoryCountTransitionSchema,
+  importInventoryCountLinesSchema,
   produceCompositeSchema,
   receiveStockTransferSchema,
   receivePurchaseOrderSchema,
@@ -25,6 +27,12 @@ import {
   updateOrganizationInventoryPolicySchema,
   updateSupplierSchema,
 } from "@/features/inventory/advanced-inventory-schema";
+import {
+  hasAllInventoryCapabilities,
+  hasAnyInventoryCapability,
+  hasInventoryCapability,
+  type InventoryCapability,
+} from "@/features/inventory/inventory-permissions";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { postgresCodeMessage, validationFailure } from "@/lib/server/db-errors";
 import type { Json } from "@/lib/supabase/database.types";
@@ -64,15 +72,40 @@ async function requireInventoryManager() {
   return { context, error: null };
 }
 
-async function requireInventoryCounter() {
+/**
+ * Purchasing uses the same capability catalogue as the database procedures.
+ * This avoids treating inventory.manage as a hardcoded proxy for every
+ * purchasing operation while retaining the legacy permission bundle mapping.
+ */
+async function requirePurchasingCapability(
+  capability: Extract<InventoryCapability, `purchasing.${string}`>,
+  errorMessage: string,
+) {
   const context = await requireBusinessContext();
 
   if (!context.features.inventory) {
     return { context, error: "Inventory is disabled for this business." };
   }
 
-  if (!hasPermission(context, "inventory.count") && !hasPermission(context, "inventory.manage")) {
-    return { context, error: "You do not have permission to perform inventory counts." };
+  if (!hasInventoryCapability(context, capability)) {
+    return { context, error: errorMessage };
+  }
+
+  return { context, error: null };
+}
+
+async function requireInventoryCountCapability(
+  capability: "inventory.count.create" | "inventory.count.finalize",
+  errorMessage: string,
+) {
+  const context = await requireBusinessContext();
+
+  if (!context.features.inventory) {
+    return { context, error: "Inventory is disabled for this business." };
+  }
+
+  if (!hasInventoryCapability(context, capability)) {
+    return { context, error: errorMessage };
   }
 
   return { context, error: null };
@@ -85,8 +118,28 @@ async function requireInventoryAdjuster() {
     return { context, error: "Inventory is disabled for this business." };
   }
 
-  if (!hasPermission(context, "inventory.adjust")) {
+  if (!hasAnyInventoryCapability(context, [
+    "inventory.adjust.create",
+    "inventory.adjust.post",
+  ])) {
     return { context, error: "You do not have permission to adjust inventory." };
+  }
+
+  return { context, error: null };
+}
+
+async function requireInventoryCapabilities(
+  capabilities: readonly InventoryCapability[],
+  errorMessage: string,
+) {
+  const context = await requireBusinessContext();
+
+  if (!context.features.inventory) {
+    return { context, error: "Inventory is disabled for this business." };
+  }
+
+  if (!hasAllInventoryCapabilities(context, capabilities)) {
+    return { context, error: errorMessage };
   }
 
   return { context, error: null };
@@ -95,7 +148,10 @@ async function requireInventoryAdjuster() {
 export async function createSupplierAction(
   input: unknown,
 ): Promise<AdvancedInventoryActionResult<{ supplierId: string }>> {
-  const { context, error: permissionError } = await requireInventoryManager();
+  const { context, error: permissionError } = await requirePurchasingCapability(
+    "purchasing.suppliers.manage",
+    "You do not have permission to manage suppliers.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   if (!context.features.purchase_orders) return { ok: false, message: "Purchase orders are disabled for this business." };
 
@@ -118,13 +174,17 @@ export async function createSupplierAction(
   }
 
   revalidatePath("/back-office/inventory");
+  revalidatePath("/back-office/purchasing");
   return { ok: true, message: "Supplier created.", data: { supplierId: data } };
 }
 
 export async function updateSupplierAction(
   input: unknown,
 ): Promise<AdvancedInventoryActionResult<{ supplierId: string }>> {
-  const { context, error: permissionError } = await requireInventoryManager();
+  const { context, error: permissionError } = await requirePurchasingCapability(
+    "purchasing.suppliers.manage",
+    "You do not have permission to manage suppliers.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   if (!context.features.purchase_orders) return { ok: false, message: "Purchase orders are disabled for this business." };
 
@@ -149,11 +209,15 @@ export async function updateSupplierAction(
   }
 
   revalidatePath("/back-office/inventory");
+  revalidatePath("/back-office/purchasing");
   return { ok: true, message: "Supplier updated.", data: { supplierId: data } };
 }
 
 export async function importSuppliersCsvAction(input: unknown): Promise<AdvancedInventoryActionResult<{ importedCount: number }>> {
-  const { context, error: permissionError } = await requireInventoryManager();
+  const { context, error: permissionError } = await requirePurchasingCapability(
+    "purchasing.suppliers.manage",
+    "You do not have permission to manage suppliers.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   if (!context.features.purchase_orders) return { ok: false, message: "Purchase orders are disabled for this business." };
   const parsed = importSuppliersCsvSchema.safeParse(input);
@@ -162,6 +226,7 @@ export async function importSuppliersCsvAction(input: unknown): Promise<Advanced
   const { data, error } = await supabase.rpc("import_suppliers_csv", { target_organization_id: context.organization.id, target_rows: parsed.data.rows.map((row) => ({ row_number: row.rowNumber, name: row.name, contact_name: row.contactName, email: row.email, phone: row.phone, address: row.address, notes: row.notes })) as Json });
   if (error || data === null) return { ok: false, message: error?.message?.startsWith("CSV row") ? error.message : databaseMessage(error?.code, "TINDIO could not import this supplier CSV file.") };
   revalidatePath("/back-office/inventory");
+  revalidatePath("/back-office/purchasing");
   revalidatePath("/back-office/replenishment");
   return { ok: true, message: `${data} supplier${data === 1 ? "" : "s"} imported.`, data: { importedCount: data } };
 }
@@ -169,7 +234,10 @@ export async function importSuppliersCsvAction(input: unknown): Promise<Advanced
 export async function createPurchaseOrderAction(
   input: unknown,
 ): Promise<AdvancedInventoryActionResult<{ purchaseOrderId: string }>> {
-  const { context, error: permissionError } = await requireInventoryManager();
+  const { context, error: permissionError } = await requirePurchasingCapability(
+    "purchasing.po.create",
+    "You do not have permission to create purchase orders.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   if (!context.features.purchase_orders) return { ok: false, message: "Purchase orders are disabled for this business." };
 
@@ -212,7 +280,10 @@ export async function createPurchaseOrderAction(
 export async function receivePurchaseOrderAction(
   input: unknown,
 ): Promise<AdvancedInventoryActionResult<{ receiptId: string }>> {
-  const { context, error: permissionError } = await requireInventoryManager();
+  const { context, error: permissionError } = await requirePurchasingCapability(
+    "purchasing.receive",
+    "You do not have permission to receive purchase orders.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   if (!context.features.purchase_orders) return { ok: false, message: "Purchase orders are disabled for this business." };
 
@@ -243,7 +314,10 @@ export async function receivePurchaseOrderAction(
 export async function cancelPurchaseOrderAction(
   input: unknown,
 ): Promise<AdvancedInventoryActionResult<{ purchaseOrderId: string }>> {
-  const { context, error: permissionError } = await requireInventoryManager();
+  const { context, error: permissionError } = await requirePurchasingCapability(
+    "purchasing.po.create",
+    "You do not have permission to cancel purchase orders.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   if (!context.features.purchase_orders) return { ok: false, message: "Purchase orders are disabled for this business." };
 
@@ -269,7 +343,10 @@ export async function cancelPurchaseOrderAction(
 export async function completeInventoryCountAction(
   input: unknown,
 ): Promise<AdvancedInventoryActionResult<{ inventoryCountId: string }>> {
-  const { context, error: permissionError } = await requireInventoryCounter();
+  const { context, error: permissionError } = await requireInventoryCapabilities(
+    ["inventory.count.create", "inventory.count.finalize"],
+    "You do not have permission to create and finalize inventory counts.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
 
   const parsed = completeInventoryCountSchema.safeParse(input);
@@ -326,7 +403,10 @@ export async function completeInventoryCountAction(
 export async function createInventoryCountDraftAction(
   input: unknown,
 ): Promise<AdvancedInventoryActionResult<{ inventoryCountId: string }>> {
-  const { context, error: permissionError } = await requireInventoryCounter();
+  const { context, error: permissionError } = await requireInventoryCountCapability(
+    "inventory.count.create",
+    "You do not have permission to create inventory counts.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   const parsed = createInventoryCountDraftSchema.safeParse(input);
   if (!parsed.success) return validationError();
@@ -351,7 +431,10 @@ export async function createInventoryCountDraftAction(
 }
 
 export async function saveInventoryCountLineAction(input: unknown): Promise<AdvancedInventoryActionResult> {
-  const { context, error: permissionError } = await requireInventoryCounter();
+  const { context, error: permissionError } = await requireInventoryCountCapability(
+    "inventory.count.create",
+    "You do not have permission to record physical quantities.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   const parsed = saveInventoryCountLineSchema.safeParse(input);
   if (!parsed.success) return validationError();
@@ -373,7 +456,10 @@ async function transitionInventoryCount(
   operation: "submit_inventory_count_for_review" | "post_inventory_count" | "cancel_inventory_count",
   successMessage: string,
 ): Promise<AdvancedInventoryActionResult> {
-  const { context, error: permissionError } = await requireInventoryCounter();
+  const { context, error: permissionError } = await requireInventoryCountCapability(
+    "inventory.count.finalize",
+    "You do not have permission to review, post, or cancel inventory counts.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   const parsed = inventoryCountTransitionSchema.safeParse(input);
   if (!parsed.success) return validationError();
@@ -406,24 +492,93 @@ export async function cancelInventoryCountAction(input: unknown) {
   return transitionInventoryCount(input, "cancel_inventory_count", "Inventory count cancelled. No stock variance was posted.");
 }
 
+export async function createInventoryCountBatchAction(
+  input: unknown,
+): Promise<AdvancedInventoryActionResult<{ inventoryCountBatchId: string }>> {
+  const { context, error: permissionError } = await requireInventoryCountCapability(
+    "inventory.count.create",
+    "You do not have permission to create inventory counts.",
+  );
+  if (permissionError) return { ok: false, message: permissionError };
+
+  const parsed = createInventoryCountBatchSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("create_inventory_count_batch", {
+    target_organization_id: context.organization.id,
+    target_name: parsed.data.name,
+    target_note: parsed.data.note,
+    target_store_ids: parsed.data.storeIds,
+    target_count_mode: parsed.data.countMode,
+    target_sort_mode: parsed.data.sortMode,
+    target_include_zero_stock: parsed.data.includeZeroStock,
+  });
+  if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not prepare this multi-store count batch.") };
+
+  revalidatePath("/back-office/inventory");
+  return { ok: true, message: "Count batch prepared. Each store now has its own resumable count sheet.", data: { inventoryCountBatchId: data } };
+}
+
+export async function importInventoryCountLinesAction(
+  input: unknown,
+): Promise<AdvancedInventoryActionResult<{ importedCount: number }>> {
+  const { context, error: permissionError } = await requireInventoryCountCapability(
+    "inventory.count.create",
+    "You do not have permission to record physical quantities.",
+  );
+  if (permissionError) return { ok: false, message: permissionError };
+
+  const parsed = importInventoryCountLinesSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("import_inventory_count_lines", {
+    target_organization_id: context.organization.id,
+    target_inventory_count_id: parsed.data.inventoryCountId,
+    target_rows: parsed.data.rows.map((row) => ({
+      count_line_id: row.countLineId,
+      product_id: row.productId,
+      variant_id: row.variantId || null,
+      counted_quantity: row.countedQuantity,
+    })) as Json,
+  });
+  if (error || data === null) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not import these physical quantities.") };
+
+  revalidatePath("/back-office/inventory");
+  return { ok: true, message: `${data} physical count${data === 1 ? "" : "s"} imported. Blank spreadsheet cells remain uncounted.`, data: { importedCount: data } };
+}
+
 export async function transferStockAction(
   input: unknown,
 ): Promise<AdvancedInventoryActionResult<{ transferId: string }>> {
-  const { context, error: permissionError } = await requireInventoryManager();
+  const { context, error: permissionError } = await requireInventoryCapabilities(
+    ["inventory.transfer.create", "inventory.transfer.send"],
+    "You do not have permission to create and send stock transfers.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   if (!context.features.transfers) return { ok: false, message: "Stock transfers are disabled for this business." };
 
   const parsed = transferStockSchema.safeParse(input);
   if (!parsed.success) return validationError();
 
-  // CANDIDATE_FOR_REMOVAL: this legacy server action is retained for source
-  // compatibility only. The public immediate-shipment RPC is intentionally
-  // revoked so every new transfer follows the request → approval → dispatch
-  // lifecycle in Restock items.
-  return {
-    ok: false,
-    message: "Create a stock request from Restock items. Stock leaves its source only when that approved request is dispatched.",
-  };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("create_direct_stock_transfer", {
+    target_organization_id: context.organization.id,
+    target_source_store_id: parsed.data.sourceStoreId,
+    target_destination_store_id: parsed.data.destinationStoreId,
+    target_note: parsed.data.note,
+    target_operation_id: parsed.data.operationId,
+    target_lines: parsed.data.lines.map((line) => ({
+      product_id: line.productId,
+      variant_id: line.variantId || null,
+      quantity: line.quantity,
+    })) as Json,
+  });
+  if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not send this transfer.") };
+  revalidatePath("/back-office/inventory");
+  revalidatePath("/back-office/replenishment");
+  return { ok: true, message: "Transfer sent. Destination stock will update when it is received.", data: { transferId: data } };
 }
 
 export async function updateInventoryPolicyAction(
@@ -551,7 +706,10 @@ export async function importInventoryAdjustmentsCsvAction(input: unknown): Promi
 export async function receiveStockTransferAction(
   input: unknown,
 ): Promise<AdvancedInventoryActionResult<{ receiptId: string }>> {
-  const { context, error: permissionError } = await requireInventoryManager();
+  const { context, error: permissionError } = await requireInventoryCapabilities(
+    ["inventory.transfer.receive"],
+    "You do not have permission to receive stock transfers.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   if (!context.features.transfers) return { ok: false, message: "Stock transfers are disabled for this business." };
   const parsed = receiveStockTransferSchema.safeParse(input);
@@ -563,7 +721,12 @@ export async function receiveStockTransferAction(
     target_stock_transfer_id: parsed.data.stockTransferId,
     target_note: parsed.data.note,
     target_operation_id: parsed.data.operationId,
-    target_lines: parsed.data.lines.map((line) => ({ stock_transfer_line_id: line.stockTransferLineId, quantity: line.quantity })) as Json,
+    target_lines: parsed.data.lines.map((line) => ({
+      stock_transfer_line_id: line.stockTransferLineId,
+      received_quantity: line.receivedQuantity,
+      short_quantity: line.shortQuantity,
+      discrepancy_note: line.discrepancyNote || null,
+    })) as Json,
   });
   if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not receive this transfer.") };
   revalidatePath("/back-office/inventory");
@@ -573,7 +736,10 @@ export async function receiveStockTransferAction(
 export async function returnToSupplierAction(
   input: unknown,
 ): Promise<AdvancedInventoryActionResult<{ supplierReturnId: string }>> {
-  const { context, error: permissionError } = await requireInventoryManager();
+  const { context, error: permissionError } = await requirePurchasingCapability(
+    "purchasing.return",
+    "You do not have permission to return stock to a supplier.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   if (!context.features.purchase_orders) return { ok: false, message: "Purchase orders are disabled for this business." };
   const parsed = returnToSupplierSchema.safeParse(input);
@@ -590,6 +756,7 @@ export async function returnToSupplierAction(
   });
   if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not record the supplier return.") };
   revalidatePath("/back-office/inventory");
+  revalidatePath("/back-office/purchasing");
   return { ok: true, message: "Supplier return posted to the inventory ledger.", data: { supplierReturnId: data } };
 }
 

@@ -12,6 +12,10 @@ import {
   updateSupplierLeadTimeSchema,
   upsertReplenishmentRuleSchema,
 } from "@/features/inventory/supply-chain-schema";
+import {
+  hasAllInventoryCapabilities,
+  type InventoryCapability,
+} from "@/features/inventory/inventory-permissions";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { postgresCodeMessage } from "@/lib/server/db-errors";
 import type { Json } from "@/lib/supabase/database.types";
@@ -43,6 +47,16 @@ async function requireSupplyChainManager() {
   if (!hasPermission(context, "inventory.manage")) {
     return { context, error: "You do not have permission to manage replenishment." };
   }
+  return { context, error: null };
+}
+
+async function requireTransferCapabilities(
+  capabilities: readonly InventoryCapability[],
+  errorMessage: string,
+) {
+  const context = await requireBusinessContext();
+  if (!context.features.inventory) return { context, error: "Inventory is disabled for this business." };
+  if (!hasAllInventoryCapabilities(context, capabilities)) return { context, error: errorMessage };
   return { context, error: null };
 }
 
@@ -107,7 +121,10 @@ export async function upsertReplenishmentRuleAction(input: unknown): Promise<Sup
 }
 
 export async function createStockRequestAction(input: unknown): Promise<SupplyChainActionResult<{ stockRequestId: string }>> {
-  const { context, error: permissionError } = await requireSupplyChainManager();
+  const { context, error: permissionError } = await requireTransferCapabilities(
+    ["inventory.transfer.create"],
+    "You do not have permission to create stock requests.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   const parsed = createStockRequestSchema.safeParse(input);
   if (!parsed.success) return validationError();
@@ -130,7 +147,10 @@ export async function createStockRequestAction(input: unknown): Promise<SupplyCh
 }
 
 export async function approveStockRequestAction(input: unknown): Promise<SupplyChainActionResult> {
-  const { context, error: permissionError } = await requireSupplyChainManager();
+  const { context, error: permissionError } = await requireTransferCapabilities(
+    ["inventory.transfer.send"],
+    "You do not have permission to approve stock transfers.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   const parsed = approveStockRequestSchema.safeParse(input);
   if (!parsed.success) return validationError();
@@ -149,7 +169,10 @@ export async function approveStockRequestAction(input: unknown): Promise<SupplyC
 }
 
 export async function startStockRequestPickingAction(input: unknown): Promise<SupplyChainActionResult> {
-  const { context, error: permissionError } = await requireSupplyChainManager();
+  const { context, error: permissionError } = await requireTransferCapabilities(
+    ["inventory.transfer.send"],
+    "You do not have permission to pick stock transfers.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   const parsed = requestIdentifierSchema.safeParse(input);
   if (!parsed.success) return validationError();
@@ -164,7 +187,10 @@ export async function startStockRequestPickingAction(input: unknown): Promise<Su
 }
 
 export async function dispatchStockRequestAction(input: unknown): Promise<SupplyChainActionResult<{ stockTransferId: string }>> {
-  const { context, error: permissionError } = await requireSupplyChainManager();
+  const { context, error: permissionError } = await requireTransferCapabilities(
+    ["inventory.transfer.send"],
+    "You do not have permission to dispatch stock transfers.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   const parsed = dispatchStockRequestSchema.safeParse(input);
   if (!parsed.success) return validationError();
@@ -181,7 +207,10 @@ export async function dispatchStockRequestAction(input: unknown): Promise<Supply
 }
 
 export async function receiveStockRequestAction(input: unknown): Promise<SupplyChainActionResult<{ stockRequestId: string }>> {
-  const { context, error: permissionError } = await requireSupplyChainManager();
+  const { context, error: permissionError } = await requireTransferCapabilities(
+    ["inventory.transfer.receive"],
+    "You do not have permission to receive stock transfers.",
+  );
   if (permissionError) return { ok: false, message: permissionError };
   const parsed = receiveStockRequestSchema.safeParse(input);
   if (!parsed.success) return validationError();

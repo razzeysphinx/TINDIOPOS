@@ -91,9 +91,10 @@ test("Phase 3 prepares one ordered, resumable inventory-count document per store
   assert.match(workspace, /Include zero-stock items/);
   assert.match(workspace, /downloadCountCsv\(document\)/);
   assert.match(workspace, /data-inventory-count-print-document/);
-  assert.match(actions, /requireInventoryCounter/);
+  assert.match(actions, /requireInventoryCountCapability/);
   assert.match(actions, /create_inventory_count_plan/);
-  assert.match(page, /hasPermission\(context, "inventory\.count"\) \|\| canManage/);
+  assert.match(page, /hasInventoryCapability\(context, "inventory\.count\.create"\)/);
+  assert.match(page, /hasInventoryCapability\(context, "inventory\.count\.finalize"\)/);
   assert.match(migration, /product\.status = 'active'/);
   assert.match(migration, /product\.track_inventory/);
   assert.match(migration, /row_number\(\) over \(order by/);
@@ -110,10 +111,10 @@ test("Phase 4 keeps the preparation snapshot immutable and posts only the reconc
   assert.doesNotMatch(migration, /set\s+quantity\s*=\s*(target_)?counted/i);
 });
 
-test("Blind count print and CSV omit expected and variance columns", async () => {
+test("Blind count print and spreadsheet exports omit expected and variance columns", async () => {
   const workspace = await source("src/features/inventory/inventory-count-workspace.tsx");
 
-  assert.match(workspace, /document\.countMode === "blind" \? \["Item", "Category", "SKU", "Barcode", "Unit", "Counted"\]/);
-  assert.match(workspace, /document\.countMode === "standard" \? <>\s*<th>Snapshot<\/th>\s*<th>Reconciled<\/th>/);
+  assert.match(workspace, /document\.countMode === "standard" \? \["Snapshot quantity", "Reconciled quantity"\] : \[\]/);
+  assert.match(workspace, /document\.countMode === "standard" \? <th>System Qty<\/th> : null/);
   assert.match(workspace, /Expected quantities stay hidden/);
 });

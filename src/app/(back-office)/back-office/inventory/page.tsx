@@ -28,6 +28,7 @@ import {
   InventoryHealthWorkspace,
   type InventoryHealthIssue,
   type InventoryHealthSeverity,
+  type InventoryOverviewMetric,
 } from "@/features/inventory/inventory-health-workspace";
 import { SupplyChainWorkflows, type ReplenishmentRule } from "@/features/inventory/supply-chain-workflows";
 import {
@@ -37,6 +38,7 @@ import {
 import { type InventoryStockStatus } from "@/features/inventory/inventory-stock-view";
 import { getInventoryStockCondition } from "@/features/inventory/inventory-stock-status";
 import { InventoryTransferWorkspace } from "@/features/inventory/inventory-transfer-workspace";
+import { hasAnyInventoryCapability, hasInventoryCapability } from "@/features/inventory/inventory-permissions";
 import {
   InventoryWorkspaceNavigation,
   type InventoryControlTab,
@@ -53,7 +55,6 @@ export const metadata = { title: "Stock Control" };
 
 const INVENTORY_CONTROL_TABS: readonly { id: InventoryControlTab; label: string }[] = [
   { id: "overview", label: "Overview" },
-  { id: "health", label: "Stock Health" },
   { id: "activity", label: "Activity" },
   { id: "adjustments", label: "Stock adjustments" },
   { id: "counts", label: "Counts" },
@@ -78,8 +79,11 @@ type InventoryTab = InventoryControlTab | PurchasingTab;
 
 export type InventoryWorkspacePageProps = {
   searchParams: Promise<{
+    activityPage?: string | string[];
     configuration?: string | string[];
     detail?: string | string[];
+    detailProduct?: string | string[];
+    detailVariant?: string | string[];
     from?: string | string[];
     movementType?: string | string[];
     purchaseOrder?: string | string[];
@@ -104,6 +108,7 @@ const INVENTORY_STOCK_STATUSES = [
 ] as const satisfies readonly InventoryStockStatus[];
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const INVENTORY_ACTIVITY_PAGE_SIZE = 50;
 const MOVEMENT_TYPES = ["OPENING_STOCK", "ADJUSTMENT", "DAMAGE", "LOSS", "SALE", "REFUND", "RECEIPT", "COUNT", "TRANSFER_OUT", "TRANSFER_IN", "SUPPLIER_RETURN", "PRODUCTION", "DISASSEMBLY"] as const;
 const INVENTORY_MOVEMENT_SOURCE_TYPES = [
   "composite_sale",
@@ -119,8 +124,19 @@ const INVENTORY_MOVEMENT_SOURCE_TYPES = [
 
 type InventoryMovementSourceType = (typeof INVENTORY_MOVEMENT_SOURCE_TYPES)[number];
 
+type InventoryDetailPosition = {
+  id: string | null;
+  product_id: string;
+  quantity: number;
+  store_id: string;
+  variant_id: string | null;
+};
+
 function resolveInventoryTab(value: string | string[] | undefined, workspace: "control" | "purchasing"): InventoryTab {
   const candidate = Array.isArray(value) ? value[0] : value;
+  // CANDIDATE_FOR_REMOVAL: preserve historical Stock Health links while its
+  // useful investigation content now lives in Overview.
+  if (workspace === "control" && candidate === "health") return "overview";
   if (candidate === "purchasing") return "purchase-orders";
   const allowedTabs = workspace === "purchasing" ? PURCHASING_TABS : INVENTORY_CONTROL_TABS.map((tab) => tab.id);
   if (allowedTabs.includes(candidate as never)) return candidate as InventoryTab;
@@ -142,6 +158,12 @@ function resolveInventoryLevelId(value: string | string[] | undefined) {
 function resolveDate(value: string | string[] | undefined) {
   const candidate = Array.isArray(value) ? value[0] : value;
   return candidate && /^\d{4}-\d{2}-\d{2}$/.test(candidate) ? candidate : null;
+}
+
+function resolveActivityPage(value: string | string[] | undefined) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  const page = Number(candidate);
+  return Number.isSafeInteger(page) && page >= 1 && page <= 1_000 ? page : 1;
 }
 
 function resolveMovementType(value: string | string[] | undefined) {
@@ -254,7 +276,25 @@ export async function InventoryWorkspacePage({
   searchParams,
   workspace,
 }: InventoryWorkspacePageProps & { workspace: Extract<InventoryWorkspace, "control" | "purchasing"> }) {
-  const context = await requireBackOfficePermission(["inventory.view", "inventory.adjust", "inventory.count", "inventory.manage"]);
+  const context = await requireBackOfficePermission([
+    "inventory.view",
+    "inventory.adjust",
+    "inventory.adjust.create",
+    "inventory.adjust.post",
+    "inventory.count",
+    "inventory.manage",
+    "inventory.count.create",
+    "inventory.count.finalize",
+    "inventory.valuation.view",
+    "inventory.transfer.create",
+    "inventory.transfer.send",
+    "inventory.transfer.receive",
+    "purchasing.view",
+    "purchasing.po.create",
+    "purchasing.receive",
+    "purchasing.suppliers.manage",
+    "purchasing.return",
+  ]);
   const parameters = await searchParams;
   const rawRequestedTab = Array.isArray(parameters.tab) ? parameters.tab[0] : parameters.tab;
   if (rawRequestedTab === "stock") {
@@ -264,9 +304,41 @@ export async function InventoryWorkspacePage({
     redirect(`/back-office/replenishment?${query.toString()}`);
   }
   const canManage = hasPermission(context, "inventory.manage");
-  const canAdjust = hasPermission(context, "inventory.adjust") || canManage;
-  const canCount = hasPermission(context, "inventory.count") || canManage;
+  const canCreateAdjustments = hasInventoryCapability(context, "inventory.adjust.create");
+  const canPostAdjustments = hasInventoryCapability(context, "inventory.adjust.post");
+  const canAdjust = canCreateAdjustments || canPostAdjustments;
+  const canCreateCounts = hasInventoryCapability(context, "inventory.count.create");
+  const canFinalizeCounts = hasInventoryCapability(context, "inventory.count.finalize");
+  const canCount = canCreateCounts || canFinalizeCounts;
+  const canCreateTransfers = hasInventoryCapability(context, "inventory.transfer.create");
+  const canSendTransfers = hasInventoryCapability(context, "inventory.transfer.send");
+  const canReceiveTransfers = hasInventoryCapability(context, "inventory.transfer.receive");
+  const canAccessTransfers = hasAnyInventoryCapability(context, [
+    "inventory.transfer.create",
+    "inventory.transfer.send",
+    "inventory.transfer.receive",
+  ]);
+  const canViewValuation = hasPermission(context, "products.view_cost")
+    && hasInventoryCapability(context, "inventory.valuation.view");
+  const canViewPurchasing = hasInventoryCapability(context, "purchasing.view");
+  const canCreatePurchaseOrders = hasInventoryCapability(context, "purchasing.po.create");
+  const canReceivePurchaseOrders = hasInventoryCapability(context, "purchasing.receive");
+  const canManageSuppliers = hasInventoryCapability(context, "purchasing.suppliers.manage");
+  const canReturnToSupplier = hasInventoryCapability(context, "purchasing.return");
+  const canAccessPurchasing = hasAnyInventoryCapability(context, [
+    "purchasing.view",
+    "purchasing.po.create",
+    "purchasing.receive",
+    "purchasing.suppliers.manage",
+    "purchasing.return",
+  ]);
+  const canReadPurchaseOrders = canViewPurchasing || canCreatePurchaseOrders || canReceivePurchaseOrders;
   const canViewInventory = hasPermission(context, "inventory.view") || canAdjust || canCount;
+  const canAccessControl = canManage || canViewInventory || canAccessTransfers || canViewValuation;
+  const canReadOperationalStock = canAccessControl
+    || canCreatePurchaseOrders
+    || canReceivePurchaseOrders
+    || canReturnToSupplier;
   const selectedStore = parameters.store;
   const purchaseOrder = Array.isArray(parameters.purchaseOrder) ? parameters.purchaseOrder[0] : parameters.purchaseOrder;
   const legacyPurchasingTab = rawRequestedTab === "purchasing"
@@ -274,9 +346,24 @@ export async function InventoryWorkspacePage({
     : PURCHASING_TABS.includes(rawRequestedTab as PurchasingTab)
       ? rawRequestedTab as PurchasingTab
       : null;
-  const legacyControlTab = INVENTORY_CONTROL_TABS.some((tab) => tab.id === rawRequestedTab)
-    ? rawRequestedTab as InventoryControlTab
-    : null;
+  const legacyControlTab = rawRequestedTab === "health"
+    ? "overview"
+    : INVENTORY_CONTROL_TABS.some((tab) => tab.id === rawRequestedTab)
+      ? rawRequestedTab as InventoryControlTab
+      : null;
+
+  if (workspace === "control" && !canAccessControl && canAccessPurchasing) {
+    const fallbackTab: PurchasingTab = canViewPurchasing || canCreatePurchaseOrders
+      ? "purchase-orders"
+      : canReceivePurchaseOrders
+        ? "receiving"
+        : canManageSuppliers
+          ? "suppliers"
+          : "supplier-returns";
+    const query = new URLSearchParams({ tab: fallbackTab });
+    if (selectedStore) query.set("store", selectedStore);
+    redirect(`/back-office/purchasing?${query.toString()}`);
+  }
 
   if (workspace === "control" && legacyPurchasingTab) {
     const query = new URLSearchParams({ tab: legacyPurchasingTab });
@@ -291,27 +378,62 @@ export async function InventoryWorkspacePage({
     redirect(`/back-office/inventory?${query.toString()}`);
   }
 
-  if (workspace === "purchasing" && !canManage) {
-    const query = new URLSearchParams({ tab: "activity" });
-    if (selectedStore) query.set("store", selectedStore);
-    redirect(`/back-office/inventory?${query.toString()}`);
-  }
-
   const requestedTab = resolveInventoryTab(parameters.tab, workspace);
+  const canOpenPurchasingTab = (tab: PurchasingTab) => {
+    if (canViewPurchasing) return true;
+    if (tab === "purchase-orders") return canCreatePurchaseOrders;
+    if (tab === "receiving") return canReceivePurchaseOrders;
+    if (tab === "suppliers") return canManageSuppliers;
+    return canReturnToSupplier;
+  };
+  if (workspace === "purchasing" && (!canAccessPurchasing || !canOpenPurchasingTab(requestedTab as PurchasingTab))) {
+    const fallbackTab: PurchasingTab | null = canViewPurchasing || canCreatePurchaseOrders
+      ? "purchase-orders"
+      : canReceivePurchaseOrders
+        ? "receiving"
+        : canManageSuppliers
+          ? "suppliers"
+          : canReturnToSupplier
+            ? "supplier-returns"
+            : null;
+    if (!fallbackTab) {
+      const query = new URLSearchParams({ tab: "activity" });
+      if (selectedStore) query.set("store", selectedStore);
+      redirect(`/back-office/inventory?${query.toString()}`);
+    }
+    const query = new URLSearchParams({ tab: fallbackTab });
+    if (selectedStore) query.set("store", selectedStore);
+    redirect(`/back-office/purchasing?${query.toString()}`);
+  }
   const canOpenRequestedTab = canManage
-    || (canViewInventory && ["overview", "health", "activity"].includes(requestedTab))
+    || (canViewInventory && ["overview", "activity"].includes(requestedTab))
     || (canAdjust && requestedTab === "adjustments")
-    || (canCount && requestedTab === "counts");
-  const activeTab = workspace === "purchasing" || canOpenRequestedTab ? requestedTab : "activity";
+    || (canCount && requestedTab === "counts")
+    || (canAccessTransfers && requestedTab === "transfers")
+    || (canViewValuation && requestedTab === "valuation");
+  const fallbackControlTab: InventoryControlTab = canManage || canViewInventory
+    ? "activity"
+    : canViewValuation
+      ? "valuation"
+      : canAdjust
+        ? "adjustments"
+        : canCount
+          ? "counts"
+          : "transfers";
+  const activeTab = workspace === "purchasing" || canOpenRequestedTab ? requestedTab : fallbackControlTab;
   // CANDIDATE_FOR_REMOVAL: retained while the legacy stock query parameter is
   // still accepted for backwards-compatible deep links to Stock & Restock.
   const initialStockStatus = resolveInventoryStockStatus(parameters.status);
   void initialStockStatus;
   const requestedDetailLevelId = resolveInventoryLevelId(parameters.detail);
+  const requestedDetailProductId = resolveInventoryLevelId(parameters.detailProduct);
+  const requestedDetailVariantId = resolveInventoryLevelId(parameters.detailVariant);
   const requestedPurchaseOrderId = resolveInventoryLevelId(parameters.purchaseOrder);
   const showConfiguration = parameters.configuration === "1" || parameters.configuration?.[0] === "1";
   const activityFrom = resolveDate(parameters.from);
   const activityTo = resolveDate(parameters.to);
+  const activityPage = resolveActivityPage(parameters.activityPage);
+  const activityPageOffset = (activityPage - 1) * INVENTORY_ACTIVITY_PAGE_SIZE;
   const activityMovementType = resolveMovementType(parameters.movementType);
   const activitySourceType = resolveMovementSourceType(parameters.sourceType);
   const activitySourceId = resolveInventoryLevelId(parameters.sourceId);
@@ -347,14 +469,18 @@ export async function InventoryWorkspacePage({
   const canViewCosts = hasPermission(context, "products.view_cost");
   const selectedStoreId = storeScope.selectedStoreId;
   const scopedStoreIds = selectedStoreId ? [selectedStoreId] : storeScope.storeIds;
-  const settingsQuery = supabase
-    .from("product_store_settings")
-    .select("product_id, store_id, is_available, price_override_minor, restock_policy")
-    .eq("organization_id", organizationId);
-  const levelsQuery = supabase
-    .from("inventory_levels")
-    .select("id, store_id, product_id, variant_id, quantity, updated_at")
-    .eq("organization_id", organizationId);
+  const settingsQuery = canReadOperationalStock
+    ? supabase
+        .from("product_store_settings")
+        .select("product_id, store_id, is_available, price_override_minor, restock_policy")
+        .eq("organization_id", organizationId)
+    : null;
+  const levelsQuery = canReadOperationalStock
+    ? supabase
+        .from("inventory_levels")
+        .select("id, store_id, product_id, variant_id, quantity, updated_at")
+        .eq("organization_id", organizationId)
+    : null;
   // Operational forms intentionally use active catalog and store records only.
   // Activity is an audit view, so it loads a small, separate set of historical
   // display names instead of turning archived items or inactive stores back
@@ -374,26 +500,26 @@ export async function InventoryWorkspacePage({
     : null;
   // Valuation is an audit view. Historical product and store names must remain
   // visible without turning archived catalog records into operating options.
-  const valuationProductsQuery = activeTab === "valuation"
+  const valuationProductsQuery = activeTab === "valuation" && canViewValuation
     ? supabase
         .from("products")
         .select("id, name, unit, status, product_type, price_minor")
         .eq("organization_id", organizationId)
         .eq("track_inventory", true)
     : null;
-  const valuationVariantsQuery = activeTab === "valuation"
+  const valuationVariantsQuery = activeTab === "valuation" && canViewValuation
     ? supabase
         .from("product_variants")
         .select("id, product_id, name, price_minor, is_active")
         .eq("organization_id", organizationId)
     : null;
-  const valuationStoresQuery = activeTab === "valuation"
+  const valuationStoresQuery = activeTab === "valuation" && canViewValuation
     ? supabase
         .from("stores")
         .select("id, name")
         .eq("organization_id", organizationId)
     : null;
-  const valuationQuery = activeTab === "valuation" && canViewCosts
+  const valuationQuery = ["overview", "valuation"].includes(activeTab) && canViewValuation
     ? supabase.rpc("get_inventory_valuation", { target_organization_id: organizationId })
     : Promise.resolve({ data: [], error: null });
   const replenishmentRulesQuery = canManage
@@ -402,7 +528,7 @@ export async function InventoryWorkspacePage({
         .select("id, store_id, product_id, variant_id, preferred_warehouse_id, reorder_point, target_stock")
         .eq("organization_id", organizationId)
     : null;
-  const purchaseOrdersQuery = canManage
+  const purchaseOrdersQuery = canReadPurchaseOrders
     ? supabase
         .from("purchase_orders")
         .select("id, supplier_id, store_id, order_number, status, expected_at, created_at")
@@ -410,7 +536,14 @@ export async function InventoryWorkspacePage({
         .order("created_at", { ascending: false })
         .limit(30)
       : null;
-  const productUnitsQuery = canManage
+  const openPurchaseOrdersCountQuery = canReadPurchaseOrders && activeTab === "overview"
+    ? supabase
+        .from("purchase_orders")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .in("status", ["ordered", "partially_received"])
+    : null;
+  const productUnitsQuery = canCreatePurchaseOrders
     ? supabase
         .from("product_units")
         .select("product_id, unit_code, unit_name, factor_to_base, is_base, is_purchase_unit")
@@ -432,7 +565,7 @@ export async function InventoryWorkspacePage({
         .eq("organization_id", organizationId)
         .limit(1)
     : null;
-  const recentMovementsQuery = ["overview", "health", "activity"].includes(activeTab)
+  const recentMovementsQuery = ["overview", "activity"].includes(activeTab)
     ? supabase
         .from("inventory_movements")
         .select(
@@ -440,28 +573,48 @@ export async function InventoryWorkspacePage({
         )
         .eq("organization_id", organizationId)
         .order("created_at", { ascending: false })
-        .limit(30)
+        .order("id", { ascending: false })
     : null;
 
   if (activityFrom) recentMovementsQuery?.gte("created_at", `${activityFrom}T00:00:00.000Z`);
   if (activityTo) recentMovementsQuery?.lte("created_at", `${activityTo}T23:59:59.999Z`);
+  if (selectedStoreId) recentMovementsQuery?.eq("store_id", selectedStoreId);
   if (activityMovementType) recentMovementsQuery?.eq("movement_type", activityMovementType);
   if (activitySourceFilter) {
     recentMovementsQuery?.eq("source_type", activitySourceFilter.type).eq("source_id", activitySourceFilter.id);
   }
-  const inventoryCountsQuery = canCount && ["overview", "health", "counts"].includes(activeTab)
+  if (activeTab === "activity") {
+    recentMovementsQuery?.range(activityPageOffset, activityPageOffset + INVENTORY_ACTIVITY_PAGE_SIZE);
+  } else {
+    recentMovementsQuery?.limit(30);
+  }
+  const inventoryCountsQuery = canCount && ["overview", "counts"].includes(activeTab)
     ? supabase
         .from("inventory_counts")
-        .select("id, count_number, store_id, status, note, started_at, completed_at, updated_at, count_mode, scope_type, scope_reference_id, sort_mode, include_zero_stock")
+        .select("id, count_number, store_id, status, note, started_at, started_by_employee_id, completed_at, updated_at, count_mode, scope_type, scope_reference_id, sort_mode, include_zero_stock")
         .eq("organization_id", organizationId)
         .in("status", ["draft", "in_progress", "ready_for_review", "posted", "cancelled", "open", "completed"])
         .order("started_at", { ascending: false })
+        .limit(100)
+    : null;
+  const inventoryCountBatchesQuery = canCount && activeTab === "counts"
+    ? supabase
+        .from("inventory_count_batches")
+        .select("id, batch_number, name, note, created_at, updated_at")
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: false })
         .limit(25)
+    : null;
+  const inventoryCountBatchDocumentsQuery = canCount && activeTab === "counts"
+    ? supabase
+        .from("inventory_count_batch_documents")
+        .select("inventory_count_batch_id, inventory_count_id, store_id")
+        .eq("organization_id", organizationId)
     : null;
   const countAwarenessQuery = workspace === "control"
     ? supabase.rpc("get_inventory_health_awareness", { target_organization_id: organizationId })
     : null;
-  const offlineInventoryIssuesQuery = hasPermission(context, "devices.manage") && ["overview", "health"].includes(activeTab)
+  const offlineInventoryIssuesQuery = hasPermission(context, "devices.manage") && activeTab === "overview"
     ? supabase
         .from("offline_sync_events")
         .select("id, store_id, store_name_snapshot, state, conflict_type")
@@ -472,12 +625,13 @@ export async function InventoryWorkspacePage({
     : null;
 
   if (scopedStoreIds) {
-    settingsQuery.in("store_id", scopedStoreIds);
-    levelsQuery.in("store_id", scopedStoreIds);
+    settingsQuery?.in("store_id", scopedStoreIds);
+    levelsQuery?.in("store_id", scopedStoreIds);
     activityStoresQuery?.in("id", scopedStoreIds);
     valuationStoresQuery?.in("id", scopedStoreIds);
     replenishmentRulesQuery?.in("store_id", scopedStoreIds);
     purchaseOrdersQuery?.in("store_id", scopedStoreIds);
+    openPurchaseOrdersCountQuery?.in("store_id", scopedStoreIds);
     inventoryPoliciesQuery?.in("store_id", scopedStoreIds);
     recentMovementsQuery?.in("store_id", scopedStoreIds);
     inventoryCountsQuery?.in("store_id", scopedStoreIds);
@@ -500,6 +654,7 @@ export async function InventoryWorkspacePage({
     movementsResult,
     suppliersResult,
     purchaseOrdersResult,
+    openPurchaseOrdersCountResult,
     inventoryPoliciesResult,
     inventoryPolicyDefaultsResult,
     adjustmentReasonsResult,
@@ -507,6 +662,8 @@ export async function InventoryWorkspacePage({
     stockTransferLinesResult,
     replenishmentRulesResult,
     inventoryCountsResult,
+    inventoryCountBatchesResult,
+    inventoryCountBatchDocumentsResult,
     warehousesResult,
     countSuppliersResult,
     countAwarenessResult,
@@ -543,8 +700,8 @@ export async function InventoryWorkspacePage({
       .eq("is_active", true)
       .order("sort_order", { ascending: true }),
     productUnitsQuery ?? Promise.resolve({ data: [], error: null }),
-    settingsQuery,
-    levelsQuery,
+    settingsQuery ?? Promise.resolve({ data: [], error: null }),
+    levelsQuery ?? Promise.resolve({ data: [], error: null }),
     valuationQuery,
     recentMovementsQuery ?? Promise.resolve({
           data: [] as Array<
@@ -569,7 +726,7 @@ export async function InventoryWorkspacePage({
           >,
           error: null,
         }),
-    canManage
+    canAccessPurchasing
       ? supabase
           .from("suppliers")
           .select("id, name, contact_name, email, phone, address, notes, is_active, lead_time_days")
@@ -577,6 +734,7 @@ export async function InventoryWorkspacePage({
           .order("name", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
     purchaseOrdersQuery ?? Promise.resolve({ data: [], error: null }),
+    openPurchaseOrdersCountQuery ?? Promise.resolve({ count: 0, data: null, error: null }),
     inventoryPoliciesQuery ?? Promise.resolve({ data: [], error: null }),
     inventoryPolicyDefaultsQuery ?? Promise.resolve({ data: [], error: null }),
     canAdjust
@@ -587,24 +745,26 @@ export async function InventoryWorkspacePage({
           .eq("is_active", true)
           .order("name", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
-    canManage
+    canAccessTransfers
       ? supabase
           .from("stock_transfers")
           .select("id, transfer_number, stock_request_id, source_store_id, destination_store_id, status, note")
           .eq("organization_id", organizationId)
           .in("status", ["in_transit", "partially_received"])
       : Promise.resolve({ data: [], error: null }),
-    canManage
+    canAccessTransfers
       ? supabase
           .from("stock_transfer_lines")
-          .select("id, stock_transfer_id, product_id, variant_id, quantity, received_quantity")
+          .select("id, stock_transfer_id, product_id, variant_id, quantity, received_quantity, short_quantity")
           .eq("organization_id", organizationId)
       : Promise.resolve({ data: [], error: null }),
     replenishmentRulesQuery ?? Promise.resolve({ data: [], error: null }),
     inventoryCountsQuery ?? Promise.resolve({
-      data: [] as Array<Pick<TableRow<"inventory_counts">, "id" | "count_number" | "store_id" | "status" | "note" | "started_at" | "completed_at" | "updated_at" | "count_mode" | "scope_type" | "scope_reference_id" | "sort_mode" | "include_zero_stock">>,
+      data: [] as Array<Pick<TableRow<"inventory_counts">, "id" | "count_number" | "store_id" | "status" | "note" | "started_at" | "started_by_employee_id" | "completed_at" | "updated_at" | "count_mode" | "scope_type" | "scope_reference_id" | "sort_mode" | "include_zero_stock">>,
       error: null,
     }),
+    inventoryCountBatchesQuery ?? Promise.resolve({ data: [], error: null }),
+    inventoryCountBatchDocumentsQuery ?? Promise.resolve({ data: [], error: null }),
     canManage && showConfiguration
       ? supabase
           .from("supply_chain_warehouses")
@@ -613,7 +773,7 @@ export async function InventoryWorkspacePage({
           .eq("is_active", true)
           .order("name", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
-    canCount && activeTab === "counts"
+    canCreateCounts && activeTab === "counts"
       ? supabase.rpc("get_inventory_count_suppliers", { target_organization_id: organizationId })
       : Promise.resolve({ data: [], error: null }),
     countAwarenessQuery ?? Promise.resolve({ data: [], error: null }),
@@ -637,6 +797,7 @@ export async function InventoryWorkspacePage({
     movementsResult,
     suppliersResult,
     purchaseOrdersResult,
+    openPurchaseOrdersCountResult,
     inventoryPoliciesResult,
     inventoryPolicyDefaultsResult,
     adjustmentReasonsResult,
@@ -644,6 +805,8 @@ export async function InventoryWorkspacePage({
     stockTransferLinesResult,
     replenishmentRulesResult,
     inventoryCountsResult,
+    inventoryCountBatchesResult,
+    inventoryCountBatchDocumentsResult,
     countSuppliersResult,
     countAwarenessResult,
     offlineInventoryIssuesResult,
@@ -667,10 +830,15 @@ export async function InventoryWorkspacePage({
   const settings = (settingsResult.data ?? []).filter((setting) => visibleStore(setting.store_id));
   const levels = (levelsResult.data ?? []).filter((level) => visibleStore(level.store_id));
   const inventoryValuation = (valuationResult.data ?? []).filter((entry) => visibleStore(entry.store_id));
-  const movements = (movementsResult.data ?? []).filter((movement) => visibleStore(movement.store_id));
+  const loadedMovements = (movementsResult.data ?? []).filter((movement) => visibleStore(movement.store_id));
+  const movements = activeTab === "activity"
+    ? loadedMovements.slice(0, INVENTORY_ACTIVITY_PAGE_SIZE)
+    : loadedMovements;
   const suppliers = suppliersResult.data ?? [];
   const purchaseOrders = (purchaseOrdersResult.data ?? []).filter((order) => visibleStore(order.store_id));
   const inventoryCounts = (inventoryCountsResult.data ?? []).filter((count) => visibleStore(count.store_id));
+  const inventoryCountBatches = inventoryCountBatchesResult.data ?? [];
+  const inventoryCountBatchDocuments = (inventoryCountBatchDocumentsResult.data ?? []).filter((document) => visibleStore(document.store_id));
   const countSuppliers = countSuppliersResult.data ?? [];
   const countAwareness = (countAwarenessResult.data ?? []).filter((entry) => visibleStore(entry.store_id));
   const offlineInventoryIssues = (offlineInventoryIssuesResult.data ?? []).filter((entry) => visibleStore(entry.store_id));
@@ -807,15 +975,58 @@ export async function InventoryWorkspacePage({
 
   if (selectedDetailLevelId && !selectedDetailLevel) notFound();
 
+  const selectedDetailPosition: InventoryDetailPosition | null = selectedDetailLevel
+    ? {
+        id: selectedDetailLevel.id,
+        product_id: selectedDetailLevel.product_id,
+        quantity: Number(selectedDetailLevel.quantity),
+        store_id: selectedDetailLevel.store_id,
+        variant_id: selectedDetailLevel.variant_id,
+      }
+    : requestedDetailProductId && storeScope.selectedStoreId
+      ? (() => {
+          const product = productById.get(requestedDetailProductId);
+          const variant = requestedDetailVariantId ? variantById.get(requestedDetailVariantId) : undefined;
+          const isValidSaleable = product && (
+            (product.product_type === "simple" && !requestedDetailVariantId)
+            || (product.product_type !== "simple" && variant?.product_id === product.id)
+          );
+          const isAssignedToStore = settings.some((setting) => (
+            setting.product_id === requestedDetailProductId && setting.store_id === storeScope.selectedStoreId
+          ));
+          if (!isValidSaleable || !isAssignedToStore || !storeNames.has(storeScope.selectedStoreId)) return null;
+
+          const existingLevel = levels.find((level) => (
+            level.store_id === storeScope.selectedStoreId
+            && level.product_id === requestedDetailProductId
+            && level.variant_id === (requestedDetailVariantId ?? null)
+          ));
+          return {
+            id: existingLevel?.id ?? null,
+            product_id: requestedDetailProductId,
+            quantity: existingLevel ? Number(existingLevel.quantity) : 0,
+            store_id: storeScope.selectedStoreId,
+            variant_id: requestedDetailVariantId ?? null,
+          };
+        })()
+      : null;
+
+  if (requestedDetailProductId && !selectedDetailPosition) notFound();
+
+  const hasNextActivityPage = activeTab === "activity"
+    && !selectedDetailPosition
+    && loadedMovements.length > INVENTORY_ACTIVITY_PAGE_SIZE;
+  const activityPageStart = movements.length ? activityPageOffset + 1 : 0;
+  const activityPageEnd = activityPageOffset + movements.length;
   const detailActivityLimit = activeTab === "activity" ? 50 : 12;
-  const detailMovementsResult = selectedDetailLevel
+  const detailMovementsResult = selectedDetailPosition
     ? await loadInventoryItemActivity({
         limit: detailActivityLimit,
         organizationId,
-        productId: selectedDetailLevel.product_id,
-        storeId: selectedDetailLevel.store_id,
+        productId: selectedDetailPosition.product_id,
+        storeId: selectedDetailPosition.store_id,
         supabase,
-        variantId: selectedDetailLevel.variant_id,
+        variantId: selectedDetailPosition.variant_id,
       })
     : { data: [], error: null };
 
@@ -824,8 +1035,8 @@ export async function InventoryWorkspacePage({
   }
 
   const detailMovements = detailMovementsResult.data ?? [];
-  const activityMovements = selectedDetailLevel ? detailMovements : movements;
-  const activityActorSource = selectedDetailLevel || activeTab === "activity" ? activityMovements : [];
+  const activityMovements = selectedDetailPosition ? detailMovements : movements;
+  const activityActorSource = selectedDetailPosition || activeTab === "activity" ? activityMovements : [];
   const actorEmployeeIds = [...new Set(activityActorSource.map((movement) => movement.actor_employee_id))];
   const employeesResult = hasPermission(context, "employees.manage") && actorEmployeeIds.length
     ? await supabase
@@ -987,6 +1198,22 @@ export async function InventoryWorkspacePage({
       }));
   });
   const quantitiesBySaleable = new Map<string, Record<string, number>>();
+  const targetStockByPosition = new Map(
+    replenishmentRules.map((rule) => [
+      `${rule.product_id}|${rule.variant_id ?? ""}|${rule.store_id}`,
+      Number(rule.target_stock),
+    ]),
+  );
+  const incomingTransferByPosition = new Map<string, number>();
+
+  for (const transfer of stockTransfers) {
+    for (const line of stockTransferLines.filter((candidate) => candidate.stock_transfer_id === transfer.id)) {
+      const remainingQuantity = Number(line.quantity) - Number(line.received_quantity) - Number(line.short_quantity);
+      if (remainingQuantity <= 0) continue;
+      const key = `${line.product_id}|${line.variant_id ?? ""}|${transfer.destination_store_id}`;
+      incomingTransferByPosition.set(key, (incomingTransferByPosition.get(key) ?? 0) + remainingQuantity);
+    }
+  }
 
   for (const level of levels) {
     const saleableKey = `${level.product_id}|${level.variant_id ?? ""}`;
@@ -1017,6 +1244,17 @@ export async function InventoryWorkspacePage({
     quantitiesByStore:
       quantitiesBySaleable.get(`${item.productId}|${item.variantId ?? ""}`) ?? {},
   }));
+  const directTransferItems = advancedItems.map((item) => ({
+    ...item,
+    incomingByStore: Object.fromEntries(stores.map((store) => [
+      store.id,
+      incomingTransferByPosition.get(`${item.productId}|${item.variantId ?? ""}|${store.id}`) ?? 0,
+    ])),
+    targetStockByStore: Object.fromEntries(stores.map((store) => [
+      store.id,
+      targetStockByPosition.get(`${item.productId}|${item.variantId ?? ""}|${store.id}`) ?? null,
+    ])),
+  }));
   const warehouseNames = new Map(warehouses.map((warehouse) => [warehouse.id, `${warehouse.code} · ${warehouse.name}`]));
   const configurationRules: ReplenishmentRule[] = replenishmentRules.map((rule) => {
     const product = productById.get(rule.product_id);
@@ -1035,8 +1273,10 @@ export async function InventoryWorkspacePage({
       currentQuantity: item?.quantitiesByStore[rule.store_id] ?? 0,
       incomingPurchaseQuantity: 0,
       inTransitQuantity: 0,
+      restockPolicy: "restock" as const,
       storeName: storeNames.get(rule.store_id) ?? "Inactive store",
       warehouseName: rule.preferred_warehouse_id ? warehouseNames.get(rule.preferred_warehouse_id) ?? "Unavailable warehouse" : null,
+      sourceOptions: [],
     };
   });
   const countLinesByDocument = new Map<string, typeof inventoryCountLines>();
@@ -1053,6 +1293,11 @@ export async function InventoryWorkspacePage({
     scopeReferenceId: count.scope_reference_id,
     scopeType: count.scope_type as "full_store" | "category" | "supplier" | "selected",
     sortMode: count.sort_mode as "category_name" | "supplier_name" | "sku" | "barcode" | "product_name",
+    preparedBy: count.started_by_employee_id === context.employee.id
+      ? context.profile.full_name || context.profile.email || context.employee.employee_number
+      : "Authorized employee",
+    startedAt: count.started_at,
+    storeId: count.store_id,
     storeName: storeNames.get(count.store_id) ?? "Inactive store",
     status: count.status as "draft" | "in_progress" | "ready_for_review" | "posted" | "cancelled" | "open" | "completed",
     note: count.note,
@@ -1073,6 +1318,19 @@ export async function InventoryWorkspacePage({
         countedAt: line.counted_at,
       };
     }),
+  }));
+  const inventoryCountDocumentById = new Map(inventoryCountDocuments.map((document) => [document.id, document]));
+  const inventoryCountBatchesWithDocuments = inventoryCountBatches.map((batch) => ({
+    batchNumber: Number(batch.batch_number),
+    createdAt: batch.created_at,
+    id: batch.id,
+    name: batch.name,
+    note: batch.note,
+    updatedAt: batch.updated_at,
+    documents: inventoryCountBatchDocuments
+      .filter((document) => document.inventory_count_batch_id === batch.id)
+      .map((document) => inventoryCountDocumentById.get(document.inventory_count_id))
+      .filter((document): document is NonNullable<typeof document> => Boolean(document)),
   }));
   const supplierNames = new Map(suppliers.map((supplier) => [supplier.id, supplier.name]));
   const purchaseOrderLinesByOrder = new Map<string, typeof purchaseOrderLines>();
@@ -1145,28 +1403,30 @@ export async function InventoryWorkspacePage({
 
   const inTransitTransfers = stockTransfers
     .map((transfer) => ({
+      destinationStoreId: transfer.destination_store_id,
       id: transfer.id,
       transferNumber: Number(transfer.transfer_number),
       stockRequestId: transfer.stock_request_id,
       sourceStoreName: storeNames.get(transfer.source_store_id) ?? "Inactive store",
+      sourceStoreId: transfer.source_store_id,
       destinationStoreName: storeNames.get(transfer.destination_store_id) ?? "Inactive store",
       note: transfer.note,
       status: transfer.status as "in_transit" | "partially_received",
       lines: (transferLinesByTransfer.get(transfer.id) ?? [])
-        .filter((line) => Number(line.received_quantity) < Number(line.quantity))
+        .filter((line) => Number(line.received_quantity) + Number(line.short_quantity) < Number(line.quantity))
         .map((line) => ({
           id: line.id,
           label: `${productById.get(line.product_id)?.name ?? "Unavailable product"}${line.variant_id ? ` / ${variantById.get(line.variant_id)?.name ?? "Unavailable variant"}` : ""}`,
           unit: productById.get(line.product_id)?.unit ?? "units",
           quantity: Number(line.quantity),
           receivedQuantity: Number(line.received_quantity),
+          shortQuantity: Number(line.short_quantity),
         })),
     }))
     .filter((transfer) => transfer.lines.length > 0);
-  // The restock-request workflow is the only normal path for new transfers.
-  // Keep historical direct transfers receivable without allowing a generic
-  // receipt to bypass shortage/discrepancy recording for request-linked stock.
-  const legacyInTransitTransfers = inTransitTransfers.filter((transfer) => !transfer.stockRequestId);
+  // Request-linked replenishment transfers retain their dedicated receipt
+  // path. Direct transfers use the canonical generic receipt path below.
+  const directInTransitTransfers = inTransitTransfers.filter((transfer) => !transfer.stockRequestId);
   const policiesByStore = Object.fromEntries(
     inventoryPolicies.map((policy) => [
       policy.store_id,
@@ -1193,6 +1453,19 @@ export async function InventoryWorkspacePage({
   const needsAttentionCount = outOfStockCount + negativeStockCount;
   const inventoryTabHref = (tab: InventoryControlTab) =>
     `/back-office/inventory?tab=${tab}${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}`;
+  const inventoryActivityPageHref = (page: number) => {
+    const query = new URLSearchParams({ tab: "activity" });
+    if (activityFrom) query.set("from", activityFrom);
+    if (activityTo) query.set("to", activityTo);
+    if (activityMovementType) query.set("movementType", activityMovementType);
+    if (activitySourceFilter) {
+      query.set("sourceId", activitySourceFilter.id);
+      query.set("sourceType", activitySourceFilter.type);
+    }
+    if (storeScope.selectedStoreId) query.set("store", storeScope.selectedStoreId);
+    if (page > 1) query.set("activityPage", String(page));
+    return `/back-office/inventory?${query.toString()}`;
+  };
   const purchasingTabHref = (tab: PurchasingTab) =>
     `/back-office/purchasing?tab=${tab}${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}`;
   const inventorySourceHref = (sourceType: InventoryMovementSourceType, sourceId: string) => {
@@ -1270,7 +1543,6 @@ export async function InventoryWorkspacePage({
     "supplier-returns": "Supplier returns",
   };
   const controlSectionLabels: Partial<Record<InventoryControlTab, string>> = {
-    health: "Stock Health",
     adjustments: "Stock adjustments",
     counts: "Inventory counts",
     production: "Production",
@@ -1289,10 +1561,17 @@ export async function InventoryWorkspacePage({
         { href: inventoryTabHref("overview"), label: "Inventory" },
         { label: controlSectionLabels[activeTab as InventoryControlTab] ?? "Stock Control" },
       ];
-  const stockLevelsHref = (status?: InventoryStockStatus) =>
-    `/back-office/replenishment?tab=levels${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}${status && status !== "all" ? `&status=${status}` : ""}`;
-  const inventoryDetailHref = (levelId: string) =>
-    `${inventoryTabHref("activity")}&detail=${levelId}`;
+  const stockLevelsHref = (status?: InventoryStockStatus, storeId = storeScope.selectedStoreId) =>
+    `/back-office/replenishment?tab=levels${storeId ? `&store=${storeId}` : ""}${status && status !== "all" ? `&status=${status}` : ""}`;
+  const inventoryDetailHref = (position: InventoryDetailPosition) => {
+    const query = new URLSearchParams({ store: position.store_id, tab: "activity" });
+    if (position.id) query.set("detail", position.id);
+    else {
+      query.set("detailProduct", position.product_id);
+      if (position.variant_id) query.set("detailVariant", position.variant_id);
+    }
+    return `/back-office/inventory?${query.toString()}`;
+  };
   const stockRows = levels.flatMap((level) => {
     const product = productById.get(level.product_id);
     const variant = level.variant_id ? variantById.get(level.variant_id) : undefined;
@@ -1307,7 +1586,13 @@ export async function InventoryWorkspacePage({
       barcode: variant?.barcode ?? product.barcode,
       categoryId: product.category_id,
       categoryName: product.category_id ? categoryNames.get(product.category_id) ?? "Uncategorized" : "Uncategorized",
-      detailHref: inventoryDetailHref(level.id),
+      detailHref: inventoryDetailHref({
+        id: level.id,
+        product_id: level.product_id,
+        quantity: Number(level.quantity),
+        store_id: level.store_id,
+        variant_id: level.variant_id,
+      }),
       id: level.id,
       isAvailable: availability.get(`${level.product_id}|${level.store_id}`) === true,
       productId: level.product_id,
@@ -1324,29 +1609,60 @@ export async function InventoryWorkspacePage({
       variantName: variant?.name ?? null,
     }];
   });
+  const emptyStockPositionCounts = () => ({
+    inStockCount: 0,
+    lowStockCount: 0,
+    negativeStockCount: 0,
+    outOfStockCount: 0,
+  });
+  const stockPositionCounts = emptyStockPositionCounts();
+  const stockPositionCountsByStore = new Map<string, ReturnType<typeof emptyStockPositionCounts>>();
+  for (const row of stockRows) {
+    const condition = getInventoryStockCondition({ quantity: row.quantity, reorderPoint: row.reorderPoint });
+    const storeCounts = stockPositionCountsByStore.get(row.storeId) ?? emptyStockPositionCounts();
+    if (condition === "in_stock") {
+      stockPositionCounts.inStockCount += 1;
+      storeCounts.inStockCount += 1;
+    } else if (condition === "low") {
+      stockPositionCounts.lowStockCount += 1;
+      storeCounts.lowStockCount += 1;
+    } else if (condition === "negative") {
+      stockPositionCounts.negativeStockCount += 1;
+      storeCounts.negativeStockCount += 1;
+    } else {
+      stockPositionCounts.outOfStockCount += 1;
+      storeCounts.outOfStockCount += 1;
+    }
+    stockPositionCountsByStore.set(row.storeId, storeCounts);
+  }
   const countAwarenessByPosition = new Map(
     countAwareness.map((entry) => [`${entry.store_id}|${entry.product_id}|${entry.variant_id ?? ""}`, entry]),
   );
   // CANDIDATE_FOR_REMOVAL: retained source data for the previous Inventory
   // stock-list surface. Stock & Restock now owns that workspace.
   void stockRows;
-  const selectedDetailProduct = selectedDetailLevel ? productById.get(selectedDetailLevel.product_id) : undefined;
-  const selectedDetailVariant = selectedDetailLevel?.variant_id
-    ? variantById.get(selectedDetailLevel.variant_id)
+  const selectedDetailProduct = selectedDetailPosition ? productById.get(selectedDetailPosition.product_id) : undefined;
+  const selectedDetailVariant = selectedDetailPosition?.variant_id
+    ? variantById.get(selectedDetailPosition.variant_id)
     : undefined;
-  const inventoryDetail: InventoryProductDetailData | null = selectedDetailLevel && selectedDetailProduct
+  const inventoryDetail: InventoryProductDetailData | null = selectedDetailPosition && selectedDetailProduct
     ? (() => {
-        const positionKey = `${selectedDetailLevel.store_id}|${selectedDetailLevel.product_id}|${selectedDetailLevel.variant_id ?? ""}`;
+        const positionKey = `${selectedDetailPosition.store_id}|${selectedDetailPosition.product_id}|${selectedDetailPosition.variant_id ?? ""}`;
         const lastCount = countAwarenessByPosition.get(positionKey);
         const incomingQuantity = purchaseOrders
-          .filter((order) => order.store_id === selectedDetailLevel.store_id && ["draft", "ordered", "partially_received"].includes(order.status))
+          .filter((order) => order.store_id === selectedDetailPosition.store_id && ["draft", "ordered", "partially_received"].includes(order.status))
           .flatMap((order) => purchaseOrderLinesByOrder.get(order.id) ?? [])
-          .filter((line) => line.product_id === selectedDetailLevel.product_id && line.variant_id === selectedDetailLevel.variant_id)
+          .filter((line) => line.product_id === selectedDetailPosition.product_id && line.variant_id === selectedDetailPosition.variant_id)
           .reduce((total, line) => total + Math.max(0, Number(line.ordered_quantity) - Number(line.received_quantity)), 0);
         const inTransitQuantity = stockTransfers
-          .filter((transfer) => transfer.destination_store_id === selectedDetailLevel.store_id)
+          .filter((transfer) => transfer.destination_store_id === selectedDetailPosition.store_id)
           .flatMap((transfer) => transferLinesByTransfer.get(transfer.id) ?? [])
-          .filter((line) => line.product_id === selectedDetailLevel.product_id && line.variant_id === selectedDetailLevel.variant_id)
+          .filter((line) => line.product_id === selectedDetailPosition.product_id && line.variant_id === selectedDetailPosition.variant_id)
+          .reduce((total, line) => total + Math.max(0, Number(line.quantity) - Number(line.received_quantity)), 0);
+        const outboundTransferQuantity = stockTransfers
+          .filter((transfer) => transfer.source_store_id === selectedDetailPosition.store_id)
+          .flatMap((transfer) => transferLinesByTransfer.get(transfer.id) ?? [])
+          .filter((line) => line.product_id === selectedDetailPosition.product_id && line.variant_id === selectedDetailPosition.variant_id)
           .reduce((total, line) => total + Math.max(0, Number(line.quantity) - Number(line.received_quantity)), 0);
 
         return {
@@ -1371,13 +1687,13 @@ export async function InventoryWorkspacePage({
         categoryName: selectedDetailProduct.category_id ? categoryNames.get(selectedDetailProduct.category_id) ?? "Uncategorized" : "Uncategorized",
         closeHref: inventoryTabHref("activity"),
         condition: getInventoryStockCondition({
-          quantity: Number(selectedDetailLevel.quantity),
-          reorderPoint: reorderPoints.get(`${selectedDetailLevel.store_id}|${selectedDetailLevel.product_id}|${selectedDetailLevel.variant_id ?? ""}`) ?? null,
+          quantity: selectedDetailPosition.quantity,
+          reorderPoint: reorderPoints.get(`${selectedDetailPosition.store_id}|${selectedDetailPosition.product_id}|${selectedDetailPosition.variant_id ?? ""}`) ?? null,
         }),
-        fullActivityHref: inventoryDetailHref(selectedDetailLevel.id),
+        fullActivityHref: inventoryDetailHref(selectedDetailPosition),
         countHref: canCount ? inventoryTabHref("counts") : null,
         incomingQuantity,
-        isAvailable: availability.get(`${selectedDetailLevel.product_id}|${selectedDetailLevel.store_id}`) === true,
+        isAvailable: availability.get(`${selectedDetailPosition.product_id}|${selectedDetailPosition.store_id}`) === true,
         productName: selectedDetailProduct.name,
         inTransitQuantity,
         lastCount: lastCount?.last_counted_at && lastCount.count_number !== null && lastCount.expected_quantity !== null && lastCount.counted_quantity !== null ? {
@@ -1386,21 +1702,34 @@ export async function InventoryWorkspacePage({
           countNumber: Number(lastCount.count_number),
           expectedQuantity: Number(lastCount.expected_quantity),
         } : null,
+        outboundTransferQuantity,
         purchasingHref: canManage ? purchasingTabHref("purchase-orders") : null,
-        quantity: Number(selectedDetailLevel.quantity),
-        reorderPoint: reorderPoints.get(`${selectedDetailLevel.store_id}|${selectedDetailLevel.product_id}|${selectedDetailLevel.variant_id ?? ""}`) ?? null,
+        projectedQuantity: selectedDetailPosition.quantity + incomingQuantity + inTransitQuantity - outboundTransferQuantity,
+        quantity: selectedDetailPosition.quantity,
+        reorderPoint: reorderPoints.get(`${selectedDetailPosition.store_id}|${selectedDetailPosition.product_id}|${selectedDetailPosition.variant_id ?? ""}`) ?? null,
         sku: selectedDetailVariant?.sku ?? selectedDetailProduct.sku,
-        storeName: storeNames.get(selectedDetailLevel.store_id) ?? "Unavailable store",
-        stores: levels
-          .filter((level) => level.product_id === selectedDetailLevel.product_id && level.variant_id === selectedDetailLevel.variant_id)
-          .map((level) => {
-            const reorderPoint = reorderPoints.get(`${level.store_id}|${level.product_id}|${level.variant_id ?? ""}`) ?? null;
+        storeName: storeNames.get(selectedDetailPosition.store_id) ?? "Unavailable store",
+        stores: Array.from(new Set([
+          ...levels
+            .filter((level) => level.product_id === selectedDetailPosition.product_id && level.variant_id === selectedDetailPosition.variant_id)
+            .map((level) => level.store_id),
+          ...settings
+            .filter((setting) => setting.product_id === selectedDetailPosition.product_id && storeNames.has(setting.store_id))
+            .map((setting) => setting.store_id),
+        ]))
+          .map((storeId) => {
+            const level = levels.find((candidate) => (
+              candidate.store_id === storeId
+              && candidate.product_id === selectedDetailPosition.product_id
+              && candidate.variant_id === selectedDetailPosition.variant_id
+            ));
+            const reorderPoint = reorderPoints.get(`${storeId}|${selectedDetailPosition.product_id}|${selectedDetailPosition.variant_id ?? ""}`) ?? null;
             return {
-              condition: getInventoryStockCondition({ quantity: Number(level.quantity), reorderPoint }),
-              isAvailable: availability.get(`${level.product_id}|${level.store_id}`) === true,
-              quantity: Number(level.quantity),
+              condition: getInventoryStockCondition({ quantity: level ? Number(level.quantity) : 0, reorderPoint }),
+              isAvailable: availability.get(`${selectedDetailPosition.product_id}|${storeId}`) === true,
+              quantity: level ? Number(level.quantity) : 0,
               reorderPoint,
-              storeName: storeNames.get(level.store_id) ?? "Unavailable store",
+              storeName: storeNames.get(storeId) ?? "Unavailable store",
             };
           })
           .sort((left, right) => left.storeName.localeCompare(right.storeName)),
@@ -1514,18 +1843,49 @@ export async function InventoryWorkspacePage({
     inventoryHealthIssues.push({ detail: `${conflict.count} offline inventory operation${conflict.count === 1 ? " requires" : "s require"} reconciliation in Offline Sync. No stock correction is applied here.`, href: "/back-office/offline-sync", id: `sync:${storeKey}`, itemName: "Inventory sync conflict", issueType: "Inventory sync conflict", severity: "critical", storeId: conflict.storeId, storeName: conflict.storeName });
   }
 
-  const healthIssuesByStore = new Map<string, number>();
-  for (const issue of inventoryHealthIssues) if (issue.storeId) healthIssuesByStore.set(issue.storeId, (healthIssuesByStore.get(issue.storeId) ?? 0) + 1);
   const inventoryHealthStores = stores.map((store) => {
-    const storeCountAges = countAwareness.filter((entry) => entry.store_id === store.id && entry.days_since_count !== null).map((entry) => entry.days_since_count as number);
+    const stockCounts = stockPositionCountsByStore.get(store.id) ?? emptyStockPositionCounts();
     return {
-      daysSinceLastCount: storeCountAges.sort((left, right) => left - right)[0] ?? null,
-      issueCount: healthIssuesByStore.get(store.id) ?? 0,
+      href: stockLevelsHref(undefined, store.id),
+      ...stockCounts,
+      inTransitCount: inTransitTransfers.filter((transfer) => transfer.destinationStoreId === store.id).length,
       name: store.name,
-      openTransferCount: inTransitTransfers.filter((transfer) => transfer.sourceStoreName === store.name || transfer.destinationStoreName === store.name).length,
       storeId: store.id,
     };
   });
+  const activeTrackedItemCount = products.reduce((total, product) => (
+    total + (product.product_type === "simple"
+      ? 1
+      : variants.filter((variant) => variant.product_id === product.id).length)
+  ), 0);
+  const hasUnverifiedValuationCost = inventoryValuation.some((entry) => (
+    Number(entry.quantity) !== 0 && entry.value_minor === null
+  ));
+  const inventoryValueMinor = inventoryValuation.reduce(
+    (total, entry) => total + (entry.value_minor === null ? 0 : Number(entry.value_minor)),
+    0,
+  );
+  const overviewMetrics: InventoryOverviewMetric[] = [
+    { description: "Active tracked catalog items", href: stockLevelsHref(), label: "Active inventory items", value: activeTrackedItemCount },
+    { description: "Current stock positions", href: stockLevelsHref("in_stock"), label: "In stock", value: stockPositionCounts.inStockCount },
+    { description: "At or below the reorder level", href: stockLevelsHref("low"), label: "Low stock", value: stockPositionCounts.lowStockCount },
+    { description: "Current positions with zero on hand", href: stockLevelsHref("out_of_stock"), label: "Out of stock", value: stockPositionCounts.outOfStockCount },
+    { description: "Positions below zero need investigation", href: stockLevelsHref("negative"), label: "Negative stock", value: stockPositionCounts.negativeStockCount },
+    { description: "Destination stock not yet received", href: inventoryTabHref("transfers"), label: "Incoming transfers", value: inTransitTransfers.length },
+  ];
+  if (canReadPurchaseOrders) {
+    overviewMetrics.push({ description: "Ordered or partially received", href: purchasingTabHref("receiving"), label: "Incoming purchase orders", value: openPurchaseOrdersCountResult.count ?? 0 });
+  }
+  if (canViewValuation) {
+    overviewMetrics.push({
+      description: hasUnverifiedValuationCost
+        ? "Some stock has an unverified cost. Review valuation before using a total."
+        : "Authorized weighted-average valuation.",
+      href: inventoryTabHref("valuation"),
+      label: "Inventory value",
+      value: hasUnverifiedValuationCost ? "Unavailable" : formatMoney(inventoryValueMinor, context.organization.currency_code),
+    });
+  }
   inventoryHealthIssues.sort((left, right) => ({ critical: 0, warning: 1, information: 2 })[left.severity] - ({ critical: 0, warning: 1, information: 2 })[right.severity] || left.itemName.localeCompare(right.itemName));
 
   return (
@@ -1543,12 +1903,29 @@ export async function InventoryWorkspacePage({
         activeTab={activeTab}
         canAdjust={canAdjust}
         canCount={canCount}
+        canCreatePurchaseOrders={canCreatePurchaseOrders}
         canManage={canManage}
+        canManageSuppliers={canManageSuppliers}
+        canReceivePurchaseOrders={canReceivePurchaseOrders}
+        canReturnToSupplier={canReturnToSupplier}
+        canTransfer={canAccessTransfers}
         canView={canViewInventory}
+        canViewValuation={canViewValuation}
+        canViewPurchasing={canViewPurchasing}
         canUseProduction={context.features.production}
         storeId={storeScope.selectedStoreId}
         workspace={workspace}
       />
+
+      {activeTab === "overview" ? <InventoryControlTower
+        healthHref={inventoryTabHref("overview")}
+        issues={inventoryHealthIssues}
+        overviewMetrics={overviewMetrics}
+        recentActivity={activityRows.map((row) => ({ href: row.referenceHref, id: row.id, label: row.productName, quantityDelta: row.quantityDelta, storeName: row.storeName }))}
+        stores={inventoryHealthStores}
+        transfers={inventoryHealthTransfers}
+        transfersHref={inventoryTabHref("transfers")}
+      /> : null}
 
       {activeTab === "overview" ? (
         <DashboardActionGrid
@@ -1558,20 +1935,11 @@ export async function InventoryWorkspacePage({
         />
       ) : null}
 
-      {activeTab === "overview" ? <InventoryControlTower
-        healthHref={inventoryTabHref("health")}
-        issues={inventoryHealthIssues}
-        recentActivity={activityRows.map((row) => ({ href: row.referenceHref, id: row.id, label: row.productName, quantityDelta: row.quantityDelta, storeName: row.storeName }))}
-        stores={inventoryHealthStores}
-        transfers={inventoryHealthTransfers}
-        transfersHref={inventoryTabHref("transfers")}
-      /> : null}
-
       {activeTab === "overview" ? <Card>
-        <CardHeader><CardTitle>Needs attention and shortcuts</CardTitle><CardDescription>Use Stock Levels for current balances, Activity for recent changes, and Stock Health for investigation. {needsAttentionCount} current stock position{needsAttentionCount === 1 ? " needs" : "s need"} attention: {negativeStockCount} negative and {outOfStockCount} out of stock.</CardDescription></CardHeader>
+        <CardHeader><CardTitle>Needs attention and shortcuts</CardTitle><CardDescription>Use Stock Levels for current balances, Activity for recent changes, and the Stock health section below for investigation. {needsAttentionCount} current stock position{needsAttentionCount === 1 ? " needs" : "s need"} attention: {negativeStockCount} negative and {outOfStockCount} out of stock.</CardDescription></CardHeader>
         <CardContent className="flex flex-wrap gap-x-4 gap-y-2">
           <Link className="text-sm font-medium text-primary hover:underline" href={stockLevelsHref()}>View stock levels</Link>
-          <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("health")}>Review Stock Health</Link>
+          <Link className="text-sm font-medium text-primary hover:underline" href="#stock-health-details">Review stock health</Link>
           <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("activity")}>View activity</Link>
           {canAdjust ? <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("adjustments")}>Stock adjustments</Link> : null}
           {canCount ? <Link className="text-sm font-medium text-primary hover:underline" href={inventoryTabHref("counts")}>Inventory counts</Link> : null}
@@ -1579,11 +1947,13 @@ export async function InventoryWorkspacePage({
         </CardContent>
       </Card> : null}
 
-      {activeTab === "health" ? <InventoryHealthWorkspace
-        initialSeverity={resolveHealthSeverity(parameters.severity)}
-        issues={inventoryHealthIssues}
-        stores={stores.map(({ id, name }) => ({ id, name }))}
-      /> : null}
+      {activeTab === "overview" ? <div id="stock-health-details">
+        <InventoryHealthWorkspace
+          initialSeverity={resolveHealthSeverity(parameters.severity)}
+          issues={inventoryHealthIssues}
+          stores={stores.map(({ id, name }) => ({ id, name }))}
+        />
+      </div> : null}
 
       {activeTab === "overview" && canManage && showConfiguration ? (
         <section aria-labelledby="inventory-configuration-title" className="space-y-4">
@@ -1629,7 +1999,7 @@ export async function InventoryWorkspacePage({
         </details>
       ) : null}
 
-      {(["purchase-orders", "receiving", "suppliers"] as const).includes(activeTab as "purchase-orders" | "receiving" | "suppliers") && canManage ? (
+      {(["purchase-orders", "receiving", "suppliers"] as const).includes(activeTab as "purchase-orders" | "receiving" | "suppliers") && canAccessPurchasing ? (
           <AdvancedInventoryWorkflows
           key={activeTab}
           stores={stores.map(({ id, name }) => ({ id, name }))}
@@ -1647,6 +2017,10 @@ export async function InventoryWorkspacePage({
           purchaseOrders={purchaseOrderHistory}
           receipts={recentGoodsReceipts}
           currencyCode={context.organization.currency_code}
+          canCreatePurchaseOrders={canCreatePurchaseOrders}
+          canManageSuppliers={canManageSuppliers}
+          canReceivePurchaseOrders={canReceivePurchaseOrders}
+          canUseLegacyCsvTools={canManage}
           canViewCosts={canViewCosts}
           adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name }))}
           initialReceiptOrderId={requestedPurchaseOrderId}
@@ -1658,7 +2032,7 @@ export async function InventoryWorkspacePage({
           />
       ) : null}
 
-      {activeTab === "supplier-returns" && canManage ? (
+      {activeTab === "supplier-returns" && (canViewPurchasing || canReturnToSupplier) ? (
         <InventoryIntegrityWorkflows
           stores={stores.map(({ id, name }) => ({ id, name }))}
           items={advancedItems}
@@ -1666,6 +2040,7 @@ export async function InventoryWorkspacePage({
           policies={policiesByStore}
           organizationDefaultPolicy={organizationDefaultPolicy}
           canManageOrganizationDefault={canManageOrganizationDefault}
+          canPostSupplierReturns={canReturnToSupplier}
           adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" | "OPENING_STOCK" }))}
           inTransitTransfers={inTransitTransfers}
           composites={compositeProducts}
@@ -1682,6 +2057,7 @@ export async function InventoryWorkspacePage({
           organizationDefaultPolicy={organizationDefaultPolicy}
           canManageOrganizationDefault={canManageOrganizationDefault}
           canManageAdjustmentReasons={canManage}
+          canPostAdjustments={canPostAdjustments}
           adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" | "OPENING_STOCK" }))}
           inTransitTransfers={inTransitTransfers}
           composites={compositeProducts}
@@ -1692,6 +2068,9 @@ export async function InventoryWorkspacePage({
       {activeTab === "counts" && canCount ? (
         <>
           <InventoryCountWorkspace
+            batches={inventoryCountBatchesWithDocuments}
+            canCreateCounts={canCreateCounts}
+            canFinalizeCounts={canFinalizeCounts}
             documents={inventoryCountDocuments}
             categories={categories.filter((category) => !category.is_archived).map(({ id, name }) => ({ id, name }))}
             items={advancedItems.map(({ barcode, categoryId, categoryName, productId, quantitiesByStore, sku, storeIds, variantId, label, unit }) => ({
@@ -1733,21 +2112,26 @@ export async function InventoryWorkspacePage({
         </>
       ) : null}
 
-      {activeTab === "transfers" && canManage ? (
+      {activeTab === "transfers" && canAccessTransfers ? (
         <>
           <InventoryTransferWorkspace
-            awaitingReceiptCount={inTransitTransfers.length}
-            replenishmentHref={`/back-office/replenishment?tab=requests${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}`}
+            awaitingReceiptCount={directInTransitTransfers.length}
+            canCreateTransfers={canCreateTransfers}
+            canSendTransfers={canSendTransfers}
+            items={directTransferItems}
+            stores={stores.map(({ id, name }) => ({ id, name }))}
+            transfersEnabled={context.features.transfers}
           />
-          {legacyInTransitTransfers.length ? <InventoryIntegrityWorkflows
+          {directInTransitTransfers.length ? <InventoryIntegrityWorkflows
             stores={stores.map(({ id, name }) => ({ id, name }))}
             items={advancedItems}
             suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
             policies={policiesByStore}
             organizationDefaultPolicy={organizationDefaultPolicy}
             canManageOrganizationDefault={canManageOrganizationDefault}
+            canReceiveTransfers={canReceiveTransfers}
             adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name, movementType: reason.movement_type as "ADJUSTMENT" | "DAMAGE" | "LOSS" | "OPENING_STOCK" }))}
-            inTransitTransfers={legacyInTransitTransfers}
+            inTransitTransfers={directInTransitTransfers}
             composites={compositeProducts}
             sections={["transfer-receipt"]}
           /> : null}
@@ -1769,7 +2153,7 @@ export async function InventoryWorkspacePage({
         />
       ) : null}
 
-      {activeTab === "valuation" && canViewCosts ? (
+      {activeTab === "valuation" && canViewValuation ? (
         <InventoryValuationSummary
           currencyCode={context.organization.currency_code}
           entries={inventoryValuation.map((entry) => {
@@ -1783,6 +2167,7 @@ export async function InventoryWorkspacePage({
 
             return {
               averageCostMinor: Number(entry.average_cost_minor),
+              costAvailable: entry.value_minor !== null,
               priceMinor: sellingPriceMinor === null || sellingPriceMinor === undefined
                 ? null
                 : Number(sellingPriceMinor),
@@ -1799,7 +2184,7 @@ export async function InventoryWorkspacePage({
         />
       ) : activeTab === "valuation" ? (
         <BackOfficeStateCard
-          description="Cost and valuation data stays restricted to employees with the existing cost-view permission."
+          description="Cost and valuation data stays restricted to employees with the existing cost-view and inventory-valuation permissions."
           icon={<Warehouse className="size-5" aria-hidden="true" />}
           title="Inventory valuation access required"
         />
@@ -1896,7 +2281,9 @@ export async function InventoryWorkspacePage({
                 ? "The latest 50 append-only records for this item. History is never edited here."
                 : activitySourceFilter
                   ? "Every append-only inventory movement recorded by this source document."
-                  : "The newest 30 append-only stock records."}
+                  : activityPageStart
+                    ? `Showing ${activityPageStart}–${activityPageEnd} append-only stock records.`
+                    : "No stock movement records match these filters."}
             </p>
           </div>
 
@@ -1905,7 +2292,7 @@ export async function InventoryWorkspacePage({
             label={selectedActivitySourceReference?.label ?? formatInventorySourceReference(activitySourceFilter.type) ?? "Source document"}
           /> : null}
 
-          {!selectedDetailLevel ? (
+          {!selectedDetailPosition ? (
             <GlobalFilterBar
               action="/back-office/inventory"
               dateEndName="to"
@@ -1918,7 +2305,7 @@ export async function InventoryWorkspacePage({
               namePrefix="inventory-activity-filter"
               primaryAdditionalFields={(
                 <label className="grid min-w-0 gap-1.5 text-sm font-medium lg:min-w-44 lg:flex-none">
-                  Document type
+                  Movement type
                   <select className="h-8 min-w-0 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" defaultValue={activityMovementType ?? ""} name="movementType">
                     <option value="">All activity</option>
                     {MOVEMENT_TYPES.map((movementType) => <option key={movementType} value={movementType}>{movementType.replaceAll("_", " ")}</option>)}
@@ -1935,6 +2322,21 @@ export async function InventoryWorkspacePage({
           {activityRows.length > 0 ? (
             <>
               <InventoryActivityList currencyCode={context.organization.currency_code} rows={activityRows} />
+              {!selectedDetailPosition && (activityPage > 1 || hasNextActivityPage) ? (
+                <nav aria-label="Inventory activity pages" className="flex items-center justify-end gap-3 text-sm">
+                  {activityPage > 1 ? (
+                    <Link className="rounded-md border px-3 py-1.5 font-medium hover:bg-muted" href={inventoryActivityPageHref(activityPage - 1)}>
+                      Previous
+                    </Link>
+                  ) : null}
+                  <span className="text-muted-foreground">Page {activityPage}</span>
+                  {hasNextActivityPage ? (
+                    <Link className="rounded-md border px-3 py-1.5 font-medium hover:bg-muted" href={inventoryActivityPageHref(activityPage + 1)}>
+                      Next
+                    </Link>
+                  ) : null}
+                </nav>
+              ) : null}
               {/* CANDIDATE_FOR_REMOVAL: retained legacy movement-card renderer until the shared activity drawer completes visual QA. */}
               {false ? <Card>
               <CardContent className="divide-y px-0">
@@ -2035,6 +2437,7 @@ function InventoryValuationSummary({
   currencyCode: string;
   entries: Array<{
     averageCostMinor: number;
+    costAvailable: boolean;
     priceMinor: number | null;
     productName: string;
     productStatus: string;
@@ -2048,8 +2451,8 @@ function InventoryValuationSummary({
   // than recalculating quantity × cost in JavaScript, so a fractional stock balance
   // cannot create a different valuation in the UI.
   const stockPositions = entries.filter((entry) => entry.quantity !== 0);
-  const costedEntries = stockPositions.filter((entry) => entry.averageCostMinor > 0);
-  const missingCostEntries = stockPositions.filter((entry) => entry.averageCostMinor <= 0);
+  const costedEntries = stockPositions.filter((entry) => entry.costAvailable);
+  const missingCostEntries = stockPositions.filter((entry) => !entry.costAvailable);
   const pricedEntries = stockPositions.filter((entry) => entry.priceMinor !== null);
   const comparableEntries = costedEntries.filter((entry) => entry.priceMinor !== null);
   const totalValueMinor = costedEntries.reduce((total, entry) => total + entry.valueMinor, 0);
@@ -2123,7 +2526,7 @@ function InventoryValuationSummary({
               <tbody className="divide-y">
                 {sortedEntries.map((entry, index) => {
                   const retailValueMinor = entry.priceMinor === null ? null : Math.round(entry.quantity * entry.priceMinor);
-                  const potentialProfit = entry.averageCostMinor > 0 && retailValueMinor !== null
+                  const potentialProfit = entry.costAvailable && retailValueMinor !== null
                     ? retailValueMinor - entry.valueMinor
                     : null;
                   const marginBps = potentialProfit !== null && retailValueMinor !== null && retailValueMinor > 0
@@ -2134,8 +2537,8 @@ function InventoryValuationSummary({
                     <td className="min-w-52 px-4 py-3"><div className="font-medium">{entry.productName}</div><div className="mt-1 flex flex-wrap gap-1">{entry.productStatus === "archived" ? <Badge variant="outline">Archived</Badge> : null}{entry.quantity < 0 ? <Badge variant="destructive">Negative stock</Badge> : null}</div></td>
                     <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{entry.storeName}</td>
                     <td className={cn("whitespace-nowrap px-4 py-3 text-right", entry.quantity < 0 && "font-medium text-destructive")}>{formatQuantity(entry.quantity)} {entry.unit}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right">{entry.averageCostMinor > 0 ? formatMoney(entry.averageCostMinor, currencyCode) : <span className="text-muted-foreground">Missing cost</span>}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right font-medium">{entry.averageCostMinor > 0 ? formatMoney(entry.valueMinor, currencyCode) : <span className="text-muted-foreground">Unavailable</span>}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right">{entry.costAvailable ? formatMoney(entry.averageCostMinor, currencyCode) : <span className="text-muted-foreground">Missing cost</span>}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-medium">{entry.costAvailable ? formatMoney(entry.valueMinor, currencyCode) : <span className="text-muted-foreground">Unavailable</span>}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-right">{retailValueMinor === null ? <span className="text-muted-foreground">Unavailable</span> : formatMoney(retailValueMinor, currencyCode)}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-right">{potentialProfit === null ? <span className="text-muted-foreground">Unavailable</span> : formatMoney(potentialProfit, currencyCode)}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-right">{marginBps === null ? <span className="text-muted-foreground">Unavailable</span> : formatPercentFromBasisPoints(marginBps)}</td>

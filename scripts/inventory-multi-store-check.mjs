@@ -30,12 +30,14 @@ test("Phase 4 preserves shared store scope and stock-detail routing after the St
   assert.match(inventoryPage, /rawRequestedTab === "stock"/);
   assert.match(inventoryPage, /redirect\(`\/back-office\/replenishment\?\$\{query\.toString\(\)\}`\)/);
   assert.match(replenishmentPage, /const storeScope = resolveBackOfficeStoreScope\(context, parameters\)/);
-  assert.match(replenishmentPage, /const visibleStore = \(storeId: string\) => !storeScope\.selectedStoreId \|\| storeId === storeScope\.selectedStoreId/);
+  assert.match(replenishmentPage, /const authorizedStore = \(storeId: string\) => storeScope\.storeIds === null \|\| storeScope\.storeIds\.includes\(storeId\);/);
+  assert.match(replenishmentPage, /const visibleStore = \(storeId: string\) => authorizedStore\(storeId\) &&/);
   assert.match(replenishmentPage, /const stockLevels = levels\.filter\(\(level\) => visibleStore\(level\.store_id\)\)/);
-  assert.match(replenishmentPage, /productId: level\.product_id/);
-  assert.match(replenishmentPage, /variantId: level\.variant_id/);
+  assert.match(replenishmentPage, /stockPositionKey\(level\.store_id, level\.product_id, level\.variant_id\)/);
+  assert.match(replenishmentPage, /const stockRowsByPosition = new Map<string, InventoryStockRow>/);
   assert.match(replenishmentPage, /multiStoreCount=\{stores\.filter\(\(store\) => visibleStore\(store\.id\)\)\.length\}/);
-  assert.match(replenishmentPage, /detailHref: `\/back-office\/inventory\?\$\{query\.toString\(\)}`/);
+  assert.match(replenishmentPage, /const stockDetailHref/);
+  assert.match(replenishmentPage, /query\.set\("detailProduct", productId\)/);
 });
 
 test("Phase 4 is a read-only presentation layer with no new database write path", async () => {

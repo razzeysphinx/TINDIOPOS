@@ -32,10 +32,20 @@ export default async function BackOfficeLayout({ children }: { children: ReactNo
     canViewKitchen: context.features.kitchen_display && context.permissions.some((permission) => ["kitchen.view", "kitchen.manage"].includes(permission)),
     canUseApprovals: context.permissions.some((permission) => ["approvals.manage", "audit.view"].includes(permission)),
     canUseInventory: context.features.inventory && context.permissions.some(
-      (permission) => permission === "inventory.view" || permission === "inventory.count" || permission === "inventory.manage",
+      (permission) => permission === "inventory.view"
+        || permission === "inventory.count"
+        || permission === "inventory.count.create"
+        || permission === "inventory.count.finalize"
+        || permission === "inventory.manage"
+        || permission === "inventory.transfer.create"
+        || permission === "inventory.transfer.send"
+        || permission === "inventory.transfer.receive",
     ),
     canCountInventory: context.features.inventory && context.permissions.some(
-      (permission) => permission === "inventory.count" || permission === "inventory.manage",
+      (permission) => permission === "inventory.count"
+        || permission === "inventory.count.create"
+        || permission === "inventory.count.finalize"
+        || permission === "inventory.manage",
     ),
     canManageInventory: context.features.inventory && context.permissions.includes("inventory.manage"),
     canManageCatalog: context.permissions.includes("products.manage"),

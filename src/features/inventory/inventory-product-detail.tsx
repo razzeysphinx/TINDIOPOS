@@ -44,7 +44,9 @@ export type InventoryProductDetailData = {
   countHref: string | null;
   incomingQuantity: number;
   isAvailable: boolean;
+  outboundTransferQuantity: number;
   productName: string;
+  projectedQuantity: number;
   inTransitQuantity: number;
   lastCount: {
     countedAt: string;
@@ -89,8 +91,10 @@ export function InventoryProductDetail({ detail }: { detail: InventoryProductDet
             {detail.condition === "negative" ? <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">Negative stock needs investigation before correction. Review the contributing activity and last physical count below; TINDIO will still enforce this store&apos;s existing negative-stock policy.</p> : null}
             <dl className="grid gap-3 rounded-xl border bg-muted/20 p-4 sm:grid-cols-2">
               <SummaryMetric label="On hand" value={`${formatQuantity(detail.quantity)} ${detail.unit}`} />
-              <SummaryMetric label="Incoming" value={`${formatQuantity(detail.incomingQuantity)} ${detail.unit}`} />
-              <SummaryMetric label="In transit" value={`${formatQuantity(detail.inTransitQuantity)} ${detail.unit}`} />
+              <SummaryMetric label="Incoming purchase orders" value={`${formatQuantity(detail.incomingQuantity)} ${detail.unit}`} />
+              <SummaryMetric label="Transfer inbound" value={`${formatQuantity(detail.inTransitQuantity)} ${detail.unit}`} />
+              <SummaryMetric label="Transfer outbound" value={`${formatQuantity(detail.outboundTransferQuantity)} ${detail.unit}`} />
+              <SummaryMetric label="Projected stock" value={`${formatQuantity(detail.projectedQuantity)} ${detail.unit}`} />
               <SummaryMetric label="Last counted" value={detail.lastCount ? formatDate(detail.lastCount.countedAt) : "Never"} />
               <SummaryMetric label="Selling availability" value={detail.isAvailable ? "Available" : "Off"} />
               <SummaryMetric label="Reorder level" value={detail.reorderPoint === null ? "Not configured" : `${formatQuantity(detail.reorderPoint)} ${detail.unit}`} />

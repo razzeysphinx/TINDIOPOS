@@ -13,9 +13,9 @@ const [page, health, detail, navigation, migration, clockMigration] = await Prom
   source("../supabase/migrations/20260905090300_inventory_health_awareness_clock.sql"),
 ]);
 
-test("Phase 4 adds an attention-first control tower and Stock Health workspace", () => {
-  assert.match(navigation, /"health"/);
-  assert.match(navigation, /Stock Health/);
+test("Stock health is merged into the attention-first Inventory Overview", () => {
+  assert.doesNotMatch(navigation, /\{ id: "health", label:/);
+  assert.match(page, /candidate === "health"\) return "overview"/);
   assert.match(page, /<InventoryControlTower/);
   assert.match(page, /<InventoryHealthWorkspace/);
   for (const issue of ["Negative stock", "Low stock", "Out of stock", "Count variance", "Stale physical count", "Never physically counted", "Transfer discrepancy", "Inventory sync conflict"]) {
@@ -25,7 +25,22 @@ test("Phase 4 adds an attention-first control tower and Stock Health workspace",
   assert.match(health, /Multi-store stock/);
   assert.match(health, /Transfers in progress/);
   assert.match(health, /Recent inventory activity/);
-  assert.match(health, /This page never changes stock automatically/);
+  assert.match(health, /This view never changes stock automatically/);
+});
+
+test("Phase 2 turns the Overview into a permission-aware owner control tower", () => {
+  assert.match(health, /Inventory overview/);
+  assert.match(health, /Needs attention/);
+  for (const label of ["Active inventory items", "In stock", "Low stock", "Out of stock", "Negative stock", "Incoming transfers", "Incoming purchase orders", "Inventory value"]) {
+    assert.match(page, new RegExp(`label: "${label}"`));
+  }
+  assert.match(health, /Compare the same authorized Stock Levels positions by store/);
+  for (const column of ["In stock", "Low", "Out", "Negative", "In transit"]) assert.match(health, new RegExp(`>${column}<`));
+  assert.match(page, /const valuationQuery = \["overview", "valuation"\]\.includes\(activeTab\) && canViewCosts/);
+  assert.match(page, /openPurchaseOrdersCountQuery\?\.in\("store_id", scopedStoreIds\)/);
+  assert.match(page, /const stockPositionCountsByStore = new Map/);
+  assert.match(page, /href: stockLevelsHref\(undefined, store\.id\)/);
+  assert.match(page, /overviewMetrics=\{overviewMetrics\}/);
 });
 
 test("latest count awareness is read-only, permission checked, and store scoped", () => {
@@ -44,8 +59,10 @@ test("latest count awareness is read-only, permission checked, and store scoped"
 
 test("product investigation keeps quantities distinct and reuses existing workspaces", () => {
   assert.match(detail, /label="On hand"/);
-  assert.match(detail, /label="Incoming"/);
-  assert.match(detail, /label="In transit"/);
+  assert.match(detail, /label="Incoming purchase orders"/);
+  assert.match(detail, /label="Transfer inbound"/);
+  assert.match(detail, /label="Transfer outbound"/);
+  assert.match(detail, /label="Projected stock"/);
   assert.match(detail, /Last physical count/);
   assert.match(detail, />Start count</);
   assert.match(detail, />Create transfer</);

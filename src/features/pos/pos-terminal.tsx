@@ -79,6 +79,7 @@ import {
   type PosCustomer,
   type PosDiningOption,
   type PosDiscount,
+  type PosIncomingTransfer,
   type PosLoyaltyProgram,
   type PosPaymentMethod,
   type PosOpenTicket,
@@ -158,6 +159,7 @@ export function PosTerminal({
   canEditQuantity,
   canOpenShift,
   canManageTiles,
+  canReceiveIncomingTransfers,
   canRemoveItems,
   categories,
   customerDisplaySessions,
@@ -169,6 +171,7 @@ export function PosTerminal({
   initialItems,
   initialFavoriteItems,
   initialRecentItems,
+  incomingTransfers,
   loyaltyProgram,
   organizationName,
   openTickets: initialOpenTickets,
@@ -185,6 +188,7 @@ export function PosTerminal({
 }: {
   activeShift: PosActiveShift | null;
   canAccessBackOffice: boolean;
+  canReceiveIncomingTransfers: boolean;
 } & PosCapabilities & {
   categories: PosCategory[];
   customerDisplaySessions: PosCustomerDisplaySession[];
@@ -196,6 +200,7 @@ export function PosTerminal({
   initialItems: PosCatalogItem[];
   initialFavoriteItems: PosCatalogItem[];
   initialRecentItems: PosCatalogItem[];
+  incomingTransfers: PosIncomingTransfer[];
   loyaltyProgram: PosLoyaltyProgram | null;
   organizationName: string;
   openTickets: PosOpenTicket[];
@@ -1106,11 +1111,13 @@ export function PosTerminal({
         <div className="grid min-h-svh grid-rows-[auto_1fr] lg:h-svh">
         <PosWorkspaceHeader
           canAccessBackOffice={canAccessBackOffice}
+          canReceiveIncomingTransfers={canReceiveIncomingTransfers}
           canCreateSales
           canUseShiftControls={canUseShiftControls}
           canUseTimeClock={canUseTimeClock}
           canViewReceipts={canViewReceipts}
           employeeName={employeeName}
+          incomingTransfers={incomingTransfers}
           itemCount={cartSummary.itemCount}
           onCreateCustomer={canCreateCustomers && !isPaymentScreenOpen ? () => setIsCustomerCreateOpen(true) : undefined}
           onViewCart={() => setIsCartReviewOpen(true)}

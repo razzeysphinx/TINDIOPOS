@@ -33,6 +33,7 @@ export default async function PosPage() {
     <PosTerminal
       activeShift={activeShift}
       canAccessBackOffice={canAccessBackOffice(context)}
+      canReceiveIncomingTransfers={workspace.canReceiveIncomingTransfers}
       {...capabilities}
       categories={workspace.categories}
       customerDisplaySessions={context.features.customer_display ? workspace.customerDisplaySessions : []}
@@ -44,6 +45,7 @@ export default async function PosPage() {
       initialItems={workspace.initialItems}
       initialFavoriteItems={workspace.initialFavoriteItems}
       initialRecentItems={workspace.initialRecentItems}
+      incomingTransfers={workspace.incomingTransfers}
       key={`${activeShift?.id ?? "shift-closed"}:${workspace.openTickets.map((ticket) => `${ticket.id}:${ticket.updatedAt}`).join(",")}`}
       loyaltyProgram={capabilities.canUseCustomerLoyalty ? workspace.loyaltyProgram : null}
       organizationName={context.organization.name}

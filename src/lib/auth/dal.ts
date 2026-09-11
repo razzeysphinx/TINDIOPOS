@@ -374,7 +374,12 @@ const BACK_OFFICE_PERMISSIONS = [
   "products.manage",
   "inventory.view",
   "inventory.count",
+  "inventory.count.create",
+  "inventory.count.finalize",
   "inventory.manage",
+  "inventory.transfer.create",
+  "inventory.transfer.send",
+  "inventory.transfer.receive",
   "customers.manage",
   "employees.manage",
   "roles.manage",
@@ -426,7 +431,16 @@ export function canAccessBackOffice(context: BusinessContext) {
 export function getBackOfficeHome(context: BusinessContext) {
   if (hasPermission(context, "dashboard.view")) return "/back-office";
   if (hasPermission(context, "reports.view")) return "/back-office/reports";
-  if (hasAnyPermission(context, ["inventory.view", "inventory.count", "inventory.manage"]) && context.features.inventory) {
+  if (hasAnyPermission(context, [
+    "inventory.view",
+    "inventory.count",
+    "inventory.count.create",
+    "inventory.count.finalize",
+    "inventory.manage",
+    "inventory.transfer.create",
+    "inventory.transfer.send",
+    "inventory.transfer.receive",
+  ]) && context.features.inventory) {
     return "/back-office/inventory";
   }
   if (hasPermission(context, "products.manage")) return "/back-office/catalog";

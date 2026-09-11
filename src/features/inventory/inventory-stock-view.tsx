@@ -48,6 +48,7 @@ type InventoryStockViewProps = {
   multiStoreCount: number;
   preferenceScope: string;
   rows: InventoryStockRow[];
+  stores: Array<{ id: string; name: string }>;
 };
 
 export type InventoryStockStatus =
@@ -62,6 +63,7 @@ export type InventoryStockStatus =
 type InventoryStockLayout = "grid" | "list";
 type InventoryStockSort = "priority" | "name_asc" | "name_desc" | "quantity_asc" | "quantity_desc" | "updated_desc" | "value_desc";
 type InventoryStockGroup = "none" | "category" | "status" | "store";
+type InventoryRestockPolicyFilter = "all" | InventoryStockRow["restockPolicy"];
 type InventoryStockRollup = {
   availableStoreCount: number;
   id: string;
@@ -120,6 +122,14 @@ function stockRowMatchesQuery(row: InventoryStockRow, query: string) {
 
 function stockRowMatchesCategory(row: InventoryStockRow, categoryId: string) {
   return categoryId === "all" || (row.categoryId ?? "uncategorized") === categoryId;
+}
+
+function stockRowMatchesStore(row: InventoryStockRow, storeId: string) {
+  return storeId === "all" || row.storeId === storeId;
+}
+
+function stockRowMatchesRestockPolicy(row: InventoryStockRow, restockPolicy: InventoryRestockPolicyFilter) {
+  return restockPolicy === "all" || row.restockPolicy === restockPolicy;
 }
 
 function buildStockRollups(rows: InventoryStockRow[]): InventoryStockRollup[] {
@@ -209,6 +219,7 @@ export function InventoryStockView({
   multiStoreCount,
   preferenceScope,
   rows,
+  stores,
 }: InventoryStockViewProps) {
   const savedLayout = useSyncExternalStore<InventoryStockLayout>(
     subscribeToLayoutPreference,
@@ -219,7 +230,9 @@ export function InventoryStockView({
   const layout = sessionLayout ?? savedLayout;
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("all");
+  const [storeId, setStoreId] = useState("all");
   const [status, setStatus] = useState<InventoryStockStatus>(initialStatus);
+  const [restockPolicy, setRestockPolicy] = useState<InventoryRestockPolicyFilter>("all");
   const [sort, setSort] = useState<InventoryStockSort>("priority");
   const [group, setGroup] = useState<InventoryStockGroup>("none");
   const [isPrinting, setIsPrinting] = useState(false);
@@ -239,19 +252,28 @@ export function InventoryStockView({
     const query = search.trim().toLocaleLowerCase();
 
     return rows.filter((row) => {
-      return stockRowMatchesQuery(row, query) && stockRowMatchesCategory(row, categoryId) && matchesStatus(row, status);
+      return stockRowMatchesQuery(row, query)
+        && stockRowMatchesCategory(row, categoryId)
+        && stockRowMatchesStore(row, storeId)
+        && stockRowMatchesRestockPolicy(row, restockPolicy)
+        && matchesStatus(row, status);
     });
-  }, [categoryId, rows, search, status]);
+  }, [categoryId, restockPolicy, rows, search, status, storeId]);
 
   const multiStoreRollups = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
     const matchingRollups = buildStockRollups(rows).filter((rollup) => (
-      rollup.rows.some((row) => stockRowMatchesQuery(row, query) && stockRowMatchesCategory(row, categoryId))
+      rollup.rows.some((row) => (
+        stockRowMatchesQuery(row, query)
+        && stockRowMatchesCategory(row, categoryId)
+        && stockRowMatchesStore(row, storeId)
+        && stockRowMatchesRestockPolicy(row, restockPolicy)
+      ))
       && matchesRollupStatus(rollup, status)
     ));
 
     return sortRollups(matchingRollups, sort);
-  }, [categoryId, rows, search, sort, status]);
+  }, [categoryId, restockPolicy, rows, search, sort, status, storeId]);
 
   const sortedRows = useMemo(() => [...filteredRows].sort((left, right) => {
     switch (sort) {
@@ -294,7 +316,7 @@ export function InventoryStockView({
     return Array.from(result.values());
   }, [group, sortedRows]);
 
-  const hasClientFilters = search.length > 0 || categoryId !== "all" || status !== "all" || sort !== "priority" || group !== "none";
+  const hasClientFilters = search.length > 0 || categoryId !== "all" || storeId !== "all" || status !== "all" || restockPolicy !== "all" || sort !== "priority" || group !== "none";
   const updateLayout = (nextLayout: InventoryStockLayout) => {
     setSessionLayout(nextLayout);
     try {
@@ -306,7 +328,9 @@ export function InventoryStockView({
   const clearClientFilters = () => {
     setSearch("");
     setCategoryId("all");
+    setStoreId("all");
     setStatus("all");
+    setRestockPolicy("all");
     setSort("priority");
     setGroup("none");
   };
@@ -341,7 +365,7 @@ export function InventoryStockView({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold" id="stock-levels-title">{multiStoreCount > 1 ? "Store records" : "Current stock"}<ContextHelp label="What is current stock?">The quantity TINDIO currently records at a store. Open an item to see its stock activity and why it changed.</ContextHelp></h2>
-          <p className="mt-1 text-sm text-muted-foreground">{multiStoreCount > 1 ? "Individual projected balances remain store-specific. Use the page filter above to change the store scope." : "One projected balance per store and saleable item. Use the page filter above to change the store scope."}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{multiStoreCount > 1 ? "Individual projected balances remain store-specific. Use the Store filter to compare your authorized locations." : "One projected balance per store and saleable item."}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <Button disabled={isPrinting} onClick={printCurrentView} size="sm" type="button" variant="outline">
@@ -361,7 +385,7 @@ export function InventoryStockView({
       />
 
       <div className="rounded-xl border bg-card p-3 sm:p-4">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(15rem,1.5fr)_repeat(4,minmax(0,1fr))_auto]">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(15rem,1.5fr)_repeat(6,minmax(0,1fr))_auto]">
           <label className="grid gap-1.5 sm:col-span-2 xl:col-span-1">
             <span className="text-sm font-medium">Search</span>
             <span className="relative">
@@ -376,6 +400,13 @@ export function InventoryStockView({
               {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
             </select>
           </label>
+          {stores.length > 1 ? <label className="grid gap-1.5">
+            <span className="text-sm font-medium">Store</span>
+            <select className={selectClassName} onChange={(event) => setStoreId(event.target.value)} value={storeId}>
+              <option value="all">All stores</option>
+              {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
+            </select>
+          </label> : null}
           <label className="grid gap-1.5">
             <span className="text-sm font-medium">Status</span>
             <select className={selectClassName} onChange={(event) => setStatus(event.target.value as InventoryStockStatus)} value={status}>
@@ -386,6 +417,14 @@ export function InventoryStockView({
               <option value="negative">Negative stock</option>
               <option value="available">Available to sell</option>
               {canUseReorderStatus ? <option value="attention">Needs attention</option> : null}
+            </select>
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-sm font-medium">Restock policy</span>
+            <select className={selectClassName} onChange={(event) => setRestockPolicy(event.target.value as InventoryRestockPolicyFilter)} value={restockPolicy}>
+              <option value="all">All policies</option>
+              <option value="restock">Restock</option>
+              <option value="do_not_restock">Do not restock</option>
             </select>
           </label>
           <label className="grid gap-1.5">
@@ -461,11 +500,11 @@ function StockSummary({
   }, { in_stock: 0, low: 0, negative: 0, out_of_stock: 0 });
   const activeProductCount = new Set(rows.map((row) => row.productId)).size;
   const metrics: Array<{ label: string; value: number; target: InventoryStockStatus; visible: boolean }> = [
-    { label: "Active products", value: activeProductCount, target: "all", visible: true },
-    { label: "In stock", value: counts.in_stock, target: "in_stock", visible: true },
-    { label: "Low stock", value: counts.low, target: "low", visible: canUseReorderStatus },
-    { label: "Out of stock", value: counts.out_of_stock, target: "out_of_stock", visible: true },
     { label: "Negative stock", value: counts.negative, target: "negative", visible: true },
+    { label: "Low stock", value: counts.low, target: "low", visible: canUseReorderStatus },
+    { label: "In stock", value: counts.in_stock, target: "in_stock", visible: true },
+    { label: "Out of stock", value: counts.out_of_stock, target: "out_of_stock", visible: true },
+    { label: "Active products", value: activeProductCount, target: "all", visible: true },
   ];
 
   return (

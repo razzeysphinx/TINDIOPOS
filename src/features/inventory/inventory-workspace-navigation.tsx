@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 
 export type InventoryControlTab =
   | "overview"
-  | "health"
   | "activity"
   | "adjustments"
   | "counts"
@@ -12,7 +11,7 @@ export type InventoryControlTab =
   | "production"
   | "valuation";
 
-export type StockRestockTab = "levels" | "needs-restocking" | "requests";
+export type StockRestockTab = "levels" | "replenishment";
 export type PurchasingTab = "purchase-orders" | "receiving" | "suppliers" | "supplier-returns";
 export type InventoryWorkspace = "control" | "restock" | "purchasing";
 
@@ -21,7 +20,14 @@ type InventoryWorkspaceNavigationProps = {
   canAdjust?: boolean;
   canCount?: boolean;
   canManage: boolean;
+  canCreatePurchaseOrders?: boolean;
+  canManageSuppliers?: boolean;
+  canReceivePurchaseOrders?: boolean;
+  canReturnToSupplier?: boolean;
+  canTransfer?: boolean;
   canView?: boolean;
+  canViewValuation?: boolean;
+  canViewPurchasing?: boolean;
   canUseProduction?: boolean;
   storeId?: string | null;
   workspace: InventoryWorkspace;
@@ -34,7 +40,6 @@ type InventoryNavigationItem = {
 
 const inventoryControlItems: readonly InventoryNavigationItem[] = [
   { id: "overview", label: "Overview" },
-  { id: "health", label: "Stock Health" },
   { id: "activity", label: "Inventory activity" },
   { id: "adjustments", label: "Stock adjustments" },
   { id: "counts", label: "Inventory counts" },
@@ -52,8 +57,7 @@ const purchasingItems: readonly InventoryNavigationItem[] = [
 
 const restockItems: readonly InventoryNavigationItem[] = [
   { id: "levels", label: "Stock levels" },
-  { id: "needs-restocking", label: "Needs restocking" },
-  { id: "requests", label: "Restock requests" },
+  { id: "replenishment", label: "Replenishment" },
 ];
 
 function tabHref(workspace: InventoryWorkspace, tab: string, storeId?: string | null) {
@@ -73,8 +77,15 @@ export function InventoryWorkspaceNavigation({
   activeTab,
   canAdjust = false,
   canCount = false,
+  canCreatePurchaseOrders = false,
   canManage,
+  canManageSuppliers = false,
+  canReceivePurchaseOrders = false,
+  canReturnToSupplier = false,
+  canTransfer = false,
   canView = false,
+  canViewValuation = false,
+  canViewPurchasing = false,
   canUseProduction = false,
   storeId,
   workspace,
@@ -82,14 +93,22 @@ export function InventoryWorkspaceNavigation({
   const visibleControlItems = inventoryControlItems.filter((item) => {
     if (
       !canManage
-      && !(canView && (item.id === "overview" || item.id === "health" || item.id === "activity"))
+      && !(canView && (item.id === "overview" || item.id === "activity"))
       && !(canAdjust && item.id === "adjustments")
       && !(canCount && item.id === "counts")
+      && !(canTransfer && item.id === "transfers")
+      && !(canViewValuation && item.id === "valuation")
     ) return false;
     return item.id !== "production" || canUseProduction;
   });
-  const visiblePurchasingItems = purchasingItems.filter(() => canManage);
-  const restockNavigationItems = restockItems.filter((item) => canManage || item.id === "levels");
+  const visiblePurchasingItems = purchasingItems.filter((item) => {
+    if (canManage || canViewPurchasing) return true;
+    if (item.id === "purchase-orders") return canCreatePurchaseOrders;
+    if (item.id === "receiving") return canReceivePurchaseOrders;
+    if (item.id === "suppliers") return canManageSuppliers;
+    return canReturnToSupplier;
+  });
+  const restockNavigationItems = restockItems.filter((item) => canManage || canTransfer || item.id === "levels");
   const title = workspace === "control"
     ? "Stock Control sections"
     : workspace === "restock"

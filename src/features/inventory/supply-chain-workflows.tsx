@@ -66,11 +66,19 @@ export type ReplenishmentRule = {
   currentQuantity: number;
   incomingPurchaseQuantity: number;
   inTransitQuantity: number;
+  restockPolicy: "restock" | "do_not_restock";
   storeName: string;
   warehouseName: string | null;
-  recommendedWarehouseId?: string | null;
-  recommendedWarehouseName?: string | null;
-  recommendedSourceQuantity?: number;
+  sourceOptions: ReplenishmentSourceOption[];
+};
+export type ReplenishmentSourceOption = {
+  warehouseId: string | null;
+  warehouseName: string | null;
+  storeId: string;
+  storeName: string;
+  onHandQuantity: number;
+  targetStock: number | null;
+  safeExcessQuantity: number | null;
 };
 export type SupplyChainRequest = {
   id: string;
@@ -129,6 +137,9 @@ export function SupplyChainWorkflows({
   rules,
   requests,
   inboundPurchaseOrders,
+  canCreateTransfers = true,
+  canReceiveTransfers = true,
+  canSendTransfers = true,
   defaultStoreId,
   sections = ALL_SUPPLY_CHAIN_SECTIONS,
 }: {
@@ -139,6 +150,9 @@ export function SupplyChainWorkflows({
   rules: ReplenishmentRule[];
   requests: SupplyChainRequest[];
   inboundPurchaseOrders: InboundPurchaseOrder[];
+  canCreateTransfers?: boolean;
+  canReceiveTransfers?: boolean;
+  canSendTransfers?: boolean;
   defaultStoreId?: string | null;
   /** Keeps daily restocking separate from stock-location configuration. */
   sections?: readonly SupplyChainSection[];
@@ -234,13 +248,18 @@ export function SupplyChainWorkflows({
     )));
   }
 
-  function applyRuleSuggestion(rule: ReplenishmentRule) {
-    if (!rule.recommendedWarehouseId) return;
+  function applyRuleSuggestion(rule: ReplenishmentRule, source: ReplenishmentSourceOption | null) {
     const suggested = Math.max(0, rule.targetStock - rule.currentQuantity - rule.incomingPurchaseQuantity - rule.inTransitQuantity);
     if (suggested === 0) return;
     setRequestStoreId(rule.storeId);
-    setRequestWarehouseId(rule.recommendedWarehouseId);
-    setRequestLines([{ productId: rule.productId, variantId: rule.variantId ?? "", quantity: String(Math.min(suggested || 1, rule.recommendedSourceQuantity ?? Math.max(suggested, 1))) }]);
+    setRequestWarehouseId(source?.warehouseId ?? "");
+    setRequestLines([{
+      productId: rule.productId,
+      variantId: rule.variantId ?? "",
+      quantity: String(source?.safeExcessQuantity === null || source?.safeExcessQuantity === undefined
+        ? suggested
+        : Math.min(suggested, source.safeExcessQuantity)),
+    }]);
     setRequestResult(null);
   }
 
@@ -367,8 +386,8 @@ export function SupplyChainWorkflows({
   return (
     <section className="space-y-6" aria-labelledby="replenishment-workflows-title">
       <div>
-        <h2 className="text-lg font-semibold" id="replenishment-workflows-title">Restocking and store transfers</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Follow each request from approval to delivery so you always know where stock is and what happens next.</p>
+        <h2 className="text-lg font-semibold" id="replenishment-workflows-title">Replenishment</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Review projected stock and choose an explicit transfer or purchase action when it is appropriate. Suggestions never create inventory documents on their own.</p>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -404,7 +423,7 @@ export function SupplyChainWorkflows({
         </WorkflowCard> : null}
 
         {showRequests ? <WorkflowCard icon={<Send aria-hidden="true" />} title="Submit stock request" description="A request records demand only. Warehouse stock changes later, when the picked request is dispatched.">
-          {stores.length && eligibleRequestWarehouses.length && requestItems.length ? <form className="space-y-3" onSubmit={submitRequest} noValidate>
+          {canCreateTransfers && stores.length && eligibleRequestWarehouses.length && requestItems.length ? <form className="space-y-3" onSubmit={submitRequest} noValidate>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Requesting store"><select className={selectClassName} value={requestStoreId} onChange={(event) => setRequestStoreId(event.target.value)}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></Field>
               <Field label="Source warehouse"><select className={selectClassName} value={requestWarehouseId} onChange={(event) => setRequestWarehouseId(event.target.value)}><option value="">Choose a warehouse</option>{eligibleRequestWarehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.code} · {warehouse.name}</option>)}</select></Field>
@@ -420,7 +439,7 @@ export function SupplyChainWorkflows({
             />
             <Field label="Request note"><Input value={requestNote} onChange={(event) => setRequestNote(event.target.value)} placeholder="Optional reason or delivery note" /></Field>
             <SubmitRow pending={isActionPending("request")} result={requestResult} label="Submit for approval" icon={<Send />} />
-          </form> : <Empty message="You need two stock locations, a designated warehouse, and a tracked item at the requesting store." />}
+          </form> : <Empty message={canCreateTransfers ? "You need two stock locations, a designated warehouse, and a tracked item at the requesting store." : "Your role can review stock requests but does not have permission to create them."} />}
         </WorkflowCard> : null}
       </div>
 
@@ -430,7 +449,7 @@ export function SupplyChainWorkflows({
         {rules.length ? <div className="grid gap-3 lg:grid-cols-2">{rules.map((rule) => {
           const suggested = Math.max(0, rule.targetStock - rule.currentQuantity);
           const needsReorder = rule.currentQuantity <= rule.reorderPoint;
-          return <Card key={rule.id} size="sm"><CardContent className="flex flex-wrap items-center justify-between gap-3 py-4"><div><p className="font-medium">{rule.label}</p><p className="mt-1 text-xs text-muted-foreground">{rule.storeName} · on hand {formatQuantity(rule.currentQuantity)} {rule.unit} · reorder {formatQuantity(rule.reorderPoint)} · target {formatQuantity(rule.targetStock)}</p>{rule.warehouseName ? <p className="mt-1 text-xs text-muted-foreground">Preferred source: {rule.warehouseName}</p> : null}</div><div className="flex items-center gap-2"><Badge variant={needsReorder ? "secondary" : "outline"}>{needsReorder ? `Request ${formatQuantity(suggested)}` : "Above reorder point"}</Badge>{suggested > 0 ? <Button size="sm" type="button" variant="outline" onClick={() => applyRuleSuggestion(rule)}>Use suggestion</Button> : null}</div></CardContent></Card>;
+          return <Card key={rule.id} size="sm"><CardContent className="flex flex-wrap items-center justify-between gap-3 py-4"><div><p className="font-medium">{rule.label}</p><p className="mt-1 text-xs text-muted-foreground">{rule.storeName} · on hand {formatQuantity(rule.currentQuantity)} {rule.unit} · reorder {formatQuantity(rule.reorderPoint)} · target {formatQuantity(rule.targetStock)}</p>{rule.warehouseName ? <p className="mt-1 text-xs text-muted-foreground">Preferred source: {rule.warehouseName}</p> : null}</div><div className="flex items-center gap-2"><Badge variant={needsReorder ? "secondary" : "outline"}>{needsReorder ? `Request ${formatQuantity(suggested)}` : "Above reorder point"}</Badge>{suggested > 0 ? <Button size="sm" type="button" variant="outline" onClick={() => applyRuleSuggestion(rule, null)}>Use suggestion</Button> : null}</div></CardContent></Card>;
         })}</div> : <Empty message="Save a reorder point and target stock rule to see replenishment suggestions." />}
       </section> : <ReplenishmentRecommendations rules={rules} onPrepareTransfer={applyRuleSuggestion} />) : null}
 
@@ -441,7 +460,7 @@ export function SupplyChainWorkflows({
 
       {showRequests ? <section className="space-y-3" aria-labelledby="request-workflow-title">
         <div><h3 className="font-semibold" id="request-workflow-title">Stock request workflow</h3><p className="mt-1 text-sm text-muted-foreground">Approval and picking do not move stock. Dispatch moves it out; receiving adds only the quantities actually received.</p></div>
-        {requests.length ? <div className="grid gap-4">{requests.map((request) => <StockRequestCard key={request.id} request={request} isPending={isActionPending(`workflow:${request.id}`)} dispatchNote={dispatchNotes[request.id] ?? ""} receiptNote={receiptNotes[request.id] ?? ""} result={workflowResults[request.id] ?? null} onDispatchNote={(note) => setDispatchNotes((current) => ({ ...current, [request.id]: note }))} onReceiptNote={(note) => setReceiptNotes((current) => ({ ...current, [request.id]: note }))} receiptValue={receiptValue} onReceiptChange={updateReceiptValue} onApprove={() => approveRequest(request)} onStartPicking={() => startPicking(request)} onDispatch={() => dispatchRequest(request)} onReceive={() => receiveRequest(request)} />)}</div> : <Empty message="Submitted stock requests will appear here as they move through approval, picking, dispatch, and receiving." />}
+        {requests.length ? <div className="grid gap-4">{requests.map((request) => <StockRequestCard canReceiveTransfers={canReceiveTransfers} canSendTransfers={canSendTransfers} key={request.id} request={request} isPending={isActionPending(`workflow:${request.id}`)} dispatchNote={dispatchNotes[request.id] ?? ""} receiptNote={receiptNotes[request.id] ?? ""} result={workflowResults[request.id] ?? null} onDispatchNote={(note) => setDispatchNotes((current) => ({ ...current, [request.id]: note }))} onReceiptNote={(note) => setReceiptNotes((current) => ({ ...current, [request.id]: note }))} receiptValue={receiptValue} onReceiptChange={updateReceiptValue} onApprove={() => approveRequest(request)} onStartPicking={() => startPicking(request)} onDispatch={() => dispatchRequest(request)} onReceive={() => receiveRequest(request)} />)}</div> : <Empty message="Submitted stock requests will appear here as they move through approval, picking, dispatch, and receiving." />}
       </section> : null}
     </section>
   );
@@ -452,12 +471,12 @@ function ReplenishmentRecommendations({
   onPrepareTransfer,
 }: {
   rules: ReplenishmentRule[];
-  onPrepareTransfer: (rule: ReplenishmentRule) => void;
+  onPrepareTransfer: (rule: ReplenishmentRule, source: ReplenishmentSourceOption | null) => void;
 }) {
   return (
     <section className="space-y-3" aria-labelledby="replenishment-recommendations-title">
       <div>
-        <h3 className="font-semibold" id="replenishment-recommendations-title">Restock suggestions</h3>
+        <h3 className="font-semibold" id="replenishment-recommendations-title">Replenishment suggestions</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           Suggestions use the stock levels you set. They identify the store, quantity, and next step, but never create a transfer or purchase order automatically.
         </p>
@@ -466,8 +485,24 @@ function ReplenishmentRecommendations({
         const projectedQuantity = rule.currentQuantity + rule.incomingPurchaseQuantity + rule.inTransitQuantity;
         const suggestedQuantity = Math.max(0, rule.targetStock - projectedQuantity);
         const needsReorder = rule.currentQuantity <= rule.reorderPoint;
-        const canPrepareTransfer = needsReorder && suggestedQuantity > 0 && Boolean(rule.recommendedWarehouseId && rule.recommendedWarehouseName && (rule.recommendedSourceQuantity ?? 0) > 0);
         const hasReplenishmentGap = needsReorder && suggestedQuantity > 0;
+        const safeTransferSource = rule.sourceOptions.find((source) => (
+          source.warehouseId !== null && source.safeExcessQuantity !== null && source.safeExcessQuantity > 0
+        )) ?? null;
+        const manuallyReviewableSource = rule.sourceOptions.find((source) => source.onHandQuantity > 0) ?? null;
+        const suggestedTransferQuantity = safeTransferSource
+          ? Math.min(suggestedQuantity, safeTransferSource.safeExcessQuantity ?? 0)
+          : 0;
+        const availableWithoutTarget = rule.sourceOptions.find((source) => (
+          source.onHandQuantity > 0 && source.targetStock === null
+        )) ?? null;
+        const safeExcessUnavailable = rule.sourceOptions.some((source) => (
+          source.onHandQuantity > 0 && source.targetStock !== null && source.safeExcessQuantity === 0
+        ));
+        const canPrepareTransfer = hasReplenishmentGap && safeTransferSource !== null;
+        if (rule.restockPolicy === "do_not_restock") {
+          return <Card key={rule.id} size="sm"><CardContent className="py-4"><p className="font-medium">{rule.label}</p><p className="mt-1 text-xs text-muted-foreground">{rule.storeName} is marked Do not restock. TINDIO will not suggest a transfer or purchase for this position.</p><Badge className="mt-3" variant="outline">Do not restock</Badge></CardContent></Card>;
+        }
         // Replenishment inputs are database numeric fields. Retain the older
         // display as a defensive fallback only if a malformed value reaches
         // the client; normal recommendations always use the full projection.
@@ -483,9 +518,13 @@ function ReplenishmentRecommendations({
                   {needsReorder ? (
                     <p className="mt-1 text-xs text-muted-foreground">
                       {hasReplenishmentGap
-                        ? rule.recommendedWarehouseName
-                          ? `Suggested internal source: ${rule.recommendedWarehouseName} · ${formatQuantity(rule.recommendedSourceQuantity ?? 0)} ${rule.unit} on hand`
-                          : "No authorized internal source currently has stock. Plan supplier replenishment or configure another warehouse."
+                        ? safeTransferSource
+                          ? `Suggested transfer: ${formatQuantity(suggestedTransferQuantity)} ${rule.unit} from ${safeTransferSource.storeName}. Source on hand ${formatQuantity(safeTransferSource.onHandQuantity)} · source target ${formatQuantity(safeTransferSource.targetStock ?? 0)} · safe excess ${formatQuantity(safeTransferSource.safeExcessQuantity ?? 0)}.`
+                          : availableWithoutTarget
+                            ? `${availableWithoutTarget.storeName} has ${formatQuantity(availableWithoutTarget.onHandQuantity)} ${rule.unit} available, but its target stock is not configured. Review the source before deciding to transfer.`
+                            : safeExcessUnavailable
+                              ? "Other authorized stores have stock, but none has safe excess above its configured target. Plan a supplier purchase or review the source targets."
+                              : "No authorized internal source currently has stock. Plan supplier replenishment or configure another warehouse."
                         : "Confirmed incoming stock already covers the target. No new restock request is suggested."}
                     </p>
                   ) : null}
@@ -493,27 +532,28 @@ function ReplenishmentRecommendations({
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={hasReplenishmentGap ? "secondary" : "outline"}>
                     {hasReplenishmentGap
-                      ? rule.recommendedWarehouseName
-                        ? `Request ${formatQuantity(Math.min(suggestedQuantity, rule.recommendedSourceQuantity ?? 0))}`
+                      ? safeTransferSource
+                        ? `Transfer ${formatQuantity(suggestedTransferQuantity)}`
                         : `Plan ${formatQuantity(suggestedQuantity)}`
                       : needsReorder
                         ? "Incoming covers target"
                         : "Above reorder point"}
                   </Badge>
-                  {canPrepareTransfer ? <Button size="sm" type="button" variant="outline" onClick={() => onPrepareTransfer(rule)}>Prepare transfer request</Button> : null}
-                  {hasReplenishmentGap && !rule.recommendedWarehouseName ? <Link className={buttonVariants({ size: "sm", variant: "outline" })} href="/back-office/purchasing?tab=purchase-orders">Plan supplier purchase</Link> : null}
+                  {canPrepareTransfer ? <Button size="sm" type="button" variant="outline" onClick={() => onPrepareTransfer(rule, safeTransferSource)}>Prepare transfer request</Button> : null}
+                  {hasReplenishmentGap && !safeTransferSource && manuallyReviewableSource ? <Button size="sm" type="button" variant="outline" onClick={() => onPrepareTransfer(rule, null)}>Review transfer options</Button> : null}
+                  {hasReplenishmentGap && !safeTransferSource && !availableWithoutTarget ? <Link className={buttonVariants({ size: "sm", variant: "outline" })} href="/back-office/purchasing?tab=purchase-orders">Plan supplier purchase</Link> : null}
                 </div>
               </CardContent>
             </Card>
           );
         }
-        return <Card key={rule.id} size="sm"><CardContent className="flex flex-wrap items-center justify-between gap-3 py-4"><div><p className="font-medium">{rule.label}</p><p className="mt-1 text-xs text-muted-foreground">{rule.storeName} · on hand {formatQuantity(rule.currentQuantity)} {rule.unit} · reorder {formatQuantity(rule.reorderPoint)} · target {formatQuantity(rule.targetStock)}</p>{needsReorder ? <p className="mt-1 text-xs text-muted-foreground">{rule.recommendedWarehouseName ? `Suggested internal source: ${rule.recommendedWarehouseName} · ${formatQuantity(rule.recommendedSourceQuantity ?? 0)} ${rule.unit} on hand` : "No authorized internal source currently has stock. Plan supplier replenishment or configure another warehouse."}</p> : null}</div><div className="flex flex-wrap items-center gap-2"><Badge variant={needsReorder ? "secondary" : "outline"}>{needsReorder ? rule.recommendedWarehouseName ? `Request ${formatQuantity(Math.min(suggestedQuantity, rule.recommendedSourceQuantity ?? 0))}` : "Plan supplier replenishment" : "Above reorder point"}</Badge>{canPrepareTransfer ? <Button size="sm" type="button" variant="outline" onClick={() => onPrepareTransfer(rule)}>Prepare transfer request</Button> : null}{needsReorder && !rule.recommendedWarehouseName ? <Link className={buttonVariants({ size: "sm", variant: "outline" })} href="/back-office/purchasing?tab=purchase-orders">Plan supplier purchase</Link> : null}</div></CardContent></Card>;
+        return <Card key={rule.id} size="sm"><CardContent className="py-4"><p className="font-medium">{rule.label}</p><p className="mt-1 text-xs text-muted-foreground">Replenishment inputs are incomplete. Review this rule before using it to prepare a transfer or purchase.</p></CardContent></Card>;
       })}</div> : <Empty message="Save a reorder point and target stock rule to see replenishment suggestions." />}
     </section>
   );
 }
 
-function StockRequestCard({ request, isPending, dispatchNote, receiptNote, result, onDispatchNote, onReceiptNote, receiptValue, onReceiptChange, onApprove, onStartPicking, onDispatch, onReceive }: {
+function StockRequestCard({ request, isPending, dispatchNote, receiptNote, result, onDispatchNote, onReceiptNote, receiptValue, onReceiptChange, onApprove, onStartPicking, onDispatch, onReceive, canSendTransfers, canReceiveTransfers }: {
   request: SupplyChainRequest;
   isPending: boolean;
   dispatchNote: string;
@@ -527,6 +567,8 @@ function StockRequestCard({ request, isPending, dispatchNote, receiptNote, resul
   onStartPicking: () => void;
   onDispatch: () => void;
   onReceive: () => void;
+  canSendTransfers: boolean;
+  canReceiveTransfers: boolean;
 }) {
   const canReceive = request.status === "dispatched" || request.status === "partially_received";
   const unresolvedQuantity = request.lines.reduce((total, line) => total + Math.max(0, line.dispatchedQuantity - line.receivedQuantity - line.shortQuantity), 0);
@@ -538,12 +580,12 @@ function StockRequestCard({ request, isPending, dispatchNote, receiptNote, resul
     <div className="divide-y rounded-lg border">{request.lines.map((line) => {
       const remaining = Math.max(0, line.dispatchedQuantity - line.receivedQuantity - line.shortQuantity);
       const draft = receiptValue(request.id, line);
-      return <div className="grid gap-2 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center" key={line.id}><div><p className="font-medium">{line.label}</p><p className="mt-1 text-xs text-muted-foreground">Requested {formatQuantity(line.requestedQuantity)} · approved {formatQuantity(line.approvedQuantity)} · picked {formatQuantity(line.pickedQuantity)} · sent {formatQuantity(line.dispatchedQuantity)} · received {formatQuantity(line.receivedQuantity)}{line.shortQuantity ? ` · short ${formatQuantity(line.shortQuantity)}` : ""} {line.unit}</p>{line.discrepancies.map((discrepancy) => <p className="mt-1 text-xs text-amber-700 dark:text-amber-300" key={`${discrepancy.reportedAt}-${discrepancy.note}`}>Short {formatQuantity(discrepancy.quantity)} · {discrepancy.note} · {formatDate(discrepancy.reportedAt)}</p>)}</div>{canReceive && line.transferLineId && remaining > 0 ? <div className="grid gap-2 sm:grid-cols-3"><Field label="Received now"><Input inputMode="decimal" value={draft.receivedQuantity} onChange={(event) => onReceiptChange(request.id, line.id, { receivedQuantity: event.target.value }, draft)} /></Field><Field label="Short"><Input inputMode="decimal" value={draft.shortQuantity} onChange={(event) => onReceiptChange(request.id, line.id, { shortQuantity: event.target.value }, draft)} /></Field><Field label="Short reason"><Input value={draft.discrepancyNote} onChange={(event) => onReceiptChange(request.id, line.id, { discrepancyNote: event.target.value }, draft)} placeholder="Required when short" /></Field></div> : <span className="text-xs text-muted-foreground">{remaining > 0 ? `${formatQuantity(remaining)} in transit` : "Accounted for"}</span>}</div>;
+      return <div className="grid gap-2 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center" key={line.id}><div><p className="font-medium">{line.label}</p><p className="mt-1 text-xs text-muted-foreground">Requested {formatQuantity(line.requestedQuantity)} · approved {formatQuantity(line.approvedQuantity)} · picked {formatQuantity(line.pickedQuantity)} · sent {formatQuantity(line.dispatchedQuantity)} · received {formatQuantity(line.receivedQuantity)}{line.shortQuantity ? ` · short ${formatQuantity(line.shortQuantity)}` : ""} {line.unit}</p>{line.discrepancies.map((discrepancy) => <p className="mt-1 text-xs text-amber-700 dark:text-amber-300" key={`${discrepancy.reportedAt}-${discrepancy.note}`}>Short {formatQuantity(discrepancy.quantity)} · {discrepancy.note} · {formatDate(discrepancy.reportedAt)}</p>)}</div>{canReceive && canReceiveTransfers && line.transferLineId && remaining > 0 ? <div className="grid gap-2 sm:grid-cols-3"><Field label="Received now"><Input inputMode="decimal" value={draft.receivedQuantity} onChange={(event) => onReceiptChange(request.id, line.id, { receivedQuantity: event.target.value }, draft)} /></Field><Field label="Short"><Input inputMode="decimal" value={draft.shortQuantity} onChange={(event) => onReceiptChange(request.id, line.id, { shortQuantity: event.target.value }, draft)} /></Field><Field label="Short reason"><Input value={draft.discrepancyNote} onChange={(event) => onReceiptChange(request.id, line.id, { discrepancyNote: event.target.value }, draft)} placeholder="Required when short" /></Field></div> : <span className="text-xs text-muted-foreground">{remaining > 0 ? `${formatQuantity(remaining)} in transit` : "Accounted for"}</span>}</div>;
     })}</div>
-    {request.status === "requested" ? <SubmitRow pending={isPending} result={result} label="Approve requested quantities" icon={<CheckCircle2 />} onClick={onApprove} /> : null}
-    {request.status === "approved" ? <SubmitRow pending={isPending} result={result} label="Start picking" icon={<ClipboardCheck />} onClick={onStartPicking} /> : null}
-    {request.status === "picking" ? <div className="space-y-3"><Field label="Dispatch note"><Input value={dispatchNote} onChange={(event) => onDispatchNote(event.target.value)} placeholder="Optional courier or packing note" /></Field><SubmitRow pending={isPending} result={result} label="Dispatch to in transit" icon={<Truck />} onClick={onDispatch} /></div> : null}
-    {canReceive ? <div className="space-y-3"><Field label="Receipt note"><Input value={receiptNote} onChange={(event) => onReceiptNote(event.target.value)} placeholder="Optional delivery note" /></Field><SubmitRow pending={isPending} result={result} label="Record receipt / shortage" icon={<PackageCheck />} onClick={onReceive} /></div> : null}
+    {request.status === "requested" && canSendTransfers ? <SubmitRow pending={isPending} result={result} label="Approve requested quantities" icon={<CheckCircle2 />} onClick={onApprove} /> : null}
+    {request.status === "approved" && canSendTransfers ? <SubmitRow pending={isPending} result={result} label="Start picking" icon={<ClipboardCheck />} onClick={onStartPicking} /> : null}
+    {request.status === "picking" && canSendTransfers ? <div className="space-y-3"><Field label="Dispatch note"><Input value={dispatchNote} onChange={(event) => onDispatchNote(event.target.value)} placeholder="Optional courier or packing note" /></Field><SubmitRow pending={isPending} result={result} label="Dispatch to in transit" icon={<Truck />} onClick={onDispatch} /></div> : null}
+    {canReceive && canReceiveTransfers ? <div className="space-y-3"><Field label="Receipt note"><Input value={receiptNote} onChange={(event) => onReceiptNote(event.target.value)} placeholder="Optional delivery note" /></Field><SubmitRow pending={isPending} result={result} label="Record receipt / shortage" icon={<PackageCheck />} onClick={onReceive} /></div> : null}
   </CardContent></Card>;
 }
 

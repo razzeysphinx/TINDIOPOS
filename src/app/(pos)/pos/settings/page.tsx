@@ -18,9 +18,11 @@ export default async function PosSettingsPage() {
     <main className="min-h-svh bg-background">
       <PosWorkspaceHeader
         canAccessBackOffice={canAccessBackOffice(context)}
+        canReceiveIncomingTransfers={workspace.canReceiveIncomingTransfers}
         {...getPosNavigationCapabilities(context)}
         canUseTimeClock={context.features.time_clock}
         employeeName={context.profile.full_name || context.profile.email || "Cashier"}
+        incomingTransfers={workspace.incomingTransfers}
         organizationName={context.organization.name}
         scope={`${context.organization.id}:${context.user.id}`}
         stores={workspace.stores}

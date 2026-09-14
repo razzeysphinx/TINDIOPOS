@@ -351,26 +351,10 @@ end;
 $$;
 
 commit;
--- Phase 10: retain the canonical purchasing procedures while adding their
--- explicit granular capability alternative to the legacy authorization path.
-begin;
-
--- Checked-in canonical purchasing procedures. Only their authorization guards differ.
-
-create or replace function private.create_supplier(target_organization_id uuid, target_name text, target_contact_name text, target_email text, target_phone text, target_address text, target_notes text) returns uuid language plpgsql security definer set search_path = '' as $$ declare supplier_id uuid; begin
- if (select auth.uid()) is null or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.suppliers.manage'))) then raise exception 'Inventory permission is required.' using errcode='42501'; end if;
- insert into public.suppliers (organization_id,name,contact_name,email,phone,address,notes) values (target_organization_id,nullif(btrim(target_name),''),nullif(btrim(target_contact_name),''),nullif(btrim(target_email),''),nullif(btrim(target_phone),''),nullif(btrim(target_address),''),nullif(btrim(target_notes),'')) returning id into supplier_id; return supplier_id; end; $$;
-
-create or replace function public.update_supplier(
+create or replace function private.cancel_purchase_order(
   target_organization_id uuid,
-  target_supplier_id uuid,
-  target_name text,
-  target_contact_name text,
-  target_email text,
-  target_phone text,
-  target_address text,
-  target_notes text,
-  target_is_active boolean
+  target_purchase_order_id uuid,
+  target_note text
 )
 returns uuid
 language plpgsql
@@ -378,96 +362,65 @@ security definer
 set search_path = ''
 as $$
 declare
-  normalized_name text := nullif(btrim(target_name), '');
-  normalized_email text := nullif(btrim(target_email), '');
-  actor_employee_id uuid;
+  purchase public.purchase_orders%rowtype;
+  actor_id uuid;
+  normalized_note text;
 begin
   if (select auth.uid()) is null
-    or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.suppliers.manage'))) then
+     or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.po.create'))) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
 
-  if normalized_name is null or char_length(normalized_name) > 160 then
-    raise exception 'Enter a supplier name with at most 160 characters.' using errcode = '22023';
+  select *
+  into purchase
+  from public.purchase_orders purchase_order
+  where purchase_order.id = target_purchase_order_id
+    and purchase_order.organization_id = target_organization_id
+    and purchase_order.status in ('draft', 'ordered', 'partially_received')
+  for update;
+
+  if purchase.id is null then
+    raise exception 'This purchase order cannot be cancelled.' using errcode = '23514';
   end if;
 
-  if normalized_email is not null
-    and (char_length(normalized_email) > 320 or normalized_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$') then
-    raise exception 'Enter a valid supplier email address.' using errcode = '22023';
+  actor_id := private.inventory_actor(target_organization_id, purchase.store_id);
+  if actor_id is null then
+    raise exception 'An assigned employee is required for this store.' using errcode = '42501';
   end if;
 
-  if char_length(btrim(target_contact_name)) > 160
-    or char_length(btrim(target_phone)) > 40
-    or char_length(btrim(target_address)) > 1000
-    or char_length(btrim(target_notes)) > 2000 then
-    raise exception 'One or more supplier fields are too long.' using errcode = '22023';
-  end if;
-
-  select employee.id
-  into actor_employee_id
-  from public.employees employee
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active';
-
-  update public.suppliers supplier
-  set
-    name = normalized_name,
-    contact_name = nullif(btrim(target_contact_name), ''),
-    email = normalized_email,
-    phone = nullif(btrim(target_phone), ''),
-    address = nullif(btrim(target_address), ''),
-    notes = nullif(btrim(target_notes), ''),
-    is_active = target_is_active
-  where supplier.id = target_supplier_id
-    and supplier.organization_id = target_organization_id;
-
-  if not found then
-    raise exception 'Select a supplier in this organization.' using errcode = '23503';
-  end if;
+  normalized_note := nullif(btrim(target_note), '');
+  update public.purchase_orders
+  set status = 'cancelled'
+  where id = purchase.id;
 
   perform private.write_audit_log(
     target_organization_id,
-    'SUPPLIER_UPDATED',
+    'PURCHASE_ORDER_CANCELLED',
     'inventory.manage',
-    actor_employee_id,
+    actor_id,
+    null,
+    purchase.store_id,
     null,
     null,
     null,
-    null,
-    null,
-    null,
-    jsonb_build_object(
-      'supplier_id', target_supplier_id,
-      'is_active', target_is_active
-    )
+    normalized_note,
+    jsonb_build_object('purchase_order_id', purchase.id, 'remaining_quantity', (
+      select coalesce(sum(ordered_quantity - received_quantity), 0)
+      from public.purchase_order_lines purchase_line
+      where purchase_line.purchase_order_id = purchase.id
+    ))
   );
 
-  return target_supplier_id;
+  return purchase.id;
 end;
 $$;
 
-commit;
--- Phase 10: retain the canonical purchasing procedures while adding their
--- explicit granular capability alternative to the legacy authorization path.
-begin;
-
--- Checked-in canonical purchasing procedures. Only their authorization guards differ.
-
-create or replace function private.create_supplier(target_organization_id uuid, target_name text, target_contact_name text, target_email text, target_phone text, target_address text, target_notes text) returns uuid language plpgsql security definer set search_path = '' as $$ declare supplier_id uuid; begin
- if (select auth.uid()) is null or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.suppliers.manage'))) then raise exception 'Inventory permission is required.' using errcode='42501'; end if;
- insert into public.suppliers (organization_id,name,contact_name,email,phone,address,notes) values (target_organization_id,nullif(btrim(target_name),''),nullif(btrim(target_contact_name),''),nullif(btrim(target_email),''),nullif(btrim(target_phone),''),nullif(btrim(target_address),''),nullif(btrim(target_notes),'')) returning id into supplier_id; return supplier_id; end; $$;
-
-create or replace function public.update_supplier(
+create or replace function private.receive_purchase_order(
   target_organization_id uuid,
-  target_supplier_id uuid,
-  target_name text,
-  target_contact_name text,
-  target_email text,
-  target_phone text,
-  target_address text,
-  target_notes text,
-  target_is_active boolean
+  target_purchase_order_id uuid,
+  target_lines jsonb,
+  target_note text,
+  target_operation_id uuid
 )
 returns uuid
 language plpgsql
@@ -475,72 +428,247 @@ security definer
 set search_path = ''
 as $$
 declare
-  normalized_name text := nullif(btrim(target_name), '');
-  normalized_email text := nullif(btrim(target_email), '');
-  actor_employee_id uuid;
+  purchase public.purchase_orders%rowtype;
+  existing_receipt public.goods_receipts%rowtype;
+  actor_id uuid;
+  receipt_id uuid;
+  receipt_number bigint;
+  line jsonb;
+  po_line public.purchase_order_lines%rowtype;
+  quantity_received numeric(14,3);
+  base_quantity_received numeric(14,6);
+  total_remaining numeric(14,3);
+  normalized_note text;
+  requested_lines jsonb;
+  persisted_lines jsonb;
 begin
   if (select auth.uid()) is null
-    or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.suppliers.manage'))) then
+     or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.receive'))) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
 
-  if normalized_name is null or char_length(normalized_name) > 160 then
-    raise exception 'Enter a supplier name with at most 160 characters.' using errcode = '22023';
+  if target_operation_id is null then
+    raise exception 'A stable goods-receipt operation ID is required.' using errcode = '23514';
   end if;
 
-  if normalized_email is not null
-    and (char_length(normalized_email) > 320 or normalized_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$') then
-    raise exception 'Enter a valid supplier email address.' using errcode = '22023';
+  if target_lines is null
+     or jsonb_typeof(target_lines) <> 'array'
+     or jsonb_array_length(target_lines) not between 1 and 100 then
+    raise exception 'A receipt needs one to 100 items.' using errcode = '23514';
   end if;
 
-  if char_length(btrim(target_contact_name)) > 160
-    or char_length(btrim(target_phone)) > 40
-    or char_length(btrim(target_address)) > 1000
-    or char_length(btrim(target_notes)) > 2000 then
-    raise exception 'One or more supplier fields are too long.' using errcode = '22023';
+  for line in select value from jsonb_array_elements(target_lines)
+  loop
+    if coalesce(line ->> 'purchase_order_line_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+       or coalesce(line ->> 'quantity', '') !~ '^\d+(\.\d{1,3})?$'
+       or (line ->> 'quantity')::numeric <= 0 then
+      raise exception 'Receipt quantities must be positive.' using errcode = '23514';
+    end if;
+  end loop;
+
+  if exists (
+    select 1
+    from (
+      select lower(btrim(value ->> 'purchase_order_line_id')) as purchase_order_line_id, count(*) as line_count
+      from jsonb_array_elements(target_lines)
+      group by 1
+    ) duplicate_line
+    where duplicate_line.line_count > 1
+  ) then
+    raise exception 'Each order line can be received once per receipt.' using errcode = '23514';
   end if;
 
-  select employee.id
-  into actor_employee_id
-  from public.employees employee
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active';
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'purchase_order_line_id', normalized.purchase_order_line_id,
+        'quantity', normalized.quantity
+      )
+      order by normalized.purchase_order_line_id
+    ),
+    '[]'::jsonb
+  )
+  into requested_lines
+  from (
+    select
+      lower(btrim(value ->> 'purchase_order_line_id')) as purchase_order_line_id,
+      ((value ->> 'quantity')::numeric(14,3))::text as quantity
+    from jsonb_array_elements(target_lines)
+  ) normalized;
 
-  update public.suppliers supplier
+  normalized_note := nullif(btrim(target_note), '');
+
+  select *
+  into existing_receipt
+  from public.goods_receipts goods_receipt
+  where goods_receipt.organization_id = target_organization_id
+    and goods_receipt.operation_id = target_operation_id
+  for update;
+
+  if found then
+    select *
+    into purchase
+    from public.purchase_orders purchase_order
+    where purchase_order.id = target_purchase_order_id
+      and purchase_order.organization_id = target_organization_id
+    for update;
+
+    actor_id := private.inventory_actor(target_organization_id, purchase.store_id);
+    if purchase.id is not null
+       and actor_id is not null then
+      select coalesce(
+        jsonb_agg(
+          jsonb_build_object(
+            'purchase_order_line_id', receipt_line.purchase_order_line_id::text,
+            'quantity', receipt_line.quantity_received::text
+          )
+          order by receipt_line.purchase_order_line_id::text
+        ),
+        '[]'::jsonb
+      )
+      into persisted_lines
+      from public.goods_receipt_lines receipt_line
+      where receipt_line.organization_id = target_organization_id
+        and receipt_line.goods_receipt_id = existing_receipt.id;
+
+      if existing_receipt.purchase_order_id = target_purchase_order_id
+         and existing_receipt.store_id = purchase.store_id
+         and existing_receipt.received_by_employee_id = actor_id
+         and existing_receipt.note is not distinct from normalized_note
+         and persisted_lines = requested_lines then
+        return existing_receipt.id;
+      end if;
+    end if;
+
+    raise exception 'This operation ID is already assigned to a different goods receipt request.' using errcode = '23505';
+  end if;
+
+  select *
+  into purchase
+  from public.purchase_orders purchase_order
+  where purchase_order.id = target_purchase_order_id
+    and purchase_order.organization_id = target_organization_id
+    and purchase_order.status in ('ordered', 'partially_received')
+  for update;
+
+  if purchase.id is null then
+    raise exception 'This purchase order cannot be received.' using errcode = '23514';
+  end if;
+
+  actor_id := private.inventory_actor(target_organization_id, purchase.store_id);
+  if actor_id is null then
+    raise exception 'An assigned employee is required for this store.' using errcode = '42501';
+  end if;
+
+  receipt_number := nextval('private.tindio_goods_receipt_number_sequence'::regclass);
+  insert into public.goods_receipts (
+    organization_id,
+    purchase_order_id,
+    store_id,
+    received_by_employee_id,
+    note,
+    receipt_number,
+    operation_id
+  )
+  values (
+    target_organization_id,
+    purchase.id,
+    purchase.store_id,
+    actor_id,
+    normalized_note,
+    receipt_number,
+    target_operation_id
+  )
+  returning id into receipt_id;
+
+  for line in select value from jsonb_array_elements(target_lines)
+  loop
+    select *
+    into po_line
+    from public.purchase_order_lines purchase_line
+    where purchase_line.id = (line ->> 'purchase_order_line_id')::uuid
+      and purchase_line.purchase_order_id = purchase.id
+      and purchase_line.organization_id = target_organization_id
+    for update;
+
+    if po_line.id is null then
+      raise exception 'A receipt line does not belong to this purchase order.' using errcode = '23514';
+    end if;
+
+    quantity_received := (line ->> 'quantity')::numeric(14,3);
+    if po_line.received_quantity + quantity_received > po_line.ordered_quantity then
+      raise exception 'Received quantity cannot exceed the ordered quantity.' using errcode = '23514';
+    end if;
+
+    base_quantity_received := quantity_received * po_line.purchase_unit_factor_to_base;
+    if base_quantity_received <> round(base_quantity_received, 3) then
+      raise exception 'This received quantity cannot be expressed in the product base unit to three decimal places.' using errcode = '23514';
+    end if;
+
+    insert into public.goods_receipt_lines (
+      organization_id,
+      goods_receipt_id,
+      purchase_order_line_id,
+      quantity_received
+    )
+    values (
+      target_organization_id,
+      receipt_id,
+      po_line.id,
+      quantity_received
+    );
+
+    update public.purchase_order_lines
+    set received_quantity = received_quantity + quantity_received
+    where id = po_line.id;
+
+    perform private.apply_inventory_change_v2(
+      target_organization_id,
+      purchase.store_id,
+      po_line.product_id,
+      po_line.variant_id,
+      round(base_quantity_received, 3),
+      'RECEIPT',
+      actor_id,
+      format('Goods receipt GR-%s', lpad(receipt_number::text, 6, '0')),
+      'goods_receipt',
+      receipt_id,
+      round(po_line.unit_cost_minor::numeric / po_line.purchase_unit_factor_to_base)::bigint
+    );
+  end loop;
+
+  select coalesce(sum(ordered_quantity - received_quantity), 0)
+  into total_remaining
+  from public.purchase_order_lines purchase_line
+  where purchase_line.purchase_order_id = purchase.id;
+
+  update public.purchase_orders
   set
-    name = normalized_name,
-    contact_name = nullif(btrim(target_contact_name), ''),
-    email = normalized_email,
-    phone = nullif(btrim(target_phone), ''),
-    address = nullif(btrim(target_address), ''),
-    notes = nullif(btrim(target_notes), ''),
-    is_active = target_is_active
-  where supplier.id = target_supplier_id
-    and supplier.organization_id = target_organization_id;
-
-  if not found then
-    raise exception 'Select a supplier in this organization.' using errcode = '23503';
-  end if;
+    status = case when total_remaining = 0 then 'received' else 'partially_received' end,
+    received_at = now(),
+    received_by_employee_id = actor_id
+  where id = purchase.id;
 
   perform private.write_audit_log(
     target_organization_id,
-    'SUPPLIER_UPDATED',
+    'PURCHASE_ORDER_RECEIVED',
     'inventory.manage',
-    actor_employee_id,
+    actor_id,
+    null,
+    purchase.store_id,
     null,
     null,
     null,
-    null,
-    null,
-    null,
+    normalized_note,
     jsonb_build_object(
-      'supplier_id', target_supplier_id,
-      'is_active', target_is_active
+      'purchase_order_id', purchase.id,
+      'goods_receipt_id', receipt_id,
+      'goods_receipt_number', receipt_number,
+      'operation_id', target_operation_id
     )
   );
 
-  return target_supplier_id;
+  return receipt_id;
 end;
 $$;
 

@@ -82,7 +82,7 @@ test("transfer RPCs retain canonical procedures with explicit granular capabilit
   ]) {
     assert.match(migration, new RegExp(`${procedure.replaceAll(".", "\\.")}[\\s\\S]*${capability.replaceAll(".", "\\.")}`));
   }
-  assert.match(migration, /requested_permission = 'inventory\.manage'/);
+  assert.match(migration, /private\.has_permission\(target_organization_id, 'inventory\.manage'\)/);
   assert.doesNotMatch(migration, /update public\.inventory_levels/);
   assert.doesNotMatch(migration, /tindio\.inventory_required_capabilities/);
 });

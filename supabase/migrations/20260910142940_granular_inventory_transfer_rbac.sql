@@ -220,9 +220,7 @@ as $$
   );
 $$;
 
--- Checked-in canonical transfer procedures appear below.  Their authorization
--- guards explicitly combine the established inventory.manage/approval path
--- with their granular capabilities.
+-- Checked-in canonical transfer procedures. Only their authorization guards differ.
 
 create or replace function private.transfer_stock(target_organization_id uuid, target_source_store_id uuid, target_destination_store_id uuid, target_lines jsonb, target_note text) returns uuid language plpgsql security definer set search_path='' as $$ declare actor_id uuid; transfer_id uuid; line jsonb; source_quantity numeric(14,3); begin
  if (select auth.uid()) is null or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_all_inventory_capabilities(target_organization_id, array['inventory.transfer.create', 'inventory.transfer.send']::text[]))) then raise exception 'Inventory permission is required.' using errcode='42501'; end if;
@@ -238,7 +236,7 @@ create or replace function private.transfer_stock(target_organization_id uuid, t
   perform private.apply_inventory_change(target_organization_id,target_destination_store_id,(line->>'product_id')::uuid,nullif(line->>'variant_id','')::uuid,(line->>'quantity')::numeric,'TRANSFER_IN',actor_id,'Stock transfer in','stock_transfer',transfer_id);
  end loop; return transfer_id; end; $$;
 
-create function private.create_stock_request(
+create or replace function private.create_stock_request(
   target_organization_id uuid,
   target_requesting_store_id uuid,
   target_source_warehouse_id uuid,
@@ -416,987 +414,357 @@ begin
 
     if not found then
       raise exception 'Every request item must be an active tracked product.' using errcode = '23514';
+    end…8314 tokens truncated…ullif(line ->> 'variant_id', '')::uuid
+    for update;
+
+    if source_level.id is null
+       or source_level.quantity < (line ->> 'quantity')::numeric(14,3) then
+      raise exception 'Source stock is insufficient for this transfer.' using errcode = '23514';
     end if;
 
     if not exists (
       select 1
       from public.inventory_levels level
       where level.organization_id = target_organization_id
-        and level.store_id = target_requesting_store_id
-        and level.product_id = (line ->> 'product_id')::uuid
+        and level.store_id = target_destination_store_id
+        and level.product_id = product_row.id
         and level.variant_id is not distinct from nullif(line ->> 'variant_id', '')::uuid
     ) then
-      raise exception 'Initialize the destination stock projection for every requested item.' using errcode = '23514';
+      raise exception 'The destination stock projection is not initialized for one transfer item.' using errcode = '23514';
     end if;
 
-    insert into public.stock_request_lines (
+    insert into public.stock_transfer_lines (
       organization_id,
-      stock_request_id,
+      stock_transfer_id,
+      stock_request_line_id,
       product_id,
       variant_id,
-      product_name_snapshot,
-      variant_name_snapshot,
-      unit_snapshot,
-      requested_quantity
+      quantity,
+      unit_cost_minor
     )
     values (
       target_organization_id,
-      request_id,
-      (line ->> 'product_id')::uuid,
+      transfer_id,
+      null,
+      product_row.id,
       nullif(line ->> 'variant_id', '')::uuid,
-      product_row.product_name,
-      product_row.variant_name,
-      product_row.unit,
-      (line ->> 'quantity')::numeric(14,3)
+      (line ->> 'quantity')::numeric(14,3),
+      source_level.average_cost_minor
+    );
+
+    -- Transfers always require real source stock. The POS negative-stock
+    -- policy is deliberately not consulted for this operational command.
+    perform private.apply_inventory_change_v2(
+      target_organization_id,
+      target_source_store_id,
+      product_row.id,
+      nullif(line ->> 'variant_id', '')::uuid,
+      -(line ->> 'quantity')::numeric(14,3),
+      'TRANSFER_OUT',
+      actor_id,
+      format('Direct transfer TR-%s sent', lpad(transfer_number::text, 6, '0')),
+      'stock_transfer',
+      transfer_id,
+      source_level.average_cost_minor
     );
   end loop;
 
   perform private.write_audit_log(
     target_organization_id,
-    'STOCK_REQUEST_SUBMITTED',
+    'STOCK_TRANSFER_SENT',
     'inventory.manage',
     actor_id,
     null,
-    target_requesting_store_id,
+    target_source_store_id,
     null,
     null,
     null,
     normalized_note,
-    jsonb_build_object('stock_request_id', request_id, 'request_number', request_number, 'source_warehouse_id', target_source_warehouse_id)
+    jsonb_build_object(
+      'stock_transfer_id', transfer_id,
+      'transfer_number', transfer_number,
+      'source_store_id', target_source_store_id,
+      'destination_store_id', target_destination_store_id,
+      'operation_id', target_operation_id,
+      'lines', requested_payload
+    )
   );
-  return request_id;
+
+  return transfer_id;
 end;
 $$;
 
-commit;
--- Phase 6: add capability-level inventory transfer authorization without
--- removing the established inventory permissions.  The existing document,
--- ledger, idempotency, discrepancy, and audit procedures remain canonical.
-begin;
-
-insert into public.permissions (code, category, name, description)
-values
-  ('inventory.transfer.create', 'Inventory', 'Create transfer requests', 'Create an authorized request for stock to move between stores.'),
-  ('inventory.transfer.send', 'Inventory', 'Send stock transfers', 'Approve, pick, and dispatch stock from an authorized source store.'),
-  ('inventory.transfer.receive', 'Inventory', 'Receive stock transfers', 'Record authorized stock-transfer receipts at an assigned destination store.'),
-  ('inventory.count.create', 'Inventory', 'Create inventory counts', 'Create and prepare an inventory count.'),
-  ('inventory.count.finalize', 'Inventory', 'Finalize inventory counts', 'Submit, post, or cancel an authorized inventory count.'),
-  ('inventory.adjust.create', 'Inventory', 'Create inventory adjustments', 'Prepare an authorized inventory adjustment.'),
-  ('inventory.adjust.post', 'Inventory', 'Post inventory adjustments', 'Post an authorized inventory adjustment to the immutable stock ledger.'),
-  ('inventory.valuation.view', 'Inventory', 'View inventory valuation', 'View inventory valuation and cost-sensitive stock values.'),
-  ('purchasing.view', 'Purchasing', 'View purchasing', 'View authorized suppliers, purchase orders, and receiving records.'),
-  ('purchasing.po.create', 'Purchasing', 'Create purchase orders', 'Create and maintain authorized purchase orders.'),
-  ('purchasing.receive', 'Purchasing', 'Receive purchase orders', 'Receive authorized supplier deliveries.'),
-  ('purchasing.suppliers.manage', 'Purchasing', 'Manage suppliers', 'Create and maintain supplier records.'),
-  ('purchasing.return', 'Purchasing', 'Return stock to suppliers', 'Record authorized supplier returns.')
-on conflict (code) do update
-set category = excluded.category,
-    name = excluded.name,
-    description = excluded.description;
-
--- Existing capability bundles keep their effective access.  This is based on
--- assigned capabilities, not on role codes, so organization-defined roles
--- migrate safely alongside preset roles.
-with compatibility (legacy_permission, capability) as (
-  values
-    ('inventory.manage', 'inventory.transfer.create'),
-    ('inventory.manage', 'inventory.transfer.send'),
-    ('inventory.manage', 'inventory.transfer.receive'),
-    ('inventory.manage', 'inventory.count.create'),
-    ('inventory.manage', 'inventory.count.finalize'),
-    ('inventory.manage', 'inventory.adjust.create'),
-    ('inventory.manage', 'inventory.adjust.post'),
-    ('inventory.manage', 'inventory.valuation.view'),
-    ('inventory.manage', 'purchasing.view'),
-    ('inventory.manage', 'purchasing.po.create'),
-    ('inventory.manage', 'purchasing.receive'),
-    ('inventory.manage', 'purchasing.suppliers.manage'),
-    ('inventory.manage', 'purchasing.return'),
-    ('inventory.transfers', 'inventory.transfer.create'),
-    ('inventory.transfers', 'inventory.transfer.send'),
-    ('inventory.transfers', 'inventory.transfer.receive'),
-    ('inventory.count', 'inventory.count.create'),
-    ('inventory.count', 'inventory.count.finalize'),
-    ('inventory.adjust', 'inventory.adjust.create'),
-    ('inventory.adjust', 'inventory.adjust.post'),
-    ('inventory.purchase_orders', 'purchasing.view'),
-    ('inventory.purchase_orders', 'purchasing.po.create'),
-    ('inventory.receive', 'purchasing.receive'),
-    ('inventory.suppliers', 'purchasing.suppliers.manage'),
-    ('products.view_cost', 'inventory.valuation.view')
-)
-insert into public.role_permissions (organization_id, role_id, permission_code)
-select distinct role_permission.organization_id, role_permission.role_id, compatibility.capability
-from public.role_permissions role_permission
-join compatibility on compatibility.legacy_permission = role_permission.permission_code
-on conflict do nothing;
-
--- This resolver centralizes compatibility at the capability boundary.  A
--- customer-created role can use only the new code; an older role remains
--- operational through its already-assigned legacy capability.
-create or replace function private.has_inventory_capability(
+create or replace function private.receive_stock_transfer(
   target_organization_id uuid,
-  requested_capability text
+  target_stock_transfer_id uuid,
+  target_lines jsonb,
+  target_note text,
+  target_operation_id uuid
 )
-returns boolean
-language sql
-stable
+returns uuid
+language plpgsql
 security definer
 set search_path = ''
 as $$
-  select coalesce(
-    (select auth.uid()) is not null
-    and exists (
-      select 1
-      from public.organizations organization
-      where organization.id = target_organization_id
-        and organization.status = 'active'
-    )
-    and exists (
-      select 1
-      from public.employees employee
-      join public.employee_roles employee_role
-        on employee_role.employee_id = employee.id
-       and employee_role.organization_id = employee.organization_id
-      join public.role_permissions role_permission
-        on role_permission.role_id = employee_role.role_id
-       and role_permission.organization_id = employee_role.organization_id
-      where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
-        and employee.status = 'active'
-        and (
-          role_permission.permission_code = requested_capability
-          or role_permission.permission_code = 'inventory.manage'
-          or (
-            requested_capability in ('inventory.transfer.create', 'inventory.transfer.send', 'inventory.transfer.receive')
-            and role_permission.permission_code = 'inventory.transfers'
-          )
-          or (
-            requested_capability in ('inventory.count.create', 'inventory.count.finalize')
-            and role_permission.permission_code = 'inventory.count'
-          )
-          or (
-            requested_capability in ('inventory.adjust.create', 'inventory.adjust.post')
-            and role_permission.permission_code = 'inventory.adjust'
-          )
-          or (
-            requested_capability in ('purchasing.view', 'purchasing.po.create')
-            and role_permission.permission_code = 'inventory.purchase_orders'
-          )
-          or (
-            requested_capability = 'purchasing.receive'
-            and role_permission.permission_code = 'inventory.receive'
-          )
-          or (
-            requested_capability = 'purchasing.suppliers.manage'
-            and role_permission.permission_code = 'inventory.suppliers'
-          )
-          or (
-            requested_capability = 'inventory.valuation.view'
-            and role_permission.permission_code = 'products.view_cost'
-          )
+declare
+  transfer public.stock_transfers%rowtype;
+  existing_receipt public.stock_transfer_receipts%rowtype;
+  actor_id uuid;
+  receipt_id uuid;
+  receipt_number bigint;
+  line jsonb;
+  transfer_line public.stock_transfer_lines%rowtype;
+  received_now numeric(14,3);
+  short_now numeric(14,3);
+  remaining numeric(14,3);
+  total_remaining numeric(14,3);
+  has_shortage boolean;
+  normalized_note text;
+  requested_payload jsonb;
+  uses_legacy_line_shape boolean;
+begin
+  if (select auth.uid()) is null
+     or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive'))) then
+    raise exception 'Inventory permission is required.' using errcode = '42501';
+  end if;
+
+  if target_operation_id is null then
+    raise exception 'A stable transfer-receipt operation ID is required.' using errcode = '23514';
+  end if;
+
+  if target_lines is null
+     or jsonb_typeof(target_lines) <> 'array'
+     or jsonb_array_length(target_lines) not between 1 and 100
+     or (target_note is not null and char_length(btrim(target_note)) > 500) then
+    raise exception 'A transfer receipt needs one to 100 items and a valid note.' using errcode = '23514';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_array_elements(target_lines) receipt(value)
+    where jsonb_typeof(receipt.value) <> 'object'
+      or coalesce(receipt.value ->> 'stock_transfer_line_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      or coalesce(receipt.value ->> 'received_quantity', receipt.value ->> 'quantity', '') !~ '^\d+(\.\d{1,3})?$'
+      or coalesce(receipt.value ->> 'short_quantity', '0') !~ '^\d+(\.\d{1,3})?$'
+      or ((coalesce(receipt.value ->> 'received_quantity', receipt.value ->> 'quantity'))::numeric
+        + (coalesce(receipt.value ->> 'short_quantity', '0'))::numeric) <= 0
+      or ((coalesce(receipt.value ->> 'short_quantity', '0'))::numeric > 0
+        and char_length(btrim(coalesce(receipt.value ->> 'discrepancy_note', ''))) not between 2 and 500)
+  )
+  or (select count(*) from jsonb_array_elements(target_lines)) <> (
+    select count(distinct value ->> 'stock_transfer_line_id') from jsonb_array_elements(target_lines)
+  ) then
+    raise exception 'Receipt lines, quantities, and discrepancy notes are invalid.' using errcode = '23514';
+  end if;
+
+  select bool_and(not (value ? 'received_quantity') and not (value ? 'short_quantity') and not (value ? 'discrepancy_note'))
+  into uses_legacy_line_shape
+  from jsonb_array_elements(target_lines);
+
+  if uses_legacy_line_shape then
+    select coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'stock_transfer_line_id', normalized.stock_transfer_line_id,
+          'quantity', normalized.received_quantity
         )
-    ),
-    false
-  );
-$$;
-
-commit;
--- Phase 6: add capability-level inventory transfer authorization without
--- removing the established inventory permissions.  The existing document,
--- ledger, idempotency, discrepancy, and audit procedures remain canonical.
-begin;
-
-insert into public.permissions (code, category, name, description)
-values
-  ('inventory.transfer.create', 'Inventory', 'Create transfer requests', 'Create an authorized request for stock to move between stores.'),
-  ('inventory.transfer.send', 'Inventory', 'Send stock transfers', 'Approve, pick, and dispatch stock from an authorized source store.'),
-  ('inventory.transfer.receive', 'Inventory', 'Receive stock transfers', 'Record authorized stock-transfer receipts at an assigned destination store.'),
-  ('inventory.count.create', 'Inventory', 'Create inventory counts', 'Create and prepare an inventory count.'),
-  ('inventory.count.finalize', 'Inventory', 'Finalize inventory counts', 'Submit, post, or cancel an authorized inventory count.'),
-  ('inventory.adjust.create', 'Inventory', 'Create inventory adjustments', 'Prepare an authorized inventory adjustment.'),
-  ('inventory.adjust.post', 'Inventory', 'Post inventory adjustments', 'Post an authorized inventory adjustment to the immutable stock ledger.'),
-  ('inventory.valuation.view', 'Inventory', 'View inventory valuation', 'View inventory valuation and cost-sensitive stock values.'),
-  ('purchasing.view', 'Purchasing', 'View purchasing', 'View authorized suppliers, purchase orders, and receiving records.'),
-  ('purchasing.po.create', 'Purchasing', 'Create purchase orders', 'Create and maintain authorized purchase orders.'),
-  ('purchasing.receive', 'Purchasing', 'Receive purchase orders', 'Receive authorized supplier deliveries.'),
-  ('purchasing.suppliers.manage', 'Purchasing', 'Manage suppliers', 'Create and maintain supplier records.'),
-  ('purchasing.return', 'Purchasing', 'Return stock to suppliers', 'Record authorized supplier returns.')
-on conflict (code) do update
-set category = excluded.category,
-    name = excluded.name,
-    description = excluded.description;
-
--- Existing capability bundles keep their effective access.  This is based on
--- assigned capabilities, not on role codes, so organization-defined roles
--- migrate safely alongside preset roles.
-with compatibility (legacy_permission, capability) as (
-  values
-    ('inventory.manage', 'inventory.transfer.create'),
-    ('inventory.manage', 'inventory.transfer.send'),
-    ('inventory.manage', 'inventory.transfer.receive'),
-    ('inventory.manage', 'inventory.count.create'),
-    ('inventory.manage', 'inventory.count.finalize'),
-    ('inventory.manage', 'inventory.adjust.create'),
-    ('inventory.manage', 'inventory.adjust.post'),
-    ('inventory.manage', 'inventory.valuation.view'),
-    ('inventory.manage', 'purchasing.view'),
-    ('inventory.manage', 'purchasing.po.create'),
-    ('inventory.manage', 'purchasing.receive'),
-    ('inventory.manage', 'purchasing.suppliers.manage'),
-    ('inventory.manage', 'purchasing.return'),
-    ('inventory.transfers', 'inventory.transfer.create'),
-    ('inventory.transfers', 'inventory.transfer.send'),
-    ('inventory.transfers', 'inventory.transfer.receive'),
-    ('inventory.count', 'inventory.count.create'),
-    ('inventory.count', 'inventory.count.finalize'),
-    ('inventory.adjust', 'inventory.adjust.create'),
-    ('inventory.adjust', 'inventory.adjust.post'),
-    ('inventory.purchase_orders', 'purchasing.view'),
-    ('inventory.purchase_orders', 'purchasing.po.create'),
-    ('inventory.receive', 'purchasing.receive'),
-    ('inventory.suppliers', 'purchasing.suppliers.manage'),
-    ('products.view_cost', 'inventory.valuation.view')
-)
-insert into public.role_permissions (organization_id, role_id, permission_code)
-select distinct role_permission.organization_id, role_permission.role_id, compatibility.capability
-from public.role_permissions role_permission
-join compatibility on compatibility.legacy_permission = role_permission.permission_code
-on conflict do nothing;
-
--- This resolver centralizes compatibility at the capability boundary.  A
--- customer-created role can use only the new code; an older role remains
--- operational through its already-assigned legacy capability.
-create or replace function private.has_inventory_capability(
-  target_organization_id uuid,
-  requested_capability text
-)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select coalesce(
-    (select auth.uid()) is not null
-    and exists (
-      select 1
-      from public.organizations organization
-      where organization.id = target_organization_id
-        and organization.status = 'active'
+        order by normalized.stock_transfer_line_id
+      ),
+      '[]'::jsonb
     )
-    and exists (
-      select 1
-      from public.employees employee
-      join public.employee_roles employee_role
-        on employee_role.employee_id = employee.id
-       and employee_role.organization_id = employee.organization_id
-      join public.role_permissions role_permission
-        on role_permission.role_id = employee_role.role_id
-       and role_permission.organization_id = employee_role.organization_id
-      where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
-        and employee.status = 'active'
-        and (
-          role_permission.permission_code = requested_capability
-          or role_permission.permission_code = 'inventory.manage'
-          or (
-            requested_capability in ('inventory.transfer.create', 'inventory.transfer.send', 'inventory.transfer.receive')
-            and role_permission.permission_code = 'inventory.transfers'
-          )
-          or (
-            requested_capability in ('inventory.count.create', 'inventory.count.finalize')
-            and role_permission.permission_code = 'inventory.count'
-          )
-          or (
-            requested_capability in ('inventory.adjust.create', 'inventory.adjust.post')
-            and role_permission.permission_code = 'inventory.adjust'
-          )
-          or (
-            requested_capability in ('purchasing.view', 'purchasing.po.create')
-            and role_permission.permission_code = 'inventory.purchase_orders'
-          )
-          or (
-            requested_capability = 'purchasing.receive'
-            and role_permission.permission_code = 'inventory.receive'
-          )
-          or (
-            requested_capability = 'purchasing.suppliers.manage'
-            and role_permission.permission_code = 'inventory.suppliers'
-          )
-          or (
-            requested_capability = 'inventory.valuation.view'
-            and role_permission.permission_code = 'products.view_cost'
-          )
+    into requested_payload
+    from (
+      select
+        lower(btrim(value ->> 'stock_transfer_line_id')) as stock_transfer_line_id,
+        ((value ->> 'quantity')::numeric(14,3))::text as received_quantity
+      from jsonb_array_elements(target_lines)
+    ) normalized;
+  else
+    select coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'stock_transfer_line_id', normalized.stock_transfer_line_id,
+          'received_quantity', normalized.received_quantity,
+          'short_quantity', normalized.short_quantity,
+          'discrepancy_note', normalized.discrepancy_note
         )
-    ),
-    false
-  );
-$$;
-
-commit;
--- Phase 6: add capability-level inventory transfer authorization without
--- removing the established inventory permissions.  The existing document,
--- ledger, idempotency, discrepancy, and audit procedures remain canonical.
-begin;
-
-insert into public.permissions (code, category, name, description)
-values
-  ('inventory.transfer.create', 'Inventory', 'Create transfer requests', 'Create an authorized request for stock to move between stores.'),
-  ('inventory.transfer.send', 'Inventory', 'Send stock transfers', 'Approve, pick, and dispatch stock from an authorized source store.'),
-  ('inventory.transfer.receive', 'Inventory', 'Receive stock transfers', 'Record authorized stock-transfer receipts at an assigned destination store.'),
-  ('inventory.count.create', 'Inventory', 'Create inventory counts', 'Create and prepare an inventory count.'),
-  ('inventory.count.finalize', 'Inventory', 'Finalize inventory counts', 'Submit, post, or cancel an authorized inventory count.'),
-  ('inventory.adjust.create', 'Inventory', 'Create inventory adjustments', 'Prepare an authorized inventory adjustment.'),
-  ('inventory.adjust.post', 'Inventory', 'Post inventory adjustments', 'Post an authorized inventory adjustment to the immutable stock ledger.'),
-  ('inventory.valuation.view', 'Inventory', 'View inventory valuation', 'View inventory valuation and cost-sensitive stock values.'),
-  ('purchasing.view', 'Purchasing', 'View purchasing', 'View authorized suppliers, purchase orders, and receiving records.'),
-  ('purchasing.po.create', 'Purchasing', 'Create purchase orders', 'Create and maintain authorized purchase orders.'),
-  ('purchasing.receive', 'Purchasing', 'Receive purchase orders', 'Receive authorized supplier deliveries.'),
-  ('purchasing.suppliers.manage', 'Purchasing', 'Manage suppliers', 'Create and maintain supplier records.'),
-  ('purchasing.return', 'Purchasing', 'Return stock to suppliers', 'Record authorized supplier returns.')
-on conflict (code) do update
-set category = excluded.category,
-    name = excluded.name,
-    description = excluded.description;
-
--- Existing capability bundles keep their effective access.  This is based on
--- assigned capabilities, not on role codes, so organization-defined roles
--- migrate safely alongside preset roles.
-with compatibility (legacy_permission, capability) as (
-  values
-    ('inventory.manage', 'inventory.transfer.create'),
-    ('inventory.manage', 'inventory.transfer.send'),
-    ('inventory.manage', 'inventory.transfer.receive'),
-    ('inventory.manage', 'inventory.count.create'),
-    ('inventory.manage', 'inventory.count.finalize'),
-    ('inventory.manage', 'inventory.adjust.create'),
-    ('inventory.manage', 'inventory.adjust.post'),
-    ('inventory.manage', 'inventory.valuation.view'),
-    ('inventory.manage', 'purchasing.view'),
-    ('inventory.manage', 'purchasing.po.create'),
-    ('inventory.manage', 'purchasing.receive'),
-    ('inventory.manage', 'purchasing.suppliers.manage'),
-    ('inventory.manage', 'purchasing.return'),
-    ('inventory.transfers', 'inventory.transfer.create'),
-    ('inventory.transfers', 'inventory.transfer.send'),
-    ('inventory.transfers', 'inventory.transfer.receive'),
-    ('inventory.count', 'inventory.count.create'),
-    ('inventory.count', 'inventory.count.finalize'),
-    ('inventory.adjust', 'inventory.adjust.create'),
-    ('inventory.adjust', 'inventory.adjust.post'),
-    ('inventory.purchase_orders', 'purchasing.view'),
-    ('inventory.purchase_orders', 'purchasing.po.create'),
-    ('inventory.receive', 'purchasing.receive'),
-    ('inventory.suppliers', 'purchasing.suppliers.manage'),
-    ('products.view_cost', 'inventory.valuation.view')
-)
-insert into public.role_permissions (organization_id, role_id, permission_code)
-select distinct role_permission.organization_id, role_permission.role_id, compatibility.capability
-from public.role_permissions role_permission
-join compatibility on compatibility.legacy_permission = role_permission.permission_code
-on conflict do nothing;
-
--- This resolver centralizes compatibility at the capability boundary.  A
--- customer-created role can use only the new code; an older role remains
--- operational through its already-assigned legacy capability.
-create or replace function private.has_inventory_capability(
-  target_organization_id uuid,
-  requested_capability text
-)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select coalesce(
-    (select auth.uid()) is not null
-    and exists (
-      select 1
-      from public.organizations organization
-      where organization.id = target_organization_id
-        and organization.status = 'active'
+        order by normalized.stock_transfer_line_id
+      ),
+      '[]'::jsonb
     )
-    and exists (
-      select 1
-      from public.employees employee
-      join public.employee_roles employee_role
-        on employee_role.employee_id = employee.id
-       and employee_role.organization_id = employee.organization_id
-      join public.role_permissions role_permission
-        on role_permission.role_id = employee_role.role_id
-       and role_permission.organization_id = employee_role.organization_id
-      where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
-        and employee.status = 'active'
-        and (
-          role_permission.permission_code = requested_capability
-          or role_permission.permission_code = 'inventory.manage'
-          or (
-            requested_capability in ('inventory.transfer.create', 'inventory.transfer.send', 'inventory.transfer.receive')
-            and role_permission.permission_code = 'inventory.transfers'
-          )
-          or (
-            requested_capability in ('inventory.count.create', 'inventory.count.finalize')
-            and role_permission.permission_code = 'inventory.count'
-          )
-          or (
-            requested_capability in ('inventory.adjust.create', 'inventory.adjust.post')
-            and role_permission.permission_code = 'inventory.adjust'
-          )
-          or (
-            requested_capability in ('purchasing.view', 'purchasing.po.create')
-            and role_permission.permission_code = 'inventory.purchase_orders'
-          )
-          or (
-            requested_capability = 'purchasing.receive'
-            and role_permission.permission_code = 'inventory.receive'
-          )
-          or (
-            requested_capability = 'purchasing.suppliers.manage'
-            and role_permission.permission_code = 'inventory.suppliers'
-          )
-          or (
-            requested_capability = 'inventory.valuation.view'
-            and role_permission.permission_code = 'products.view_cost'
-          )
-        )
-    ),
-    false
-  );
-$$;
+    into requested_payload
+    from (
+      select
+        lower(btrim(value ->> 'stock_transfer_line_id')) as stock_transfer_line_id,
+        ((coalesce(value ->> 'received_quantity', value ->> 'quantity'))::numeric(14,3))::text as received_quantity,
+        ((coalesce(value ->> 'short_quantity', '0'))::numeric(14,3))::text as short_quantity,
+        nullif(btrim(coalesce(value ->> 'discrepancy_note', '')), '') as discrepancy_note
+      from jsonb_array_elements(target_lines)
+    ) normalized;
+  end if;
 
-commit;
--- Phase 6: add capability-level inventory transfer authorization without
--- removing the established inventory permissions.  The existing document,
--- ledger, idempotency, discrepancy, and audit procedures remain canonical.
-begin;
+  normalized_note := nullif(btrim(target_note), '');
+  select *
+  into transfer
+  from public.stock_transfers item
+  where item.id = target_stock_transfer_id
+    and item.organization_id = target_organization_id
+  for update;
 
-insert into public.permissions (code, category, name, description)
-values
-  ('inventory.transfer.create', 'Inventory', 'Create transfer requests', 'Create an authorized request for stock to move between stores.'),
-  ('inventory.transfer.send', 'Inventory', 'Send stock transfers', 'Approve, pick, and dispatch stock from an authorized source store.'),
-  ('inventory.transfer.receive', 'Inventory', 'Receive stock transfers', 'Record authorized stock-transfer receipts at an assigned destination store.'),
-  ('inventory.count.create', 'Inventory', 'Create inventory counts', 'Create and prepare an inventory count.'),
-  ('inventory.count.finalize', 'Inventory', 'Finalize inventory counts', 'Submit, post, or cancel an authorized inventory count.'),
-  ('inventory.adjust.create', 'Inventory', 'Create inventory adjustments', 'Prepare an authorized inventory adjustment.'),
-  ('inventory.adjust.post', 'Inventory', 'Post inventory adjustments', 'Post an authorized inventory adjustment to the immutable stock ledger.'),
-  ('inventory.valuation.view', 'Inventory', 'View inventory valuation', 'View inventory valuation and cost-sensitive stock values.'),
-  ('purchasing.view', 'Purchasing', 'View purchasing', 'View authorized suppliers, purchase orders, and receiving records.'),
-  ('purchasing.po.create', 'Purchasing', 'Create purchase orders', 'Create and maintain authorized purchase orders.'),
-  ('purchasing.receive', 'Purchasing', 'Receive purchase orders', 'Receive authorized supplier deliveries.'),
-  ('purchasing.suppliers.manage', 'Purchasing', 'Manage suppliers', 'Create and maintain supplier records.'),
-  ('purchasing.return', 'Purchasing', 'Return stock to suppliers', 'Record authorized supplier returns.')
-on conflict (code) do update
-set category = excluded.category,
-    name = excluded.name,
-    description = excluded.description;
+  if transfer.id is null then
+    raise exception 'Choose a transfer in this organization.' using errcode = '23514';
+  end if;
 
--- Existing capability bundles keep their effective access.  This is based on
--- assigned capabilities, not on role codes, so organization-defined roles
--- migrate safely alongside preset roles.
-with compatibility (legacy_permission, capability) as (
-  values
-    ('inventory.manage', 'inventory.transfer.create'),
-    ('inventory.manage', 'inventory.transfer.send'),
-    ('inventory.manage', 'inventory.transfer.receive'),
-    ('inventory.manage', 'inventory.count.create'),
-    ('inventory.manage', 'inventory.count.finalize'),
-    ('inventory.manage', 'inventory.adjust.create'),
-    ('inventory.manage', 'inventory.adjust.post'),
-    ('inventory.manage', 'inventory.valuation.view'),
-    ('inventory.manage', 'purchasing.view'),
-    ('inventory.manage', 'purchasing.po.create'),
-    ('inventory.manage', 'purchasing.receive'),
-    ('inventory.manage', 'purchasing.suppliers.manage'),
-    ('inventory.manage', 'purchasing.return'),
-    ('inventory.transfers', 'inventory.transfer.create'),
-    ('inventory.transfers', 'inventory.transfer.send'),
-    ('inventory.transfers', 'inventory.transfer.receive'),
-    ('inventory.count', 'inventory.count.create'),
-    ('inventory.count', 'inventory.count.finalize'),
-    ('inventory.adjust', 'inventory.adjust.create'),
-    ('inventory.adjust', 'inventory.adjust.post'),
-    ('inventory.purchase_orders', 'purchasing.view'),
-    ('inventory.purchase_orders', 'purchasing.po.create'),
-    ('inventory.receive', 'purchasing.receive'),
-    ('inventory.suppliers', 'purchasing.suppliers.manage'),
-    ('products.view_cost', 'inventory.valuation.view')
-)
-insert into public.role_permissions (organization_id, role_id, permission_code)
-select distinct role_permission.organization_id, role_permission.role_id, compatibility.capability
-from public.role_permissions role_permission
-join compatibility on compatibility.legacy_permission = role_permission.permission_code
-on conflict do nothing;
+  if transfer.stock_request_id is not null then
+    raise exception 'Receive replenishment transfers from the stock request workflow so shortages stay traceable.' using errcode = '23514';
+  end if;
 
--- This resolver centralizes compatibility at the capability boundary.  A
--- customer-created role can use only the new code; an older role remains
--- operational through its already-assigned legacy capability.
-create or replace function private.has_inventory_capability(
-  target_organization_id uuid,
-  requested_capability text
-)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select coalesce(
-    (select auth.uid()) is not null
-    and exists (
-      select 1
-      from public.organizations organization
-      where organization.id = target_organization_id
-        and organization.status = 'active'
+  actor_id := private.inventory_actor(target_organization_id, transfer.destination_store_id);
+  if actor_id is null then
+    raise exception 'An assigned employee is required for the destination store.' using errcode = '42501';
+  end if;
+
+  select *
+  into existing_receipt
+  from public.stock_transfer_receipts receipt
+  where receipt.organization_id = target_organization_id
+    and receipt.operation_id = target_operation_id
+  for update;
+
+  if found then
+    if existing_receipt.stock_transfer_id = transfer.id
+       and existing_receipt.destination_store_id = transfer.destination_store_id
+       and existing_receipt.received_by_employee_id = actor_id
+       and existing_receipt.note is not distinct from normalized_note
+       and existing_receipt.operation_payload = requested_payload then
+      return existing_receipt.id;
+    end if;
+
+    raise exception 'This operation ID is already assigned to a different transfer receipt.' using errcode = '23505';
+  end if;
+
+  if transfer.status not in ('in_transit', 'partially_received') then
+    raise exception 'This transfer is not available for receiving.' using errcode = '23514';
+  end if;
+
+  receipt_number := nextval('private.tindio_stock_transfer_receipt_number_sequence'::regclass);
+  insert into public.stock_transfer_receipts (
+    organization_id,
+    receipt_number,
+    operation_id,
+    operation_payload,
+    stock_transfer_id,
+    destination_store_id,
+    received_by_employee_id,
+    note
+  )
+  values (
+    target_organization_id,
+    receipt_number,
+    target_operation_id,
+    requested_payload,
+    transfer.id,
+    transfer.destination_store_id,
+    actor_id,
+    normalized_note
+  )
+  returning id into receipt_id;
+
+  for line in select value from jsonb_array_elements(target_lines)
+  loop
+    select *
+    into transfer_line
+    from public.stock_transfer_lines item
+    where item.id = (line ->> 'stock_transfer_line_id')::uuid
+      and item.stock_transfer_id = transfer.id
+      and item.organization_id = target_organization_id
+      and item.stock_request_line_id is null
+    for update;
+
+    if transfer_line.id is null then
+      raise exception 'A receipt line does not belong to this direct transfer.' using errcode = '23514';
+    end if;
+
+    received_now := (coalesce(line ->> 'received_quantity', line ->> 'quantity'))::numeric(14,3);
+    short_now := (coalesce(line ->> 'short_quantity', '0'))::numeric(14,3);
+    remaining := transfer_line.quantity - transfer_line.received_quantity - transfer_line.short_quantity;
+    if received_now + short_now > remaining then
+      raise exception 'Received and short quantities cannot exceed the remaining sent quantity.' using errcode = '23514';
+    end if;
+
+    if received_now > 0 then
+      insert into public.stock_transfer_receipt_lines (
+        organization_id,
+        stock_transfer_receipt_id,
+        stock_transfer_line_id,
+        quantity_received
+      )
+      values (target_organization_id, receipt_id, transfer_line.id, received_now);
+
+      perform private.apply_inventory_change_v2(
+        target_organization_id,
+        transfer.destination_store_id,
+        transfer_line.product_id,
+        transfer_line.variant_id,
+        received_now,
+        'TRANSFER_IN',
+        actor_id,
+        format('Transfer TR-%s receipt %s', lpad(transfer.transfer_number::text, 6, '0'), lpad(receipt_number::text, 6, '0')),
+        'stock_transfer_receipt',
+        receipt_id,
+        transfer_line.unit_cost_minor
+      );
+    end if;
+
+    update public.stock_transfer_lines
+    set received_quantity = received_quantity + received_now,
+        short_quantity = short_quantity + short_now
+    where id = transfer_line.id;
+  end loop;
+
+  select coalesce(sum(quantity - received_quantity - short_quantity), 0)
+  into total_remaining
+  from public.stock_transfer_lines
+  where stock_transfer_id = transfer.id;
+
+  select exists (
+    select 1
+    from public.stock_transfer_lines
+    where stock_transfer_id = transfer.id
+      and short_quantity > 0
+  )
+  into has_shortage;
+
+  update public.stock_transfers
+  set status = case when total_remaining = 0 then 'completed' else 'partially_received' end,
+      received_by_employee_id = actor_id,
+      received_at = now(),
+      completed_at = case when total_remaining = 0 then now() else completed_at end
+  where id = transfer.id;
+
+  perform private.write_audit_log(
+    target_organization_id,
+    case when total_remaining = 0 then 'STOCK_TRANSFER_RECEIVED' else 'STOCK_TRANSFER_PARTIALLY_RECEIVED' end,
+    'inventory.manage',
+    actor_id,
+    null,
+    transfer.destination_store_id,
+    null,
+    null,
+    null,
+    normalized_note,
+    jsonb_build_object(
+      'stock_transfer_id', transfer.id,
+      'transfer_number', transfer.transfer_number,
+      'receipt_id', receipt_id,
+      'receipt_number', receipt_number,
+      'remaining_quantity', total_remaining,
+      'has_discrepancy', has_shortage,
+      'receipt_lines', requested_payload
     )
-    and exists (
-      select 1
-      from public.employees employee
-      join public.employee_roles employee_role
-        on employee_role.employee_id = employee.id
-       and employee_role.organization_id = employee.organization_id
-      join public.role_permissions role_permission
-        on role_permission.role_id = employee_role.role_id
-       and role_permission.organization_id = employee_role.organization_id
-      where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
-        and employee.status = 'active'
-        and (
-          role_permission.permission_code = requested_capability
-          or role_permission.permission_code = 'inventory.manage'
-          or (
-            requested_capability in ('inventory.transfer.create', 'inventory.transfer.send', 'inventory.transfer.receive')
-            and role_permission.permission_code = 'inventory.transfers'
-          )
-          or (
-            requested_capability in ('inventory.count.create', 'inventory.count.finalize')
-            and role_permission.permission_code = 'inventory.count'
-          )
-          or (
-            requested_capability in ('inventory.adjust.create', 'inventory.adjust.post')
-            and role_permission.permission_code = 'inventory.adjust'
-          )
-          or (
-            requested_capability in ('purchasing.view', 'purchasing.po.create')
-            and role_permission.permission_code = 'inventory.purchase_orders'
-          )
-          or (
-            requested_capability = 'purchasing.receive'
-            and role_permission.permission_code = 'inventory.receive'
-          )
-          or (
-            requested_capability = 'purchasing.suppliers.manage'
-            and role_permission.permission_code = 'inventory.suppliers'
-          )
-          or (
-            requested_capability = 'inventory.valuation.view'
-            and role_permission.permission_code = 'products.view_cost'
-          )
-        )
-    ),
-    false
   );
-$$;
-
-commit;
--- Phase 6: add capability-level inventory transfer authorization without
--- removing the established inventory permissions.  The existing document,
--- ledger, idempotency, discrepancy, and audit procedures remain canonical.
-begin;
-
-insert into public.permissions (code, category, name, description)
-values
-  ('inventory.transfer.create', 'Inventory', 'Create transfer requests', 'Create an authorized request for stock to move between stores.'),
-  ('inventory.transfer.send', 'Inventory', 'Send stock transfers', 'Approve, pick, and dispatch stock from an authorized source store.'),
-  ('inventory.transfer.receive', 'Inventory', 'Receive stock transfers', 'Record authorized stock-transfer receipts at an assigned destination store.'),
-  ('inventory.count.create', 'Inventory', 'Create inventory counts', 'Create and prepare an inventory count.'),
-  ('inventory.count.finalize', 'Inventory', 'Finalize inventory counts', 'Submit, post, or cancel an authorized inventory count.'),
-  ('inventory.adjust.create', 'Inventory', 'Create inventory adjustments', 'Prepare an authorized inventory adjustment.'),
-  ('inventory.adjust.post', 'Inventory', 'Post inventory adjustments', 'Post an authorized inventory adjustment to the immutable stock ledger.'),
-  ('inventory.valuation.view', 'Inventory', 'View inventory valuation', 'View inventory valuation and cost-sensitive stock values.'),
-  ('purchasing.view', 'Purchasing', 'View purchasing', 'View authorized suppliers, purchase orders, and receiving records.'),
-  ('purchasing.po.create', 'Purchasing', 'Create purchase orders', 'Create and maintain authorized purchase orders.'),
-  ('purchasing.receive', 'Purchasing', 'Receive purchase orders', 'Receive authorized supplier deliveries.'),
-  ('purchasing.suppliers.manage', 'Purchasing', 'Manage suppliers', 'Create and maintain supplier records.'),
-  ('purchasing.return', 'Purchasing', 'Return stock to suppliers', 'Record authorized supplier returns.')
-on conflict (code) do update
-set category = excluded.category,
-    name = excluded.name,
-    description = excluded.description;
-
--- Existing capability bundles keep their effective access.  This is based on
--- assigned capabilities, not on role codes, so organization-defined roles
--- migrate safely alongside preset roles.
-with compatibility (legacy_permission, capability) as (
-  values
-    ('inventory.manage', 'inventory.transfer.create'),
-    ('inventory.manage', 'inventory.transfer.send'),
-    ('inventory.manage', 'inventory.transfer.receive'),
-    ('inventory.manage', 'inventory.count.create'),
-    ('inventory.manage', 'inventory.count.finalize'),
-    ('inventory.manage', 'inventory.adjust.create'),
-    ('inventory.manage', 'inventory.adjust.post'),
-    ('inventory.manage', 'inventory.valuation.view'),
-    ('inventory.manage', 'purchasing.view'),
-    ('inventory.manage', 'purchasing.po.create'),
-    ('inventory.manage', 'purchasing.receive'),
-    ('inventory.manage', 'purchasing.suppliers.manage'),
-    ('inventory.manage', 'purchasing.return'),
-    ('inventory.transfers', 'inventory.transfer.create'),
-    ('inventory.transfers', 'inventory.transfer.send'),
-    ('inventory.transfers', 'inventory.transfer.receive'),
-    ('inventory.count', 'inventory.count.create'),
-    ('inventory.count', 'inventory.count.finalize'),
-    ('inventory.adjust', 'inventory.adjust.create'),
-    ('inventory.adjust', 'inventory.adjust.post'),
-    ('inventory.purchase_orders', 'purchasing.view'),
-    ('inventory.purchase_orders', 'purchasing.po.create'),
-    ('inventory.receive', 'purchasing.receive'),
-    ('inventory.suppliers', 'purchasing.suppliers.manage'),
-    ('products.view_cost', 'inventory.valuation.view')
-)
-insert into public.role_permissions (organization_id, role_id, permission_code)
-select distinct role_permission.organization_id, role_permission.role_id, compatibility.capability
-from public.role_permissions role_permission
-join compatibility on compatibility.legacy_permission = role_permission.permission_code
-on conflict do nothing;
-
--- This resolver centralizes compatibility at the capability boundary.  A
--- customer-created role can use only the new code; an older role remains
--- operational through its already-assigned legacy capability.
-create or replace function private.has_inventory_capability(
-  target_organization_id uuid,
-  requested_capability text
-)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select coalesce(
-    (select auth.uid()) is not null
-    and exists (
-      select 1
-      from public.organizations organization
-      where organization.id = target_organization_id
-        and organization.status = 'active'
-    )
-    and exists (
-      select 1
-      from public.employees employee
-      join public.employee_roles employee_role
-        on employee_role.employee_id = employee.id
-       and employee_role.organization_id = employee.organization_id
-      join public.role_permissions role_permission
-        on role_permission.role_id = employee_role.role_id
-       and role_permission.organization_id = employee_role.organization_id
-      where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
-        and employee.status = 'active'
-        and (
-          role_permission.permission_code = requested_capability
-          or role_permission.permission_code = 'inventory.manage'
-          or (
-            requested_capability in ('inventory.transfer.create', 'inventory.transfer.send', 'inventory.transfer.receive')
-            and role_permission.permission_code = 'inventory.transfers'
-          )
-          or (
-            requested_capability in ('inventory.count.create', 'inventory.count.finalize')
-            and role_permission.permission_code = 'inventory.count'
-          )
-          or (
-            requested_capability in ('inventory.adjust.create', 'inventory.adjust.post')
-            and role_permission.permission_code = 'inventory.adjust'
-          )
-          or (
-            requested_capability in ('purchasing.view', 'purchasing.po.create')
-            and role_permission.permission_code = 'inventory.purchase_orders'
-          )
-          or (
-            requested_capability = 'purchasing.receive'
-            and role_permission.permission_code = 'inventory.receive'
-          )
-          or (
-            requested_capability = 'purchasing.suppliers.manage'
-            and role_permission.permission_code = 'inventory.suppliers'
-          )
-          or (
-            requested_capability = 'inventory.valuation.view'
-            and role_permission.permission_code = 'products.view_cost'
-          )
-        )
-    ),
-    false
-  );
-$$;
-
-commit;
--- Phase 6: add capability-level inventory transfer authorization without
--- removing the established inventory permissions.  The existing document,
--- ledger, idempotency, discrepancy, and audit procedures remain canonical.
-begin;
-
-insert into public.permissions (code, category, name, description)
-values
-  ('inventory.transfer.create', 'Inventory', 'Create transfer requests', 'Create an authorized request for stock to move between stores.'),
-  ('inventory.transfer.send', 'Inventory', 'Send stock transfers', 'Approve, pick, and dispatch stock from an authorized source store.'),
-  ('inventory.transfer.receive', 'Inventory', 'Receive stock transfers', 'Record authorized stock-transfer receipts at an assigned destination store.'),
-  ('inventory.count.create', 'Inventory', 'Create inventory counts', 'Create and prepare an inventory count.'),
-  ('inventory.count.finalize', 'Inventory', 'Finalize inventory counts', 'Submit, post, or cancel an authorized inventory count.'),
-  ('inventory.adjust.create', 'Inventory', 'Create inventory adjustments', 'Prepare an authorized inventory adjustment.'),
-  ('inventory.adjust.post', 'Inventory', 'Post inventory adjustments', 'Post an authorized inventory adjustment to the immutable stock ledger.'),
-  ('inventory.valuation.view', 'Inventory', 'View inventory valuation', 'View inventory valuation and cost-sensitive stock values.'),
-  ('purchasing.view', 'Purchasing', 'View purchasing', 'View authorized suppliers, purchase orders, and receiving records.'),
-  ('purchasing.po.create', 'Purchasing', 'Create purchase orders', 'Create and maintain authorized purchase orders.'),
-  ('purchasing.receive', 'Purchasing', 'Receive purchase orders', 'Receive authorized supplier deliveries.'),
-  ('purchasing.suppliers.manage', 'Purchasing', 'Manage suppliers', 'Create and maintain supplier records.'),
-  ('purchasing.return', 'Purchasing', 'Return stock to suppliers', 'Record authorized supplier returns.')
-on conflict (code) do update
-set category = excluded.category,
-    name = excluded.name,
-    description = excluded.description;
-
--- Existing capability bundles keep their effective access.  This is based on
--- assigned capabilities, not on role codes, so organization-defined roles
--- migrate safely alongside preset roles.
-with compatibility (legacy_permission, capability) as (
-  values
-    ('inventory.manage', 'inventory.transfer.create'),
-    ('inventory.manage', 'inventory.transfer.send'),
-    ('inventory.manage', 'inventory.transfer.receive'),
-    ('inventory.manage', 'inventory.count.create'),
-    ('inventory.manage', 'inventory.count.finalize'),
-    ('inventory.manage', 'inventory.adjust.create'),
-    ('inventory.manage', 'inventory.adjust.post'),
-    ('inventory.manage', 'inventory.valuation.view'),
-    ('inventory.manage', 'purchasing.view'),
-    ('inventory.manage', 'purchasing.po.create'),
-    ('inventory.manage', 'purchasing.receive'),
-    ('inventory.manage', 'purchasing.suppliers.manage'),
-    ('inventory.manage', 'purchasing.return'),
-    ('inventory.transfers', 'inventory.transfer.create'),
-    ('inventory.transfers', 'inventory.transfer.send'),
-    ('inventory.transfers', 'inventory.transfer.receive'),
-    ('inventory.count', 'inventory.count.create'),
-    ('inventory.count', 'inventory.count.finalize'),
-    ('inventory.adjust', 'inventory.adjust.create'),
-    ('inventory.adjust', 'inventory.adjust.post'),
-    ('inventory.purchase_orders', 'purchasing.view'),
-    ('inventory.purchase_orders', 'purchasing.po.create'),
-    ('inventory.receive', 'purchasing.receive'),
-    ('inventory.suppliers', 'purchasing.suppliers.manage'),
-    ('products.view_cost', 'inventory.valuation.view')
-)
-insert into public.role_permissions (organization_id, role_id, permission_code)
-select distinct role_permission.organization_id, role_permission.role_id, compatibility.capability
-from public.role_permissions role_permission
-join compatibility on compatibility.legacy_permission = role_permission.permission_code
-on conflict do nothing;
-
--- This resolver centralizes compatibility at the capability boundary.  A
--- customer-created role can use only the new code; an older role remains
--- operational through its already-assigned legacy capability.
-create or replace function private.has_inventory_capability(
-  target_organization_id uuid,
-  requested_capability text
-)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select coalesce(
-    (select auth.uid()) is not null
-    and exists (
-      select 1
-      from public.organizations organization
-      where organization.id = target_organization_id
-        and organization.status = 'active'
-    )
-    and exists (
-      select 1
-      from public.employees employee
-      join public.employee_roles employee_role
-        on employee_role.employee_id = employee.id
-       and employee_role.organization_id = employee.organization_id
-      join public.role_permissions role_permission
-        on role_permission.role_id = employee_role.role_id
-       and role_permission.organization_id = employee_role.organization_id
-      where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
-        and employee.status = 'active'
-        and (
-          role_permission.permission_code = requested_capability
-          or role_permission.permission_code = 'inventory.manage'
-          or (
-            requested_capability in ('inventory.transfer.create', 'inventory.transfer.send', 'inventory.transfer.receive')
-            and role_permission.permission_code = 'inventory.transfers'
-          )
-          or (
-            requested_capability in ('inventory.count.create', 'inventory.count.finalize')
-            and role_permission.permission_code = 'inventory.count'
-          )
-          or (
-            requested_capability in ('inventory.adjust.create', 'inventory.adjust.post')
-            and role_permission.permission_code = 'inventory.adjust'
-          )
-          or (
-            requested_capability in ('purchasing.view', 'purchasing.po.create')
-            and role_permission.permission_code = 'inventory.purchase_orders'
-          )
-          or (
-            requested_capability = 'purchasing.receive'
-            and role_permission.permission_code = 'inventory.receive'
-          )
-          or (
-            requested_capability = 'purchasing.suppliers.manage'
-            and role_permission.permission_code = 'inventory.suppliers'
-          )
-          or (
-            requested_capability = 'inventory.valuation.view'
-            and role_permission.permission_code = 'products.view_cost'
-          )
-        )
-    ),
-    false
-  );
-$$;
-
-commit;
--- Phase 6: add capability-level inventory transfer authorization without
--- removing the established inventory permissions.  The existing document,
--- ledger, idempotency, discrepancy, and audit procedures remain canonical.
-begin;
-
-insert into public.permissions (code, category, name, description)
-values
-  ('inventory.transfer.create', 'Inventory', 'Create transfer requests', 'Create an authorized request for stock to move between stores.'),
-  ('inventory.transfer.send', 'Inventory', 'Send stock transfers', 'Approve, pick, and dispatch stock from an authorized source store.'),
-  ('inventory.transfer.receive', 'Inventory', 'Receive stock transfers', 'Record authorized stock-transfer receipts at an assigned destination store.'),
-  ('inventory.count.create', 'Inventory', 'Create inventory counts', 'Create and prepare an inventory count.'),
-  ('inventory.count.finalize', 'Inventory', 'Finalize inventory counts', 'Submit, post, or cancel an authorized inventory count.'),
-  ('inventory.adjust.create', 'Inventory', 'Create inventory adjustments', 'Prepare an authorized inventory adjustment.'),
-  ('inventory.adjust.post', 'Inventory', 'Post inventory adjustments', 'Post an authorized inventory adjustment to the immutable stock ledger.'),
-  ('inventory.valuation.view', 'Inventory', 'View inventory valuation', 'View inventory valuation and cost-sensitive stock values.'),
-  ('purchasing.view', 'Purchasing', 'View purchasing', 'View authorized suppliers, purchase orders, and receiving records.'),
-  ('purchasing.po.create', 'Purchasing', 'Create purchase orders', 'Create and maintain authorized purchase orders.'),
-  ('purchasing.receive', 'Purchasing', 'Receive purchase orders', 'Receive authorized supplier deliveries.'),
-  ('purchasing.suppliers.manage', 'Purchasing', 'Manage suppliers', 'Create and maintain supplier records.'),
-  ('purchasing.return', 'Purchasing', 'Return stock to suppliers', 'Record authorized supplier returns.')
-on conflict (code) do update
-set category = excluded.category,
-    name = excluded.name,
-    description = excluded.description;
-
--- Existing capability bundles keep their effective access.  This is based on
--- assigned capabilities, not on role codes, so organization-defined roles
--- migrate safely alongside preset roles.
-with compatibility (legacy_permission, capability) as (
-  values
-    ('inventory.manage', 'inventory.transfer.create'),
-    ('inventory.manage', 'inventory.transfer.send'),
-    ('inventory.manage', 'inventory.transfer.receive'),
-    ('inventory.manage', 'inventory.count.create'),
-    ('inventory.manage', 'inventory.count.finalize'),
-    ('inventory.manage', 'inventory.adjust.create'),
-    ('inventory.manage', 'inventory.adjust.post'),
-    ('inventory.manage', 'inventory.valuation.view'),
-    ('inventory.manage', 'purchasing.view'),
-    ('inventory.manage', 'purchasing.po.create'),
-    ('inventory.manage', 'purchasing.receive'),
-    ('inventory.manage', 'purchasing.suppliers.manage'),
-    ('inventory.manage', 'purchasing.return'),
-    ('inventory.transfers', 'inventory.transfer.create'),
-    ('inventory.transfers', 'inventory.transfer.send'),
-    ('inventory.transfers', 'inventory.transfer.receive'),
-    ('inventory.count', 'inventory.count.create'),
-    ('inventory.count', 'inventory.count.finalize'),
-    ('inventory.adjust', 'inventory.adjust.create'),
-    ('inventory.adjust', 'inventory.adjust.post'),
-    ('inventory.purchase_orders', 'purchasing.view'),
-    ('inventory.purchase_orders', 'purchasing.po.create'),
-    ('inventory.receive', 'purchasing.receive'),
-    ('inventory.suppliers', 'purchasing.suppliers.manage'),
-    ('products.view_cost', 'inventory.valuation.view')
-)
-insert into public.role_permissions (organization_id, role_id, permission_code)
-select distinct role_permission.organization_id, role_permission.role_id, compatibility.capability
-from public.role_permissions role_permission
-join compatibility on compatibility.legacy_permission = role_permission.permission_code
-on conflict do nothing;
-
--- This resolver centralizes compatibility at the capability boundary.  A
--- customer-created role can use only the new code; an older role remains
--- operational through its already-assigned legacy capability.
-create or replace function private.has_inventory_capability(
-  target_organization_id uuid,
-  requested_capability text
-)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select coalesce(
-    (select auth.uid()) is not null
-    and exists (
-      select 1
-      from public.organizations organization
-      where organization.id = target_organization_id
-        and organization.status = 'active'
-    )
-    and exists (
-      select 1
-      from public.employees employee
-      join public.employee_roles employee_role
-        on employee_role.employee_id = employee.id
-       and employee_role.organization_id = employee.organization_id
-      join public.role_permissions role_permission
-        on role_permission.role_id = employee_role.role_id
-       and role_permission.organization_id = employee_role.organization_id
-      where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
-        and employee.status = 'active'
-        and (
-          role_permission.permission_code = requested_capability
-          or role_permission.permission_code = 'inventory.manage'
-          or (
-            requested_capability in ('inventory.transfer.create', 'inventory.transfer.send', 'inventory.transfer.receive')
-            and role_permission.permission_code = 'inventory.transfers'
-          )
-          or (
-            requested_capability in ('inventory.count.create', 'inventory.count.finalize')
-            and role_permission.permission_code = 'inventory.count'
-          )
-          or (
-            requested_capability in ('inventory.adjust.create', 'inventory.adjust.post')
-            and role_permission.permission_code = 'inventory.adjust'
-          )
-          or (
-            requested_capability in ('purchasing.view', 'purchasing.po.create')
-            and role_permission.permission_code = 'inventory.purchase_orders'
-          )
-          or (
-            requested_capability = 'purchasing.receive'
-            and role_permission.permission_code = 'inventory.receive'
-          )
-          or (
-            requested_capability = 'purchasing.suppliers.manage'
-            and role_permission.permission_code = 'inventory.suppliers'
-          )
-          or (
-            requested_capability = 'inventory.valuation.view'
-            and role_permission.permission_code = 'products.view_cost'
-          )
-        )
-    ),
-    false
-  );
+  return receipt_id;
+end;
 $$;
 
 -- A sender must be able to discover the request that targets its authorized
@@ -1558,5 +926,46 @@ comment on function private.has_any_inventory_capability(uuid, text[]) is
   'Returns whether the active employee has any listed inventory capability in the active organization.';
 
 notify pgrst, 'reload schema';
+
+create or replace function private.approve_stock_request(target_organization_id uuid, target_stock_request_id uuid, target_lines jsonb)
+returns void language plpgsql security definer set search_path = '' as $$
+declare request_row public.stock_requests%rowtype; actor_id uuid; line jsonb; request_line public.stock_request_lines%rowtype; warehouse_store_id uuid;
+begin
+  if (select auth.uid()) is null or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send'))) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
+  if target_lines is null or jsonb_typeof(target_lines) <> 'array' or jsonb_array_length(target_lines) not between 1 and 100 then raise exception 'Approval needs every request line.' using errcode = '23514'; end if;
+  select * into request_row from public.stock_requests request where request.id = target_stock_request_id and request.organization_id = target_organization_id and request.status = 'requested' for update;
+  if request_row.id is null then raise exception 'Only a submitted request can be approved.' using errcode = '23514'; end if;
+  select warehouse.store_id into warehouse_store_id from public.supply_chain_warehouses warehouse where warehouse.id = request_row.source_warehouse_id and warehouse.organization_id = target_organization_id and warehouse.is_active;
+  actor_id := private.inventory_actor(target_organization_id, warehouse_store_id);
+  if actor_id is null then raise exception 'An assigned employee is required for the source warehouse.' using errcode = '42501'; end if;
+  if (select count(*) from public.stock_request_lines where stock_request_id = request_row.id) <> jsonb_array_length(target_lines)
+    or exists (select 1 from jsonb_array_elements(target_lines) approval(value) where jsonb_typeof(approval.value) <> 'object' or coalesce(approval.value->>'stock_request_line_id','') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' or coalesce(approval.value->>'approved_quantity','') !~ '^\d+(\.\d{1,3})?$')
+    or (select count(*) from jsonb_array_elements(target_lines)) <> (select count(distinct value->>'stock_request_line_id') from jsonb_array_elements(target_lines)) then raise exception 'Approval lines are invalid.' using errcode = '23514'; end if;
+  for line in select value from jsonb_array_elements(target_lines) loop
+    select * into request_line from public.stock_request_lines item where item.id = (line->>'stock_request_line_id')::uuid and item.stock_request_id = request_row.id and item.organization_id = target_organization_id for update;
+    if request_line.id is null or (line->>'approved_quantity')::numeric > request_line.requested_quantity then raise exception 'Approved quantity cannot exceed the request.' using errcode = '23514'; end if;
+    update public.stock_request_lines set approved_quantity = (line->>'approved_quantity')::numeric(14,3) where id = request_line.id;
+  end loop;
+  if not exists (select 1 from public.stock_request_lines where stock_request_id = request_row.id and approved_quantity > 0) then raise exception 'Approve at least one requested quantity.' using errcode = '23514'; end if;
+  update public.stock_requests set status = 'approved', approved_by_employee_id = actor_id, approved_at = now() where id = request_row.id;
+  perform private.write_audit_log(target_organization_id, 'STOCK_REQUEST_APPROVED', 'inventory.manage', actor_id, null, request_row.requesting_store_id, null, null, null, null, jsonb_build_object('stock_request_id', request_row.id));
+end;
+$$;
+
+create or replace function private.start_stock_request_picking(target_organization_id uuid, target_stock_request_id uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+declare request_row public.stock_requests%rowtype; actor_id uuid; warehouse_store_id uuid;
+begin
+  if (select auth.uid()) is null or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send'))) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
+  select * into request_row from public.stock_requests request where request.id = target_stock_request_id and request.organization_id = target_organization_id and request.status = 'approved' for update;
+  if request_row.id is null then raise exception 'Only an approved request can be picked.' using errcode = '23514'; end if;
+  select warehouse.store_id into warehouse_store_id from public.supply_chain_warehouses warehouse where warehouse.id = request_row.source_warehouse_id and warehouse.organization_id = target_organization_id and warehouse.is_active;
+  actor_id := private.inventory_actor(target_organization_id, warehouse_store_id);
+  if actor_id is null then raise exception 'An assigned employee is required for the source warehouse.' using errcode = '42501'; end if;
+  update public.stock_request_lines set picked_quantity = approved_quantity where stock_request_id = request_row.id;
+  update public.stock_requests set status = 'picking', picked_by_employee_id = actor_id, picked_at = now() where id = request_row.id;
+  perform private.write_audit_log(target_organization_id, 'STOCK_REQUEST_PICKING_STARTED', 'inventory.manage', actor_id, null, warehouse_store_id, null, null, null, null, jsonb_build_object('stock_request_id', request_row.id));
+end;
+$$;
 
 commit;

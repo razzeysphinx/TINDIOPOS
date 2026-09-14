@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Boxes, PackageOpen, Warehouse } from "lucide-react";
+import { ArrowDown, ArrowUp, Boxes, ClipboardCheck, PackageOpen, Warehouse } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -40,13 +40,23 @@ import { getInventoryStockCondition } from "@/features/inventory/inventory-stock
 import { InventoryTransferWorkspace } from "@/features/inventory/inventory-transfer-workspace";
 import { hasAnyInventoryCapability, hasInventoryCapability } from "@/features/inventory/inventory-permissions";
 import {
+  loadInventorySchemaContract,
+  reportInventoryModuleFailure,
+  type InventoryModuleFailure,
+} from "@/features/inventory/inventory-schema-contract";
+import {
   InventoryWorkspaceNavigation,
   type InventoryControlTab,
   type InventoryWorkspace,
   type PurchasingTab,
 } from "@/features/inventory/inventory-workspace-navigation";
 import { resolveBackOfficeStoreScope } from "@/lib/server/back-office-store-scope";
-import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
+import {
+  getBackOfficeHome,
+  hasPermission,
+  requireBackOfficeContext,
+} from "@/lib/auth/dal";
+import { hasInventoryBackOfficeResponsibility } from "@/lib/auth/inventory-capabilities";
 import type { TableRow } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -276,25 +286,15 @@ export async function InventoryWorkspacePage({
   searchParams,
   workspace,
 }: InventoryWorkspacePageProps & { workspace: Extract<InventoryWorkspace, "control" | "purchasing"> }) {
-  const context = await requireBackOfficePermission([
-    "inventory.view",
-    "inventory.adjust",
-    "inventory.adjust.create",
-    "inventory.adjust.post",
-    "inventory.count",
-    "inventory.manage",
-    "inventory.count.create",
-    "inventory.count.finalize",
-    "inventory.valuation.view",
-    "inventory.transfer.create",
-    "inventory.transfer.send",
-    "inventory.transfer.receive",
-    "purchasing.view",
-    "purchasing.po.create",
-    "purchasing.receive",
-    "purchasing.suppliers.manage",
-    "purchasing.return",
-  ]);
+  const context = await requireBackOfficeContext();
+
+  if (
+    !hasInventoryBackOfficeResponsibility(
+      context.permissions,
+    )
+  ) {
+    redirect(getBackOfficeHome(context));
+  }
   const parameters = await searchParams;
   const rawRequestedTab = Array.isArray(parameters.tab) ? parameters.tab[0] : parameters.tab;
   if (rawRequestedTab === "stock") {
@@ -466,6 +466,41 @@ export async function InventoryWorkspacePage({
 
   const supabase = await createClient();
   const organizationId = context.organization.id;
+  const inventorySchema =
+    await loadInventorySchemaContract(
+      supabase,
+      organizationId,
+    );
+
+  if (inventorySchema.status === "outdated") {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          action={
+            <Badge variant="outline">
+              Database update required
+            </Badge>
+          }
+          description="This TINDIO application version requires a newer Inventory database contract before stock workflows can run safely."
+          eyebrow="Inventory"
+          title="Stock Control"
+        />
+
+        <BackOfficeStateCard
+          description="Inventory has been placed in a protected state. Apply the pending database migrations, then reload this page. No stock-changing action is available while the application and database are out of sync."
+          icon={
+            <Boxes
+              className="size-5"
+              aria-hidden="true"
+            />
+          }
+          title="Inventory update required"
+        />
+      </div>
+    );
+  }
+
+  const inventoryModules = inventorySchema.modules;
   const canViewCosts = hasPermission(context, "products.view_cost");
   const selectedStoreId = storeScope.selectedStoreId;
   const scopedStoreIds = selectedStoreId ? [selectedStoreId] : storeScope.storeIds;
@@ -500,35 +535,35 @@ export async function InventoryWorkspacePage({
     : null;
   // Valuation is an audit view. Historical product and store names must remain
   // visible without turning archived catalog records into operating options.
-  const valuationProductsQuery = activeTab === "valuation" && canViewValuation
+  const valuationProductsQuery = activeTab === "valuation" && canViewValuation && inventoryModules.valuation
     ? supabase
         .from("products")
         .select("id, name, unit, status, product_type, price_minor")
         .eq("organization_id", organizationId)
         .eq("track_inventory", true)
     : null;
-  const valuationVariantsQuery = activeTab === "valuation" && canViewValuation
+  const valuationVariantsQuery = activeTab === "valuation" && canViewValuation && inventoryModules.valuation
     ? supabase
         .from("product_variants")
         .select("id, product_id, name, price_minor, is_active")
         .eq("organization_id", organizationId)
     : null;
-  const valuationStoresQuery = activeTab === "valuation" && canViewValuation
+  const valuationStoresQuery = activeTab === "valuation" && canViewValuation && inventoryModules.valuation
     ? supabase
         .from("stores")
         .select("id, name")
         .eq("organization_id", organizationId)
     : null;
-  const valuationQuery = ["overview", "valuation"].includes(activeTab) && canViewValuation
+  const valuationQuery = ["overview", "valuation"].includes(activeTab) && canViewValuation && inventoryModules.valuation
     ? supabase.rpc("get_inventory_valuation", { target_organization_id: organizationId })
     : Promise.resolve({ data: [], error: null });
-  const replenishmentRulesQuery = canManage
+  const replenishmentRulesQuery = canManage && inventoryModules.replenishment
     ? supabase
         .from("inventory_replenishment_rules")
         .select("id, store_id, product_id, variant_id, preferred_warehouse_id, reorder_point, target_stock")
         .eq("organization_id", organizationId)
     : null;
-  const purchaseOrdersQuery = canReadPurchaseOrders
+  const purchaseOrdersQuery = canReadPurchaseOrders && inventoryModules.purchasing
     ? supabase
         .from("purchase_orders")
         .select("id, supplier_id, store_id, order_number, status, expected_at, created_at")
@@ -536,14 +571,14 @@ export async function InventoryWorkspacePage({
         .order("created_at", { ascending: false })
         .limit(30)
       : null;
-  const openPurchaseOrdersCountQuery = canReadPurchaseOrders && activeTab === "overview"
+  const openPurchaseOrdersCountQuery = canReadPurchaseOrders && activeTab === "overview" && inventoryModules.purchasing
     ? supabase
         .from("purchase_orders")
         .select("id", { count: "exact", head: true })
         .eq("organization_id", organizationId)
         .in("status", ["ordered", "partially_received"])
     : null;
-  const productUnitsQuery = canCreatePurchaseOrders
+  const productUnitsQuery = canCreatePurchaseOrders && inventoryModules.purchasing
     ? supabase
         .from("product_units")
         .select("product_id, unit_code, unit_name, factor_to_base, is_base, is_purchase_unit")
@@ -597,7 +632,7 @@ export async function InventoryWorkspacePage({
         .order("started_at", { ascending: false })
         .limit(100)
     : null;
-  const inventoryCountBatchesQuery = canCount && activeTab === "counts"
+  const inventoryCountBatchesQuery = canCount && activeTab === "counts" && inventoryModules.count_batches
     ? supabase
         .from("inventory_count_batches")
         .select("id, batch_number, name, note, created_at, updated_at")
@@ -718,7 +753,7 @@ export async function InventoryWorkspacePage({
           >,
           error: null,
         }),
-    canAccessPurchasing
+    canAccessPurchasing && inventoryModules.purchasing
       ? supabase
           .from("suppliers")
           .select("id, name, contact_name, email, phone, address, notes, is_active, lead_time_days")
@@ -737,7 +772,7 @@ export async function InventoryWorkspacePage({
           .eq("is_active", true)
           .order("name", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
-    canAccessTransfers
+    canAccessTransfers && inventoryModules.direct_transfers
       ? supabase
           .from("stock_transfers")
           .select("id, transfer_number, stock_request_id, source_store_id, destination_store_id, status, note")
@@ -765,41 +800,87 @@ export async function InventoryWorkspacePage({
     offlineInventoryIssuesQuery ?? Promise.resolve({ data: [], error: null }),
   ]);
 
-  const error = [
+  const coreError = [
     storesResult,
     categoriesResult,
     productsResult,
     activityProductsResult,
     activityStoresResult,
+    variantsResult,
+    settingsResult,
+    levelsResult,
+    movementsResult,
+  ].find((result) => result.error)?.error;
+
+  if (coreError) {
+    throw new Error(
+      `Unable to load canonical inventory data: ${
+        coreError.message
+      }`,
+    );
+  }
+
+  const transferFailure =
+    stockTransfersResult.error
+      ? reportInventoryModuleFailure(
+          "direct_transfers",
+          stockTransfersResult.error,
+        )
+      : null;
+
+  const valuationError = [
     valuationProductsResult,
     valuationVariantsResult,
     valuationStoresResult,
-    variantsResult,
-    productUnitsResult,
-    settingsResult,
-    levelsResult,
     valuationResult,
-    movementsResult,
+  ].find((result) => result.error)?.error;
+  const valuationFailure = valuationError
+    ? reportInventoryModuleFailure("valuation", valuationError)
+    : null;
+
+  const purchasingError = [
+    productUnitsResult,
     suppliersResult,
     purchaseOrdersResult,
     openPurchaseOrdersCountResult,
-    inventoryPoliciesResult,
-    inventoryPolicyDefaultsResult,
-    adjustmentReasonsResult,
-    stockTransfersResult,
-    replenishmentRulesResult,
-    inventoryCountsResult,
-    inventoryCountBatchesResult,
-    countSuppliersResult,
-    countAwarenessResult,
-    offlineInventoryIssuesResult,
   ].find((result) => result.error)?.error;
+  const purchasingFailure = purchasingError
+    ? reportInventoryModuleFailure("purchasing", purchasingError)
+    : null;
 
-  if (error) {
-    throw new Error(`Unable to load inventory: ${error.message}`);
-  }
+  const replenishmentFailure =
+    replenishmentRulesResult.error
+      ? reportInventoryModuleFailure(
+          "replenishment",
+          replenishmentRulesResult.error,
+        )
+      : null;
 
-  const openStockTransferIds = (stockTransfersResult.data ?? []).map((transfer) => transfer.id);
+  const countsFailure = inventoryCountsResult.error
+    ? reportInventoryModuleFailure(
+        "counts",
+        inventoryCountsResult.error,
+      )
+    : null;
+
+  const countBatchFailure =
+    inventoryCountBatchesResult.error
+      ? reportInventoryModuleFailure(
+          "count_batches",
+          inventoryCountBatchesResult.error,
+        )
+      : null;
+
+  const adjustmentFailure = adjustmentReasonsResult.error
+    ? reportInventoryModuleFailure(
+        "adjustments",
+        adjustmentReasonsResult.error,
+      )
+    : null;
+
+  const openStockTransferIds = inventoryModules.direct_transfers && !transferFailure
+    ? (stockTransfersResult.data ?? []).map((transfer) => transfer.id)
+    : [];
   const stockTransferLinesResult = openStockTransferIds.length
     ? await supabase
         .from("stock_transfer_lines")
@@ -807,9 +888,12 @@ export async function InventoryWorkspacePage({
         .eq("organization_id", organizationId)
         .in("stock_transfer_id", openStockTransferIds)
     : { data: [], error: null };
-  if (stockTransferLinesResult.error) {
-    throw new Error(`Unable to load open stock transfer lines: ${stockTransferLinesResult.error.message}`);
-  }
+  const transferLinesFailure = stockTransferLinesResult.error
+    ? reportInventoryModuleFailure(
+        "direct_transfers",
+        stockTransferLinesResult.error,
+      )
+    : null;
 
   const visibleStore = (storeId: string) => scopedStoreIds === null || scopedStoreIds.includes(storeId);
   const stores = (storesResult.data ?? []).filter((store) => visibleStore(store.id));
@@ -831,8 +915,12 @@ export async function InventoryWorkspacePage({
     : loadedMovements;
   const suppliers = suppliersResult.data ?? [];
   const purchaseOrders = (purchaseOrdersResult.data ?? []).filter((order) => visibleStore(order.store_id));
-  const inventoryCounts = (inventoryCountsResult.data ?? []).filter((count) => visibleStore(count.store_id));
-  const inventoryCountBatches = inventoryCountBatchesResult.data ?? [];
+  const inventoryCounts = countsFailure
+    ? []
+    : (inventoryCountsResult.data ?? []).filter((count) => visibleStore(count.store_id));
+  const inventoryCountBatches = inventoryModules.count_batches && !countBatchFailure
+    ? inventoryCountBatchesResult.data ?? []
+    : [];
   const inventoryCountBatchIds = inventoryCountBatches.map((batch) => batch.id);
   const inventoryCountBatchDocumentsResult = inventoryCountBatchIds.length
     ? await supabase
@@ -841,24 +929,29 @@ export async function InventoryWorkspacePage({
         .eq("organization_id", organizationId)
         .in("inventory_count_batch_id", inventoryCountBatchIds)
     : { data: [], error: null };
-  if (inventoryCountBatchDocumentsResult.error) {
-    throw new Error(`Unable to load inventory count batches: ${inventoryCountBatchDocumentsResult.error.message}`);
-  }
-  const inventoryCountBatchDocuments = (inventoryCountBatchDocumentsResult.data ?? []).filter((document) => visibleStore(document.store_id));
+  const countBatchDocumentsFailure = inventoryCountBatchDocumentsResult.error
+    ? reportInventoryModuleFailure(
+        "count_batches",
+        inventoryCountBatchDocumentsResult.error,
+      )
+    : null;
+  const inventoryCountBatchDocuments = countBatchDocumentsFailure
+    ? []
+    : (inventoryCountBatchDocumentsResult.data ?? []).filter((document) => visibleStore(document.store_id));
   const countSuppliers = countSuppliersResult.data ?? [];
   const countAwareness = (countAwarenessResult.data ?? []).filter((entry) => visibleStore(entry.store_id));
   const offlineInventoryIssues = (offlineInventoryIssuesResult.data ?? []).filter((entry) => visibleStore(entry.store_id));
   const purchaseOrderIds = purchaseOrders.map((order) => order.id);
   const countIds = inventoryCounts.map((count) => count.id);
   const [purchaseOrderLinesResult, goodsReceiptsResult, countLinesResult] = await Promise.all([
-    purchaseOrderIds.length
+    inventoryModules.purchasing && !purchasingFailure && purchaseOrderIds.length
       ? supabase
           .from("purchase_order_lines")
           .select("id, purchase_order_id, product_id, variant_id, product_name_snapshot, variant_name_snapshot, unit_snapshot, purchase_unit_code_snapshot, purchase_unit_factor_to_base, ordered_quantity, received_quantity")
           .eq("organization_id", organizationId)
           .in("purchase_order_id", purchaseOrderIds)
       : Promise.resolve({ data: [], error: null }),
-    purchaseOrderIds.length
+    inventoryModules.purchasing && !purchasingFailure && purchaseOrderIds.length
       ? supabase
           .from("goods_receipts")
           .select("id, receipt_number, purchase_order_id, store_id, note, received_at")
@@ -877,23 +970,28 @@ export async function InventoryWorkspacePage({
       : Promise.resolve({ data: [], error: null }),
   ]);
 
-  const purchasingError = [purchaseOrderLinesResult, goodsReceiptsResult, countLinesResult].find((result) => result.error)?.error;
-  if (purchasingError) {
-    throw new Error(`Unable to load purchasing history: ${purchasingError.message}`);
-  }
+  const purchasingHistoryError = [purchaseOrderLinesResult, goodsReceiptsResult].find((result) => result.error)?.error;
+  const purchasingHistoryFailure = purchasingHistoryError
+    ? reportInventoryModuleFailure("purchasing", purchasingHistoryError)
+    : null;
+  const countLinesFailure = countLinesResult.error
+    ? reportInventoryModuleFailure("counts", countLinesResult.error)
+    : null;
 
   const goodsReceiptIds = (goodsReceiptsResult.data ?? []).map((receipt) => receipt.id);
-  const goodsReceiptLinesResult = goodsReceiptIds.length
+  const goodsReceiptLinesResult = !purchasingHistoryFailure && goodsReceiptIds.length
     ? await supabase
         .from("goods_receipt_lines")
         .select("goods_receipt_id, purchase_order_line_id, quantity_received")
         .eq("organization_id", organizationId)
         .in("goods_receipt_id", goodsReceiptIds)
     : { data: [], error: null };
-
-  if (goodsReceiptLinesResult.error) {
-    throw new Error(`Unable to load receiving history: ${goodsReceiptLinesResult.error.message}`);
-  }
+  const goodsReceiptLinesFailure = goodsReceiptLinesResult.error
+    ? reportInventoryModuleFailure(
+        "purchasing",
+        goodsReceiptLinesResult.error,
+      )
+    : null;
 
   const purchaseOrderLines = purchaseOrderLinesResult.data ?? [];
   const goodsReceipts = goodsReceiptsResult.data ?? [];
@@ -904,7 +1002,8 @@ export async function InventoryWorkspacePage({
   // The permission-checked RPC intentionally accepts no more than 100 IDs.
   // Keep this page compatible with unusually large purchase-order histories
   // without weakening that database-side input bound.
-  if (canViewCosts) {
+  let purchaseOrderCostsFailure: InventoryModuleFailure | null = null;
+  if (canViewCosts && !purchasingHistoryFailure && !goodsReceiptLinesFailure) {
     for (let start = 0; start < purchaseOrderLineIds.length; start += 100) {
       const purchaseOrderLineCostsResult = await supabase.rpc("get_purchase_order_line_costs", {
         requested_purchase_order_line_ids: purchaseOrderLineIds.slice(start, start + 100),
@@ -912,12 +1011,34 @@ export async function InventoryWorkspacePage({
       });
 
       if (purchaseOrderLineCostsResult.error) {
-        throw new Error(`Unable to load purchase order costs: ${purchaseOrderLineCostsResult.error.message}`);
+        purchaseOrderCostsFailure = reportInventoryModuleFailure(
+          "purchasing",
+          purchaseOrderLineCostsResult.error,
+        );
+        break;
       }
 
       purchaseOrderLineCostRows.push(...(purchaseOrderLineCostsResult.data ?? []));
     }
   }
+
+  const transferModuleAvailable = inventoryModules.direct_transfers
+    && !transferFailure
+    && !transferLinesFailure;
+  const valuationModuleAvailable = inventoryModules.valuation
+    && !valuationFailure;
+  const purchasingModuleAvailable = inventoryModules.purchasing
+    && !purchasingFailure
+    && !purchasingHistoryFailure
+    && !goodsReceiptLinesFailure
+    && !purchaseOrderCostsFailure;
+  const replenishmentModuleAvailable = inventoryModules.replenishment
+    && !replenishmentFailure;
+  const countsModuleAvailable = !countsFailure && !countLinesFailure;
+  const batchFeatureAvailable = inventoryModules.count_batches
+    && !countBatchFailure
+    && !countBatchDocumentsFailure;
+  const adjustmentsModuleAvailable = !adjustmentFailure;
 
   const purchaseOrderLineCostById = new Map(
     purchaseOrderLineCostRows.map((line) => [line.id, Number(line.unit_cost_minor)]),
@@ -925,10 +1046,18 @@ export async function InventoryWorkspacePage({
   const inventoryPolicies = (inventoryPoliciesResult.data ?? []).filter((policy) => visibleStore(policy.store_id));
   const organizationDefaultPolicy = (inventoryPolicyDefaultsResult.data?.[0]?.negative_stock_policy as "allow" | "warn" | "block" | undefined) ?? "block";
   const canManageOrganizationDefault = canManage && storeScope.canAccessAllStores;
-  const adjustmentReasons = adjustmentReasonsResult.data ?? [];
-  const stockTransfers = (stockTransfersResult.data ?? []).filter((transfer) => visibleStore(transfer.source_store_id) || visibleStore(transfer.destination_store_id));
-  const stockTransferLines = stockTransferLinesResult.data ?? [];
-  const replenishmentRules = (replenishmentRulesResult.data ?? []).filter((rule) => visibleStore(rule.store_id));
+  const adjustmentReasons = adjustmentsModuleAvailable
+    ? adjustmentReasonsResult.data ?? []
+    : [];
+  const stockTransfers = transferModuleAvailable
+    ? (stockTransfersResult.data ?? []).filter((transfer) => visibleStore(transfer.source_store_id) || visibleStore(transfer.destination_store_id))
+    : [];
+  const stockTransferLines = transferModuleAvailable
+    ? stockTransferLinesResult.data ?? []
+    : [];
+  const replenishmentRules = replenishmentModuleAvailable
+    ? (replenishmentRulesResult.data ?? []).filter((rule) => visibleStore(rule.store_id))
+    : [];
   const warehouses = warehousesResult.data ?? [];
   const storeNames = new Map(stores.map((store) => [store.id, store.name]));
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
@@ -1053,7 +1182,7 @@ export async function InventoryWorkspacePage({
     : { data: [], error: null };
 
   if (employeesResult.error) {
-    throw new Error(`Unable to load inventory activity employees: ${employeesResult.error.message}`);
+    reportInventoryModuleFailure("activity_references", employeesResult.error);
   }
 
   const activityEmployees = employeesResult.data ?? [];
@@ -1063,7 +1192,7 @@ export async function InventoryWorkspacePage({
     : { data: [], error: null };
 
   if (profilesResult.error) {
-    throw new Error(`Unable to load inventory activity employee names: ${profilesResult.error.message}`);
+    reportInventoryModuleFailure("activity_references", profilesResult.error);
   }
 
   const receiptSourceSaleIds = [...new Set(activityActorSource.flatMap((movement) => (
@@ -1081,7 +1210,7 @@ export async function InventoryWorkspacePage({
     : { data: [], error: null };
 
   if (refundsResult.error) {
-    throw new Error(`Unable to load inventory activity refund references: ${refundsResult.error.message}`);
+    reportInventoryModuleFailure("activity_references", refundsResult.error);
   }
 
   const receiptSaleIds = [...new Set([
@@ -1097,7 +1226,7 @@ export async function InventoryWorkspacePage({
     : { data: [], error: null };
 
   if (receiptsResult.error) {
-    throw new Error(`Unable to load inventory activity receipt references: ${receiptsResult.error.message}`);
+    reportInventoryModuleFailure("activity_references", receiptsResult.error);
   }
 
   const profileNames = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.full_name]));
@@ -1134,14 +1263,14 @@ export async function InventoryWorkspacePage({
           .eq("organization_id", organizationId)
           .in("id", countSourceIds)
       : Promise.resolve({ data: [], error: null }),
-    canManage && goodsReceiptSourceIds.length
+    canManage && inventoryModules.purchasing && goodsReceiptSourceIds.length
       ? supabase
           .from("goods_receipts")
           .select("id, purchase_order_id, receipt_number")
           .eq("organization_id", organizationId)
           .in("id", goodsReceiptSourceIds)
       : Promise.resolve({ data: [], error: null }),
-    canManage && transferSourceIds.length
+    canManage && inventoryModules.direct_transfers && transferSourceIds.length
       ? supabase
           .from("stock_transfers")
           .select("id, transfer_number")
@@ -1166,7 +1295,7 @@ export async function InventoryWorkspacePage({
 
   const sourceDocumentError = [adjustmentDocumentsResult, countDocumentsResult, goodsReceiptDocumentsResult, transferDocumentsResult, supplierReturnDocumentsResult, productionRunDocumentsResult].find((result) => result.error)?.error;
   if (sourceDocumentError) {
-    throw new Error(`Unable to load inventory source documents: ${sourceDocumentError.message}`);
+    reportInventoryModuleFailure("document_references", sourceDocumentError);
   }
   const purchaseUnitsByProduct = new Map<string, Array<{ code: string; factorToBase: number; name: string }>>();
   for (const productUnit of productUnits) {
@@ -1757,7 +1886,7 @@ export async function InventoryWorkspacePage({
     : { data: [], error: null };
 
   if (movementCostsResult.error) {
-    throw new Error(`Unable to load inventory movement costs: ${movementCostsResult.error.message}`);
+    reportInventoryModuleFailure("valuation", movementCostsResult.error);
   }
 
   const movementCostById = new Map(
@@ -1879,10 +2008,10 @@ export async function InventoryWorkspacePage({
     { description: "Positions below zero need investigation", href: stockLevelsHref("negative"), label: "Negative stock", value: stockPositionCounts.negativeStockCount },
     { description: "Destination stock not yet received", href: inventoryTabHref("transfers"), label: "Incoming transfers", value: inTransitTransfers.length },
   ];
-  if (canReadPurchaseOrders) {
+  if (canReadPurchaseOrders && purchasingModuleAvailable) {
     overviewMetrics.push({ description: "Ordered or partially received", href: purchasingTabHref("receiving"), label: "Incoming purchase orders", value: openPurchaseOrdersCountResult.count ?? 0 });
   }
-  if (canViewValuation) {
+  if (canViewValuation && valuationModuleAvailable) {
     overviewMetrics.push({
       description: hasUnverifiedValuationCost
         ? "Some stock has an unverified cost. Review valuation before using a total."
@@ -1961,7 +2090,7 @@ export async function InventoryWorkspacePage({
         />
       </div> : null}
 
-      {activeTab === "overview" && canManage && showConfiguration ? (
+      {activeTab === "overview" && canManage && showConfiguration && replenishmentModuleAvailable ? (
         <section aria-labelledby="inventory-configuration-title" className="space-y-4">
           <div>
             <h2 className="text-lg font-semibold" id="inventory-configuration-title">Inventory configuration</h2>
@@ -2005,7 +2134,7 @@ export async function InventoryWorkspacePage({
         </details>
       ) : null}
 
-      {(["purchase-orders", "receiving", "suppliers"] as const).includes(activeTab as "purchase-orders" | "receiving" | "suppliers") && canAccessPurchasing ? (
+      {(["purchase-orders", "receiving", "suppliers"] as const).includes(activeTab as "purchase-orders" | "receiving" | "suppliers") && canAccessPurchasing && purchasingModuleAvailable ? (
           <AdvancedInventoryWorkflows
           key={activeTab}
           stores={stores.map(({ id, name }) => ({ id, name }))}
@@ -2038,7 +2167,15 @@ export async function InventoryWorkspacePage({
           />
       ) : null}
 
-      {activeTab === "supplier-returns" && (canViewPurchasing || canReturnToSupplier) ? (
+      {(["purchase-orders", "receiving", "suppliers", "supplier-returns"] as const).includes(activeTab as PurchasingTab) && canAccessPurchasing && !purchasingModuleAvailable ? (
+        <BackOfficeStateCard
+          description="Stock Control is still available, but the purchasing module could not be loaded. No purchasing action has been executed."
+          icon={<PackageOpen className="size-5" aria-hidden="true" />}
+          title="Purchasing temporarily unavailable"
+        />
+      ) : null}
+
+      {activeTab === "supplier-returns" && (canViewPurchasing || canReturnToSupplier) && purchasingModuleAvailable ? (
         <InventoryIntegrityWorkflows
           stores={stores.map(({ id, name }) => ({ id, name }))}
           items={advancedItems}
@@ -2054,7 +2191,7 @@ export async function InventoryWorkspacePage({
         />
       ) : null}
 
-      {activeTab === "adjustments" && canAdjust ? (
+      {activeTab === "adjustments" && canAdjust && adjustmentsModuleAvailable ? (
         <InventoryIntegrityWorkflows
           stores={stores.map(({ id, name }) => ({ id, name }))}
           items={advancedItems}
@@ -2071,10 +2208,19 @@ export async function InventoryWorkspacePage({
         />
       ) : null}
 
-      {activeTab === "counts" && canCount ? (
+      {activeTab === "adjustments" && canAdjust && !adjustmentsModuleAvailable ? (
+        <BackOfficeStateCard
+          description="Stock Control is still available, but adjustment reasons could not be loaded. No stock adjustment action has been executed."
+          icon={<Boxes className="size-5" aria-hidden="true" />}
+          title="Stock adjustments temporarily unavailable"
+        />
+      ) : null}
+
+      {activeTab === "counts" && canCount && countsModuleAvailable ? (
         <>
           <InventoryCountWorkspace
             batches={inventoryCountBatchesWithDocuments}
+            batchFeatureAvailable={batchFeatureAvailable}
             canCreateCounts={canCreateCounts}
             canFinalizeCounts={canFinalizeCounts}
             documents={inventoryCountDocuments}
@@ -2118,7 +2264,15 @@ export async function InventoryWorkspacePage({
         </>
       ) : null}
 
-      {activeTab === "transfers" && canAccessTransfers ? (
+      {activeTab === "counts" && canCount && !countsModuleAvailable ? (
+        <BackOfficeStateCard
+          description="Stock Control is still available, but inventory count data could not be loaded. No count action has been executed."
+          icon={<ClipboardCheck className="size-5" aria-hidden="true" />}
+          title="Inventory counts temporarily unavailable"
+        />
+      ) : null}
+
+      {activeTab === "transfers" && canAccessTransfers && transferModuleAvailable ? (
         <>
           <InventoryTransferWorkspace
             awaitingReceiptCount={directInTransitTransfers.length}
@@ -2144,6 +2298,14 @@ export async function InventoryWorkspacePage({
         </>
       ) : null}
 
+      {activeTab === "transfers" && canAccessTransfers && !transferModuleAvailable ? (
+        <BackOfficeStateCard
+          description="Stock Control is still available, but the transfer module could not be loaded. No transfer action has been executed."
+          icon={<ArrowUp className="size-5" aria-hidden="true" />}
+          title="Transfers temporarily unavailable"
+        />
+      ) : null}
+
       {activeTab === "production" && canManage && context.features.production ? (
         <InventoryIntegrityWorkflows
           stores={stores.map(({ id, name }) => ({ id, name }))}
@@ -2159,7 +2321,7 @@ export async function InventoryWorkspacePage({
         />
       ) : null}
 
-      {activeTab === "valuation" && canViewValuation ? (
+      {activeTab === "valuation" && canViewValuation && valuationModuleAvailable ? (
         <InventoryValuationSummary
           currencyCode={context.organization.currency_code}
           entries={inventoryValuation.map((entry) => {
@@ -2187,6 +2349,12 @@ export async function InventoryWorkspacePage({
               valueMinor: Number(entry.value_minor),
             };
           })}
+        />
+      ) : activeTab === "valuation" && !valuationModuleAvailable ? (
+        <BackOfficeStateCard
+          description="Stock Control is still available, but inventory valuation could not be loaded. No valuation action has been executed."
+          icon={<Warehouse className="size-5" aria-hidden="true" />}
+          title="Inventory valuation temporarily unavailable"
         />
       ) : activeTab === "valuation" ? (
         <BackOfficeStateCard

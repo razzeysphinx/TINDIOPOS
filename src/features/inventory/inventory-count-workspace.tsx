@@ -99,6 +99,7 @@ const quantityPattern = /^\d{1,8}(?:\.\d{1,3})?$/;
 
 export function InventoryCountWorkspace({
   batches,
+  batchFeatureAvailable,
   canCreateCounts,
   canFinalizeCounts,
   categories,
@@ -108,6 +109,7 @@ export function InventoryCountWorkspace({
   suppliers,
 }: {
   batches: CountBatch[];
+  batchFeatureAvailable: boolean;
   canCreateCounts: boolean;
   canFinalizeCounts: boolean;
   categories: Category[];
@@ -172,17 +174,22 @@ export function InventoryCountWorkspace({
             <p className="mt-1 text-sm text-muted-foreground">Prepare one ordered count sheet per store, save it as you work, then review and post its traceable variance.</p>
           </div>
           {canCreateCounts ? <div className="flex flex-wrap gap-2">
-            {stores.length > 1 ? <Button onClick={() => { setMessage(null); setIsCreatingBatch(true); }} type="button" variant="outline"><Layers3 />New count batch</Button> : null}
+            {batchFeatureAvailable && stores.length > 1 ? <Button onClick={() => { setMessage(null); setIsCreatingBatch(true); }} type="button" variant="outline"><Layers3 />New count batch</Button> : null}
             <Button onClick={() => { setMessage(null); setIsCreating(true); }} type="button"><Plus />New inventory count</Button>
           </div> : null}
         </div>
 
-        {batches.length || (canCreateCounts && stores.length > 1) ? <Card>
+        {batchFeatureAvailable && (batches.length || (canCreateCounts && stores.length > 1)) ? <Card>
           <CardHeader>
             <CardTitle>Multi-store count batches</CardTitle>
             <CardDescription>A batch coordinates independent store count documents. Each store still reconciles and posts its own stock variance.</CardDescription>
           </CardHeader>
           <CardContent>{batches.length ? <CountBatchList batches={batches} onSelect={setSelectedBatchId} /> : <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No multi-store count batches are in this store scope yet.</p>}</CardContent>
+        </Card> : !batchFeatureAvailable ? <Card>
+          <CardHeader>
+            <CardTitle>Multi-store count batches unavailable</CardTitle>
+            <CardDescription>Store-level inventory counts are still available. Multi-store batch coordination requires the current Inventory database migration.</CardDescription>
+          </CardHeader>
         </Card> : null}
 
         <Card>
@@ -200,7 +207,7 @@ export function InventoryCountWorkspace({
         <Dialog.Root open={drawerOpen} onOpenChange={(open) => { if (!open) resetDrawer(); }}>
           <BackOfficeDetailDrawer closeLabel={isCreating ? "Close new inventory count" : isCreatingBatch ? "Close new count batch" : selectedBatch ? "Close count batch" : "Close inventory count"} width="wide">
             {isCreating ? <CreateCountDrawer categories={categories} items={items} message={message} pending={pendingAction === "create"} stores={stores} suppliers={suppliers} onSubmit={(input) => void run("create", () => createInventoryCountDraftAction(input))} /> : null}
-            {isCreatingBatch ? <CreateCountBatchDrawer message={message} pending={pendingAction === "batch"} stores={stores} onSubmit={(input) => void run("batch", () => createInventoryCountBatchAction(input))} /> : null}
+            {isCreatingBatch && batchFeatureAvailable ? <CreateCountBatchDrawer message={message} pending={pendingAction === "batch"} stores={stores} onSubmit={(input) => void run("batch", () => createInventoryCountBatchAction(input))} /> : null}
             {selectedBatch ? <CountBatchDrawer batch={selectedBatch} onOpenCount={(countId) => { setSelectedBatchId(null); setSelectedCountId(countId); setMessage(null); }} /> : null}
             {selectedDocument ? <CountDetailDrawer
               canCreateCounts={canCreateCounts}

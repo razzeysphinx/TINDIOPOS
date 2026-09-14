@@ -13,6 +13,11 @@ import {
 } from "@/features/business-profile/business-features";
 import type { TableRow } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
+import {
+  hasInventoryBackOfficeResponsibility,
+  hasInventoryControlResponsibility,
+  hasPurchasingResponsibility,
+} from "@/lib/auth/inventory-capabilities";
 
 export type VerifiedUser = {
   id: string;
@@ -372,14 +377,6 @@ const BACK_OFFICE_PERMISSIONS = [
   "dashboard.view",
   "reports.view",
   "products.manage",
-  "inventory.view",
-  "inventory.count",
-  "inventory.count.create",
-  "inventory.count.finalize",
-  "inventory.manage",
-  "inventory.transfer.create",
-  "inventory.transfer.send",
-  "inventory.transfer.receive",
   "customers.manage",
   "employees.manage",
   "roles.manage",
@@ -421,7 +418,13 @@ export function getPosNavigationCapabilities(context: BusinessContext) {
 }
 
 export function canAccessBackOffice(context: BusinessContext) {
-  return hasAnyPermission(context, BACK_OFFICE_PERMISSIONS);
+  return hasAnyPermission(context, BACK_OFFICE_PERMISSIONS)
+    || (
+      context.features.inventory
+      && hasInventoryBackOfficeResponsibility(
+        context.permissions,
+      )
+    );
 }
 
 /**
@@ -431,17 +434,17 @@ export function canAccessBackOffice(context: BusinessContext) {
 export function getBackOfficeHome(context: BusinessContext) {
   if (hasPermission(context, "dashboard.view")) return "/back-office";
   if (hasPermission(context, "reports.view")) return "/back-office/reports";
-  if (hasAnyPermission(context, [
-    "inventory.view",
-    "inventory.count",
-    "inventory.count.create",
-    "inventory.count.finalize",
-    "inventory.manage",
-    "inventory.transfer.create",
-    "inventory.transfer.send",
-    "inventory.transfer.receive",
-  ]) && context.features.inventory) {
+  if (
+    context.features.inventory
+    && hasInventoryControlResponsibility(context.permissions)
+  ) {
     return "/back-office/inventory";
+  }
+  if (
+    context.features.inventory
+    && hasPurchasingResponsibility(context.permissions)
+  ) {
+    return "/back-office/purchasing";
   }
   if (hasPermission(context, "products.manage")) return "/back-office/catalog";
   if (hasPermission(context, "customers.manage")) return "/back-office/customers";

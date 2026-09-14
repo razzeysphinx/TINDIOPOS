@@ -39,6 +39,7 @@
     "test:inventory-health": "node --test scripts/inventory-health-awareness-check.mjs",
     "test:inventory-transfers": "node --test scripts/inventory-transfer-chain-check.mjs",
     "test:inventory-rbac": "node --test scripts/inventory-granular-rbac-check.mjs",
+    "test:inventory-schema-contract": "node --test scripts/inventory-schema-contract-check.mjs",
     "test:pos-incoming-transfers": "node --test scripts/pos-incoming-transfer-inbox-check.mjs",
     "test:inventory-accountability": "node --test scripts/inventory-accountability-forensics-check.mjs",
     "test:inventory-ledger-integrity": "node --test scripts/inventory-ledger-integrity-check.mjs",

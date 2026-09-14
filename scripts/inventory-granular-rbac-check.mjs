@@ -87,3 +87,54 @@ test("transfer controls are hidden when their specific capability is absent", as
   assert.match(supplyChain, /canReceiveTransfers/);
   assert.match(navigation, /canTransfer/);
 });
+
+test("Inventory application RBAC uses the central capability catalog without role names", async () => {
+  const [capabilities, dal, page] = await Promise.all([
+    source("src/lib/auth/inventory-capabilities.ts"),
+    source("src/lib/auth/dal.ts"),
+    source("src/app/(back-office)/back-office/inventory/page.tsx"),
+  ]);
+
+  for (const capability of [
+    "inventory.transfer.create",
+    "inventory.transfer.send",
+    "inventory.transfer.receive",
+    "inventory.count.create",
+    "inventory.count.finalize",
+    "inventory.adjust.create",
+    "inventory.adjust.post",
+    "inventory.valuation.view",
+    "purchasing.view",
+    "purchasing.po.create",
+    "purchasing.receive",
+    "purchasing.suppliers.manage",
+    "purchasing.return",
+  ]) {
+    assert.match(capabilities, new RegExp(`"${capability.replaceAll(".", "\\.")}"`));
+  }
+
+  assert.match(dal, /hasInventoryBackOfficeResponsibility/);
+  assert.match(dal, /hasInventoryControlResponsibility/);
+  assert.match(dal, /hasPurchasingResponsibility/);
+  assert.doesNotMatch(dal, /const BACK_OFFICE_PERMISSIONS = \[[\s\S]*inventory\.transfer\.create/);
+  assert.match(page, /requireBackOfficeContext\(\)/);
+  assert.match(page, /hasInventoryBackOfficeResponsibility/);
+  assert.doesNotMatch(page, /requireBackOfficePermission\(/);
+  assert.match(page, /hasPermission\(context, "products\.view_cost"\)\s*&&\s*hasInventoryCapability\(context, "inventory\.valuation\.view"\)/);
+
+  for (const legacyPermission of [
+    "inventory.manage",
+    "inventory.transfers",
+    "inventory.count",
+    "inventory.adjust",
+    "inventory.purchase_orders",
+    "inventory.receive",
+    "inventory.suppliers",
+  ]) {
+    assert.match(capabilities, new RegExp(`"${legacyPermission.replaceAll(".", "\\.")}"`));
+  }
+
+  assert.doesNotMatch(capabilities, /role\s*===|roleNames\.includes/i);
+  assert.doesNotMatch(dal, /role\s*===|roleNames\.includes/i);
+  assert.doesNotMatch(page, /role\s*===|roleNames\.includes/i);
+});

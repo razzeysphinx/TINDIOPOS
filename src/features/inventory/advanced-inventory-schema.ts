@@ -201,6 +201,7 @@ export const saveInventoryCountLineSchema = saleableLine.extend({
 export const inventoryCountTransitionSchema = z.object({
   inventoryCountId: z.uuid("Choose an inventory count."),
   note: z.string().trim().max(500).optional(),
+  operationId: operationId.optional(),
 });
 
 export const importInventoryCountLinesSchema = z.object({

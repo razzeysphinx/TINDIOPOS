@@ -47,7 +47,7 @@ test("print uses only the active report snapshot and the browser print dialog", 
 test("inventory prints the current authorized stock view without creating an export route", () => {
   assert.match(inventoryStockView, /Print current view/);
   assert.match(inventoryStockView, /document\.body\.dataset\.printMode = "inventory"/);
-  assert.match(inventoryStockView, /rows=\{sortedRows\}/);
+  assert.match(inventoryStockView, /<InventoryPrintDocument canViewCosts=\{canViewCosts\} currencyCode=\{currencyCode\} rows=\{rows\}/);
   assert.match(inventoryStockView, /<th>Store<\/th>/);
   assert.match(inventoryStockView, /canViewCosts \? <th>Average cost<\/th> : null/);
   assert.match(printCss, /body\[data-print-mode="inventory"\] \[data-inventory-stock-screen\]/);

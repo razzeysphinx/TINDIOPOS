@@ -30,34 +30,40 @@ test("Stock view provides the Phase 2 operational controls and keeps the layout 
   assert.match(stockView, /group === "status"/);
 });
 
-test("Stock status derives from the existing projection and optional replenishment threshold", async () => {
-  const [stockView, stockStatus] = await Promise.all([
+test("Stock status presentation reuses the shared condition helper while filtering stays server-side", async () => {
+  const [stockView, stockStatus, stockPageMigration] = await Promise.all([
     source("src/features/inventory/inventory-stock-view.tsx"),
     source("src/features/inventory/inventory-stock-status.ts"),
+    source("supabase/migrations/20260911140000_inventory_stock_page_performance.sql"),
   ]);
 
   assert.match(stockView, /getInventoryStockCondition\(\{ quantity: row\.quantity, reorderPoint: row\.reorderPoint \}\)/);
   assert.match(stockStatus, /if \(quantity < 0\) return "negative";/);
   assert.match(stockStatus, /if \(quantity === 0\) return "out_of_stock";/);
   assert.match(stockStatus, /reorderPoint !== null && quantity <= reorderPoint/);
-  assert.match(stockView, /if \(status === "available"\) return row\.isAvailable;/);
-  assert.match(stockView, /condition === "low" \|\| condition === "negative" \|\| condition === "out_of_stock"/);
+  assert.match(stockPageMigration, /normalized_status = 'available' and is_available/);
+  assert.match(stockPageMigration, /normalized_status = 'attention'/);
+  assert.match(stockPageMigration, /requested_page_size integer default 50/);
 });
 
-test("Stock & Restock scopes selected-store stock queries and redacts financial fields without permission", async () => {
-  const replenishmentPage = await source("src/app/(back-office)/back-office/replenishment/page.tsx");
+test("Stock & Restock uses the centralized scoped read model and redacts costs at the data boundary", async () => {
+  const [replenishmentPage, stockPageMigration] = await Promise.all([
+    source("src/app/(back-office)/back-office/replenishment/page.tsx"),
+    source("supabase/migrations/20260911140000_inventory_stock_page_performance.sql"),
+  ]);
 
-  assert.match(replenishmentPage, /const authorizedStore = \(storeId: string\) => storeScope\.storeIds === null \|\| storeScope\.storeIds\.includes\(storeId\);/);
-  assert.match(replenishmentPage, /const visibleStore = \(storeId: string\) => authorizedStore\(storeId\) &&/);
+  assert.match(replenishmentPage, /supabase\.rpc\("get_inventory_stock_page"/);
+  assert.match(replenishmentPage, /requested_store_id: storeScope\.selectedStoreId/);
+  assert.match(replenishmentPage, /requested_page_size: stockPageSize/);
   assert.match(replenishmentPage, /supabase\.from\("product_store_settings"/);
   assert.match(replenishmentPage, /supabase\.from\("inventory_levels"/);
-  assert.match(replenishmentPage, /canViewCosts \? supabase\.rpc\("get_inventory_valuation"/);
-  assert.match(replenishmentPage, /averageCostMinor: canViewCosts/);
-  assert.match(replenishmentPage, /Inventory levels are the canonical projection/);
-  assert.match(replenishmentPage, /quantity: 0,/);
-  assert.match(replenishmentPage, /id: levelId \?\? `uninitialized:/);
+  assert.match(stockPageMigration, /private\.has_store_read_scope\(target_organization_id, requested_store_id\)/);
+  assert.match(stockPageMigration, /private\.has_permission\(target_organization_id, 'products\.view_cost'\)/);
+  assert.match(stockPageMigration, /case when can_read_cost then level\.average_cost_minor else null end as average_cost_minor/);
+  assert.match(stockPageMigration, /preserves inventory_levels as the balance authority/);
+  assert.match(stockPageMigration, /uninitialized_simple_positions as/);
+  assert.match(stockPageMigration, /uninitialized_variant_positions as/);
   assert.match(replenishmentPage, /detailProduct/);
-  assert.match(replenishmentPage, /stores=\{stores\.filter/);
   assert.match(replenishmentPage, /<InventoryStockView/);
   assert.match(replenishmentPage, /workspace="restock"/);
 });

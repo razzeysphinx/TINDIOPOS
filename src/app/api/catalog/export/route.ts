@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { loadCatalogExportData } from "@/features/catalog/data";
 import { getBusinessContext, hasPermission } from "@/lib/auth/dal";
-import { csvRows } from "@/lib/csv";
+import { csvExportResponse } from "@/lib/export-framework";
 
 export const dynamic = "force-dynamic";
 
@@ -77,14 +77,5 @@ export async function GET() {
       "",
     ]),
   ];
-  const body = csvRows(rows);
-  const filename = `tindio-catalog-${new Date().toISOString().slice(0, 10)}.csv`;
-
-  return new Response(body, {
-    headers: {
-      "Cache-Control": "private, no-store",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Content-Type": "text/csv; charset=utf-8",
-    },
-  });
+  return csvExportResponse("catalog-product-master", rows, { scope: "Organization" });
 }

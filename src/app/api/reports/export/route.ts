@@ -10,7 +10,7 @@ import {
   type ReportSnapshot,
 } from "@/features/reports/reporting";
 import { getBusinessContext, hasPermission } from "@/lib/auth/dal";
-import { csvRows } from "@/lib/csv";
+import { csvExportResponse, type ExportDefinitionId } from "@/lib/export-framework";
 
 const exportKindSchema = z.enum([
   "sales",
@@ -27,6 +27,17 @@ type StoreSnapshot = {
   store: { id: string; name: string };
   snapshot: ReportSnapshot;
 };
+
+const exportDefinitionByKind = {
+  customers: "reports-customers",
+  employees: "reports-employees",
+  inventory: "reports-inventory",
+  payments: "reports-payments",
+  products: "reports-products",
+  registers: "reports-registers",
+  sales: "reports-sales",
+  security: "reports-security",
+} as const satisfies Record<z.infer<typeof exportKindSchema>, ExportDefinitionId>;
 
 /** Every exported row has a store identifier. Consolidated totals are
  * intentionally represented by multiple, branch-specific rows instead of an
@@ -119,13 +130,8 @@ export async function GET(request: NextRequest) {
     store,
     snapshot: await getReportingSnapshot(context, { ...filter, storeId: store.id }, "reports"),
   })));
-  const filename = `tindio-${kind.data}-report-${filter.startDate}-to-${filter.endDate}.csv`;
-
-  return new Response(csvRows(rowsForExport(kind.data, storeSnapshots)), {
-    headers: {
-      "Cache-Control": "private, no-store",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Content-Type": "text/csv; charset=utf-8",
-    },
+  return csvExportResponse(exportDefinitionByKind[kind.data], rowsForExport(kind.data, storeSnapshots), {
+    date: `${filter.startDate}-to-${filter.endDate}`,
+    scope: filter.storeId ? stores[0]?.name ?? "Assigned-Store" : "All-Stores",
   });
 }

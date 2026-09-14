@@ -49,7 +49,8 @@ test("Inventory activity stays lazy and bounded instead of loading full history"
   assert.match(inventoryPage, /const recentMovementsQuery = \["overview", "activity"\]\.includes\(activeTab\)/);
   assert.match(inventoryPage, /\.limit\(30\)/);
   assert.match(inventoryPage, /const selectedDetailLevel = selectedDetailLevelId/);
+  assert.match(inventoryPage, /const selectedDetailPosition: InventoryDetailPosition \| null = selectedDetailLevel/);
   assert.match(inventoryPage, /const detailActivityLimit = activeTab === "activity" \? 50 : 12/);
-  assert.match(inventoryPage, /selectedDetailLevel\n    \? await loadInventoryItemActivity/);
+  assert.match(inventoryPage, /selectedDetailPosition\n    \? await loadInventoryItemActivity/);
   assert.match(inventoryPage, /limit: detailActivityLimit/);
 });

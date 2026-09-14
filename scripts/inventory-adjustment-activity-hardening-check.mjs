@@ -29,7 +29,7 @@ test("activity history is server-bounded and preserves its selected filters acro
   assert.match(page, /const INVENTORY_ACTIVITY_PAGE_SIZE = 50;/);
   assert.match(page, /resolveActivityPage\(parameters\.activityPage\)/);
   assert.match(page, /order\("created_at", \{ ascending: false \}\)\s*\.order\("id", \{ ascending: false \}\)/);
-  assert.match(page, /recentMovementsQuery\?\.range\(activityPageOffset, activityPageOffset \+ INVENTORY_ACTIVITY_PAGE_SIZE\)/);
+  assert.match(page, /recentMovementsQuery\?\.range\(activityPageOffset, activityPageOffset \+ INVENTORY_ACTIVITY_PAGE_SIZE - 1\)/);
   assert.match(page, /loadedMovements\.slice\(0, INVENTORY_ACTIVITY_PAGE_SIZE\)/);
   assert.match(page, /const inventoryActivityPageHref =/);
   assert.match(page, /query\.set\("movementType", activityMovementType\)/);

@@ -463,6 +463,9 @@ async function transitionInventoryCount(
   if (permissionError) return { ok: false, message: permissionError };
   const parsed = inventoryCountTransitionSchema.safeParse(input);
   if (!parsed.success) return validationError();
+  if (operation === "post_inventory_count" && !parsed.data.operationId) {
+    return { ok: false, message: "Start the inventory-count posting operation again and retry." };
+  }
   const supabase = await createClient();
   const { error } = operation === "cancel_inventory_count"
     ? await supabase.rpc(operation, {
@@ -470,6 +473,12 @@ async function transitionInventoryCount(
         target_inventory_count_id: parsed.data.inventoryCountId,
         target_note: parsed.data.note ?? "",
       })
+    : operation === "post_inventory_count"
+      ? await supabase.rpc(operation, {
+          target_organization_id: context.organization.id,
+          target_inventory_count_id: parsed.data.inventoryCountId,
+          target_operation_id: parsed.data.operationId!,
+        })
     : await supabase.rpc(operation, {
         target_organization_id: context.organization.id,
         target_inventory_count_id: parsed.data.inventoryCountId,

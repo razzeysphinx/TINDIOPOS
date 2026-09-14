@@ -584,7 +584,7 @@ export async function InventoryWorkspacePage({
     recentMovementsQuery?.eq("source_type", activitySourceFilter.type).eq("source_id", activitySourceFilter.id);
   }
   if (activeTab === "activity") {
-    recentMovementsQuery?.range(activityPageOffset, activityPageOffset + INVENTORY_ACTIVITY_PAGE_SIZE);
+    recentMovementsQuery?.range(activityPageOffset, activityPageOffset + INVENTORY_ACTIVITY_PAGE_SIZE - 1);
   } else {
     recentMovementsQuery?.limit(30);
   }
@@ -605,13 +605,7 @@ export async function InventoryWorkspacePage({
         .order("created_at", { ascending: false })
         .limit(25)
     : null;
-  const inventoryCountBatchDocumentsQuery = canCount && activeTab === "counts"
-    ? supabase
-        .from("inventory_count_batch_documents")
-        .select("inventory_count_batch_id, inventory_count_id, store_id")
-        .eq("organization_id", organizationId)
-    : null;
-  const countAwarenessQuery = workspace === "control"
+  const countAwarenessQuery = workspace === "control" && activeTab === "overview"
     ? supabase.rpc("get_inventory_health_awareness", { target_organization_id: organizationId })
     : null;
   const offlineInventoryIssuesQuery = hasPermission(context, "devices.manage") && activeTab === "overview"
@@ -659,11 +653,9 @@ export async function InventoryWorkspacePage({
     inventoryPolicyDefaultsResult,
     adjustmentReasonsResult,
     stockTransfersResult,
-    stockTransferLinesResult,
     replenishmentRulesResult,
     inventoryCountsResult,
     inventoryCountBatchesResult,
-    inventoryCountBatchDocumentsResult,
     warehousesResult,
     countSuppliersResult,
     countAwarenessResult,
@@ -752,19 +744,12 @@ export async function InventoryWorkspacePage({
           .eq("organization_id", organizationId)
           .in("status", ["in_transit", "partially_received"])
       : Promise.resolve({ data: [], error: null }),
-    canAccessTransfers
-      ? supabase
-          .from("stock_transfer_lines")
-          .select("id, stock_transfer_id, product_id, variant_id, quantity, received_quantity, short_quantity")
-          .eq("organization_id", organizationId)
-      : Promise.resolve({ data: [], error: null }),
     replenishmentRulesQuery ?? Promise.resolve({ data: [], error: null }),
     inventoryCountsQuery ?? Promise.resolve({
       data: [] as Array<Pick<TableRow<"inventory_counts">, "id" | "count_number" | "store_id" | "status" | "note" | "started_at" | "started_by_employee_id" | "completed_at" | "updated_at" | "count_mode" | "scope_type" | "scope_reference_id" | "sort_mode" | "include_zero_stock">>,
       error: null,
     }),
     inventoryCountBatchesQuery ?? Promise.resolve({ data: [], error: null }),
-    inventoryCountBatchDocumentsQuery ?? Promise.resolve({ data: [], error: null }),
     canManage && showConfiguration
       ? supabase
           .from("supply_chain_warehouses")
@@ -802,11 +787,9 @@ export async function InventoryWorkspacePage({
     inventoryPolicyDefaultsResult,
     adjustmentReasonsResult,
     stockTransfersResult,
-    stockTransferLinesResult,
     replenishmentRulesResult,
     inventoryCountsResult,
     inventoryCountBatchesResult,
-    inventoryCountBatchDocumentsResult,
     countSuppliersResult,
     countAwarenessResult,
     offlineInventoryIssuesResult,
@@ -814,6 +797,18 @@ export async function InventoryWorkspacePage({
 
   if (error) {
     throw new Error(`Unable to load inventory: ${error.message}`);
+  }
+
+  const openStockTransferIds = (stockTransfersResult.data ?? []).map((transfer) => transfer.id);
+  const stockTransferLinesResult = openStockTransferIds.length
+    ? await supabase
+        .from("stock_transfer_lines")
+        .select("id, stock_transfer_id, product_id, variant_id, quantity, received_quantity, short_quantity")
+        .eq("organization_id", organizationId)
+        .in("stock_transfer_id", openStockTransferIds)
+    : { data: [], error: null };
+  if (stockTransferLinesResult.error) {
+    throw new Error(`Unable to load open stock transfer lines: ${stockTransferLinesResult.error.message}`);
   }
 
   const visibleStore = (storeId: string) => scopedStoreIds === null || scopedStoreIds.includes(storeId);
@@ -838,6 +833,17 @@ export async function InventoryWorkspacePage({
   const purchaseOrders = (purchaseOrdersResult.data ?? []).filter((order) => visibleStore(order.store_id));
   const inventoryCounts = (inventoryCountsResult.data ?? []).filter((count) => visibleStore(count.store_id));
   const inventoryCountBatches = inventoryCountBatchesResult.data ?? [];
+  const inventoryCountBatchIds = inventoryCountBatches.map((batch) => batch.id);
+  const inventoryCountBatchDocumentsResult = inventoryCountBatchIds.length
+    ? await supabase
+        .from("inventory_count_batch_documents")
+        .select("inventory_count_batch_id, inventory_count_id, store_id")
+        .eq("organization_id", organizationId)
+        .in("inventory_count_batch_id", inventoryCountBatchIds)
+    : { data: [], error: null };
+  if (inventoryCountBatchDocumentsResult.error) {
+    throw new Error(`Unable to load inventory count batches: ${inventoryCountBatchDocumentsResult.error.message}`);
+  }
   const inventoryCountBatchDocuments = (inventoryCountBatchDocumentsResult.data ?? []).filter((document) => visibleStore(document.store_id));
   const countSuppliers = countSuppliersResult.data ?? [];
   const countAwareness = (countAwarenessResult.data ?? []).filter((entry) => visibleStore(entry.store_id));

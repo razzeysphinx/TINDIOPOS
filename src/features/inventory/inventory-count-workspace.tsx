@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogBody, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { downloadCsvText, exportFilename } from "@/lib/export-framework";
+import { clearInventoryOperationId, getInventoryOperationId } from "@/features/inventory/inventory-operation-id";
 import {
   cancelInventoryCountAction,
   createInventoryCountBatchAction,
@@ -154,6 +156,12 @@ export function InventoryCountWorkspace({
       setPendingAction(null);
     }
   };
+  const postReviewedCount = async (inventoryCountId: string) => {
+    const operationScope = `inventory-count-post:${inventoryCountId}`;
+    const operationId = getInventoryOperationId(operationScope);
+    const posted = await run("post", () => postInventoryCountAction({ inventoryCountId, operationId }));
+    if (posted) clearInventoryOperationId(operationScope);
+  };
 
   return (
     <>
@@ -203,7 +211,7 @@ export function InventoryCountWorkspace({
               pendingAction={pendingAction}
               onCancel={() => void run("cancel", () => cancelInventoryCountAction({ inventoryCountId: selectedDocument.id, note: "Cancelled from Inventory Control" }))}
               onImport={(rows) => run("import", () => importInventoryCountLinesAction({ inventoryCountId: selectedDocument.id, rows }))}
-              onPost={() => void run("post", () => postInventoryCountAction({ inventoryCountId: selectedDocument.id }))}
+              onPost={() => void postReviewedCount(selectedDocument.id)}
               onSaveLine={(line, quantity) => run("line", () => saveInventoryCountLineAction({ inventoryCountId: selectedDocument.id, productId: line.productId, variantId: line.variantId ?? "", countedQuantity: quantity }))}
               onSubmitForReview={() => void run("review", () => submitInventoryCountForReviewAction({ inventoryCountId: selectedDocument.id }))}
             /> : null}
@@ -366,12 +374,14 @@ function downloadCountCsv(document: CountDocument) {
   const headers = ["Count reference", "Count ID", "Count line ID", "Store", "Store ID", "Product ID", "Variant ID", "Category", "Product", "SKU", "Barcode", "Unit", ...(document.countMode === "standard" ? ["Snapshot quantity", "Reconciled quantity"] : []), "Counted quantity"];
   const rows = document.lines.map((line) => [formatReference(document.countNumber), document.id, line.id, document.storeName, document.storeId, line.productId, line.variantId ?? "", line.categoryName, line.label, line.sku ?? "", line.barcode ?? "", line.unit, ...(document.countMode === "standard" ? [line.expectedQuantity, line.reconciledExpectedQuantity ?? ""] : []), line.countedQuantity ?? ""]);
   const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
-  const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
-  const link = window.document.createElement("a");
-  link.href = url;
-  link.download = `${formatReference(document.countNumber)}-${document.storeName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-count-template.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+  downloadCsvText(
+    exportFilename("inventory-count-template", {
+      date: document.startedAt,
+      scope: `${formatReference(document.countNumber)}-${document.storeName}`,
+    }),
+    csv,
+    true,
+  );
 }
 
 async function previewCountCsv(file: File, document: CountDocument): Promise<ImportPreview> {

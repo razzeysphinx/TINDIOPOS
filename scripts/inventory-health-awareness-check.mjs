@@ -36,7 +36,7 @@ test("Phase 2 turns the Overview into a permission-aware owner control tower", (
   }
   assert.match(health, /Compare the same authorized Stock Levels positions by store/);
   for (const column of ["In stock", "Low", "Out", "Negative", "In transit"]) assert.match(health, new RegExp(`>${column}<`));
-  assert.match(page, /const valuationQuery = \["overview", "valuation"\]\.includes\(activeTab\) && canViewCosts/);
+  assert.match(page, /const valuationQuery = \["overview", "valuation"\]\.includes\(activeTab\) && canViewValuation/);
   assert.match(page, /openPurchaseOrdersCountQuery\?\.in\("store_id", scopedStoreIds\)/);
   assert.match(page, /const stockPositionCountsByStore = new Map/);
   assert.match(page, /href: stockLevelsHref\(undefined, store\.id\)/);

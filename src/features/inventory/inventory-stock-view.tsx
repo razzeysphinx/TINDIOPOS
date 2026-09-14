@@ -1,8 +1,9 @@
 "use client";
 
-import { LoaderCircle, Printer, Search, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, LoaderCircle, Printer, Search, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState, useSyncExternalStore, useTransition } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { ContextHelp } from "@/components/back-office/context-help";
@@ -43,12 +44,17 @@ type InventoryStockViewProps = {
   archivedProductCount: number;
   canUseReorderStatus: boolean;
   canViewCosts: boolean;
+  categories: Array<{ id: string; name: string }>;
   currencyCode: string;
-  initialStatus?: InventoryStockStatus;
+  filters: InventoryStockFilters;
   multiStoreCount: number;
+  page: number;
+  pageSize: number;
   preferenceScope: string;
   rows: InventoryStockRow[];
+  summary: InventoryStockSummary;
   stores: Array<{ id: string; name: string }>;
+  totalCount: number;
 };
 
 export type InventoryStockStatus =
@@ -61,9 +67,24 @@ export type InventoryStockStatus =
   | "out_of_stock";
 
 type InventoryStockLayout = "grid" | "list";
-type InventoryStockSort = "priority" | "name_asc" | "name_desc" | "quantity_asc" | "quantity_desc" | "updated_desc" | "value_desc";
+export type InventoryStockSort = "priority" | "name_asc" | "name_desc" | "quantity_asc" | "quantity_desc" | "updated_desc" | "value_desc";
 type InventoryStockGroup = "none" | "category" | "status" | "store";
-type InventoryRestockPolicyFilter = "all" | InventoryStockRow["restockPolicy"];
+export type InventoryRestockPolicyFilter = "all" | InventoryStockRow["restockPolicy"];
+export type InventoryStockFilters = {
+  categoryId: string | null;
+  restockPolicy: InventoryRestockPolicyFilter;
+  search: string;
+  selectedStoreId: string | null;
+  sort: InventoryStockSort;
+  status: InventoryStockStatus;
+};
+export type InventoryStockSummary = {
+  activeProductCount: number;
+  inStockCount: number;
+  lowCount: number;
+  negativeCount: number;
+  outOfStockCount: number;
+};
 type InventoryStockRollup = {
   availableStoreCount: number;
   id: string;
@@ -95,14 +116,6 @@ function stockConditionPriority(condition: InventoryStockCondition) {
   return 3;
 }
 
-function matchesStatus(row: InventoryStockRow, status: InventoryStockStatus) {
-  if (status === "all") return true;
-  if (status === "available") return row.isAvailable;
-  const condition = stockCondition(row);
-  if (status === "attention") return condition === "low" || condition === "negative" || condition === "out_of_stock";
-  return condition === status;
-}
-
 function statusVariant(status: ReturnType<typeof stockCondition>) {
   if (status === "negative") return "destructive" as const;
   if (status === "out_of_stock") return "outline" as const;
@@ -112,24 +125,6 @@ function statusVariant(status: ReturnType<typeof stockCondition>) {
 
 function rowLabel(row: InventoryStockRow) {
   return row.variantName ? `${row.productName} / ${row.variantName}` : row.productName;
-}
-
-function stockRowMatchesQuery(row: InventoryStockRow, query: string) {
-  return !query || [row.productName, row.variantName, row.sku, row.barcode]
-    .filter((value): value is string => Boolean(value))
-    .some((value) => value.toLocaleLowerCase().includes(query));
-}
-
-function stockRowMatchesCategory(row: InventoryStockRow, categoryId: string) {
-  return categoryId === "all" || (row.categoryId ?? "uncategorized") === categoryId;
-}
-
-function stockRowMatchesStore(row: InventoryStockRow, storeId: string) {
-  return storeId === "all" || row.storeId === storeId;
-}
-
-function stockRowMatchesRestockPolicy(row: InventoryStockRow, restockPolicy: InventoryRestockPolicyFilter) {
-  return restockPolicy === "all" || row.restockPolicy === restockPolicy;
 }
 
 function buildStockRollups(rows: InventoryStockRow[]): InventoryStockRollup[] {
@@ -156,10 +151,6 @@ function buildStockRollups(rows: InventoryStockRow[]): InventoryStockRollup[] {
   }
 
   return Array.from(rollups.values());
-}
-
-function matchesRollupStatus(rollup: InventoryStockRollup, status: InventoryStockStatus) {
-  return rollup.rows.some((row) => matchesStatus(row, status));
 }
 
 function rollupLabel(rollup: InventoryStockRollup) {
@@ -214,13 +205,22 @@ export function InventoryStockView({
   archivedProductCount,
   canUseReorderStatus,
   canViewCosts,
+  categories,
   currencyCode,
-  initialStatus = "all",
+  filters,
   multiStoreCount,
+  page,
+  pageSize,
   preferenceScope,
   rows,
+  summary,
   stores,
+  totalCount,
 }: InventoryStockViewProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [isNavigating, startNavigation] = useTransition();
   const savedLayout = useSyncExternalStore<InventoryStockLayout>(
     subscribeToLayoutPreference,
     () => readSavedLayout(preferenceScope),
@@ -228,78 +228,24 @@ export function InventoryStockView({
   );
   const [sessionLayout, setSessionLayout] = useState<InventoryStockLayout | null>(null);
   const layout = sessionLayout ?? savedLayout;
-  const [search, setSearch] = useState("");
-  const [categoryId, setCategoryId] = useState("all");
-  const [storeId, setStoreId] = useState("all");
-  const [status, setStatus] = useState<InventoryStockStatus>(initialStatus);
-  const [restockPolicy, setRestockPolicy] = useState<InventoryRestockPolicyFilter>("all");
-  const [sort, setSort] = useState<InventoryStockSort>("priority");
+  const [search, setSearch] = useState(filters.search);
+  const [categoryId, setCategoryId] = useState(filters.categoryId ?? "all");
+  const [storeId, setStoreId] = useState(filters.selectedStoreId ?? "all");
+  const [status, setStatus] = useState<InventoryStockStatus>(filters.status);
+  const [restockPolicy, setRestockPolicy] = useState<InventoryRestockPolicyFilter>(filters.restockPolicy);
+  const [sort, setSort] = useState<InventoryStockSort>(filters.sort);
   const [group, setGroup] = useState<InventoryStockGroup>("none");
   const [isPrinting, setIsPrinting] = useState(false);
 
-  const categories = useMemo(
-    () => Array.from(
-      new Map(
-        rows.map((row) => [row.categoryId ?? "uncategorized", row.categoryName ?? "Uncategorized"]),
-      ).entries(),
-    )
-      .map(([id, name]) => ({ id, name }))
-      .sort((left, right) => left.name.localeCompare(right.name)),
-    [rows],
+  const multiStoreRollups = useMemo(
+    () => sortRollups(buildStockRollups(rows), filters.sort),
+    [filters.sort, rows],
   );
-
-  const filteredRows = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase();
-
-    return rows.filter((row) => {
-      return stockRowMatchesQuery(row, query)
-        && stockRowMatchesCategory(row, categoryId)
-        && stockRowMatchesStore(row, storeId)
-        && stockRowMatchesRestockPolicy(row, restockPolicy)
-        && matchesStatus(row, status);
-    });
-  }, [categoryId, restockPolicy, rows, search, status, storeId]);
-
-  const multiStoreRollups = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase();
-    const matchingRollups = buildStockRollups(rows).filter((rollup) => (
-      rollup.rows.some((row) => (
-        stockRowMatchesQuery(row, query)
-        && stockRowMatchesCategory(row, categoryId)
-        && stockRowMatchesStore(row, storeId)
-        && stockRowMatchesRestockPolicy(row, restockPolicy)
-      ))
-      && matchesRollupStatus(rollup, status)
-    ));
-
-    return sortRollups(matchingRollups, sort);
-  }, [categoryId, restockPolicy, rows, search, sort, status, storeId]);
-
-  const sortedRows = useMemo(() => [...filteredRows].sort((left, right) => {
-    switch (sort) {
-      case "priority":
-        return stockConditionPriority(stockCondition(left)) - stockConditionPriority(stockCondition(right))
-          || rowLabel(left).localeCompare(rowLabel(right))
-          || left.storeName.localeCompare(right.storeName);
-      case "name_desc":
-        return rowLabel(right).localeCompare(rowLabel(left));
-      case "quantity_asc":
-        return left.quantity - right.quantity || rowLabel(left).localeCompare(rowLabel(right));
-      case "quantity_desc":
-        return right.quantity - left.quantity || rowLabel(left).localeCompare(rowLabel(right));
-      case "updated_desc":
-        return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime() || rowLabel(left).localeCompare(rowLabel(right));
-      case "value_desc":
-        return (right.averageCostMinor ?? 0) * right.quantity - (left.averageCostMinor ?? 0) * left.quantity || rowLabel(left).localeCompare(rowLabel(right));
-      default:
-        return rowLabel(left).localeCompare(rowLabel(right));
-    }
-  }), [filteredRows, sort]);
 
   const groups = useMemo(() => {
     const result = new Map<string, { id: string; label: string; rows: InventoryStockRow[] }>();
 
-    for (const row of sortedRows) {
+    for (const row of rows) {
       const condition = stockCondition(row);
       const value = group === "category"
         ? { id: `category:${row.categoryId ?? "uncategorized"}`, label: row.categoryName ?? "Uncategorized" }
@@ -314,9 +260,48 @@ export function InventoryStockView({
     }
 
     return Array.from(result.values());
-  }, [group, sortedRows]);
+  }, [group, rows]);
 
-  const hasClientFilters = search.length > 0 || categoryId !== "all" || storeId !== "all" || status !== "all" || restockPolicy !== "all" || sort !== "priority" || group !== "none";
+  const hasActiveFilters = filters.search.length > 0
+    || filters.categoryId !== null
+    || filters.selectedStoreId !== null
+    || filters.status !== "all"
+    || filters.restockPolicy !== "all"
+    || filters.sort !== "priority";
+  const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
+  const visibleStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const visibleEnd = Math.min(page * pageSize, totalCount);
+
+  const navigateTo = (next: Partial<InventoryStockFilters> & { page?: number }) => {
+    const query = new URLSearchParams(searchParams.toString());
+    const nextFilters = {
+      categoryId: next.categoryId === undefined ? filters.categoryId : next.categoryId,
+      restockPolicy: next.restockPolicy ?? filters.restockPolicy,
+      search: next.search === undefined ? filters.search : next.search,
+      selectedStoreId: next.selectedStoreId === undefined ? filters.selectedStoreId : next.selectedStoreId,
+      sort: next.sort ?? filters.sort,
+      status: next.status ?? filters.status,
+    };
+    const nextPage = next.page ?? 1;
+
+    query.set("tab", "levels");
+    if (nextFilters.search.trim()) query.set("stockSearch", nextFilters.search.trim());
+    else query.delete("stockSearch");
+    if (nextFilters.categoryId) query.set("category", nextFilters.categoryId);
+    else query.delete("category");
+    if (nextFilters.selectedStoreId) query.set("store", nextFilters.selectedStoreId);
+    else query.delete("store");
+    if (nextFilters.status !== "all") query.set("status", nextFilters.status);
+    else query.delete("status");
+    if (nextFilters.restockPolicy !== "all") query.set("restockPolicy", nextFilters.restockPolicy);
+    else query.delete("restockPolicy");
+    if (nextFilters.sort !== "priority") query.set("stockSort", nextFilters.sort);
+    else query.delete("stockSort");
+    if (nextPage > 1) query.set("stockPage", String(nextPage));
+    else query.delete("stockPage");
+
+    startNavigation(() => router.replace(`${pathname}?${query.toString()}`, { scroll: false }));
+  };
   const updateLayout = (nextLayout: InventoryStockLayout) => {
     setSessionLayout(nextLayout);
     try {
@@ -325,7 +310,17 @@ export function InventoryStockView({
       // Keep the current-session preference when storage is unavailable.
     }
   };
-  const clearClientFilters = () => {
+  const applyFilters = () => {
+    navigateTo({
+      categoryId: categoryId === "all" ? null : categoryId,
+      restockPolicy,
+      search,
+      selectedStoreId: storeId === "all" ? null : storeId,
+      sort,
+      status,
+    });
+  };
+  const clearFilters = () => {
     setSearch("");
     setCategoryId("all");
     setStoreId("all");
@@ -333,6 +328,14 @@ export function InventoryStockView({
     setRestockPolicy("all");
     setSort("priority");
     setGroup("none");
+    navigateTo({
+      categoryId: null,
+      restockPolicy: "all",
+      search: "",
+      selectedStoreId: null,
+      sort: "priority",
+      status: "all",
+    });
   };
   const printCurrentView = () => {
     if (isPrinting) return;
@@ -352,7 +355,7 @@ export function InventoryStockView({
       cleanup();
     }
   };
-  const printStores = Array.from(new Set(filteredRows.map((row) => row.storeName))).sort();
+  const printStores = Array.from(new Set(rows.map((row) => row.storeName))).sort();
   const printScope = printStores.length === 1
     ? printStores[0]
     : printStores.length > 1
@@ -379,12 +382,22 @@ export function InventoryStockView({
       <StockSummary
         archivedProductCount={archivedProductCount}
         canUseReorderStatus={canUseReorderStatus}
-        onStatusChange={setStatus}
-        rows={rows}
-        status={status}
+        onStatusChange={(nextStatus) => {
+          setStatus(nextStatus);
+          navigateTo({ status: nextStatus });
+        }}
+        status={filters.status}
+        summary={summary}
       />
 
-      <div className="rounded-xl border bg-card p-3 sm:p-4">
+      <form
+        aria-busy={isNavigating}
+        className="rounded-xl border bg-card p-3 sm:p-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          applyFilters();
+        }}
+      >
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(15rem,1.5fr)_repeat(6,minmax(0,1fr))_auto]">
           <label className="grid gap-1.5 sm:col-span-2 xl:col-span-1">
             <span className="text-sm font-medium">Search</span>
@@ -448,16 +461,17 @@ export function InventoryStockView({
               <option value="status">Stock status</option>
             </select>
           </label>
-          <div className="flex items-end">
-            <Button disabled={!hasClientFilters} onClick={clearClientFilters} type="button" variant="outline">Clear</Button>
+          <div className="flex items-end gap-2">
+            <Button disabled={isNavigating} type="submit">{isNavigating ? "Updating…" : "Apply"}</Button>
+            <Button disabled={!hasActiveFilters || isNavigating} onClick={clearFilters} type="button" variant="outline">Clear</Button>
           </div>
         </div>
         <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
           <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-          <span>{filteredRows.length} of {rows.length} stock record{rows.length === 1 ? "" : "s"}</span>
+          <span>{totalCount === 0 ? "No" : `Showing ${visibleStart}–${visibleEnd} of ${totalCount}`} stock record{totalCount === 1 ? "" : "s"}</span>
           {!canUseReorderStatus ? <span>Low-stock status requires inventory management access.</span> : null}
         </div>
-      </div>
+      </form>
 
       {multiStoreCount > 1 ? <MultiStoreStockSummary rollups={multiStoreRollups} storeCount={multiStoreCount} /> : null}
 
@@ -475,8 +489,15 @@ export function InventoryStockView({
           ))}
         </div>
       )}
+      {totalCount > pageSize ? <nav aria-label="Stock page navigation" className="flex flex-col gap-3 rounded-xl border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-muted-foreground">Page {page} of {pageCount}</p>
+        <div className="flex items-center gap-2">
+          <Button disabled={isNavigating || page <= 1} onClick={() => navigateTo({ page: page - 1 })} size="sm" type="button" variant="outline"><ChevronLeft aria-hidden="true" />Previous</Button>
+          <Button disabled={isNavigating || page >= pageCount} onClick={() => navigateTo({ page: page + 1 })} size="sm" type="button" variant="outline">Next<ChevronRight aria-hidden="true" /></Button>
+        </div>
+      </nav> : null}
     </section>
-    <InventoryPrintDocument canViewCosts={canViewCosts} currencyCode={currencyCode} rows={sortedRows} scope={printScope} />
+    <InventoryPrintDocument canViewCosts={canViewCosts} currencyCode={currencyCode} rows={rows} scope={printScope} />
     </>
   );
 }
@@ -485,26 +506,21 @@ function StockSummary({
   archivedProductCount,
   canUseReorderStatus,
   onStatusChange,
-  rows,
   status,
+  summary,
 }: {
   archivedProductCount: number;
   canUseReorderStatus: boolean;
   onStatusChange: (status: InventoryStockStatus) => void;
-  rows: InventoryStockRow[];
   status: InventoryStockStatus;
+  summary: InventoryStockSummary;
 }) {
-  const counts = rows.reduce<Record<InventoryStockCondition, number>>((result, row) => {
-    result[stockCondition(row)] += 1;
-    return result;
-  }, { in_stock: 0, low: 0, negative: 0, out_of_stock: 0 });
-  const activeProductCount = new Set(rows.map((row) => row.productId)).size;
   const metrics: Array<{ label: string; value: number; target: InventoryStockStatus; visible: boolean }> = [
-    { label: "Negative stock", value: counts.negative, target: "negative", visible: true },
-    { label: "Low stock", value: counts.low, target: "low", visible: canUseReorderStatus },
-    { label: "In stock", value: counts.in_stock, target: "in_stock", visible: true },
-    { label: "Out of stock", value: counts.out_of_stock, target: "out_of_stock", visible: true },
-    { label: "Active products", value: activeProductCount, target: "all", visible: true },
+    { label: "Negative stock", value: summary.negativeCount, target: "negative", visible: true },
+    { label: "Low stock", value: summary.lowCount, target: "low", visible: canUseReorderStatus },
+    { label: "In stock", value: summary.inStockCount, target: "in_stock", visible: true },
+    { label: "Out of stock", value: summary.outOfStockCount, target: "out_of_stock", visible: true },
+    { label: "Active products", value: summary.activeProductCount, target: "all", visible: true },
   ];
 
   return (
@@ -585,8 +601,8 @@ function MultiStoreStockSummary({ rollups, storeCount }: { rollups: InventorySto
     <section aria-labelledby="multi-store-stock-title" className="rounded-xl border bg-muted/20 p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="font-semibold" id="multi-store-stock-title">Across stores</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Totals across {storeCount} authorized stores. Select a store level to inspect its stock activity.</p>
+          <h3 className="font-semibold" id="multi-store-stock-title">Across stores on this page</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Compare the loaded records across {storeCount} authorized stores. Use the page controls or a Store filter to inspect another set.</p>
         </div>
         <Badge variant="outline">{rollups.length} product{rollups.length === 1 ? "" : "s"}</Badge>
       </div>

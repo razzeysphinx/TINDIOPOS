@@ -10,15 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { importCustomersCsvAction } from "@/features/customers/actions";
 import { customerCsvTemplate, parseCustomerCsv, type CustomerCsvPreviewRow } from "@/features/customers/customer-csv";
+import { downloadCsvText, exportFilename } from "@/lib/export-framework";
 
 function downloadTemplate() {
-  const blob = new Blob([customerCsvTemplate()], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = "tindio-customers-import-template.csv";
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadCsvText(
+    exportFilename("customers-import-template", { scope: "Organization" }),
+    customerCsvTemplate(),
+  );
 }
 
 export function CustomerCsvTools() {

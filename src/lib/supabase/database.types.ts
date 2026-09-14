@@ -1459,6 +1459,7 @@ export type Database = {
           include_zero_stock: boolean
           note: string | null
           organization_id: string
+          post_operation_id: string | null
           scope_reference_id: string | null
           scope_selection: Json
           scope_type: string
@@ -1478,6 +1479,7 @@ export type Database = {
           include_zero_stock?: boolean
           note?: string | null
           organization_id: string
+          post_operation_id?: string | null
           scope_reference_id?: string | null
           scope_selection?: Json
           scope_type?: string
@@ -1497,6 +1499,7 @@ export type Database = {
           include_zero_stock?: boolean
           note?: string | null
           organization_id?: string
+          post_operation_id?: string | null
           scope_reference_id?: string | null
           scope_selection?: Json
           scope_type?: string
@@ -6480,6 +6483,45 @@ export type Database = {
           variant_id: string | null
         }[]
       }
+      get_inventory_stock_page: {
+        Args: {
+          requested_category_id?: string | null
+          requested_page?: number
+          requested_page_size?: number
+          requested_restock_policy?: string
+          requested_search?: string | null
+          requested_sort?: string
+          requested_status?: string
+          requested_store_id?: string | null
+          target_organization_id: string
+        }
+        Returns: {
+          active_product_count: number
+          average_cost_minor: number | null
+          barcode: string | null
+          category_id: string | null
+          category_name: string | null
+          in_stock_count: number
+          is_available: boolean
+          level_id: string | null
+          low_count: number
+          negative_count: number
+          out_of_stock_count: number
+          product_id: string
+          product_name: string
+          quantity: number
+          reorder_point: number | null
+          restock_policy: string
+          sku: string | null
+          store_id: string
+          store_name: string
+          total_count: number
+          unit: string
+          updated_at: string
+          variant_id: string | null
+          variant_name: string | null
+        }[]
+      }
       save_inventory_count_line: {
         Args: {
           target_counted_quantity: number
@@ -6500,6 +6542,7 @@ export type Database = {
       post_inventory_count: {
         Args: {
           target_inventory_count_id: string
+          target_operation_id?: string
           target_organization_id: string
         }
         Returns: undefined

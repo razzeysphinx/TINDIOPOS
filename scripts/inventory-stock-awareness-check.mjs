@@ -15,7 +15,8 @@ const [stockView, replenishmentPage, catalogWorkspace, catalogService, catalogSc
 
 test("stock levels default to action priority and expose interactive summary filters", () => {
   assert.match(stockView, /InventoryStockSort = "priority"/);
-  assert.match(stockView, /useState<InventoryStockSort>\("priority"\)/);
+  assert.match(stockView, /useState<InventoryStockSort>\(filters\.sort\)/);
+  assert.match(stockView, /sort: "priority"/);
   assert.match(stockView, /condition === "negative"\) return 0/);
   assert.match(stockView, /condition === "low"\) return 1/);
   assert.match(stockView, /condition === "in_stock"\) return 2/);

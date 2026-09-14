@@ -61,6 +61,7 @@ import {
   updateProductAction,
 } from "@/features/catalog/actions";
 import type { CatalogActionResult } from "@/features/catalog/catalog-types";
+import { downloadCsvText, exportFilename } from "@/lib/export-framework";
 import {
   adjustInventorySchema,
   createCategorySchema,
@@ -1062,13 +1063,10 @@ export function CatalogCsvTools({
   };
 
   const downloadTemplate = () => {
-    const blob = new Blob([catalogCsvTemplate()], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "tindio-catalog-import-template.csv";
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadCsvText(
+      exportFilename("catalog-import-template", { scope: "Organization" }),
+      catalogCsvTemplate(),
+    );
   };
 
   const chooseFile = async (file: File | undefined) => {

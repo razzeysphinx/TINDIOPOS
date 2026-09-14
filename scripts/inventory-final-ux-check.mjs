@@ -39,8 +39,8 @@ test("Phase 10 applies employee store assignments before Inventory data is displ
   assert.match(storeScope, /stores\.manage.*organization-wide authority/s);
   assert.match(storeScope, /storeIds: canAccessAllStores \? null : assignedStoreIds/);
   assert.match(inventoryPage, /const scopedStoreIds = selectedStoreId \? \[selectedStoreId\] : storeScope\.storeIds/);
-  assert.match(inventoryPage, /settingsQuery\.in\("store_id", scopedStoreIds\)/);
-  assert.match(inventoryPage, /levelsQuery\.in\("store_id", scopedStoreIds\)/);
+  assert.match(inventoryPage, /settingsQuery\?\.in\("store_id", scopedStoreIds\)/);
+  assert.match(inventoryPage, /levelsQuery\?\.in\("store_id", scopedStoreIds\)/);
   assert.match(inventoryPage, /recentMovementsQuery\?\.in\("store_id", scopedStoreIds\)/);
   assert.match(inventoryPage, /inventoryCountsQuery\?\.in\("store_id", scopedStoreIds\)/);
   assert.match(inventoryPage, /purchaseOrdersQuery\?\.in\("store_id", scopedStoreIds\)/);

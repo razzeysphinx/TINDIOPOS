@@ -39,7 +39,11 @@ begin
 
   -- Preserve the existing capability, store-scope, active-employee, and
   -- authenticated-session checks even when this is a successful replay.
-  perform private.inventory_count_actor(target_organization_id, count_document.store_id);
+  perform private.inventory_count_actor(
+    target_organization_id,
+    count_document.store_id,
+    array['inventory.count.finalize']::text[]
+  );
 
   if count_document.status = 'posted'
     and count_document.post_operation_id = target_operation_id then
@@ -71,9 +75,6 @@ begin
   perform private.post_inventory_count(target_organization_id, target_inventory_count_id);
 end;
 $function$;
-
-alter function private.post_inventory_count_idempotent(uuid, uuid, uuid)
-  set tindio.inventory_required_capabilities to 'inventory.count.finalize';
 
 create or replace function public.post_inventory_count(
   target_organization_id uuid,

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -8,6 +8,18 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 
 async function source(relativePath) {
   return readFile(path.join(repositoryRoot, relativePath), "utf8");
+}
+
+async function migrationSources(relativePath = "supabase/migrations") {
+  const directory = path.join(repositoryRoot, relativePath);
+  const entries = await readdir(directory, { withFileTypes: true });
+  const sources = [];
+  for (const entry of entries) {
+    const entryPath = path.join(relativePath, entry.name);
+    if (entry.isDirectory()) sources.push(...await migrationSources(entryPath));
+    else if (entry.isFile() && entry.name.endsWith(".sql")) sources.push(await source(entryPath));
+  }
+  return sources;
 }
 
 test("Phase 6 defines granular inventory capabilities without role-name authorization", async () => {
@@ -37,17 +49,34 @@ test("Phase 6 defines granular inventory capabilities without role-name authoriz
   assert.match(migration, /role_permission\.permission_code = 'inventory\.transfers'/);
 });
 
-test("transfer RPCs retain canonical procedures but require granular capability contexts", async () => {
+test("transfer RPCs retain canonical procedures with explicit granular capability alternatives", async () => {
   const migration = await source("supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql");
 
-  assert.match(migration, /alter function private\.create_direct_stock_transfer[\s\S]*inventory\.transfer\.create,inventory\.transfer\.send/);
-  assert.match(migration, /alter function private\.receive_stock_transfer[\s\S]*inventory\.transfer\.receive/);
-  assert.match(migration, /alter function private\.create_stock_request[\s\S]*inventory\.transfer\.create/);
-  assert.match(migration, /alter function private\.dispatch_stock_request[\s\S]*inventory\.transfer\.send/);
-  assert.match(migration, /alter function private\.receive_stock_request[\s\S]*inventory\.transfer\.receive/);
+  assert.match(migration, /pg_get_functiondef\(target\.function_signature\)/);
   assert.match(migration, /private\.has_all_inventory_capabilities/);
+  for (const [procedure, capability] of [
+    ["private.transfer_stock", "inventory.transfer.create"],
+    ["private.transfer_stock", "inventory.transfer.send"],
+    ["private.create_stock_request", "inventory.transfer.create"],
+    ["private.approve_stock_request", "inventory.transfer.send"],
+    ["private.start_stock_request_picking", "inventory.transfer.send"],
+    ["private.dispatch_stock_request", "inventory.transfer.send"],
+    ["private.receive_stock_request", "inventory.transfer.receive"],
+    ["private.create_direct_stock_transfer", "inventory.transfer.create"],
+    ["private.create_direct_stock_transfer", "inventory.transfer.send"],
+    ["private.receive_stock_transfer", "inventory.transfer.receive"],
+  ]) {
+    assert.match(migration, new RegExp(`${procedure.replaceAll(".", "\\.")}[\\s\\S]*${capability.replaceAll(".", "\\.")}`));
+  }
   assert.match(migration, /requested_permission = 'inventory\.manage'/);
   assert.doesNotMatch(migration, /update public\.inventory_levels/);
+  assert.doesNotMatch(migration, /tindio\.inventory_required_capabilities/);
+});
+
+test("no migration can reintroduce hidden inventory capability routing", async () => {
+  for (const migration of await migrationSources()) {
+    assert.doesNotMatch(migration, /tindio\.inventory_required_capabilities/);
+  }
 });
 
 test("transfer reads and mutations require both capability and the existing store scope", async () => {

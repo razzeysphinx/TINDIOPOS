@@ -215,40 +215,58 @@ as $$
         and current_setting('tindio.approval_organization_id', true) = target_organization_id::text
         and current_setting('tindio.approval_permission', true) = requested_permission
       )
-      or (
-        requested_permission = 'inventory.manage'
-        and coalesce(current_setting('tindio.inventory_required_capabilities', true), '') <> ''
-        and (
-          select private.has_all_inventory_capabilities(
-            target_organization_id,
-            string_to_array(current_setting('tindio.inventory_required_capabilities', true), ',')
-          )
-        )
-      )
     ),
     false
   );
 $$;
 
--- Transfer procedures remain the single place that performs state changes.
--- Their legacy `inventory.manage` guard is now satisfied only by their named
--- capabilities (or by a pre-existing inventory.manage bundle).
-alter function private.transfer_stock(uuid, uuid, uuid, jsonb, text)
-  set tindio.inventory_required_capabilities to 'inventory.transfer.create,inventory.transfer.send';
-alter function private.create_stock_request(uuid, uuid, uuid, text, jsonb, uuid)
-  set tindio.inventory_required_capabilities to 'inventory.transfer.create';
-alter function private.approve_stock_request(uuid, uuid, jsonb)
-  set tindio.inventory_required_capabilities to 'inventory.transfer.send';
-alter function private.start_stock_request_picking(uuid, uuid)
-  set tindio.inventory_required_capabilities to 'inventory.transfer.send';
-alter function private.dispatch_stock_request(uuid, uuid, text, uuid)
-  set tindio.inventory_required_capabilities to 'inventory.transfer.send';
-alter function private.receive_stock_request(uuid, uuid, jsonb, text, uuid)
-  set tindio.inventory_required_capabilities to 'inventory.transfer.receive';
-alter function private.create_direct_stock_transfer(uuid, uuid, uuid, jsonb, text, uuid)
-  set tindio.inventory_required_capabilities to 'inventory.transfer.create,inventory.transfer.send';
-alter function private.receive_stock_transfer(uuid, uuid, jsonb, text, uuid)
-  set tindio.inventory_required_capabilities to 'inventory.transfer.receive';
+-- Recreate each latest canonical transfer command from its database definition,
+-- changing only the guard that precedes its existing business logic. The
+-- legacy permission / manager-approval path remains valid as an explicit
+-- alternative to its granular capability requirement.
+do $$
+declare
+  target record;
+  current_definition text;
+  updated_definition text;
+  legacy_guard constant text :=
+    'not (select private.has_permission(target_organization_id, ''inventory.manage''))';
+begin
+  for target in
+    select *
+    from (
+      values
+        ('private.transfer_stock(uuid,uuid,uuid,jsonb,text)'::regprocedure, array['inventory.transfer.create', 'inventory.transfer.send']::text[]),
+        ('private.create_stock_request(uuid,uuid,uuid,text,jsonb,uuid)'::regprocedure, array['inventory.transfer.create']::text[]),
+        ('private.approve_stock_request(uuid,uuid,jsonb)'::regprocedure, array['inventory.transfer.send']::text[]),
+        ('private.start_stock_request_picking(uuid,uuid)'::regprocedure, array['inventory.transfer.send']::text[]),
+        ('private.dispatch_stock_request(uuid,uuid,text,uuid)'::regprocedure, array['inventory.transfer.send']::text[]),
+        ('private.receive_stock_request(uuid,uuid,jsonb,text,uuid)'::regprocedure, array['inventory.transfer.receive']::text[]),
+        ('private.create_direct_stock_transfer(uuid,uuid,uuid,jsonb,text,uuid)'::regprocedure, array['inventory.transfer.create', 'inventory.transfer.send']::text[]),
+        ('private.receive_stock_transfer(uuid,uuid,jsonb,text,uuid)'::regprocedure, array['inventory.transfer.receive']::text[])
+    ) as mappings(function_signature, required_capabilities)
+  loop
+    select pg_get_functiondef(target.function_signature)
+    into current_definition;
+
+    updated_definition := replace(
+      current_definition,
+      legacy_guard,
+      format(
+        '(not (select private.has_permission(target_organization_id, ''inventory.manage'')) and not (select private.has_all_inventory_capabilities(target_organization_id, %L::text[])))',
+        target.required_capabilities
+      )
+    );
+
+    if updated_definition = current_definition then
+      raise exception 'Canonical transfer procedure % does not contain the expected inventory authorization guard.', target.function_signature
+        using errcode = 'XX000';
+    end if;
+
+    execute updated_definition;
+  end loop;
+end;
+$$;
 
 -- A sender must be able to discover the request that targets its authorized
 -- warehouse, while a receiver continues to see requests for its destination.

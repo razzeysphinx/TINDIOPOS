@@ -51,6 +51,13 @@ test("count preparation, import, review, and posting use granular capability and
   assert.match(actions, /"inventory\.count\.finalize"/);
   assert.match(actions, /import_inventory_count_lines/);
   assert.match(migration, /private\.has_all_inventory_capabilities/);
+  assert.match(migration, /private\.inventory_count_actor\([\s\S]*requested_capabilities text\[\]/);
+  assert.match(migration, /array\['inventory\.count\.create'\]::text\[\]/);
+  assert.match(migration, /private\.submit_inventory_count_for_review[\s\S]*inventory\.count\.finalize/);
+  assert.match(migration, /private\.post_inventory_count[\s\S]*inventory\.count\.finalize/);
+  assert.match(migration, /private\.cancel_inventory_count[\s\S]*inventory\.count\.finalize/);
+  assert.match(migration, /inventory\.count\.create'', ''inventory\.count\.finalize/);
+  assert.doesNotMatch(migration, /tindio\.inventory_required_capabilities/);
   assert.match(migration, /private\.has_store_read_scope/);
   assert.match(migration, /inventory_counts_select_authorized_scope/);
   assert.match(migration, /inventory_count_lines_select_authorized_scope/);

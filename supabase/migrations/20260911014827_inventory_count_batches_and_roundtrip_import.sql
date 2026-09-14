@@ -92,13 +92,12 @@ using (
   )
 );
 
--- The original count functions use one shared actor guard.  Phase 6 added
--- capability grants, so this guard now takes the capability tag attached to
--- its caller into account.  Legacy count bundles remain compatible through
--- private.has_inventory_capability; no role name is consulted.
+-- Count authorization is explicit at the caller boundary. Legacy bundles are
+-- resolved by private.has_inventory_capability; no role name is consulted.
 create or replace function private.inventory_count_actor(
   target_organization_id uuid,
-  target_store_id uuid
+  target_store_id uuid,
+  requested_capabilities text[]
 )
 returns uuid
 language plpgsql
@@ -107,17 +106,9 @@ set search_path = ''
 as $$
 declare
   actor_id uuid;
-  requested_capabilities text[];
 begin
-  requested_capabilities := string_to_array(
-    nullif(current_setting('tindio.inventory_required_capabilities', true), ''),
-    ','
-  );
-  if requested_capabilities is null then
-    requested_capabilities := array['inventory.count.create'];
-  end if;
-
   if (select auth.uid()) is null
+    or coalesce(cardinality(requested_capabilities), 0) = 0
     or not (select private.has_all_inventory_capabilities(target_organization_id, requested_capabilities)) then
     raise exception 'Inventory count permission is required.' using errcode = '42501';
   end if;
@@ -139,20 +130,70 @@ begin
 end;
 $$;
 
-alter function private.create_inventory_count_plan(uuid, uuid, text, text, text, uuid, jsonb, text, boolean)
-  set tindio.inventory_required_capabilities to 'inventory.count.create';
-alter function private.create_inventory_count_draft(uuid, uuid, text)
-  set tindio.inventory_required_capabilities to 'inventory.count.create';
-alter function private.save_inventory_count_line(uuid, uuid, uuid, uuid, numeric)
-  set tindio.inventory_required_capabilities to 'inventory.count.create';
-alter function private.submit_inventory_count_for_review(uuid, uuid)
-  set tindio.inventory_required_capabilities to 'inventory.count.finalize';
-alter function private.post_inventory_count(uuid, uuid)
-  set tindio.inventory_required_capabilities to 'inventory.count.finalize';
-alter function private.cancel_inventory_count(uuid, uuid, text)
-  set tindio.inventory_required_capabilities to 'inventory.count.finalize';
-alter function private.complete_inventory_count(uuid, uuid, text, jsonb)
-  set tindio.inventory_required_capabilities to 'inventory.count.create,inventory.count.finalize';
+create or replace function private.inventory_count_actor(
+  target_organization_id uuid,
+  target_store_id uuid
+)
+returns uuid
+language sql
+security definer
+set search_path = ''
+as $$
+  select private.inventory_count_actor(
+    target_organization_id,
+    target_store_id,
+    array['inventory.count.create']::text[]
+  );
+$$;
+
+-- Preserve the canonical count definitions and replace only the finalization
+-- actor calls. Creation and editing continue through the explicit two-argument
+-- create-capability overload above.
+do $$
+declare
+  target record;
+  current_definition text;
+  updated_definition text;
+begin
+  for target in
+    select *
+    from (
+      values
+        ('private.submit_inventory_count_for_review(uuid,uuid)'::regprocedure, array['inventory.count.finalize']::text[]),
+        ('private.post_inventory_count(uuid,uuid)'::regprocedure, array['inventory.count.finalize']::text[]),
+        ('private.cancel_inventory_count(uuid,uuid,text)'::regprocedure, array['inventory.count.finalize']::text[])
+    ) as mappings(function_signature, required_capabilities)
+  loop
+    select pg_get_functiondef(target.function_signature)
+    into current_definition;
+    updated_definition := replace(
+      current_definition,
+      'private.inventory_count_actor(target_organization_id, count_document.store_id)',
+      format(
+        'private.inventory_count_actor(target_organization_id, count_document.store_id, %L::text[])',
+        target.required_capabilities
+      )
+    );
+    if updated_definition = current_definition then
+      raise exception 'Canonical inventory-count procedure % does not contain the expected actor call.', target.function_signature
+        using errcode = 'XX000';
+    end if;
+    execute updated_definition;
+  end loop;
+
+  select pg_get_functiondef('private.complete_inventory_count(uuid,uuid,text,jsonb)'::regprocedure)
+  into current_definition;
+  updated_definition := replace(
+    current_definition,
+    'actor_id:=private.inventory_actor(target_organization_id,target_store_id);',
+    'perform private.inventory_count_actor(target_organization_id, target_store_id, array[''inventory.count.create'', ''inventory.count.finalize'']::text[]); actor_id:=private.inventory_actor(target_organization_id,target_store_id);'
+  );
+  if updated_definition = current_definition then
+    raise exception 'Canonical complete-inventory-count procedure does not contain the expected actor call.' using errcode = 'XX000';
+  end if;
+  execute updated_definition;
+end;
+$$;
 
 drop policy if exists inventory_counts_select_authorized_scope on public.inventory_counts;
 create policy inventory_counts_select_authorized_scope
@@ -216,7 +257,6 @@ returns uuid
 language plpgsql
 security definer
 set search_path = ''
-set tindio.inventory_required_capabilities = 'inventory.count.create'
 as $$
 declare
   actor_id uuid;
@@ -308,7 +348,6 @@ returns integer
 language plpgsql
 security definer
 set search_path = ''
-set tindio.inventory_required_capabilities = 'inventory.count.create'
 as $$
 declare
   count_document public.inventory_counts%rowtype;

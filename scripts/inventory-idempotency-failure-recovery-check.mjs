@@ -33,7 +33,8 @@ test("the database replay guard locks the canonical count and delegates ledger w
   assert.match(migration, /where post_operation_id is not null/);
   assert.match(migration, /create or replace function private\.post_inventory_count_idempotent/);
   assert.match(migration, /for update/);
-  assert.match(migration, /private\.inventory_count_actor\(target_organization_id, count_document\.store_id\)/);
+  assert.match(migration, /private\.inventory_count_actor\([\s\S]*count_document\.store_id,[\s\S]*inventory\.count\.finalize/);
+  assert.doesNotMatch(migration, /tindio\.inventory_required_capabilities/);
   assert.match(migration, /count_document\.status = 'posted'[\s\S]*count_document\.post_operation_id = target_operation_id[\s\S]*return/);
   assert.match(migration, /perform private\.post_inventory_count\(target_organization_id, target_inventory_count_id\)/);
   assert.doesNotMatch(migration, /apply_inventory_change_v2/);

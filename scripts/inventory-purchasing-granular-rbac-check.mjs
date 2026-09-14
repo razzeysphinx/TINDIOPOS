@@ -12,7 +12,7 @@ async function source(relativePath) {
 
 const migrationPath = "supabase/migrations/20260911062913_purchasing_granular_rbac_integration.sql";
 
-test("Phase 10 tags canonical purchasing commands with their granular capabilities", async () => {
+test("Phase 10 retains canonical purchasing commands with explicit granular capability alternatives", async () => {
   const migration = await source(migrationPath);
 
   for (const [procedure, capability] of [
@@ -26,10 +26,13 @@ test("Phase 10 tags canonical purchasing commands with their granular capabiliti
   ]) {
     assert.match(
       migration,
-      new RegExp(`${procedure.replaceAll(".", "\\.")}[\\s\\S]*?tindio\\.inventory_required_capabilities to '${capability.replaceAll(".", "\\.")}'`),
+      new RegExp(`${procedure.replaceAll(".", "\\.")}[\\s\\S]*?${capability.replaceAll(".", "\\.")}`),
     );
   }
 
+  assert.match(migration, /pg_get_functiondef\(target\.function_signature\)/);
+  assert.match(migration, /private\.has_inventory_capability/);
+  assert.doesNotMatch(migration, /tindio\.inventory_required_capabilities/);
   assert.match(migration, /notify pgrst, 'reload schema';/);
   assert.doesNotMatch(migration, /role\.code|role_name/i);
   assert.doesNotMatch(migration, /update public\.inventory_levels/);

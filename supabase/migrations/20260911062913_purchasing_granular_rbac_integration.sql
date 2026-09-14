@@ -1,23 +1,49 @@
--- Phase 10: keep the canonical purchasing procedures, but let the existing
--- capability resolver satisfy their legacy inventory.manage guards.  The
--- function-local setting cannot be forged by a browser RPC caller.
+-- Phase 10: retain the canonical purchasing procedures while adding their
+-- explicit granular capability alternative to the legacy authorization path.
 begin;
 
-alter function private.create_supplier(uuid, text, text, text, text, text, text)
-  set tindio.inventory_required_capabilities to 'purchasing.suppliers.manage';
-alter function public.update_supplier(uuid, uuid, text, text, text, text, text, text, boolean)
-  set tindio.inventory_required_capabilities to 'purchasing.suppliers.manage';
-alter function private.import_suppliers_csv(uuid, jsonb)
-  set tindio.inventory_required_capabilities to 'purchasing.suppliers.manage';
-
-alter function private.create_purchase_order(uuid, uuid, uuid, text, date, jsonb, uuid)
-  set tindio.inventory_required_capabilities to 'purchasing.po.create';
-alter function private.cancel_purchase_order(uuid, uuid, text)
-  set tindio.inventory_required_capabilities to 'purchasing.po.create';
-alter function private.receive_purchase_order(uuid, uuid, jsonb, text, uuid)
-  set tindio.inventory_required_capabilities to 'purchasing.receive';
-alter function private.return_to_supplier(uuid, uuid, uuid, jsonb, text, uuid)
-  set tindio.inventory_required_capabilities to 'purchasing.return';
+do $$
+declare
+  target record;
+  current_definition text;
+  updated_definition text;
+  compact_legacy_guard text :=
+    'not (select private.has_permission(target_organization_id,''inventory.manage''))';
+  spaced_legacy_guard text :=
+    'not (select private.has_permission(target_organization_id, ''inventory.manage''))';
+begin
+  for target in
+    select *
+    from (
+      values
+        ('private.create_supplier(uuid,text,text,text,text,text,text)'::regprocedure, 'purchasing.suppliers.manage'),
+        ('public.update_supplier(uuid,uuid,text,text,text,text,text,text,boolean)'::regprocedure, 'purchasing.suppliers.manage'),
+        ('private.import_suppliers_csv(uuid,jsonb)'::regprocedure, 'purchasing.suppliers.manage'),
+        ('private.create_purchase_order(uuid,uuid,uuid,text,date,jsonb,uuid)'::regprocedure, 'purchasing.po.create'),
+        ('private.cancel_purchase_order(uuid,uuid,text)'::regprocedure, 'purchasing.po.create'),
+        ('private.receive_purchase_order(uuid,uuid,jsonb,text,uuid)'::regprocedure, 'purchasing.receive'),
+        ('private.return_to_supplier(uuid,uuid,uuid,jsonb,text,uuid)'::regprocedure, 'purchasing.return')
+    ) as mappings(function_signature, required_capability)
+  loop
+    select pg_get_functiondef(target.function_signature)
+    into current_definition;
+    updated_definition := replace(
+      replace(
+        current_definition,
+        compact_legacy_guard,
+        format('(not (select private.has_permission(target_organization_id,''inventory.manage'')) and not (select private.has_inventory_capability(target_organization_id, %L)))', target.required_capability)
+      ),
+      spaced_legacy_guard,
+      format('(not (select private.has_permission(target_organization_id, ''inventory.manage'')) and not (select private.has_inventory_capability(target_organization_id, %L)))', target.required_capability)
+    );
+    if updated_definition = current_definition then
+      raise exception 'Canonical purchasing procedure % does not contain the expected inventory authorization guard.', target.function_signature
+        using errcode = 'XX000';
+    end if;
+    execute updated_definition;
+  end loop;
+end;
+$$;
 
 -- Read policies use the same capability and central store-scope helpers as
 -- the command procedures.  A purchasing capability never bypasses tenant or

@@ -30,8 +30,10 @@ test("Phase 10 retains canonical purchasing commands with explicit granular capa
     );
   }
 
-  assert.match(migration, /pg_get_functiondef\(target\.function_signature\)/);
   assert.match(migration, /private\.has_inventory_capability/);
+  assert.doesNotMatch(migration, /pg_get_functiondef\s*\(/i);
+  assert.doesNotMatch(migration, /updated_definition\s*:=\s*replace\s*\(/i);
+  assert.doesNotMatch(migration, /execute\s+updated_definition/i);
   assert.doesNotMatch(migration, /tindio\.inventory_required_capabilities/);
   assert.match(migration, /notify pgrst, 'reload schema';/);
   assert.doesNotMatch(migration, /role\.code|role_name/i);

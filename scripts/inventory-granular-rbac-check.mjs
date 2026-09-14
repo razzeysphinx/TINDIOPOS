@@ -52,8 +52,22 @@ test("Phase 6 defines granular inventory capabilities without role-name authoriz
 test("transfer RPCs retain canonical procedures with explicit granular capability alternatives", async () => {
   const migration = await source("supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql");
 
-  assert.match(migration, /pg_get_functiondef\(target\.function_signature\)/);
   assert.match(migration, /private\.has_all_inventory_capabilities/);
+  assert.doesNotMatch(migration, /pg_get_functiondef\s*\(/i);
+  assert.doesNotMatch(migration, /updated_definition\s*:=\s*replace\s*\(/i);
+  assert.doesNotMatch(migration, /execute\s+updated_definition/i);
+  for (const procedure of [
+    "transfer_stock",
+    "create_stock_request",
+    "approve_stock_request",
+    "start_stock_request_picking",
+    "dispatch_stock_request",
+    "receive_stock_request",
+    "create_direct_stock_transfer",
+    "receive_stock_transfer",
+  ]) {
+    assert.match(migration, new RegExp(`create or replace function private\\.${procedure}`, "i"));
+  }
   for (const [procedure, capability] of [
     ["private.transfer_stock", "inventory.transfer.create"],
     ["private.transfer_stock", "inventory.transfer.send"],

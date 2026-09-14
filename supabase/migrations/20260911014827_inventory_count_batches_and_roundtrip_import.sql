@@ -146,54 +146,241 @@ as $$
   );
 $$;
 
--- Preserve the canonical count definitions and replace only the finalization
--- actor calls. Creation and editing continue through the explicit two-argument
--- create-capability overload above.
-do $$
-declare
-  target record;
-  current_definition text;
-  updated_definition text;
+create or replace function private.complete_inventory_count(target_organization_id uuid, target_store_id uuid, target_note text, target_lines jsonb) returns uuid language plpgsql security definer set search_path='' as $$
+declare actor_id uuid; count_id uuid; line jsonb; expected numeric(14,3); counted numeric(14,3); target_line_product_id uuid; target_line_variant_id uuid;
 begin
-  for target in
-    select *
-    from (
-      values
-        ('private.submit_inventory_count_for_review(uuid,uuid)'::regprocedure, array['inventory.count.finalize']::text[]),
-        ('private.post_inventory_count(uuid,uuid)'::regprocedure, array['inventory.count.finalize']::text[]),
-        ('private.cancel_inventory_count(uuid,uuid,text)'::regprocedure, array['inventory.count.finalize']::text[])
-    ) as mappings(function_signature, required_capabilities)
-  loop
-    select pg_get_functiondef(target.function_signature)
-    into current_definition;
-    updated_definition := replace(
-      current_definition,
-      'private.inventory_count_actor(target_organization_id, count_document.store_id)',
-      format(
-        'private.inventory_count_actor(target_organization_id, count_document.store_id, %L::text[])',
-        target.required_capabilities
-      )
-    );
-    if updated_definition = current_definition then
-      raise exception 'Canonical inventory-count procedure % does not contain the expected actor call.', target.function_signature
-        using errcode = 'XX000';
-    end if;
-    execute updated_definition;
-  end loop;
+ if (select auth.uid()) is null or not (select private.has_permission(target_organization_id,'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode='42501'; end if;
+ if target_lines is null or jsonb_typeof(target_lines) <> 'array' or jsonb_array_length(target_lines) not between 1 and 500 then raise exception 'A count needs one to 500 items.' using errcode='23514'; end if;
+ perform private.inventory_count_actor(target_organization_id, target_store_id, array['inventory.count.create', 'inventory.count.finalize']::text[]);
+  actor_id := private.inventory_actor(target_organization_id, target_store_id); if actor_id is null then raise exception 'An assigned employee is required for this store.' using errcode='42501'; end if;
+ insert into public.inventory_counts (organization_id,store_id,status,note,started_by_employee_id,completed_by_employee_id,completed_at) values (target_organization_id,target_store_id,'completed',nullif(btrim(target_note),''),actor_id,actor_id,now()) returning id into count_id;
+ for line in select value from jsonb_array_elements(target_lines) loop
+  if coalesce(line->>'counted_quantity','') !~ '^\d+(\.\d{1,3})?$' then raise exception 'Counted quantities must be non-negative.' using errcode='23514'; end if;
+  target_line_product_id:=(line->>'product_id')::uuid; target_line_variant_id:=nullif(line->>'variant_id','')::uuid; counted:=(line->>'counted_quantity')::numeric;
+  select level.quantity into expected from public.inventory_levels level where level.organization_id=target_organization_id and level.store_id=target_store_id and level.product_id=target_line_product_id and level.variant_id is not distinct from target_line_variant_id for update; if not found then raise exception 'One count item has no stock projection.' using errcode='23514'; end if;
+  insert into public.inventory_count_lines (organization_id,inventory_count_id,product_id,variant_id,expected_quantity,counted_quantity) values (target_organization_id,count_id,target_line_product_id,target_line_variant_id,expected,counted);
+  if counted <> expected then perform private.apply_inventory_change(target_organization_id,target_store_id,target_line_product_id,target_line_variant_id,counted-expected,'COUNT',actor_id,'Inventory count','inventory_count',count_id); end if;
+ end loop; return count_id; end; $$;
 
-  select pg_get_functiondef('private.complete_inventory_count(uuid,uuid,text,jsonb)'::regprocedure)
-  into current_definition;
-  updated_definition := replace(
-    current_definition,
-    'actor_id:=private.inventory_actor(target_organization_id,target_store_id);',
-    'perform private.inventory_count_actor(target_organization_id, target_store_id, array[''inventory.count.create'', ''inventory.count.finalize'']::text[]); actor_id:=private.inventory_actor(target_organization_id,target_store_id);'
-  );
-  if updated_definition = current_definition then
-    raise exception 'Canonical complete-inventory-count procedure does not contain the expected actor call.' using errcode = 'XX000';
+drop policy if exists inventory_counts_select_authorized_scope on public.inventory_counts;
+create policy inventory_counts_select_authorized_scope
+on public.inventory_counts for select to authenticated
+using (
+  (select private.has_any_inventory_capability(
+    organization_id,
+    array['inventory.count.create', 'inventory.count.finalize']
+  ))
+  and (select private.has_store_read_scope(organization_id, store_id))
+);
+
+drop policy if exists inventory_count_lines_select_authorized_scope on public.inventory_count_lines;
+create policy inventory_count_lines_select_authorized_scope
+on public.inventory_count_lines for select to authenticated
+using (
+  (select private.has_any_inventory_capability(
+    organization_id,
+    array['inventory.count.create', 'inventory.count.finalize']
+  ))
+  and exists (
+    select 1
+    from public.inventory_counts count_document
+    where count_document.id = inventory_count_lines.inventory_count_id
+      and count_document.organization_id = inventory_count_lines.organization_id
+      and (select private.has_store_read_scope(count_document.organization_id, count_document.store_id))
+  )
+);
+
+create or replace function public.get_inventory_count_suppliers(target_organization_id uuid)
+returns table (id uuid, name text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if (select auth.uid()) is null
+    or not (select private.has_inventory_capability(target_organization_id, 'inventory.count.create')) then
+    raise exception 'Inventory count creation permission is required.' using errcode = '42501';
   end if;
-  execute updated_definition;
+
+  return query
+  select supplier.id, supplier.name
+  from public.suppliers supplier
+  where supplier.organization_id = target_organization_id
+    and supplier.is_active
+  order by lower(supplier.name), supplier.id;
 end;
 $$;
+
+-- Checked-in canonical count procedures appear below. Only their explicit
+-- capability boundary differs from the preceding canonical implementation.
+
+create or replace function private.cancel_inventory_count(
+  target_organization_id uuid,
+  target_inventory_count_id uuid,
+  target_note text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  count_document public.inventory_counts%rowtype;
+  actor_id uuid;
+begin
+  select count_row.* into count_document from public.inventory_counts count_row
+  where count_row.id = target_inventory_count_id and count_row.organization_id = target_organization_id
+  for update;
+  if count_document.id is null or count_document.status in ('posted', 'completed', 'cancelled') then
+    raise exception 'Only an open count can be cancelled.' using errcode = '23514';
+  end if;
+  actor_id := private.inventory_count_actor(target_organization_id, count_document.store_id, array['inventory.count.finalize']::text[]);
+  update public.inventory_counts
+  set status = 'cancelled', note = coalesce(nullif(btrim(target_note), ''), note), updated_at = now()
+  where id = target_inventory_count_id;
+  perform private.write_audit_log(
+    target_organization_id, 'INVENTORY_COUNT_CANCELLED', 'inventory.count', actor_id,
+    null, count_document.store_id, null, null, null, target_note,
+    jsonb_build_object('inventory_count_id', count_document.id, 'count_number', count_document.count_number)
+  );
+end;
+$$;
+
+create or replace function private.submit_inventory_count_for_review(
+  target_organization_id uuid,
+  target_inventory_count_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  count_document public.inventory_counts%rowtype;
+  actor_id uuid;
+begin
+  select count_row.* into count_document from public.inventory_counts count_row
+  where count_row.id = target_inventory_count_id and count_row.organization_id = target_organization_id
+  for update;
+  if count_document.id is null or count_document.status not in ('draft', 'in_progress') then
+    raise exception 'Only an open count with saved lines can be submitted for review.' using errcode = '23514';
+  end if;
+  actor_id := private.inventory_count_actor(target_organization_id, count_document.store_id, array['inventory.count.finalize']::text[]);
+  if not exists (
+    select 1 from public.inventory_count_lines line
+    where line.organization_id = target_organization_id and line.inventory_count_id = target_inventory_count_id
+  ) or exists (
+    select 1 from public.inventory_count_lines line
+    where line.organization_id = target_organization_id
+      and line.inventory_count_id = target_inventory_count_id
+      and line.counted_quantity is null
+  ) then
+    raise exception 'Count every prepared item before submitting for review.' using errcode = '23514';
+  end if;
+  update public.inventory_counts set status = 'ready_for_review', updated_at = now() where id = target_inventory_count_id;
+  perform private.write_audit_log(
+    target_organization_id, 'INVENTORY_COUNT_READY_FOR_REVIEW', 'inventory.count', actor_id,
+    null, count_document.store_id, null, null, null, count_document.note,
+    jsonb_build_object('inventory_count_id', count_document.id, 'count_number', count_document.count_number)
+  );
+end;
+$$;
+
+create or replace function private.post_inventory_count(
+  target_organization_id uuid,
+  target_inventory_count_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  count_document public.inventory_counts%rowtype;
+  actor_id uuid;
+  line public.inventory_count_lines%rowtype;
+  variance numeric(14,3);
+  posted_line_count integer := 0;
+  total_variance numeric(14,3) := 0;
+begin
+  select count_row.* into count_document
+  from public.inventory_counts count_row
+  where count_row.id = target_inventory_count_id
+    and count_row.organization_id = target_organization_id
+  for update;
+
+  if count_document.id is null or count_document.status <> 'ready_for_review' then
+    raise exception 'Only a reviewed inventory count can be posted.' using errcode = '23514';
+  end if;
+
+  actor_id := private.inventory_count_actor(target_organization_id, count_document.store_id, array['inventory.count.finalize']::text[]);
+
+  for line in
+    select saved_line.*
+    from public.inventory_count_lines saved_line
+    where saved_line.organization_id = target_organization_id
+      and saved_line.inventory_count_id = target_inventory_count_id
+    order by saved_line.line_sort_order, saved_line.id
+  loop
+    if line.counted_quantity is null
+      or line.reconciled_expected_quantity is null
+      or line.counted_at is null then
+      raise exception 'Every prepared item must be counted and reconciled before posting.' using errcode = '23514';
+    end if;
+
+    -- The stored reconciled expected quantity was captured under the same
+    -- inventory-level row lock used by sales, receipts, transfers, and other
+    -- canonical movements.  Movements after this line was counted remain in
+    -- the live projection; only this measured variance is added at posting.
+    variance := line.counted_quantity - line.reconciled_expected_quantity;
+    total_variance := total_variance + variance;
+    posted_line_count := posted_line_count + 1;
+
+    if variance <> 0 then
+      perform private.apply_inventory_change_v2(
+        target_organization_id,
+        count_document.store_id,
+        line.product_id,
+        line.variant_id,
+        variance,
+        'COUNT',
+        actor_id,
+        'Inventory count variance posted',
+        'inventory_count',
+        count_document.id,
+        null,
+        'COUNT_VARIANCE'
+      );
+    end if;
+  end loop;
+
+  update public.inventory_counts
+  set status = 'posted',
+      completed_by_employee_id = actor_id,
+      completed_at = clock_timestamp(),
+      updated_at = clock_timestamp()
+  where id = target_inventory_count_id;
+
+  perform private.write_audit_log(
+    target_organization_id,
+    'INVENTORY_COUNT_POSTED',
+    'inventory.count',
+    actor_id,
+    null,
+    count_document.store_id,
+    null,
+    null,
+    null,
+    count_document.note,
+    jsonb_build_object(
+      'inventory_count_id', count_document.id,
+      'count_number', count_document.count_number,
+      'line_count', posted_line_count,
+      'reconciled_variance', total_variance
+    )
+  );
+end;
+$function$;
 
 drop policy if exists inventory_counts_select_authorized_scope on public.inventory_counts;
 create policy inventory_counts_select_authorized_scope

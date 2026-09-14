@@ -20,7 +20,7 @@ Phase 7 extends that foundation with organization-scoped customer records, purch
 1. Copy `.env.example` to `.env.local`.
 2. Add the project URL and publishable key from the Supabase Connect panel.
 3. Apply `supabase/migrations` to a disposable project or start the local Supabase stack.
-4. Run `npm run dev` and visit `http://127.0.0.1:3000`.
+4. Run `pnpm dev` and visit `http://127.0.0.1:3000`.
 
 ```env
 NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000
@@ -57,11 +57,11 @@ n
 ## Quality checks
 
 ```powershell
-npm.cmd run typecheck
-npm.cmd run lint
-npm.cmd run build
-npx.cmd supabase test db
-npx.cmd supabase db advisors --local --type all --level warn --fail-on warn
+pnpm typecheck
+pnpm lint
+pnpm build
+pnpm exec supabase test db
+pnpm exec supabase db advisors --local --type all --level warn --fail-on warn
 ```
 
 The database test requires Docker Desktop and a running local Supabase stack. See [the architecture contract](docs/architecture.md) for table relationships, security boundaries, and later phase plans.

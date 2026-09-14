@@ -2,6 +2,12 @@
   "name": "tindio-pos",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "supabase"
+    ]
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

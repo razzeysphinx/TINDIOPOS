@@ -3,6 +3,12 @@ import process from "node:process";
 
 const resetLocal = process.argv.includes("--reset-local");
 
+function executable(command) {
+  if (command === "node") return process.execPath;
+  if (process.platform === "win32" && command === "pnpm") return "pnpm.cmd";
+  return command;
+}
+
 const steps = [
   {
     name: "Rebuild deterministic inventory transfer RBAC migration",
@@ -105,11 +111,11 @@ function run(step) {
   console.log(`\n=== ${step.name} ===`);
   console.log(`$ ${step.command} ${step.args.join(" ")}`);
 
-  const result = spawnSync(step.command, step.args, {
+  const result = spawnSync(executable(step.command), step.args, {
     cwd: process.cwd(),
     env: process.env,
     stdio: "inherit",
-    shell: process.platform === "win32",
+    shell: false,
   });
 
   if (result.error) {

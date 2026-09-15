@@ -13,6 +13,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "db:baseline:capture": "node scripts/capture-database-baseline.mjs",
     "test:workspace-access": "node --test scripts/phase-1-workspace-access-check.mjs",
     "test:back-office-navigation": "node --test scripts/phase-2-back-office-navigation-check.mjs",
     "test:dashboard-access": "node --test scripts/phase-3-dashboard-access-check.mjs",

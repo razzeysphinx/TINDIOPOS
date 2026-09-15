@@ -122,6 +122,12 @@ test("granular transfer migration has one coherent transaction and no orphan PL/
   const migration = await source("supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql");
   const withoutComments = migration.replace(/--.*$/gm, "");
 
+  assert.doesNotMatch(
+    migration,
+    /tokens?\s+truncated|…\s*\d+|\.\.\.\s*\d+\s+tokens?\s+truncated/i,
+    "migration must never contain tool-output truncation markers",
+  );
+
   assert.equal(countPattern(withoutComments, /^\s*begin\s*;\s*$/gim), 1, "migration must have exactly one top-level BEGIN;");
   assert.equal(countPattern(withoutComments, /^\s*commit\s*;\s*$/gim), 1, "migration must have exactly one top-level COMMIT;");
 

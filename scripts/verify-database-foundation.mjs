@@ -1,19 +1,15 @@
-import { spawnSync } from "node:child_process";
 import process from "node:process";
+import { runCommand } from "./lib/run-command.mjs";
 
 const resetLocal = process.argv.includes("--reset-local");
 
-function executable(command) {
-  if (command === "node") return process.execPath;
-  if (process.platform === "win32" && command === "pnpm") return "pnpm.cmd";
-  return command;
-}
+const pnpmCommand = "pnpm";
 
 const steps = [
   {
     name: "Rebuild deterministic inventory transfer RBAC migration",
     command: "node",
-    args: ["scripts/rebuild-inventory-transfer-rbac.mjs"],
+    args: ["scripts/rebuild-inventory-transfer-rbac.mjs", "--check"],
   },
   {
     name: "Inventory granular RBAC structure",
@@ -111,11 +107,10 @@ function run(step) {
   console.log(`\n=== ${step.name} ===`);
   console.log(`$ ${step.command} ${step.args.join(" ")}`);
 
-  const result = spawnSync(executable(step.command), step.args, {
+  const command = step.command === "pnpm" ? pnpmCommand : step.command;
+  const result = runCommand(command, step.args, {
     cwd: process.cwd(),
     env: process.env,
-    stdio: "inherit",
-    shell: false,
   });
 
   if (result.error) {

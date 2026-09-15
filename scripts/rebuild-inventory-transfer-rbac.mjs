@@ -255,7 +255,35 @@ function validateGeneratedMigration(migration) {
   }
 }
 
+function describeMismatch(current, generated) {
+  const limit = Math.min(current.length, generated.length);
+  let offset = 0;
+  while (offset < limit && current[offset] === generated[offset]) offset += 1;
+  const line = (value) => value.slice(0, offset).split("\n").length;
+  const context = (value) => {
+    const lines = value.split("\n");
+    const index = line(value) - 1;
+    return lines.slice(Math.max(0, index - 3), index + 4).join("\n");
+  };
+  return [
+    `Current normalized length: ${current.length}`,
+    `Generated normalized length: ${generated.length}`,
+    `First differing character offset: ${offset}`,
+    `Current line: ${line(current)}`,
+    `Generated line: ${line(generated)}`,
+    "CURRENT:", context(current), "GENERATED:", context(generated),
+  ].join("\n");
+}
+
 async function main() {
+  const args = new Set(process.argv.slice(2));
+  for (const argument of args) {
+    if (argument !== "--check" && argument !== "--write") {
+      fail(`Unknown argument: ${argument}. Use --check or --write.`);
+    }
+  }
+  if (args.has("--check") && args.has("--write")) fail("Use either --check or --write, not both.");
+  const mode = args.has("--write") ? "write" : "check";
   const current = await readFile(targetPath, "utf8");
   const header = extractSafeHeader(current);
   const policyBlock = extractSafePolicyBlock(current);
@@ -274,9 +302,20 @@ async function main() {
     );
   }
 
-  const generated = `${header}\n\n-- Canonical transfer procedures rebuilt from their latest complete pre-RBAC\n-- definitions. Business, ledger, idempotency, costing, audit, and store-scope\n-- behavior is preserved; only authorization guards add granular capabilities.\n\n${rebuiltFunctions.join("\n\n")}\n\n${policyBlock}\n\ncommit;\n`;
+  const generated = `${header}\n\n${rebuiltFunctions.join("\n\n")}\n\n${policyBlock}\n\ncommit;\n`;
 
   validateGeneratedMigration(generated);
+
+  const normalizeNewlines = (value) => value.replace(/\r\n?/g, "\n");
+  if (mode === "check") {
+    const normalizedCurrent = normalizeNewlines(current);
+    const normalizedGenerated = normalizeNewlines(generated);
+    if (normalizedCurrent !== normalizedGenerated) {
+      fail(`Inventory transfer RBAC migration differs from deterministic source. No file was modified. Use --write only for an intentional recovery after reviewing the mismatch.\n${describeMismatch(normalizedCurrent, normalizedGenerated)}`);
+    }
+    process.stdout.write("Inventory transfer RBAC migration matches deterministic source.\n");
+    return;
+  }
 
   const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "tindio-rbac-rebuild-"));
   const temporaryPath = path.join(temporaryDirectory, path.basename(targetPath));
@@ -288,9 +327,13 @@ async function main() {
     await rm(temporaryDirectory, { recursive: true, force: true });
   }
 
+  const written = await readFile(targetPath, "utf8");
+  if (normalizeNewlines(written) !== normalizeNewlines(generated)) fail("Written migration does not match deterministic source.");
+
   process.stdout.write(
     [
-      "Inventory transfer RBAC migration rebuilt successfully from canonical sources.",
+      "Historical migration was intentionally regenerated.",
+      "Review the complete Git diff before committing.",
       `Target: ${targetRelativePath}`,
       `Recovered canonical procedures: ${[...capabilityMatrix.keys()].join(", ")}`,
       "Historical target migration bodies were NOT used as canonical procedure sources.",

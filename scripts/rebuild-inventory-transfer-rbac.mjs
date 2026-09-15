@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -7,15 +6,19 @@ import { fileURLToPath } from "node:url";
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const targetRelativePath = "supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql";
 const targetPath = path.join(repositoryRoot, targetRelativePath);
-const cleanBaselineCommit = "197dccb12f3acde2d6e044558b0ec13081606155";
 
 const canonicalSources = {
+  transfer_stock: "supabase/migrations/20260821153703_phase_9_advanced_inventory.sql",
+  create_stock_request: "supabase/migrations/20260906074121_transfer_lifecycle_operation_integrity.sql",
+  approve_stock_request: "supabase/migrations/20260824210000_improvement_14_supply_chain_replenishment.sql",
+  start_stock_request_picking: "supabase/migrations/20260824210000_improvement_14_supply_chain_replenishment.sql",
   dispatch_stock_request: "supabase/migrations/20260906074121_transfer_lifecycle_operation_integrity.sql",
   receive_stock_request: "supabase/migrations/20260906074121_transfer_lifecycle_operation_integrity.sql",
   create_direct_stock_transfer: "supabase/migrations/20260910140907_direct_store_transfer_lifecycle.sql",
+  receive_stock_transfer: "supabase/migrations/20260910140907_direct_store_transfer_lifecycle.sql",
 };
 
-const requiredCapabilities = new Map([
+const capabilityMatrix = new Map([
   ["transfer_stock", ["inventory.transfer.create", "inventory.transfer.send"]],
   ["create_stock_request", ["inventory.transfer.create"]],
   ["approve_stock_request", ["inventory.transfer.send"]],
@@ -26,26 +29,27 @@ const requiredCapabilities = new Map([
   ["receive_stock_transfer", ["inventory.transfer.receive"]],
 ]);
 
+const policyStartMarker = "-- A sender must be able to discover the request";
+const reloadStatement = "notify pgrst, 'reload schema';";
+
 function fail(message) {
   throw new Error(`[inventory-transfer-rbac-rebuild] ${message}`);
 }
 
-function gitShow(ref, relativePath) {
-  try {
-    return execFileSync("git", ["show", `${ref}:${relativePath}`], {
-      cwd: repositoryRoot,
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-  } catch (error) {
-    const detail = error?.stderr?.toString?.().trim();
-    fail(`Unable to read ${relativePath} from ${ref}.${detail ? ` ${detail}` : ""}`);
-  }
-}
-
 function countMatches(source, expression) {
   return [...source.matchAll(expression)].length;
+}
+
+function assertNoTruncationArtifacts(source, label) {
+  for (const pattern of [
+    /tokens?\s+truncated/i,
+    /…\s*\d+/u,
+    /\.\.\.\s*\d+\s+tokens?\s+truncated/i,
+  ]) {
+    if (pattern.test(source)) {
+      fail(`${label} contains a truncation artifact matching ${pattern}. Refusing to copy incomplete SQL.`);
+    }
+  }
 }
 
 function extractFunction(source, schema, functionName) {
@@ -67,21 +71,50 @@ function extractFunction(source, schema, functionName) {
   const end = source.indexOf(terminator, bodyStart);
   if (end < 0) fail(`Could not find closing ${tag} for ${schema}.${functionName}.`);
 
-  return source.slice(start, end + terminator.length);
+  const block = source.slice(start, end + terminator.length);
+  assertNoTruncationArtifacts(block, `${schema}.${functionName}`);
+  return block;
 }
 
-function replaceLegacyInventoryGuard(functionSource, replacementCondition) {
-  const guard = /if\s+\(select\s+auth\.uid\(\)\)\s+is\s+null\s+or\s+not\s+\(select\s+private\.has_permission\(target_organization_id,\s*'inventory\.manage'\)\)\s+then/i;
-  const matches = countMatches(functionSource, new RegExp(guard.source, "gi"));
-  if (matches !== 1) {
-    fail(`Expected exactly one legacy inventory.manage guard, found ${matches}.`);
+function removeFunctionBlocks(sql) {
+  const declaration = /create\s+(?:or\s+replace\s+)?function\s+[a-zA-Z0-9_.]+\s*\(/gi;
+  let cursor = 0;
+  let outside = "";
+
+  while (true) {
+    declaration.lastIndex = cursor;
+    const match = declaration.exec(sql);
+    if (!match) {
+      outside += sql.slice(cursor);
+      break;
+    }
+
+    outside += sql.slice(cursor, match.index);
+    const tail = sql.slice(match.index);
+    const asMatch = /\bas\s+(\$[A-Za-z0-9_]*\$)/i.exec(tail);
+    if (!asMatch) fail(`Function beginning at offset ${match.index} has no dollar-quoted AS body.`);
+
+    const tag = asMatch[1];
+    const bodyStart = match.index + asMatch.index + asMatch[0].length;
+    const end = sql.indexOf(`${tag};`, bodyStart);
+    if (end < 0) fail(`Function beginning at offset ${match.index} has no closing ${tag};.`);
+    cursor = end + tag.length + 1;
   }
 
-  return functionSource.replace(guard, replacementCondition);
+  return outside;
 }
 
 function normalizeCreateOrReplace(functionSource) {
-  return functionSource.replace(/^create\s+function/i, "create or replace function");
+  return functionSource.replace(/^create\s+(?:or\s+replace\s+)?function/i, "create or replace function");
+}
+
+function replaceLegacyInventoryGuard(functionSource, replacementCondition, functionName) {
+  const guard = /if\s+\(select\s+auth\.uid\(\)\)\s+is\s+null\s+or\s+not\s+\(select\s+private\.has_permission\(target_organization_id\s*,\s*'inventory\.manage'\)\)\s+then/i;
+  const matches = countMatches(functionSource, new RegExp(guard.source, "gi"));
+  if (matches !== 1) {
+    fail(`Expected exactly one legacy inventory.manage guard in private.${functionName}; found ${matches}.`);
+  }
+  return functionSource.replace(guard, replacementCondition);
 }
 
 function granularSingle(capability) {
@@ -95,31 +128,76 @@ function granularAll(capabilities) {
 
 function rebuildCanonicalFunction(name, source) {
   let functionSource = normalizeCreateOrReplace(extractFunction(source, "private", name));
+  const capabilities = capabilityMatrix.get(name);
+  if (!capabilities) fail(`No capability mapping exists for private.${name}.`);
 
-  if (name === "dispatch_stock_request") {
-    functionSource = replaceLegacyInventoryGuard(
-      functionSource,
-      granularSingle("inventory.transfer.send"),
-    );
-  } else if (name === "receive_stock_request") {
-    functionSource = replaceLegacyInventoryGuard(
-      functionSource,
-      granularSingle("inventory.transfer.receive"),
-    );
-  } else if (name === "create_direct_stock_transfer") {
-    functionSource = replaceLegacyInventoryGuard(
-      functionSource,
-      granularAll(["inventory.transfer.create", "inventory.transfer.send"]),
-    );
-  } else {
-    fail(`No deterministic authorization rewrite is defined for ${name}.`);
-  }
+  const replacement = capabilities.length === 1
+    ? granularSingle(capabilities[0])
+    : granularAll(capabilities);
 
+  functionSource = replaceLegacyInventoryGuard(functionSource, replacement, name);
+  assertNoTruncationArtifacts(functionSource, `rebuilt private.${name}`);
   return functionSource.trim();
 }
 
+function extractSafeHeader(current) {
+  const firstBusinessFunction = /create\s+(?:or\s+replace\s+)?function\s+private\.transfer_stock\s*\(/i.exec(current);
+  if (!firstBusinessFunction) fail("Could not locate the transfer_stock boundary in the existing granular RBAC migration.");
+
+  let header = current.slice(0, firstBusinessFunction.index).trimEnd();
+  assertNoTruncationArtifacts(header, "granular RBAC header");
+
+  const staleCommentStart = header.indexOf("-- Existing inventory procedures retain their exact business implementation.");
+  const hasPermissionStart = header.indexOf("create or replace function private.has_permission(");
+  if (staleCommentStart >= 0 && hasPermissionStart > staleCommentStart) {
+    header = `${header.slice(0, staleCommentStart).trimEnd()}\n\n-- Manager approval compatibility remains centralized in has_permission.\n-- Granular inventory capabilities are checked explicitly inside each canonical\n-- inventory procedure; no hidden session capability routing is used.\n${header.slice(hasPermissionStart)}`;
+  }
+
+  if (countMatches(header, /^begin;\s*$/gim) !== 1) fail("Granular RBAC header must contain exactly one transaction BEGIN;.");
+  if (/^commit;\s*$/im.test(header)) fail("Granular RBAC header unexpectedly contains COMMIT;.");
+
+  for (const expected of [
+    "inventory.transfer.create",
+    "inventory.transfer.send",
+    "inventory.transfer.receive",
+    "private.has_inventory_capability",
+    "private.has_all_inventory_capabilities",
+    "private.has_any_inventory_capability",
+    "private.has_permission",
+  ]) {
+    if (!header.includes(expected)) fail(`Granular RBAC header is missing ${expected}.`);
+  }
+
+  return header;
+}
+
+function extractSafePolicyBlock(current) {
+  const start = current.indexOf(policyStartMarker);
+  if (start < 0) fail("Could not locate the transfer read-scope policy block.");
+
+  const reload = current.indexOf(reloadStatement, start);
+  if (reload < 0) fail("Could not locate the schema reload statement after the transfer policy block.");
+
+  const block = current.slice(start, reload + reloadStatement.length).trim();
+  assertNoTruncationArtifacts(block, "transfer read-scope policy block");
+
+  for (const expected of [
+    "private.has_stock_request_read_scope",
+    "private.has_stock_transfer_read_scope",
+    "stock_requests_select_inventory_transfer_scope",
+    "stock_transfers_select_inventory_transfer_scope",
+    "stock_transfer_receipts_select_inventory_transfer_scope",
+    "supply_chain_warehouses_select_inventory_transfer_scope",
+    "private.has_store_read_scope",
+  ]) {
+    if (!block.includes(expected)) fail(`Transfer read-scope policy block is missing ${expected}.`);
+  }
+
+  return block;
+}
+
 function validateFunctionCapabilities(migration) {
-  for (const [name, capabilities] of requiredCapabilities) {
+  for (const [name, capabilities] of capabilityMatrix) {
     const declarationCount = countMatches(
       migration,
       new RegExp(`create\\s+or\\s+replace\\s+function\\s+private\\.${name}\\s*\\(`, "gi"),
@@ -138,17 +216,14 @@ function validateFunctionCapabilities(migration) {
 }
 
 function validateGeneratedMigration(migration) {
+  assertNoTruncationArtifacts(migration, "generated granular transfer RBAC migration");
+
   if (!migration.trimStart().startsWith("-- Phase 6:")) {
-    fail("Generated migration does not start from the known Phase 6 clean baseline.");
+    fail("Generated migration does not start with the expected Phase 6 header.");
   }
 
-  const commitCount = countMatches(migration, /^commit;\s*$/gim);
-  if (commitCount !== 1) fail(`Expected exactly one top-level COMMIT, found ${commitCount}.`);
-
-  const transactionBeginCount = countMatches(migration, /^begin;\s*$/gim);
-  if (transactionBeginCount !== 1) {
-    fail(`Expected exactly one top-level BEGIN;, found ${transactionBeginCount}.`);
-  }
+  if (countMatches(migration, /^begin;\s*$/gim) !== 1) fail("Generated migration must have exactly one top-level BEGIN;.");
+  if (countMatches(migration, /^commit;\s*$/gim) !== 1) fail("Generated migration must have exactly one top-level COMMIT;.");
 
   for (const forbidden of [
     /tindio\.inventory_required_capabilities/i,
@@ -158,68 +233,48 @@ function validateGeneratedMigration(migration) {
     /pg_proc\.prosrc/i,
   ]) {
     if (forbidden.test(migration)) {
-      fail(`Generated migration still contains forbidden source-rewrite/capability-routing architecture: ${forbidden}.`);
+      fail(`Generated migration contains forbidden source-rewrite/capability-routing architecture: ${forbidden}.`);
     }
   }
 
   validateFunctionCapabilities(migration);
 
-  const orphanPatterns = [
-    /^\s*returning\s+id\s+into\s+receipt_id\s*;/im,
-    /^\s*for\s+line\s+in\s+select\s+value\s+from\s+jsonb_array_elements\(target_lines\)/im,
-  ];
-
-  const scrubbed = migration.replace(/create\s+(?:or\s+replace\s+)?function[\s\S]*?\$\$;/gi, "");
-  for (const pattern of orphanPatterns) {
-    if (pattern.test(scrubbed)) {
-      fail(`Generated migration contains an orphan PL/pgSQL fragment matching ${pattern}.`);
+  const outsideFunctions = removeFunctionBlocks(migration);
+  for (const orphanPattern of [
+    /\breceipt_id\s+uuid\s*;/i,
+    /\bexisting_receipt\s+public\.stock_transfer_receipts%rowtype\s*;/i,
+    /\brequested_payload\s+jsonb\s*;/i,
+    /\breturning\s+id\s+into\s+receipt_id\s*;/i,
+    /\bfor\s+line\s+in\s+select\s+value\s+from\s+jsonb_array_elements\(target_lines\)/i,
+    /\bend\s+if\s*;/i,
+    /\bend\s+loop\s*;/i,
+  ]) {
+    if (orphanPattern.test(outsideFunctions)) {
+      fail(`Generated migration contains orphan PL/pgSQL outside a function: ${orphanPattern}.`);
     }
   }
 }
 
 async function main() {
   const current = await readFile(targetPath, "utf8");
-  if (!current.includes("inventory.transfer.receive")) {
-    fail("Current target does not look like the expected granular inventory RBAC migration.");
+  const header = extractSafeHeader(current);
+  const policyBlock = extractSafePolicyBlock(current);
+
+  const sourceCache = new Map();
+  for (const relativePath of new Set(Object.values(canonicalSources))) {
+    const text = await readFile(path.join(repositoryRoot, relativePath), "utf8");
+    assertNoTruncationArtifacts(text, relativePath);
+    sourceCache.set(relativePath, text);
   }
 
-  const cleanBaseline = gitShow(cleanBaselineCommit, targetRelativePath);
-  const cleanCommitCount = countMatches(cleanBaseline, /^commit;\s*$/gim);
-  if (cleanCommitCount !== 1) {
-    fail(`Clean baseline must contain exactly one COMMIT, found ${cleanCommitCount}.`);
-  }
-
-  for (const missingName of [
-    "dispatch_stock_request",
-    "receive_stock_request",
-    "create_direct_stock_transfer",
-  ]) {
-    const count = countMatches(
-      cleanBaseline,
-      new RegExp(`create\\s+(?:or\\s+replace\\s+)?function\\s+private\\.${missingName}\\s*\\(`, "gi"),
+  const rebuiltFunctions = [];
+  for (const name of capabilityMatrix.keys()) {
+    rebuiltFunctions.push(
+      rebuildCanonicalFunction(name, sourceCache.get(canonicalSources[name])),
     );
-    if (count !== 0) {
-      fail(`Clean baseline unexpectedly already defines private.${missingName}.`);
-    }
   }
 
-  const canonicalText = {};
-  for (const [name, relativePath] of Object.entries(canonicalSources)) {
-    canonicalText[name] = await readFile(path.join(repositoryRoot, relativePath), "utf8");
-  }
-
-  const rebuiltFunctions = [
-    rebuildCanonicalFunction("dispatch_stock_request", canonicalText.dispatch_stock_request),
-    rebuildCanonicalFunction("receive_stock_request", canonicalText.receive_stock_request),
-    rebuildCanonicalFunction("create_direct_stock_transfer", canonicalText.create_direct_stock_transfer),
-  ];
-
-  const withoutCommit = cleanBaseline.replace(/\ncommit;\s*$/i, "").trimEnd();
-  if (withoutCommit === cleanBaseline.trimEnd()) {
-    fail("Could not remove the final COMMIT from the clean baseline.");
-  }
-
-  const generated = `${withoutCommit}\n\n-- Recovered canonical transfer procedures. Business logic is copied from the\n-- latest complete pre-RBAC definitions; only authorization guards are widened\n-- to accept the explicit granular capability required by each operation.\n\n${rebuiltFunctions.join("\n\n")}\n\ncommit;\n`;
+  const generated = `${header}\n\n-- Canonical transfer procedures rebuilt from their latest complete pre-RBAC\n-- definitions. Business, ledger, idempotency, costing, audit, and store-scope\n-- behavior is preserved; only authorization guards add granular capabilities.\n\n${rebuiltFunctions.join("\n\n")}\n\n${policyBlock}\n\ncommit;\n`;
 
   validateGeneratedMigration(generated);
 
@@ -235,10 +290,11 @@ async function main() {
 
   process.stdout.write(
     [
-      "Inventory transfer RBAC migration rebuilt successfully.",
-      `Baseline: ${cleanBaselineCommit}`,
+      "Inventory transfer RBAC migration rebuilt successfully from canonical sources.",
       `Target: ${targetRelativePath}`,
-      "Recovered: dispatch_stock_request, receive_stock_request, create_direct_stock_transfer",
+      `Recovered canonical procedures: ${[...capabilityMatrix.keys()].join(", ")}`,
+      "Historical target migration bodies were NOT used as canonical procedure sources.",
+      "Truncation artifacts and orphan PL/pgSQL are rejected before the file is written.",
       "No database command was executed.",
       "Next: pnpm test:inventory-rbac && git diff --check",
       "",

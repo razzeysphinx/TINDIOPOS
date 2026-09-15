@@ -1,25 +1,20 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
+
+import { runCommand } from "./lib/run-command.mjs";
 
 const repositoryRoot = process.cwd();
 const baselineDirectory = path.join(repositoryRoot, "database", "baseline");
 const baselinePath = path.join(baselineDirectory, "0001_tindio_baseline.sql");
 
-function executable(command) {
-  if (process.platform === "win32" && command === "pnpm") return "pnpm.cmd";
-  return command;
-}
-
 function run(command, args, options = {}) {
   console.log(`$ ${command} ${args.join(" ")}`);
-  const result = spawnSync(executable(command), args, {
+  const result = runCommand(command, args, {
     cwd: repositoryRoot,
     env: process.env,
+    capture: options.capture,
     encoding: options.encoding ?? "utf8",
-    stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
-    shell: false,
   });
 
   if (result.error) throw result.error;

@@ -22,6 +22,75 @@ async function migrationSources(relativePath = "supabase/migrations") {
   return sources;
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function functionOccurrences(sql, qualifiedName) {
+  const pattern = new RegExp(
+    `create\\s+or\\s+replace\\s+function\\s+${escapeRegExp(qualifiedName)}\\s*\\(`,
+    "gi",
+  );
+  return [...sql.matchAll(pattern)];
+}
+
+function extractFunctionBlock(sql, qualifiedName) {
+  const occurrences = functionOccurrences(sql, qualifiedName);
+  assert.equal(
+    occurrences.length,
+    1,
+    `${qualifiedName} must be defined exactly once in the granular transfer migration`,
+  );
+
+  const start = occurrences[0].index;
+  const bodyStart = sql.indexOf("as $$", start);
+  assert.notEqual(bodyStart, -1, `${qualifiedName} must contain an AS $$ function body`);
+
+  const end = sql.indexOf("$$;", bodyStart + 5);
+  assert.notEqual(end, -1, `${qualifiedName} must terminate with $$;`);
+
+  return sql.slice(start, end + 3);
+}
+
+function removeFunctionBlocks(sql) {
+  const functionPattern = /create\s+or\s+replace\s+function\s+[a-zA-Z0-9_.]+\s*\(/gi;
+  let cursor = 0;
+  let remaining = "";
+
+  while (true) {
+    functionPattern.lastIndex = cursor;
+    const match = functionPattern.exec(sql);
+    if (!match) {
+      remaining += sql.slice(cursor);
+      break;
+    }
+
+    remaining += sql.slice(cursor, match.index);
+    const bodyStart = sql.indexOf("as $$", match.index);
+    assert.notEqual(bodyStart, -1, `Function beginning at offset ${match.index} is missing AS $$`);
+    const end = sql.indexOf("$$;", bodyStart + 5);
+    assert.notEqual(end, -1, `Function beginning at offset ${match.index} is missing closing $$;`);
+    cursor = end + 3;
+  }
+
+  return remaining;
+}
+
+function assertCapabilityInsideFunction(sql, qualifiedName, capabilities) {
+  const block = extractFunctionBlock(sql, qualifiedName);
+  for (const capability of capabilities) {
+    assert.match(
+      block,
+      new RegExp(escapeRegExp(capability)),
+      `${qualifiedName} must contain ${capability} inside its own function body`,
+    );
+  }
+}
+
+function countPattern(sourceText, pattern) {
+  return [...sourceText.matchAll(pattern)].length;
+}
+
 test("Phase 6 defines granular inventory capabilities without role-name authorization", async () => {
   const migration = await source("supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql");
 
@@ -49,42 +118,55 @@ test("Phase 6 defines granular inventory capabilities without role-name authoriz
   assert.match(migration, /role_permission\.permission_code = 'inventory\.transfers'/);
 });
 
-test("transfer RPCs retain canonical procedures with explicit granular capability alternatives", async () => {
+test("granular transfer migration has one coherent transaction and no orphan PL/pgSQL fragments", async () => {
+  const migration = await source("supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql");
+  const withoutComments = migration.replace(/--.*$/gm, "");
+
+  assert.equal(countPattern(withoutComments, /^\s*begin\s*;\s*$/gim), 1, "migration must have exactly one top-level BEGIN;");
+  assert.equal(countPattern(withoutComments, /^\s*commit\s*;\s*$/gim), 1, "migration must have exactly one top-level COMMIT;");
+
+  const outsideFunctions = removeFunctionBlocks(migration);
+  for (const orphanPattern of [
+    /\breceipt_id\s+uuid\s*;/i,
+    /\bexisting_receipt\s+public\.stock_transfer_receipts%rowtype\s*;/i,
+    /\brequested_payload\s+jsonb\s*;/i,
+    /\breturning\s+id\s+into\s+receipt_id\s*;/i,
+    /\bfor\s+line\s+in\s+select\s+value\s+from\s+jsonb_array_elements\(target_lines\)/i,
+  ]) {
+    assert.doesNotMatch(
+      outsideFunctions,
+      orphanPattern,
+      `PL/pgSQL fragment appears outside a CREATE OR REPLACE FUNCTION block: ${orphanPattern}`,
+    );
+  }
+});
+
+test("transfer RPCs retain canonical procedures with capabilities inside the correct function body", async () => {
   const migration = await source("supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql");
 
   assert.match(migration, /private\.has_all_inventory_capabilities/);
   assert.doesNotMatch(migration, /pg_get_functiondef\s*\(/i);
   assert.doesNotMatch(migration, /updated_definition\s*:=\s*replace\s*\(/i);
   assert.doesNotMatch(migration, /execute\s+updated_definition/i);
-  for (const procedure of [
-    "transfer_stock",
-    "create_stock_request",
-    "approve_stock_request",
-    "start_stock_request_picking",
-    "dispatch_stock_request",
-    "receive_stock_request",
-    "create_direct_stock_transfer",
-    "receive_stock_transfer",
-  ]) {
-    assert.match(migration, new RegExp(`create or replace function private\\.${procedure}`, "i"));
+  assert.doesNotMatch(migration, /tindio\.inventory_required_capabilities/);
+
+  const capabilityMatrix = new Map([
+    ["private.transfer_stock", ["inventory.transfer.create", "inventory.transfer.send"]],
+    ["private.create_stock_request", ["inventory.transfer.create"]],
+    ["private.approve_stock_request", ["inventory.transfer.send"]],
+    ["private.start_stock_request_picking", ["inventory.transfer.send"]],
+    ["private.dispatch_stock_request", ["inventory.transfer.send"]],
+    ["private.receive_stock_request", ["inventory.transfer.receive"]],
+    ["private.create_direct_stock_transfer", ["inventory.transfer.create", "inventory.transfer.send"]],
+    ["private.receive_stock_transfer", ["inventory.transfer.receive"]],
+  ]);
+
+  for (const [qualifiedName, capabilities] of capabilityMatrix) {
+    assertCapabilityInsideFunction(migration, qualifiedName, capabilities);
   }
-  for (const [procedure, capability] of [
-    ["private.transfer_stock", "inventory.transfer.create"],
-    ["private.transfer_stock", "inventory.transfer.send"],
-    ["private.create_stock_request", "inventory.transfer.create"],
-    ["private.approve_stock_request", "inventory.transfer.send"],
-    ["private.start_stock_request_picking", "inventory.transfer.send"],
-    ["private.dispatch_stock_request", "inventory.transfer.send"],
-    ["private.receive_stock_request", "inventory.transfer.receive"],
-    ["private.create_direct_stock_transfer", "inventory.transfer.create"],
-    ["private.create_direct_stock_transfer", "inventory.transfer.send"],
-    ["private.receive_stock_transfer", "inventory.transfer.receive"],
-  ]) {
-    assert.match(migration, new RegExp(`${procedure.replaceAll(".", "\\.")}[\\s\\S]*${capability.replaceAll(".", "\\.")}`));
-  }
+
   assert.match(migration, /private\.has_permission\(target_organization_id, 'inventory\.manage'\)/);
   assert.doesNotMatch(migration, /update public\.inventory_levels/);
-  assert.doesNotMatch(migration, /tindio\.inventory_required_capabilities/);
 });
 
 test("no migration can reintroduce hidden inventory capability routing", async () => {

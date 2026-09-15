@@ -151,7 +151,6 @@ test("sensitive server actions require a business context and their established 
   for (const [name, content, permission] of [
     ["refund", receiptActions, "sales.refund"],
     ["cash movement and shift close", shiftActions, "shifts.close"],
-    ["inventory adjustment", inventoryActions, "inventory.manage"],
     ["catalog price override", catalogActions, "products.manage"],
     ["role management", managementActions, "roles.manage"],
     ["employee management", managementActions, "employees.manage"],
@@ -165,7 +164,19 @@ test("sensitive server actions require a business context and their established 
     assert.match(content, new RegExp(`hasPermission\\(context, "${permission.replace(".", "\\.")}"`, "i"), `${name} checks ${permission}`);
   }
 
-  assert.match(inventoryActions, /\.rpc\("record_inventory_adjustment_v2"/);
+  // Inventory adjustments were intentionally narrowed from the legacy
+  // inventory.manage proxy to the granular adjustment capability catalogue.
+  // Keep this security gate aligned with the canonical controlled-adjustment
+  // command instead of forcing the application back onto a retired RPC.
+  assert.match(inventoryActions, /async function requireInventoryAdjuster\(\)/);
+  assert.match(inventoryActions, /requireBusinessContext\(\)/, "inventory adjustment requires an authenticated workspace");
+  assert.match(
+    inventoryActions,
+    /hasAnyInventoryCapability\(context,\s*\[[\s\S]*?"inventory\.adjust\.create"[\s\S]*?"inventory\.adjust\.post"[\s\S]*?\]\)/,
+    "inventory adjustment checks the granular create/post capability boundary",
+  );
+  assert.match(inventoryActions, /\.rpc\("record_inventory_adjustment"/);
+  assert.doesNotMatch(inventoryActions, /\.rpc\("record_inventory_adjustment_v2"/);
   assert.match(catalogService, /price_override_minor/);
   assert.match(catalogService, /organization_id: context\.organization\.id/);
 });
@@ -210,18 +221,39 @@ test("the database attack suite covers every Phase 7 negative path", () => {
   assert.match(taxBoundaryTest, /cashier tax-rate changes are rejected by RLS/);
 });
 
-test("every Back Office page declares a server-side authorization boundary", async () => {
+test("every Back Office page declares or delegates to a server-side authorization boundary", async () => {
   const pages = await findBackOfficePages(
     path.resolve(process.cwd(), "src/app/(back-office)/back-office"),
   );
   assert.ok(pages.length > 0, "Back Office pages were found");
 
+  const sharedInventoryPagePath = path.resolve(
+    process.cwd(),
+    "src/app/(back-office)/back-office/inventory/page.tsx",
+  );
+  const sharedInventoryPage = await readFile(sharedInventoryPagePath, "utf8");
+  assert.match(
+    sharedInventoryPage,
+    /requireBackOfficeContext\(\)/,
+    "shared Inventory workspace loader declares a server-side authorization boundary",
+  );
+
   await Promise.all(pages.map(async (page) => {
     const content = await readFile(page, "utf8");
+    if (/requireBackOffice(?:Permission|Context)\(/.test(content)) return;
+
+    // Purchasing is intentionally a route wrapper around the canonical
+    // InventoryWorkspacePage server loader. Accept that delegation only when
+    // the wrapper both imports and renders that exact guarded loader.
     assert.match(
       content,
-      /requireBackOffice(?:Permission|Context)\(/,
-      `${path.relative(process.cwd(), page)} has a server-side authorization boundary`,
+      /from "@\/app\/\(back-office\)\/back-office\/inventory\/page"/,
+      `${path.relative(process.cwd(), page)} imports a guarded shared Back Office loader`,
+    );
+    assert.match(
+      content,
+      /<InventoryWorkspacePage\b/,
+      `${path.relative(process.cwd(), page)} renders the guarded shared Back Office loader`,
     );
   }));
 });

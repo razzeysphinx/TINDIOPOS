@@ -8,6 +8,10 @@ const repositoryRoot = process.cwd();
 const baselineDirectory = path.join(repositoryRoot, "database", "baseline");
 const baselinePath = path.join(baselineDirectory, "0001_tindio_baseline.sql");
 
+const privateSchemaDeclaration = /CREATE\s+SCHEMA(?:\s+IF\s+NOT\s+EXISTS)?\s+(?:"private"|private)\b/i;
+const privateFunctionDeclaration = /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:"private"\.|private\.)/i;
+const publicTableDeclaration = /CREATE\s+TABLE\s+(?:"public"\.|public\.)/i;
+
 function run(command, args, options = {}) {
   console.log(`$ ${command} ${args.join(" ")}`);
   const result = runCommand(command, args, {
@@ -56,6 +60,30 @@ function summarizeBaseline(sql) {
   console.log("R3/R4 remove provider identity and role coupling before plain PostgreSQL/Neon certification.");
 }
 
+function normalizeBaselineBootstrap(sql) {
+  if (!privateFunctionDeclaration.test(sql)) {
+    throw new Error(
+      "Baseline dump does not contain private-schema functions. The dump did not capture the complete TINDIO private schema.",
+    );
+  }
+
+  if (privateSchemaDeclaration.test(sql)) return sql;
+
+  console.log("Baseline dump contains private-schema objects but no explicit CREATE SCHEMA private statement.");
+  console.log("Adding the TINDIO-owned private schema bootstrap before the pg_dump output.");
+
+  return [
+    "-- TINDIO canonical baseline bootstrap.",
+    "-- The historical TINDIO schema explicitly owns the private schema. Some",
+    "-- Supabase CLI dump shapes omit the schema-creation statement while still",
+    "-- emitting private-schema objects, so make the baseline self-contained.",
+    "create schema if not exists private;",
+    "revoke all on schema private from public;",
+    "",
+    sql.trimStart(),
+  ].join("\n");
+}
+
 async function main() {
   console.log("TINDIO canonical database baseline capture");
   console.log("=========================================");
@@ -89,17 +117,19 @@ async function main() {
   if (!sql.trim()) throw new Error("Baseline dump is empty.");
 
   // Normalize line endings so the generated baseline is stable across Windows
-  // and Unix worktrees. Do not rewrite SQL semantics here.
-  sql = sql.replace(/\r\n/g, "\n");
+  // and Unix worktrees. The only semantic normalization performed here is the
+  // explicit private-schema bootstrap when the dump contains private objects
+  // but omits CREATE SCHEMA private.
+  sql = normalizeBaselineBootstrap(sql.replace(/\r\n/g, "\n"));
   await writeFile(baselinePath, sql, "utf8");
 
   const forbiddenManagedObjects = [
-    /CREATE\s+TABLE\s+auth\./i,
-    /CREATE\s+TABLE\s+storage\./i,
-    /CREATE\s+TABLE\s+realtime\./i,
-    /CREATE\s+SCHEMA\s+auth\b/i,
-    /CREATE\s+SCHEMA\s+storage\b/i,
-    /CREATE\s+SCHEMA\s+realtime\b/i,
+    /CREATE\s+TABLE\s+(?:"auth"\.|auth\.)/i,
+    /CREATE\s+TABLE\s+(?:"storage"\.|storage\.)/i,
+    /CREATE\s+TABLE\s+(?:"realtime"\.|realtime\.)/i,
+    /CREATE\s+SCHEMA(?:\s+IF\s+NOT\s+EXISTS)?\s+(?:"auth"|auth)\b/i,
+    /CREATE\s+SCHEMA(?:\s+IF\s+NOT\s+EXISTS)?\s+(?:"storage"|storage)\b/i,
+    /CREATE\s+SCHEMA(?:\s+IF\s+NOT\s+EXISTS)?\s+(?:"realtime"|realtime)\b/i,
   ];
 
   for (const pattern of forbiddenManagedObjects) {
@@ -108,14 +138,14 @@ async function main() {
     }
   }
 
-  for (const required of [
-    /CREATE\s+SCHEMA\s+private\b/i,
-    /CREATE\s+TABLE\s+public\./i,
-    /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+private\./i,
-  ]) {
-    if (!required.test(sql)) {
-      throw new Error(`Baseline is missing expected TINDIO database content matching ${required}.`);
-    }
+  if (!privateSchemaDeclaration.test(sql)) {
+    throw new Error("Baseline is missing the TINDIO-owned private schema bootstrap.");
+  }
+  if (!publicTableDeclaration.test(sql)) {
+    throw new Error("Baseline is missing public TINDIO tables.");
+  }
+  if (!privateFunctionDeclaration.test(sql)) {
+    throw new Error("Baseline is missing TINDIO private functions.");
   }
 
   summarizeBaseline(sql);

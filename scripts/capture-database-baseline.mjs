@@ -10,7 +10,6 @@ const baselinePath = path.join(baselineDirectory, "0001_tindio_baseline.sql");
 
 const privateSchemaDeclaration = /CREATE\s+SCHEMA(?:\s+IF\s+NOT\s+EXISTS)?\s+(?:"private"|private)\b/i;
 const privateFunctionDeclaration = /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:"private"\.|private\.)/i;
-const publicTableDeclaration = /CREATE\s+TABLE\s+(?:"public"\.|public\.)/i;
 
 function run(command, args, options = {}) {
   console.log(`$ ${command} ${args.join(" ")}`);
@@ -35,6 +34,39 @@ function run(command, args, options = {}) {
 
 function countMatches(source, pattern) {
   return [...source.matchAll(pattern)].length;
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasCreateTable(sql, tableName) {
+  const identifier = escapeRegex(tableName);
+
+  // pg_dump output varies by version/configuration. A public table may appear as:
+  //   CREATE TABLE public.products (...)
+  //   CREATE TABLE "public"."products" (...)
+  //   CREATE TABLE IF NOT EXISTS public.products (...)
+  //   SET search_path = public; CREATE TABLE products (...)
+  // The dump is already restricted to public/private, so accepting the
+  // unqualified canonical table name is safe here.
+  const pattern = new RegExp(
+    `CREATE\\s+TABLE(?:\\s+IF\\s+NOT\\s+EXISTS)?\\s+` +
+      `(?:(?:"public"|public)\\s*\\.\\s*)?` +
+      `(?:"${identifier}"|${identifier})(?=\\s|\\()`,
+    "i",
+  );
+
+  return pattern.test(sql);
+}
+
+function summarizeCreateTables(sql) {
+  const matches = [
+    ...sql.matchAll(/CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+([^\s(]+)/gi),
+  ].slice(0, 12);
+
+  if (matches.length === 0) return "none found";
+  return matches.map((match) => match[1]).join(", ");
 }
 
 function summarizeBaseline(sql) {
@@ -141,9 +173,19 @@ async function main() {
   if (!privateSchemaDeclaration.test(sql)) {
     throw new Error("Baseline is missing the TINDIO-owned private schema bootstrap.");
   }
-  if (!publicTableDeclaration.test(sql)) {
-    throw new Error("Baseline is missing public TINDIO tables.");
+
+  // Require several stable TINDIO core tables instead of assuming one exact
+  // pg_dump qualification/quoting style. This proves the public business schema
+  // was captured while remaining portable across pg_dump versions.
+  const requiredPublicTables = ["organizations", "stores", "products", "inventory_movements"];
+  const missingPublicTables = requiredPublicTables.filter((table) => !hasCreateTable(sql, table));
+  if (missingPublicTables.length > 0) {
+    throw new Error(
+      `Baseline is missing required public TINDIO tables: ${missingPublicTables.join(", ")}. ` +
+        `First CREATE TABLE statements seen: ${summarizeCreateTables(sql)}`,
+    );
   }
+
   if (!privateFunctionDeclaration.test(sql)) {
     throw new Error("Baseline is missing TINDIO private functions.");
   }

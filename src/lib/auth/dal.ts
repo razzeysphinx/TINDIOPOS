@@ -13,6 +13,7 @@ import {
 } from "@/features/business-profile/business-features";
 import type { TableRow } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
+import { resolveCurrentProfileId } from "@/lib/auth/identity";
 import {
   hasInventoryBackOfficeResponsibility,
   hasInventoryControlResponsibility,
@@ -21,6 +22,7 @@ import {
 
 export type VerifiedUser = {
   id: string;
+  subject: string;
   email: string | null;
 };
 
@@ -64,13 +66,23 @@ export const getVerifiedUser = cache(async (): Promise<VerifiedUser | null> => {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getClaims();
 
-  if (error || !data?.claims?.sub) {
+  if (error || !data?.claims) {
     return null;
   }
 
+  const claims = data.claims as Record<string, unknown>;
+  const subject = typeof claims.sub === "string" && claims.sub.length > 0 ? claims.sub : null;
+
+  if (!subject) return null;
+
+  const id = await resolveCurrentProfileId(supabase);
+
+  if (!id) return null;
+
   return {
-    id: data.claims.sub,
-    email: typeof data.claims.email === "string" ? data.claims.email : null,
+    id,
+    subject,
+    email: typeof claims.email === "string" ? claims.email : null,
   };
 });
 

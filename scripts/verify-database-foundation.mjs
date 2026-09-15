@@ -7,6 +7,26 @@ const pnpmCommand = "pnpm";
 
 const steps = [
   {
+    name: "Provider-neutral identity foundation",
+    command: "node",
+    args: ["--test", "scripts/provider-neutral-identity-foundation-check.mjs"],
+  },
+  {
+    name: "Provider-neutral identity resolution",
+    command: "node",
+    args: ["--test", "scripts/provider-neutral-identity-resolution-check.mjs"],
+  },
+  {
+    name: "Provider-neutral core authorization",
+    command: "node",
+    args: ["--test", "scripts/provider-neutral-core-authorization-check.mjs"],
+  },
+  {
+    name: "Provider-neutral application auth",
+    command: "node",
+    args: ["--test", "scripts/provider-neutral-application-auth-check.mjs"],
+  },
+  {
     name: "Rebuild deterministic inventory transfer RBAC migration",
     command: "node",
     args: ["scripts/rebuild-inventory-transfer-rbac.mjs", "--check"],
@@ -49,6 +69,18 @@ if (resetLocal) {
       name: "LOCAL Supabase database rebuild",
       command: "pnpm",
       args: ["exec", "supabase", "db", "reset", "--local"],
+    },
+    {
+      name: "Provider-neutral application identity runtime",
+      command: "pnpm",
+      args: [
+        "exec",
+        "supabase",
+        "test",
+        "db",
+        "supabase/tests/database/provider_neutral_application_identity.test.sql",
+        "--local",
+      ],
     },
     {
       name: "Inventory transfer chain",

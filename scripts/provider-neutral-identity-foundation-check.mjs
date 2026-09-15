@@ -28,7 +28,7 @@ const [migration, phaseOneMigration, authDal] = await Promise.all([
   readFile(new URL("../src/lib/auth/dal.ts", import.meta.url), "utf8"),
 ]);
 
-test("R3.1 records the current identity coupling before decoupling it", () => {
+test("R3.1 preserves historical identity-coupling evidence while the current DAL uses stable profile identity", () => {
   assert.match(
     phaseOneMigration,
     /id uuid primary key references auth\.users \(id\) on delete cascade/,
@@ -51,7 +51,9 @@ test("R3.1 records the current identity coupling before decoupling it", () => {
 
   assert.match(phaseOneMigration, /auth\.uid\(\)/);
 
-  assert.match(authDal, /id: data\.claims\.sub/);
+  assert.doesNotMatch(authDal, /id\s*:\s*data\.claims\.sub/);
+  assert.match(authDal, /resolveCurrentProfileId/);
+  assert.match(authDal, /const\s+subject\s*=\s+typeof\s+claims\.sub/);
   assert.match(authDal, /\.eq\("profile_id", user\.id\)/);
   assert.match(authDal, /\.eq\("id", user\.id\)/);
 });

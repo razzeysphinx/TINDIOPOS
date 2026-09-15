@@ -229,7 +229,7 @@ test("provider-specific auth.uid coupling is isolated to the subject adapter", (
   );
 });
 
-test("Packet 2 does not migrate business authorization or application identity yet", () => {
+test("Packet 2 remains additive while the current application resolves stable TINDIO identity separately", () => {
   const createdPrivateFunctions = [
     ...migration.matchAll(
       /create or replace function private\.([a-z0-9_]+)\(/gi,
@@ -264,9 +264,19 @@ test("Packet 2 does not migrate business authorization or application identity y
     /auth\.uid\(\)/,
   );
 
+  assert.doesNotMatch(
+    authDal,
+    /id\s*:\s*data\.claims\.sub/,
+  );
+
   assert.match(
     authDal,
-    /id: data\.claims\.sub/,
+    /resolveCurrentProfileId/,
+  );
+
+  assert.match(
+    authDal,
+    /const\s+subject\s*=\s+typeof\s+claims\.sub/,
   );
 
   assert.match(

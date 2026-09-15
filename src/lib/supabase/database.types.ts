@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -1070,9 +1070,9 @@ export type Database = {
           operation_id: string
           organization_id: string
           purchase_order_id: string
+          receipt_number: number
           received_at: string
           received_by_employee_id: string
-          receipt_number: number
           store_id: string
         }
         Insert: {
@@ -1081,9 +1081,9 @@ export type Database = {
           operation_id: string
           organization_id: string
           purchase_order_id: string
+          receipt_number: number
           received_at?: string
           received_by_employee_id: string
-          receipt_number: number
           store_id: string
         }
         Update: {
@@ -1092,9 +1092,9 @@ export type Database = {
           operation_id?: string
           organization_id?: string
           purchase_order_id?: string
+          receipt_number?: number
           received_at?: string
           received_by_employee_id?: string
-          receipt_number?: number
           store_id?: string
         }
         Relationships: [
@@ -1121,6 +1121,64 @@ export type Database = {
           },
           {
             foreignKeyName: "goods_receipts_store_organization_fkey"
+            columns: ["store_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      inventory_adjustment_import_batches: {
+        Row: {
+          created_at: string
+          created_by_employee_id: string
+          id: string
+          item_count: number
+          operation_id: string
+          organization_id: string
+          payload_fingerprint: string
+          reason_code: string
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by_employee_id: string
+          id?: string
+          item_count: number
+          operation_id: string
+          organization_id: string
+          payload_fingerprint: string
+          reason_code: string
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by_employee_id?: string
+          id?: string
+          item_count?: number
+          operation_id?: string
+          organization_id?: string
+          payload_fingerprint?: string
+          reason_code?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_adjustment_import_batches_employee_organization_fkey"
+            columns: ["created_by_employee_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "inventory_adjustment_import_batches_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_adjustment_import_batches_store_organization_fkey"
             columns: ["store_id", "organization_id"]
             isOneToOne: false
             referencedRelation: "stores"
@@ -1214,69 +1272,150 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "inventory_adjustments_import_batch_fkey"
-            columns: ["import_batch_id"]
-            isOneToOne: false
-            referencedRelation: "inventory_adjustment_import_batches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inventory_adjustment_import_batches: {
-        Row: {
-          created_at: string
-          created_by_employee_id: string
-          id: string
-          item_count: number
-          operation_id: string
-          organization_id: string
-          payload_fingerprint: string
-          reason_code: string
-          store_id: string
-        }
-        Insert: {
-          created_at?: string
-          created_by_employee_id: string
-          id?: string
-          item_count: number
-          operation_id: string
-          organization_id: string
-          payload_fingerprint: string
-          reason_code: string
-          store_id: string
-        }
-        Update: {
-          created_at?: string
-          created_by_employee_id?: string
-          id?: string
-          item_count?: number
-          operation_id?: string
-          organization_id?: string
-          payload_fingerprint?: string
-          reason_code?: string
-          store_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inventory_adjustment_import_batches_employee_organization_fkey"
+            foreignKeyName: "inventory_adjustments_employee_organization_fkey"
             columns: ["created_by_employee_id", "organization_id"]
             isOneToOne: false
             referencedRelation: "employees"
             referencedColumns: ["id", "organization_id"]
           },
           {
-            foreignKeyName: "inventory_adjustment_import_batches_organization_id_fkey"
+            foreignKeyName: "inventory_adjustments_import_batch_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_adjustment_import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_adjustments_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "inventory_adjustment_import_batches_store_organization_fkey"
+            foreignKeyName: "inventory_adjustments_product_organization_fkey"
+            columns: ["product_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "inventory_adjustments_store_organization_fkey"
             columns: ["store_id", "organization_id"]
             isOneToOne: false
             referencedRelation: "stores"
             referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "inventory_adjustments_variant_product_organization_fkey"
+            columns: ["variant_id", "product_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id", "product_id", "organization_id"]
+          },
+        ]
+      }
+      inventory_count_batch_documents: {
+        Row: {
+          created_at: string
+          id: string
+          inventory_count_batch_id: string
+          inventory_count_id: string
+          organization_id: string
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          inventory_count_batch_id: string
+          inventory_count_id: string
+          organization_id: string
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          inventory_count_batch_id?: string
+          inventory_count_id?: string
+          organization_id?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_count_batch_documents_count_organization_fkey"
+            columns: ["inventory_count_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_counts"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "inventory_count_batch_documents_inventory_count_batch_id_fkey"
+            columns: ["inventory_count_batch_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_count_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_count_batch_documents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_count_batch_documents_store_organization_fkey"
+            columns: ["store_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      inventory_count_batches: {
+        Row: {
+          batch_number: number
+          created_at: string
+          created_by_employee_id: string
+          id: string
+          name: string
+          note: string | null
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          batch_number?: number
+          created_at?: string
+          created_by_employee_id: string
+          id?: string
+          name: string
+          note?: string | null
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          batch_number?: number
+          created_at?: string
+          created_by_employee_id?: string
+          id?: string
+          name?: string
+          note?: string | null
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_count_batches_employee_organization_fkey"
+            columns: ["created_by_employee_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "inventory_count_batches_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1359,102 +1498,12 @@ export type Database = {
           },
         ]
       }
-      inventory_count_batch_documents: {
-        Row: {
-          created_at: string
-          id: string
-          inventory_count_batch_id: string
-          inventory_count_id: string
-          organization_id: string
-          store_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          inventory_count_batch_id: string
-          inventory_count_id: string
-          organization_id: string
-          store_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          inventory_count_batch_id?: string
-          inventory_count_id?: string
-          organization_id?: string
-          store_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inventory_count_batch_documents_count_organization_fkey"
-            columns: ["inventory_count_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "inventory_counts"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "inventory_count_batch_documents_store_organization_fkey"
-            columns: ["store_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "stores"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
-      }
-      inventory_count_batches: {
-        Row: {
-          batch_number: number
-          created_at: string
-          created_by_employee_id: string
-          id: string
-          name: string
-          note: string | null
-          organization_id: string
-          updated_at: string
-        }
-        Insert: {
-          batch_number?: number
-          created_at?: string
-          created_by_employee_id: string
-          id?: string
-          name: string
-          note?: string | null
-          organization_id: string
-          updated_at?: string
-        }
-        Update: {
-          batch_number?: number
-          created_at?: string
-          created_by_employee_id?: string
-          id?: string
-          name?: string
-          note?: string | null
-          organization_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inventory_count_batches_employee_organization_fkey"
-            columns: ["created_by_employee_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "inventory_count_batches_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       inventory_counts: {
         Row: {
-          count_mode: string
-          count_number: number
           completed_at: string | null
           completed_by_employee_id: string | null
+          count_mode: string
+          count_number: number
           id: string
           include_zero_stock: boolean
           note: string | null
@@ -1471,10 +1520,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          count_mode?: string
-          count_number?: number
           completed_at?: string | null
           completed_by_employee_id?: string | null
+          count_mode?: string
+          count_number?: number
           id?: string
           include_zero_stock?: boolean
           note?: string | null
@@ -1491,10 +1540,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          count_mode?: string
-          count_number?: number
           completed_at?: string | null
           completed_by_employee_id?: string | null
+          count_mode?: string
+          count_number?: number
           id?: string
           include_zero_stock?: boolean
           note?: string | null
@@ -2330,7 +2379,6 @@ export type Database = {
           entry_type: string
           id: string
           note: string | null
-          operation_id: string
           organization_id: string
           points_delta: number
           refund_id: string | null
@@ -2342,7 +2390,6 @@ export type Database = {
           entry_type: string
           id?: string
           note?: string | null
-          operation_id: string
           organization_id: string
           points_delta: number
           refund_id?: string | null
@@ -2354,7 +2401,6 @@ export type Database = {
           entry_type?: string
           id?: string
           note?: string | null
-          operation_id?: string
           organization_id?: string
           points_delta?: number
           refund_id?: string | null
@@ -3361,7 +3407,7 @@ export type Database = {
           organization_id: string
           price_override_minor: number | null
           product_id: string
-          restock_policy: "do_not_restock" | "restock"
+          restock_policy: string
           store_id: string
           updated_at: string
         }
@@ -3372,7 +3418,7 @@ export type Database = {
           organization_id: string
           price_override_minor?: number | null
           product_id: string
-          restock_policy?: "do_not_restock" | "restock"
+          restock_policy?: string
           store_id: string
           updated_at?: string
         }
@@ -3383,7 +3429,7 @@ export type Database = {
           organization_id?: string
           price_override_minor?: number | null
           product_id?: string
-          restock_policy?: "do_not_restock" | "restock"
+          restock_policy?: string
           store_id?: string
           updated_at?: string
         }
@@ -3536,6 +3582,7 @@ export type Database = {
           cost_is_known: boolean
           id: string
           note: string | null
+          operation_id: string | null
           organization_id: string
           produced_at: string
           produced_by_employee_id: string
@@ -3547,6 +3594,7 @@ export type Database = {
           cost_is_known?: boolean
           id?: string
           note?: string | null
+          operation_id?: string | null
           organization_id: string
           produced_at?: string
           produced_by_employee_id: string
@@ -3558,6 +3606,7 @@ export type Database = {
           cost_is_known?: boolean
           id?: string
           note?: string | null
+          operation_id?: string | null
           organization_id?: string
           produced_at?: string
           produced_by_employee_id?: string
@@ -3714,9 +3763,9 @@ export type Database = {
           organization_id: string
           product_id: string
           product_name_snapshot: string
+          purchase_order_id: string
           purchase_unit_code_snapshot: string
           purchase_unit_factor_to_base: number
-          purchase_order_id: string
           received_quantity: number
           unit_cost_minor: number
           unit_snapshot: string
@@ -3729,9 +3778,9 @@ export type Database = {
           organization_id: string
           product_id: string
           product_name_snapshot: string
+          purchase_order_id: string
           purchase_unit_code_snapshot: string
           purchase_unit_factor_to_base: number
-          purchase_order_id: string
           received_quantity?: number
           unit_cost_minor?: number
           unit_snapshot: string
@@ -3744,9 +3793,9 @@ export type Database = {
           organization_id?: string
           product_id?: string
           product_name_snapshot?: string
+          purchase_order_id?: string
           purchase_unit_code_snapshot?: string
           purchase_unit_factor_to_base?: number
-          purchase_order_id?: string
           received_quantity?: number
           unit_cost_minor?: number
           unit_snapshot?: string
@@ -5319,8 +5368,8 @@ export type Database = {
           short_quantity: number
           stock_request_line_id: string | null
           stock_transfer_id: string
-          unit_cost_minor: number
           unit_cost_is_known: boolean
+          unit_cost_minor: number
           variant_id: string | null
         }
         Insert: {
@@ -5332,8 +5381,8 @@ export type Database = {
           short_quantity?: number
           stock_request_line_id?: string | null
           stock_transfer_id: string
-          unit_cost_minor?: number
           unit_cost_is_known?: boolean
+          unit_cost_minor?: number
           variant_id?: string | null
         }
         Update: {
@@ -5345,8 +5394,8 @@ export type Database = {
           short_quantity?: number
           stock_request_line_id?: string | null
           stock_transfer_id?: string
-          unit_cost_minor?: number
           unit_cost_is_known?: boolean
+          unit_cost_minor?: number
           variant_id?: string | null
         }
         Relationships: [
@@ -5720,6 +5769,7 @@ export type Database = {
         Row: {
           id: string
           note: string | null
+          operation_id: string | null
           organization_id: string
           returned_at: string
           returned_by_employee_id: string
@@ -5729,6 +5779,7 @@ export type Database = {
         Insert: {
           id?: string
           note?: string | null
+          operation_id?: string | null
           organization_id: string
           returned_at?: string
           returned_by_employee_id: string
@@ -5738,6 +5789,7 @@ export type Database = {
         Update: {
           id?: string
           note?: string | null
+          operation_id?: string | null
           organization_id?: string
           returned_at?: string
           returned_by_employee_id?: string
@@ -6051,13 +6103,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "time_clock_entries_employee_organization_fkey"
-            columns: ["employee_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
             foreignKeyName: "time_clock_entries_clocked_in_by_organization_fkey"
             columns: ["clocked_in_by_employee_id", "organization_id"]
             isOneToOne: false
@@ -6067,6 +6112,13 @@ export type Database = {
           {
             foreignKeyName: "time_clock_entries_clocked_out_by_organization_fkey"
             columns: ["clocked_out_by_employee_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "time_clock_entries_employee_organization_fkey"
+            columns: ["employee_id", "organization_id"]
             isOneToOne: false
             referencedRelation: "employees"
             referencedColumns: ["id", "organization_id"]
@@ -6137,14 +6189,6 @@ export type Database = {
         }
         Returns: string
       }
-      delete_catalog_product_if_eligible: {
-        Args: {
-          target_confirmation_name: string
-          target_organization_id: string
-          target_product_id: string
-        }
-        Returns: string
-      }
       approve_manager_approval: {
         Args: {
           target_approval_request_id: string
@@ -6193,6 +6237,31 @@ export type Database = {
           register_id: string
           store_id: string
         }[]
+      }
+      cancel_inventory_count: {
+        Args: {
+          target_inventory_count_id: string
+          target_note?: string
+          target_organization_id: string
+        }
+        Returns: undefined
+      }
+      cancel_purchase_order: {
+        Args: {
+          target_note: string
+          target_organization_id: string
+          target_purchase_order_id: string
+        }
+        Returns: string
+      }
+      change_employee_lifecycle: {
+        Args: {
+          target_action: string
+          target_employee_id: string
+          target_organization_id: string
+          target_reason: string
+        }
+        Returns: string
       }
       change_pos_device_register: {
         Args: {
@@ -6318,15 +6387,6 @@ export type Database = {
           was_replayed: boolean
         }[]
       }
-      clock_out_employee: {
-        Args: { target_clock_out_note?: string; target_organization_id: string }
-        Returns: {
-          clocked_in_at: string
-          clocked_out_at: string
-          entry_id: string
-          store_id: string
-        }[]
-      }
       clock_in_employee_with_pin: {
         Args: {
           target_employee_id: string
@@ -6336,20 +6396,29 @@ export type Database = {
           target_store_id: string
         }
         Returns: {
-          clocked_in_at: string | null
-          clocked_out_at: string | null
+          clocked_in_at: string
+          clocked_out_at: string
           employee_id: string
           employee_name: string
-          entry_id: string | null
+          entry_id: string
           message: string
-          register_id: string | null
-          register_name: string | null
+          register_id: string
+          register_name: string
           result_code: string
-          shift_id: string | null
-          shift_opened_at: string | null
+          shift_id: string
+          shift_opened_at: string
           store_id: string
           store_name: string
           was_replayed: boolean
+        }[]
+      }
+      clock_out_employee: {
+        Args: { target_clock_out_note?: string; target_organization_id: string }
+        Returns: {
+          clocked_in_at: string
+          clocked_out_at: string
+          entry_id: string
+          store_id: string
         }[]
       }
       clock_out_employee_with_pin: {
@@ -6360,30 +6429,21 @@ export type Database = {
           target_request_id: string
         }
         Returns: {
-          clocked_in_at: string | null
-          clocked_out_at: string | null
+          clocked_in_at: string
+          clocked_out_at: string
           employee_id: string
           employee_name: string
-          entry_id: string | null
+          entry_id: string
           message: string
-          register_id: string | null
-          register_name: string | null
+          register_id: string
+          register_name: string
           result_code: string
-          shift_id: string | null
-          shift_opened_at: string | null
+          shift_id: string
+          shift_opened_at: string
           store_id: string
           store_name: string
           was_replayed: boolean
         }[]
-      }
-      change_employee_lifecycle: {
-        Args: {
-          target_action: string
-          target_employee_id: string
-          target_organization_id: string
-          target_reason: string
-        }
-        Returns: string
       }
       close_register_shift: {
         Args: {
@@ -6406,160 +6466,6 @@ export type Database = {
           target_note: string
           target_organization_id: string
           target_store_id: string
-        }
-        Returns: string
-      }
-      create_inventory_count_draft: {
-        Args: {
-          target_note?: string
-          target_organization_id: string
-          target_store_id: string
-        }
-        Returns: string
-      }
-      create_inventory_count_plan: {
-        Args: {
-          target_count_mode: string
-          target_include_zero_stock: boolean
-          target_note: string
-          target_organization_id: string
-          target_scope_reference_id: string | null
-          target_scope_type: string
-          target_selected_items: Json
-          target_sort_mode: string
-          target_store_id: string
-        }
-        Returns: string
-      }
-      create_inventory_count_batch: {
-        Args: {
-          target_count_mode: string
-          target_include_zero_stock: boolean
-          target_name: string
-          target_note: string
-          target_organization_id: string
-          target_sort_mode: string
-          target_store_ids: string[]
-        }
-        Returns: string
-      }
-      get_inventory_count_suppliers: {
-        Args: { target_organization_id: string }
-        Returns: { id: string; name: string }[]
-      }
-      import_inventory_count_lines: {
-        Args: {
-          target_inventory_count_id: string
-          target_organization_id: string
-          target_rows: Json
-        }
-        Returns: number
-      }
-      get_inventory_count_awareness: {
-        Args: { target_organization_id: string }
-        Returns: {
-          count_number: number | null
-          counted_quantity: number | null
-          expected_quantity: number | null
-          inventory_count_id: string | null
-          last_counted_at: string | null
-          product_id: string
-          store_id: string
-          variant_id: string | null
-        }[]
-      }
-      get_inventory_health_awareness: {
-        Args: { target_organization_id: string }
-        Returns: {
-          count_number: number | null
-          count_recommended: boolean
-          counted_quantity: number | null
-          days_since_count: number | null
-          expected_quantity: number | null
-          inventory_count_id: string | null
-          last_counted_at: string | null
-          product_id: string
-          store_id: string
-          variant_id: string | null
-        }[]
-      }
-      get_inventory_stock_page: {
-        Args: {
-          requested_category_id?: string | null
-          requested_page?: number
-          requested_page_size?: number
-          requested_restock_policy?: string
-          requested_search?: string | null
-          requested_sort?: string
-          requested_status?: string
-          requested_store_id?: string | null
-          target_organization_id: string
-        }
-        Returns: {
-          active_product_count: number
-          average_cost_minor: number | null
-          barcode: string | null
-          category_id: string | null
-          category_name: string | null
-          in_stock_count: number
-          is_available: boolean
-          level_id: string | null
-          low_count: number
-          negative_count: number
-          out_of_stock_count: number
-          product_id: string
-          product_name: string
-          quantity: number
-          reorder_point: number | null
-          restock_policy: string
-          sku: string | null
-          store_id: string
-          store_name: string
-          total_count: number
-          unit: string
-          updated_at: string
-          variant_id: string | null
-          variant_name: string | null
-        }[]
-      }
-      save_inventory_count_line: {
-        Args: {
-          target_counted_quantity: number
-          target_inventory_count_id: string
-          target_organization_id: string
-          target_product_id: string
-          target_variant_id: string | null
-        }
-        Returns: undefined
-      }
-      submit_inventory_count_for_review: {
-        Args: {
-          target_inventory_count_id: string
-          target_organization_id: string
-        }
-        Returns: undefined
-      }
-      post_inventory_count: {
-        Args: {
-          target_inventory_count_id: string
-          target_operation_id?: string
-          target_organization_id: string
-        }
-        Returns: undefined
-      }
-      cancel_inventory_count: {
-        Args: {
-          target_inventory_count_id: string
-          target_note?: string
-          target_organization_id: string
-        }
-        Returns: undefined
-      }
-      cancel_purchase_order: {
-        Args: {
-          target_note: string
-          target_organization_id: string
-          target_purchase_order_id: string
         }
         Returns: string
       }
@@ -6610,62 +6516,6 @@ export type Database = {
         }
         Returns: string
       }
-      update_catalog_product_v2: {
-        Args: {
-          target_allow_fractional_quantity: boolean
-          target_barcode: string
-          target_category_id: string
-          target_cost_minor: number
-          target_description: string
-          target_image_url: string
-          target_is_variable_price: boolean
-          target_name: string
-          target_organization_id: string
-          target_price_minor: number
-          target_product_id: string
-          target_sku: string
-          target_track_inventory: boolean
-          target_unit: string
-        }
-        Returns: string
-      }
-      set_catalog_product_store_availability: {
-        Args: {
-          target_organization_id: string
-          target_product_id: string
-          target_store_ids: string[]
-        }
-        Returns: number
-      }
-      set_catalog_product_store_configuration: {
-        Args: {
-          target_low_stock_level: number
-          target_organization_id: string
-          target_price_override_minor: number
-          target_product_id: string
-          target_store_id: string
-        }
-        Returns: undefined
-      }
-      set_catalog_product_store_configuration_v2: {
-        Args: {
-          target_low_stock_level: number
-          target_organization_id: string
-          target_price_override_minor: number
-          target_product_id: string
-          target_restock_policy: string
-          target_store_id: string
-        }
-        Returns: undefined
-      }
-      set_catalog_product_archived_safely: {
-        Args: {
-          target_is_archived: boolean
-          target_organization_id: string
-          target_product_id: string
-        }
-        Returns: string
-      }
       create_custom_role: {
         Args: {
           permission_codes: string[]
@@ -6684,6 +6534,17 @@ export type Database = {
         }
         Returns: string
       }
+      create_direct_stock_transfer: {
+        Args: {
+          target_destination_store_id: string
+          target_lines: Json
+          target_note: string
+          target_operation_id: string
+          target_organization_id: string
+          target_source_store_id: string
+        }
+        Returns: string
+      }
       create_inventory_adjustment_reason: {
         Args: {
           target_code: string
@@ -6693,14 +6554,37 @@ export type Database = {
         }
         Returns: string
       }
-      create_direct_stock_transfer: {
+      create_inventory_count_batch: {
         Args: {
-          target_destination_store_id: string
-          target_lines: Json
+          target_count_mode: string
+          target_include_zero_stock: boolean
+          target_name: string
           target_note: string
-          target_operation_id: string
           target_organization_id: string
-          target_source_store_id: string
+          target_sort_mode: string
+          target_store_ids: string[]
+        }
+        Returns: string
+      }
+      create_inventory_count_draft: {
+        Args: {
+          target_note?: string
+          target_organization_id: string
+          target_store_id: string
+        }
+        Returns: string
+      }
+      create_inventory_count_plan: {
+        Args: {
+          target_count_mode: string
+          target_include_zero_stock: boolean
+          target_note: string
+          target_organization_id: string
+          target_scope_reference_id: string
+          target_scope_type: string
+          target_selected_items: Json
+          target_sort_mode: string
+          target_store_id: string
         }
         Returns: string
       }
@@ -6760,6 +6644,35 @@ export type Database = {
         }
         Returns: string
       }
+      current_profile_id: { Args: never; Returns: string }
+      decide_manager_approval: {
+        Args: {
+          target_approval_request_id: string
+          target_decision: string
+          target_organization_id: string
+        }
+        Returns: {
+          approval_request_id: string
+          decided_at: string
+          decision: string
+        }[]
+      }
+      delete_catalog_product_if_eligible: {
+        Args: {
+          target_confirmation_name: string
+          target_organization_id: string
+          target_product_id: string
+        }
+        Returns: string
+      }
+      delete_employee_if_eligible: {
+        Args: {
+          target_confirmation_number: string
+          target_employee_id: string
+          target_organization_id: string
+        }
+        Returns: string
+      }
       delete_unused_setup_record: {
         Args: {
           target_confirmation_name: string
@@ -6785,6 +6698,19 @@ export type Database = {
           sku: string
         }[]
       }
+      get_attendance_employees: {
+        Args: { target_organization_id: string; target_store_id: string }
+        Returns: {
+          clocked_in_at: string
+          employee_id: string
+          employee_name: string
+          employee_number: string
+          entry_id: string
+          entry_store_id: string
+          entry_store_name: string
+          pin_is_set: boolean
+        }[]
+      }
       get_catalog_costs: {
         Args: {
           requested_product_ids?: string[]
@@ -6796,14 +6722,19 @@ export type Database = {
           variant_id: string
         }[]
       }
-      get_checkout_stock_warning: {
-        Args: {
-          target_organization_id: string
-          target_sale_id: string
-          target_store_id: string
-        }
-        Returns: number
-      }
+      get_checkout_stock_warning:
+        | {
+            Args: { target_organization_id: string; target_store_id: string }
+            Returns: number
+          }
+        | {
+            Args: {
+              target_organization_id: string
+              target_sale_id: string
+              target_store_id: string
+            }
+            Returns: number
+          }
       get_current_time_clock_entry: {
         Args: { target_organization_id: string }
         Returns: {
@@ -6811,23 +6742,6 @@ export type Database = {
           entry_id: string
           store_id: string
         }[]
-      }
-      get_attendance_employees: {
-        Args: { target_organization_id: string; target_store_id: string }
-        Returns: {
-          clocked_in_at: string | null
-          employee_id: string
-          employee_name: string
-          employee_number: string
-          entry_id: string | null
-          entry_store_id: string | null
-          entry_store_name: string | null
-          pin_is_set: boolean
-        }[]
-      }
-      get_employee_management_detail: {
-        Args: { target_employee_id: string; target_organization_id: string }
-        Returns: Json
       }
       get_customer_display_bootstrap: {
         Args: { target_access_token_hash: string }
@@ -6904,6 +6818,15 @@ export type Database = {
           status: string
         }[]
       }
+      get_dashboard_operational_snapshot: {
+        Args: {
+          target_end_date: string
+          target_organization_id: string
+          target_start_date: string
+          target_store_id?: string
+        }
+        Returns: Json
+      }
       get_dashboard_snapshot: {
         Args: {
           target_end_date: string
@@ -6913,14 +6836,42 @@ export type Database = {
         }
         Returns: Json
       }
-      get_inventory_valuation: {
+      get_employee_management_detail: {
+        Args: { target_employee_id: string; target_organization_id: string }
+        Returns: Json
+      }
+      get_inventory_count_awareness: {
         Args: { target_organization_id: string }
         Returns: {
-          average_cost_minor: number
+          count_number: number
+          counted_quantity: number
+          expected_quantity: number
+          inventory_count_id: string
+          last_counted_at: string
           product_id: string
-          quantity: number
           store_id: string
-          value_minor: number | null
+          variant_id: string
+        }[]
+      }
+      get_inventory_count_suppliers: {
+        Args: { target_organization_id: string }
+        Returns: {
+          id: string
+          name: string
+        }[]
+      }
+      get_inventory_health_awareness: {
+        Args: { target_organization_id: string }
+        Returns: {
+          count_number: number
+          count_recommended: boolean
+          counted_quantity: number
+          days_since_count: number
+          expected_quantity: number
+          inventory_count_id: string
+          last_counted_at: string
+          product_id: string
+          store_id: string
           variant_id: string
         }[]
       }
@@ -6933,6 +6884,60 @@ export type Database = {
           id: string
           unit_cost_minor: number
           value_delta_minor: number
+        }[]
+      }
+      get_inventory_schema_contract: {
+        Args: { target_organization_id: string }
+        Returns: Json
+      }
+      get_inventory_stock_page: {
+        Args: {
+          requested_category_id?: string
+          requested_page?: number
+          requested_page_size?: number
+          requested_restock_policy?: string
+          requested_search?: string
+          requested_sort?: string
+          requested_status?: string
+          requested_store_id?: string
+          target_organization_id: string
+        }
+        Returns: {
+          active_product_count: number
+          average_cost_minor: number
+          barcode: string
+          category_id: string
+          category_name: string
+          in_stock_count: number
+          is_available: boolean
+          level_id: string
+          low_count: number
+          negative_count: number
+          out_of_stock_count: number
+          product_id: string
+          product_name: string
+          quantity: number
+          reorder_point: number
+          restock_policy: string
+          sku: string
+          store_id: string
+          store_name: string
+          total_count: number
+          unit: string
+          updated_at: string
+          variant_id: string
+          variant_name: string
+        }[]
+      }
+      get_inventory_valuation: {
+        Args: { target_organization_id: string }
+        Returns: {
+          average_cost_minor: number
+          product_id: string
+          quantity: number
+          store_id: string
+          value_minor: number
+          variant_id: string
         }[]
       }
       get_kitchen_orders: {
@@ -6982,16 +6987,6 @@ export type Database = {
         Args: { target_organization_id: string }
         Returns: Json
       }
-      get_purchase_order_line_costs: {
-        Args: {
-          requested_purchase_order_line_ids: string[]
-          target_organization_id: string
-        }
-        Returns: {
-          id: string
-          unit_cost_minor: number
-        }[]
-      }
       get_pos_customer_display_sessions: {
         Args: { target_organization_id: string }
         Returns: {
@@ -7030,11 +7025,11 @@ export type Database = {
           destination_store_id: string
           destination_store_name: string
           lines: Json
-          note: string | null
+          note: string
           source_store_id: string
           source_store_name: string
           status: string
-          stock_request_id: string | null
+          stock_request_id: string
           transfer_id: string
           transfer_number: number
         }[]
@@ -7087,6 +7082,35 @@ export type Database = {
               options: Json
             }[]
           }
+      get_pos_receipt_detail: {
+        Args: { target_organization_id: string; target_receipt_id: string }
+        Returns: Json
+      }
+      get_pos_receipt_history: {
+        Args: {
+          target_before_receipt_number?: number
+          target_limit?: number
+          target_organization_id: string
+          target_query?: string
+        }
+        Returns: {
+          cashier_name: string
+          currency_code: string
+          has_refundable_quantity: boolean
+          issued_at: string
+          payment_methods: Json
+          receipt_id: string
+          receipt_number: number
+          refund_count: number
+          refund_total_minor: number
+          register_id: string
+          register_name: string
+          sale_id: string
+          store_id: string
+          store_name: string
+          total_minor: number
+        }[]
+      }
       get_pos_recent_items: {
         Args: {
           target_limit?: number
@@ -7108,6 +7132,10 @@ export type Database = {
           variant_name: string
         }[]
       }
+      get_pos_shift_operational_summary: {
+        Args: { target_organization_id: string; target_shift_id: string }
+        Returns: Json
+      }
       get_pos_ticket_assignees: {
         Args: { target_organization_id: string; target_store_id: string }
         Returns: {
@@ -7116,6 +7144,16 @@ export type Database = {
         }[]
       }
       get_public_smart_menu: { Args: { target_menu_id: string }; Returns: Json }
+      get_purchase_order_line_costs: {
+        Args: {
+          requested_purchase_order_line_ids: string[]
+          target_organization_id: string
+        }
+        Returns: {
+          id: string
+          unit_cost_minor: number
+        }[]
+      }
       get_reports_snapshot: {
         Args: {
           target_end_date: string
@@ -7123,6 +7161,32 @@ export type Database = {
           target_start_date: string
           target_store_id?: string
         }
+        Returns: Json
+      }
+      get_shift_audit_history: {
+        Args: { target_limit?: number; target_organization_id: string }
+        Returns: {
+          closed_at: string
+          closing_note: string
+          counted_cash_minor: number
+          difference_minor: number
+          expected_cash_minor: number
+          opened_at: string
+          opened_by_employee_id: string
+          opened_by_name: string
+          opening_cash_minor: number
+          opening_note: string
+          register_id: string
+          shift_id: string
+          store_id: string
+        }[]
+      }
+      get_shift_audit_report: {
+        Args: { target_organization_id: string; target_shift_id: string }
+        Returns: Json
+      }
+      get_shift_audit_report_internal: {
+        Args: { target_organization_id: string; target_shift_id: string }
         Returns: Json
       }
       get_shift_cash_summary: {
@@ -7150,14 +7214,32 @@ export type Database = {
         Args: { target_organization_id: string; target_rows: Json }
         Returns: number
       }
-      import_inventory_adjustments_csv: {
+      import_inventory_adjustments_csv:
+        | {
+            Args: {
+              target_organization_id: string
+              target_reason_code: string
+              target_rows: Json
+              target_store_id: string
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              target_approval_request_id?: string
+              target_operation_id: string
+              target_organization_id: string
+              target_reason_code: string
+              target_rows: Json
+              target_store_id: string
+            }
+            Returns: number
+          }
+      import_inventory_count_lines: {
         Args: {
-          target_approval_request_id?: string | null
-          target_operation_id: string
+          target_inventory_count_id: string
           target_organization_id: string
-          target_reason_code: string
           target_rows: Json
-          target_store_id: string
         }
         Returns: number
       }
@@ -7235,6 +7317,22 @@ export type Database = {
           was_replayed: boolean
         }[]
       }
+      post_inventory_count:
+        | {
+            Args: {
+              target_inventory_count_id: string
+              target_organization_id: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              target_inventory_count_id: string
+              target_operation_id: string
+              target_organization_id: string
+            }
+            Returns: undefined
+          }
       prepare_organization_export: {
         Args: { target_organization_id: string }
         Returns: Json
@@ -7334,7 +7432,7 @@ export type Database = {
       }
       record_inventory_adjustment: {
         Args: {
-          target_approval_request_id?: string | null
+          target_approval_request_id?: string
           target_note: string
           target_operation_id: string
           target_organization_id: string
@@ -7342,7 +7440,7 @@ export type Database = {
           target_quantity_delta: number
           target_reason_code: string
           target_store_id: string
-          target_variant_id: string | null
+          target_variant_id: string
         }
         Returns: string
       }
@@ -7422,6 +7520,10 @@ export type Database = {
           store_id: string
         }[]
       }
+      remove_inventory_policy_override: {
+        Args: { target_organization_id: string; target_store_id: string }
+        Returns: undefined
+      }
       request_manager_approval: {
         Args: {
           target_operation_code: string
@@ -7498,6 +7600,16 @@ export type Database = {
           card_id: string
         }[]
       }
+      save_inventory_count_line: {
+        Args: {
+          target_counted_quantity: number
+          target_inventory_count_id: string
+          target_organization_id: string
+          target_product_id: string
+          target_variant_id: string
+        }
+        Returns: undefined
+      }
       save_open_ticket_v2: {
         Args: {
           target_assigned_employee_id: string
@@ -7571,6 +7683,43 @@ export type Database = {
           loyalty_points: number
           phone: string
         }[]
+      }
+      set_catalog_product_archived_safely: {
+        Args: {
+          target_is_archived: boolean
+          target_organization_id: string
+          target_product_id: string
+        }
+        Returns: string
+      }
+      set_catalog_product_store_availability: {
+        Args: {
+          target_organization_id: string
+          target_product_id: string
+          target_store_ids: string[]
+        }
+        Returns: number
+      }
+      set_catalog_product_store_configuration: {
+        Args: {
+          target_low_stock_level: number
+          target_organization_id: string
+          target_price_override_minor: number
+          target_product_id: string
+          target_store_id: string
+        }
+        Returns: undefined
+      }
+      set_catalog_product_store_configuration_v2: {
+        Args: {
+          target_low_stock_level: number
+          target_organization_id: string
+          target_price_override_minor: number
+          target_product_id: string
+          target_restock_policy: string
+          target_store_id: string
+        }
+        Returns: undefined
       }
       set_customer_display_state: {
         Args: {
@@ -7662,6 +7811,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      submit_inventory_count_for_review: {
+        Args: {
+          target_inventory_count_id: string
+          target_organization_id: string
+        }
+        Returns: undefined
+      }
       transfer_stock: {
         Args: {
           target_destination_store_id: string
@@ -7671,15 +7827,6 @@ export type Database = {
           target_source_store_id: string
         }
         Returns: string
-      }
-      validate_pos_cart_stock: {
-        Args: {
-          target_items: Json
-          target_organization_id: string
-          target_register_id: string
-          target_store_id: string
-        }
-        Returns: Json
       }
       update_approval_rule: {
         Args: {
@@ -7698,6 +7845,25 @@ export type Database = {
           target_organization_id: string
         }
         Returns: Json
+      }
+      update_catalog_product_v2: {
+        Args: {
+          target_allow_fractional_quantity: boolean
+          target_barcode: string
+          target_category_id: string
+          target_cost_minor: number
+          target_description: string
+          target_image_url: string
+          target_is_variable_price: boolean
+          target_name: string
+          target_organization_id: string
+          target_price_minor: number
+          target_product_id: string
+          target_sku: string
+          target_track_inventory: boolean
+          target_unit: string
+        }
+        Returns: string
       }
       update_custom_role: {
         Args: {
@@ -7744,31 +7910,9 @@ export type Database = {
         }
         Returns: undefined
       }
-      delete_employee_if_eligible: {
-        Args: {
-          target_confirmation_number: string
-          target_employee_id: string
-          target_organization_id: string
-        }
-        Returns: string
-      }
       update_inventory_policy: {
         Args: {
           target_negative_stock_policy: string
-          target_organization_id: string
-          target_store_id: string
-        }
-        Returns: undefined
-      }
-      update_organization_inventory_policy: {
-        Args: {
-          target_negative_stock_policy: string
-          target_organization_id: string
-        }
-        Returns: undefined
-      }
-      remove_inventory_policy_override: {
-        Args: {
           target_organization_id: string
           target_store_id: string
         }
@@ -7794,6 +7938,13 @@ export type Database = {
         Returns: {
           status: string
         }[]
+      }
+      update_organization_inventory_policy: {
+        Args: {
+          target_negative_stock_policy: string
+          target_organization_id: string
+        }
+        Returns: undefined
       }
       update_payment_method_configuration: {
         Args: {
@@ -7875,6 +8026,15 @@ export type Database = {
           target_variant_id: string
         }
         Returns: string
+      }
+      validate_pos_cart_stock: {
+        Args: {
+          target_items: Json
+          target_organization_id: string
+          target_register_id: string
+          target_store_id: string
+        }
+        Returns: Json
       }
       validate_pos_device: {
         Args: {
@@ -8040,6 +8200,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
-// Application convenience alias retained across Supabase CLI type regeneration.
-export type TableRow<TableName extends keyof DefaultSchema["Tables"]> = Tables<TableName>;

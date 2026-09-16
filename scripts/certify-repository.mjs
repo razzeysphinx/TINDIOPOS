@@ -367,16 +367,39 @@ function assertTrackedMigrationsClean() {
 function assertLocalSupabaseStatus(
   output,
 ) {
-  const urlPattern =
-    /(?:https?:\/\/|postgres(?:ql)?:\/\/)[^\s]+/gi;
+  let status;
 
-  const rawUrls =
-    output.match(
-      urlPattern,
-    ) ?? [];
+  try {
+    status =
+      JSON.parse(
+        output,
+      );
+  } catch {
+    fail(
+      "Supabase status did not return unambiguous JSON.",
+    );
+  }
 
   if (
-    rawUrls.length === 0
+    status === null
+    || Array.isArray(status)
+    || typeof status !== "object"
+  ) {
+    fail(
+      "Supabase status did not return a service object.",
+    );
+  }
+
+  const serviceUrls =
+    Object.entries(status)
+      .filter(
+        ([key, value]) =>
+          key.endsWith("_URL")
+          && typeof value === "string",
+      );
+
+  if (
+    serviceUrls.length === 0
   ) {
     fail(
       "Supabase status did not expose a verifiable local service URL.",
@@ -384,20 +407,14 @@ function assertLocalSupabaseStatus(
   }
 
   for (
-    const rawUrl
-    of rawUrls
+    const [, serviceUrl]
+    of serviceUrls
   ) {
-    const cleaned =
-      rawUrl.replace(
-        /[),;]+$/,
-        "",
-      );
-
     let parsed;
 
     try {
       parsed =
-        new URL(cleaned);
+        new URL(serviceUrl);
     } catch {
       fail(
         "Supabase status contained an ambiguous service URL.",
@@ -423,6 +440,8 @@ function getLocalSupabaseStatus() {
       "exec",
       "supabase",
       "status",
+      "--output",
+      "json",
     ],
     {
       cwd: ROOT,
@@ -495,15 +514,8 @@ function ensureLocalSupabase() {
     );
   }
 
-  const output =
-    `${
-      status.stdout ?? ""
-    }\n${
-      status.stderr ?? ""
-    }`;
-
   assertLocalSupabaseStatus(
-    output,
+    status.stdout ?? "",
   );
 
   console.log(
@@ -519,7 +531,12 @@ async function verifyGeneratedTypesStable() {
     );
 
   const beforeHash =
-    sha256(before);
+    sha256(
+      before.replaceAll(
+        "\r\n",
+        "\n",
+      ),
+    );
 
   runStep({
     name:
@@ -537,7 +554,12 @@ async function verifyGeneratedTypesStable() {
     );
 
   const afterHash =
-    sha256(after);
+    sha256(
+      after.replaceAll(
+        "\r\n",
+        "\n",
+      ),
+    );
 
   if (
     beforeHash !== afterHash
@@ -550,6 +572,16 @@ async function verifyGeneratedTypesStable() {
 
     fail(
       "Generated database.types.ts drifted from the checked-in contract. Original bytes were restored.",
+    );
+  }
+
+  if (
+    before !== after
+  ) {
+    await writeFile(
+      DATABASE_TYPES_PATH,
+      before,
+      "utf8",
     );
   }
 

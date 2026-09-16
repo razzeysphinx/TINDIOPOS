@@ -106,15 +106,18 @@ export async function upsertReplenishmentRuleAction(input: unknown): Promise<Sup
   const parsed = upsertReplenishmentRuleSchema.safeParse(input);
   if (!parsed.success) return validationError();
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("upsert_inventory_replenishment_rule", {
+  const replenishmentRuleArgs = {
     target_organization_id: context.organization.id,
     target_store_id: parsed.data.storeId,
     target_product_id: parsed.data.productId,
-    target_variant_id: (parsed.data.variantId || null) as never,
-    target_preferred_warehouse_id: (parsed.data.preferredWarehouseId || null) as never,
     target_reorder_point: Number(parsed.data.reorderPoint),
     target_target_stock: Number(parsed.data.targetStock),
-  });
+    ...(parsed.data.variantId ? { target_variant_id: parsed.data.variantId } : {}),
+    ...(parsed.data.preferredWarehouseId
+      ? { target_preferred_warehouse_id: parsed.data.preferredWarehouseId }
+      : {}),
+  };
+  const { data, error } = await supabase.rpc("upsert_inventory_replenishment_rule_v2", replenishmentRuleArgs);
   if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not save the reorder rule.") };
   refreshSupplyChain();
   return { ok: true, message: "Reorder point and target stock saved.", data: { ruleId: data } };

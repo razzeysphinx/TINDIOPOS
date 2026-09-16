@@ -31,18 +31,18 @@ select ok(
   'inventory movements accept Phase 9 ledger types'
 );
 select ok(to_regprocedure('public.create_supplier(uuid,text,text,text,text,text,text)') is not null, 'supplier creation routine exists');
-select ok(to_regprocedure('public.create_purchase_order(uuid,uuid,uuid,text,date,jsonb,uuid)') is not null, 'purchase order routine exists');
+select ok(to_regprocedure('public.create_purchase_order_v2(uuid,uuid,uuid,text,jsonb,uuid,date)') is not null, 'purchase order routine exists');
 select ok(to_regprocedure('public.receive_purchase_order(uuid,uuid,jsonb,text,uuid)') is not null, 'goods receipt routine exists');
-select ok(to_regprocedure('public.complete_inventory_count(uuid,uuid,text,jsonb)') is not null, 'legacy one-step count routine remains for migration compatibility');
+select ok(to_regprocedure('public.complete_inventory_count(uuid,uuid,text,jsonb)') is null, 'legacy one-step count routine is retired');
 select ok(to_regprocedure('public.transfer_stock(uuid,uuid,uuid,jsonb,text)') is not null, 'legacy immediate-transfer routine remains for migration compatibility');
-select ok(to_regprocedure('public.create_inventory_count_draft(uuid,uuid,text)') is not null, 'inventory count draft routine exists');
-select ok(to_regprocedure('public.save_inventory_count_line(uuid,uuid,uuid,uuid,numeric)') is not null, 'inventory count line-save routine exists');
+select ok(to_regprocedure('public.create_inventory_count_plan_v2(uuid,uuid,text,text,text,jsonb,text,boolean,uuid)') is not null, 'inventory count preparation routine exists');
+select ok(to_regprocedure('public.save_inventory_count_line_v2(uuid,uuid,uuid,numeric,uuid)') is not null, 'inventory count line-save routine exists');
 select ok(to_regprocedure('public.submit_inventory_count_for_review(uuid,uuid)') is not null, 'inventory count review routine exists');
-select ok(to_regprocedure('public.post_inventory_count(uuid,uuid)') is not null, 'inventory count post routine exists');
+select ok(to_regprocedure('public.post_inventory_count(uuid,uuid,uuid)') is not null, 'idempotent inventory count post routine exists');
 select ok(not has_function_privilege('anon', 'public.create_supplier(uuid,text,text,text,text,text,text)', 'execute'), 'anonymous callers cannot create suppliers');
 select ok(not has_table_privilege('authenticated', 'public.suppliers', 'insert'), 'authenticated callers cannot insert suppliers directly');
 select ok(not has_table_privilege('authenticated', 'public.purchase_orders', 'insert'), 'authenticated callers cannot insert purchase orders directly');
-select ok(not has_function_privilege('authenticated', 'public.complete_inventory_count(uuid,uuid,text,jsonb)', 'execute'), 'application roles cannot bypass count review with the legacy one-step count routine');
+select ok(to_regprocedure('public.complete_inventory_count(uuid,uuid,text,jsonb)') is null, 'application roles have no legacy one-step count route');
 select ok(not has_function_privilege('authenticated', 'public.transfer_stock(uuid,uuid,uuid,jsonb,text)', 'execute'), 'application roles cannot bypass transfer approval with the legacy immediate-transfer routine');
 
 insert into auth.users (id, email, raw_user_meta_data)
@@ -115,14 +115,14 @@ set supplier_id = public.create_supplier(organization_id, 'Phase 9 Supplier', 'A
 select is((select count(*) from public.suppliers), 1::bigint, 'authorized manager creates a supplier through the routine');
 
 update inventory_phase_9_context
-set purchase_order_id = public.create_purchase_order(
+set purchase_order_id = public.create_purchase_order_v2(
   organization_id,
   store_id,
   supplier_id,
   'First delivery',
-  null,
   jsonb_build_array(jsonb_build_object('product_id', product_id, 'variant_id', null, 'purchase_unit_code', 'each', 'quantity', '10', 'unit_cost_minor', 1000)),
-  gen_random_uuid()
+  gen_random_uuid(),
+  null
 );
 
 select is((select status from public.purchase_orders where id = (select purchase_order_id from inventory_phase_9_context)), 'ordered', 'new purchase order is committed as ordered');
@@ -153,10 +153,19 @@ select is((select status from public.purchase_orders where id = (select purchase
 select is((select count(*) from public.goods_receipt_lines), 1::bigint, 'receipt line is recorded');
 
 update inventory_phase_9_context
-set inventory_count_id = public.create_inventory_count_draft(organization_id, store_id, 'Cycle count');
+set inventory_count_id = public.create_inventory_count_plan_v2(
+  organization_id,
+  store_id,
+  'Cycle count',
+  'standard',
+  'selected',
+  jsonb_build_array(jsonb_build_object('product_id', product_id, 'variant_id', null)),
+  'product_name',
+  true
+);
 select lives_ok(
   format(
-    $$select public.save_inventory_count_line(%L, %L, %L, null, 7)$$,
+    $$select public.save_inventory_count_line_v2(%L, %L, %L, 7)$$,
     (select organization_id from inventory_phase_9_context),
     (select inventory_count_id from inventory_phase_9_context),
     (select product_id from inventory_phase_9_context)
@@ -178,16 +187,17 @@ select lives_ok(
 );
 select lives_ok(
   format(
-    $$select public.post_inventory_count(%L, %L)$$,
+    $$select public.post_inventory_count(%L, %L, %L)$$,
     (select organization_id from inventory_phase_9_context),
-    (select inventory_count_id from inventory_phase_9_context)
+    (select inventory_count_id from inventory_phase_9_context),
+    gen_random_uuid()
   ),
   'reviewed inventory count posts successfully'
 );
 select is(
   (select quantity from public.inventory_levels where store_id = (select store_id from inventory_phase_9_context) and product_id = (select product_id from inventory_phase_9_context)),
   7::numeric,
-  'count replaces the projection with the physical quantity'
+  'count applies the reconciled physical variance to the projection'
 );
 select is(
   (select quantity_delta from public.inventory_movements where movement_type = 'COUNT' order by created_at desc limit 1),

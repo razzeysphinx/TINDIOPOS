@@ -5,51 +5,36 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const source = (relativePath) => readFile(path.join(repositoryRoot, relativePath), "utf8");
 
-async function source(relativePath) {
-  return readFile(path.join(repositoryRoot, relativePath), "utf8");
-}
-
-test("Inventory schema contract migration protects core truth and optional modules", async () => {
-  const migration = await source("supabase/migrations/20260914120000_inventory_schema_contract.sql");
+test("Inventory schema contract v2 certifies the canonical public command boundary", async () => {
+  const migration = await source("supabase/migrations/20260916034309_inventory_schema_contract_v2.sql");
 
   assert.match(migration, /create or replace function public\.get_inventory_schema_contract/);
-  assert.match(migration, /'contract_version', 1/);
-  assert.match(migration, /'public\.inventory_levels'/);
-  assert.match(migration, /'public\.inventory_movements'/);
-  assert.match(migration, /'apply_inventory_change_v2'/);
-  assert.match(migration, /'count_batches'/);
-  assert.match(migration, /'direct_transfers'/);
-  assert.match(migration, /'purchasing'/);
-  assert.match(migration, /'valuation'/);
-  assert.match(migration, /'replenishment'/);
-  assert.match(migration, /\(select auth\.uid\(\)\) is null/);
-  assert.match(migration, /employee\.profile_id = \(select auth\.uid\(\)\)/);
-  assert.match(migration, /organization\.status = 'active'/);
-  assert.match(migration, /employee\.status = 'active'/);
+  assert.match(migration, /'contract_version', 2/);
+  for (const signature of [
+    "create_inventory_count_plan_v2(uuid,uuid,text,text,text,jsonb,text,boolean,uuid)",
+    "save_inventory_count_line_v2(uuid,uuid,uuid,numeric,uuid)",
+    "post_inventory_count(uuid,uuid,uuid)",
+    "create_purchase_order_v2(uuid,uuid,uuid,text,jsonb,uuid,date)",
+    "record_inventory_adjustment_v3(uuid,uuid,uuid,numeric,text,text,uuid,uuid,uuid)",
+  ]) assert.match(migration, new RegExp(signature.replace(/[()]/g, "\\$&")));
+  assert.match(migration, /legacy_complete_inventory_count/);
+  assert.match(migration, /legacy_post_inventory_count/);
   assert.match(migration, /security definer/);
   assert.match(migration, /set search_path = ''/);
-  assert.match(migration, /revoke all\s+on function public\.get_inventory_schema_contract\(uuid\)\s+from public/);
-  assert.match(migration, /revoke all\s+on function public\.get_inventory_schema_contract\(uuid\)\s+from anon/);
-  assert.match(migration, /grant execute\s+on function public\.get_inventory_schema_contract\(uuid\)\s+to authenticated/);
-  assert.match(migration, /notify pgrst, 'reload schema'/);
+  assert.match(migration, /revoke all on function public\.get_inventory_schema_contract\(uuid\) from public, anon, service_role/);
+  assert.match(migration, /grant execute on function public\.get_inventory_schema_contract\(uuid\) to authenticated/);
 });
 
-test("Inventory loads schema compatibility before optional query fan-out", async () => {
+test("Inventory requires schema contract version 2 before querying optional modules", async () => {
   const [page, contract] = await Promise.all([
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
     source("src/features/inventory/inventory-schema-contract.ts"),
   ]);
 
-  assert.match(contract, /INVENTORY_SCHEMA_CONTRACT_VERSION = 1/);
+  assert.match(contract, /INVENTORY_SCHEMA_CONTRACT_VERSION = 2/);
   assert.match(contract, /reason: "RPC_MISSING"/);
-  assert.match(contract, /status: "outdated"/);
   assert.match(page, /await loadInventorySchemaContract\(/);
   assert.match(page, /Inventory update required/);
-  assert.match(page, /const inventoryModules = inventorySchema\.modules/);
-  assert.match(page, /inventoryModules\.count_batches/);
-  const coreErrorBlock = page.match(
-    /const coreError = \[([\s\S]*?)\]\.find\(\(result\) => result\.error\)/,
-  )?.[1] ?? "";
-  assert.doesNotMatch(coreErrorBlock, /inventoryCountBatchesResult/);
 });

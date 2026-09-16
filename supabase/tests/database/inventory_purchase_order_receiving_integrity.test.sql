@@ -5,6 +5,21 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(1);
 
+create function pg_temp.create_purchase_order(
+  target_organization_id uuid,
+  target_store_id uuid,
+  target_supplier_id uuid,
+  target_notes text,
+  target_expected_at date,
+  target_lines jsonb,
+  target_operation_id uuid
+) returns uuid language sql as $$
+  select public.create_purchase_order_v2(
+    target_organization_id, target_store_id, target_supplier_id, target_notes,
+    target_lines, target_operation_id, target_expected_at
+  );
+$$;
+
 do $body$
 declare
   profile_id uuid := gen_random_uuid();
@@ -61,7 +76,7 @@ begin
     );
     test_supplier_id := public.create_supplier(test_organization_id, 'Phase 2 Supplier', '', '', '', '', '');
 
-    test_purchase_order_id := public.create_purchase_order(
+    test_purchase_order_id := pg_temp.create_purchase_order(
       test_organization_id,
       test_store_id,
       test_supplier_id,
@@ -77,7 +92,7 @@ begin
       purchase_operation_id
     );
 
-    if public.create_purchase_order(
+    if pg_temp.create_purchase_order(
       test_organization_id,
       test_store_id,
       test_supplier_id,
@@ -171,7 +186,7 @@ begin
       raise exception 'Full receiving did not post exactly two canonical receipt movements.';
     end if;
 
-    test_cancelled_order_id := public.create_purchase_order(
+    test_cancelled_order_id := pg_temp.create_purchase_order(
       test_organization_id,
       test_store_id,
       test_supplier_id,
@@ -198,7 +213,7 @@ begin
     returning id into test_unavailable_store_id;
 
     begin
-      perform public.create_purchase_order(
+      perform pg_temp.create_purchase_order(
         test_organization_id,
         test_unavailable_store_id,
         test_supplier_id,
@@ -224,7 +239,7 @@ begin
     perform set_config('request.jwt.claim.sub', '', true);
     denied := false;
     begin
-      perform public.create_purchase_order(
+      perform pg_temp.create_purchase_order(
         test_organization_id,
         test_store_id,
         test_supplier_id,

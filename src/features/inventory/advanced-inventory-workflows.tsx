@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import {
-  ClipboardCheck,
   Download,
   LoaderCircle,
   PackageCheck,
@@ -41,7 +40,6 @@ import { requestManagerApprovalAction } from "@/features/approvals/actions";
 import { ManagerApprovalDialog } from "@/features/approvals/manager-approval-dialog";
 import {
   cancelPurchaseOrderAction,
-  completeInventoryCountAction,
   createPurchaseOrderAction,
   createSupplierAction,
   receivePurchaseOrderAction,
@@ -114,21 +112,6 @@ export type AdvancedGoodsReceipt = {
 type StoreOption = { id: string; name: string };
 type SaleableDraft = { productId: string; variantId: string; quantity: string };
 type PurchaseDraft = SaleableDraft & { purchaseUnitCode: string; unitCost: string };
-type CountDraft = { productId: string; variantId: string; countedQuantity: string };
-type CountReview = {
-  lines: Array<{
-    countedQuantity: number;
-    difference: number;
-    expectedQuantity: number;
-    label: string;
-    productId: string;
-    unit: string;
-    variantId: string;
-  }>;
-  note: string;
-  storeId: string;
-  storeName: string;
-};
 type SupplierDraft = {
   name: string;
   contactName: string;
@@ -138,11 +121,10 @@ type SupplierDraft = {
   notes: string;
 };
 type WorkflowResult = { ok: boolean; message: string };
-export type AdvancedInventorySection = "purchasing" | "counts" | "transfers";
+export type AdvancedInventorySection = "purchasing" | "transfers";
 
 const ALL_ADVANCED_INVENTORY_SECTIONS: readonly AdvancedInventorySection[] = [
   "purchasing",
-  "counts",
   "transfers",
 ];
 
@@ -204,7 +186,6 @@ export function AdvancedInventoryWorkflows({
   const [purchaseResult, setPurchaseResult] = useState<WorkflowResult | null>(null);
   const [receiptResult, setReceiptResult] = useState<WorkflowResult | null>(null);
   const [purchasingSection, setPurchasingSection] = useState<"orders" | "receiving" | "suppliers">(initialPurchasingSection);
-  const [countResult, setCountResult] = useState<WorkflowResult | null>(null);
   const [transferResult, setTransferResult] = useState<WorkflowResult | null>(null);
 
   const firstStoreId = stores[0]?.id ?? "";
@@ -215,11 +196,6 @@ export function AdvancedInventoryWorkflows({
     purchaseUnitCode: firstItem?.purchaseUnits[0]?.code ?? "",
     quantity: "1",
     unitCost: "0.00",
-  });
-  const emptyCountLine = (): CountDraft => ({
-    productId: firstItem?.productId ?? "",
-    variantId: firstItem?.variantId ?? "",
-    countedQuantity: "0",
   });
   const emptyTransferLine = (): SaleableDraft => ({
     productId: firstItem?.productId ?? "",
@@ -245,10 +221,6 @@ export function AdvancedInventoryWorkflows({
   const [receiptQuantities, setReceiptQuantities] = useState<Record<string, string>>(() =>
     receiptDraft(initialReceiptOrder),
   );
-  const [countStoreId, setCountStoreId] = useState(firstStoreId);
-  const [countNote, setCountNote] = useState("");
-  const [countLines, setCountLines] = useState<CountDraft[]>([emptyCountLine()]);
-  const [countReview, setCountReview] = useState<CountReview | null>(null);
   const [sourceStoreId, setSourceStoreId] = useState(firstStoreId);
   const [destinationStoreId, setDestinationStoreId] = useState(stores[1]?.id ?? "");
   const [transferNote, setTransferNote] = useState("");
@@ -273,34 +245,25 @@ export function AdvancedInventoryWorkflows({
     () => items.filter((item) => item.storeIds.includes(purchaseStoreId)),
     [items, purchaseStoreId],
   );
-  const countableItems = useMemo(
-    () => items.filter((item) => item.storeIds.includes(countStoreId)),
-    [items, countStoreId],
-  );
   const transferableItems = useMemo(
     () => items.filter((item) => item.storeIds.includes(sourceStoreId)),
     [items, sourceStoreId],
   );
   const selectedReceiptOrder = receivableOrders.find((order) => order.id === receiptOrderId);
   const showPurchasing = sections.includes("purchasing");
-  const showCounts = sections.includes("counts");
   const showTransfers = sections.includes("transfers");
   const title = sections.length === 1
     ? sections[0] === "purchasing"
       ? "Purchasing"
-      : sections[0] === "counts"
-        ? "Inventory counts"
-        : "Stock transfers"
+      : "Stock transfers"
     : "Inventory operations";
   const description = sections.length === 1
     ? sections[0] === "purchasing"
       ? purchasingSection === "receiving"
         ? "Record what physically arrived from a purchase order. Receiving is the bridge from procurement to the inventory ledger."
         : "Manage suppliers, purchase orders, deliveries, and procurement costs. Purchase orders record buying intent; only receiving changes stock."
-      : sections[0] === "counts"
-        ? "Count what you physically have, review the difference, then record the verified correction."
-        : "Prepare stock transfers between stores and review the details before sending them."
-    : "Order from suppliers, receive goods, count stock, and move items between stores.";
+      : "Prepare stock transfers between stores and review the details before sending them."
+    : "Order from suppliers, receive goods, and move items between stores.";
 
   function finish(result: WorkflowResult, setResult: (value: WorkflowResult) => void) {
     setResult(result);
@@ -367,67 +330,6 @@ export function AdvancedInventoryWorkflows({
       if (result.ok) {
         clearPendingOperation(operationScope);
         setReceiptNote("");
-      }
-    });
-  }
-
-  function reviewCount(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setCountResult(null);
-    const store = stores.find((candidate) => candidate.id === countStoreId);
-    const seenItems = new Set<string>();
-    const reviewLines: CountReview["lines"] = [];
-
-    if (!store) {
-      setCountReview(null);
-      setCountResult({ ok: false, message: "Choose a valid store before reviewing." });
-      return;
-    }
-
-    for (const line of countLines) {
-      const item = findItem(countableItems, line);
-      const countedQuantity = Number(line.countedQuantity);
-      const itemKey = `${line.productId}|${line.variantId}`;
-
-      if (!item || !/^\d{1,8}(?:\.\d{1,3})?$/.test(line.countedQuantity) || !Number.isFinite(countedQuantity) || countedQuantity < 0 || seenItems.has(itemKey)) {
-        setCountReview(null);
-        setCountResult({ ok: false, message: "Choose unique counted items and enter non-negative quantities with up to 3 decimals before reviewing." });
-        return;
-      }
-
-      seenItems.add(itemKey);
-      const expectedQuantity = item.quantitiesByStore[countStoreId] ?? 0;
-      reviewLines.push({
-        countedQuantity,
-        difference: countedQuantity - expectedQuantity,
-        expectedQuantity,
-        label: item.label,
-        productId: line.productId,
-        unit: item.unit,
-        variantId: line.variantId,
-      });
-    }
-
-    setCountReview({ storeId: countStoreId, storeName: store.name, note: countNote, lines: reviewLines });
-  }
-
-  function submitReviewedCount() {
-    if (!countReview) return;
-    void runAction("count", async () => {
-      const result = await completeInventoryCountAction({
-        storeId: countReview.storeId,
-        note: countReview.note,
-        lines: countReview.lines.map((line) => ({
-          productId: line.productId,
-          variantId: line.variantId,
-          countedQuantity: String(line.countedQuantity),
-        })),
-      });
-      finish(result, setCountResult);
-      if (result.ok) {
-        setCountNote("");
-        setCountLines([emptyCountLine()]);
-        setCountReview(null);
       }
     });
   }
@@ -718,44 +620,6 @@ export function AdvancedInventoryWorkflows({
         <RecentReceiptsCard receipts={receipts ?? []} />
         </> : null}
 
-        {showCounts ? <WorkflowCard
-          title="Complete inventory count"
-          description="1. Choose a store. 2. Enter what you physically counted. 3. Review the difference before recording it."
-          icon={<ClipboardCheck aria-hidden="true" />}
-        >
-          {stores.length > 0 && items.length > 0 ? (
-            <>
-            <form className="space-y-3" onSubmit={reviewCount} noValidate>
-              <Field label="Store">
-                <select className={selectClassName} value={countStoreId} onChange={(event) => { setCountStoreId(event.target.value); setCountReview(null); }}>
-                  {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
-                </select>
-              </Field>
-              <DraftCountLines
-                lines={countLines}
-                items={countableItems}
-                storeId={countStoreId}
-                onChange={(lines) => { setCountLines(lines); setCountReview(null); }}
-                onAdd={emptyCountLine}
-              />
-              <Field label="Count note">
-                <Input value={countNote} onChange={(event) => { setCountNote(event.target.value); setCountReview(null); }} placeholder="Optional count reason" />
-              </Field>
-              <div className="flex items-center justify-between gap-3">
-                <ResultMessage result={countResult} />
-                <Button disabled={isActionPending("count") || countableItems.length === 0} type="submit">
-                  {isActionPending("count") ? <LoaderCircle className="animate-spin" /> : <ClipboardCheck />}
-                  Review count
-                </Button>
-              </div>
-            </form>
-            {countReview ? <CountReviewCard pending={isActionPending("count")} review={countReview} onBack={() => setCountReview(null)} onPost={submitReviewedCount} /> : null}
-            </>
-          ) : (
-            <EmptyWorkflow message="Create a tracked item in a store before counting inventory." />
-          )}
-        </WorkflowCard> : null}
-
         {/* CANDIDATE_FOR_REMOVAL: the shared Transfers tab now owns the
             canonical direct-transfer UI. Retain this standalone form until
             historical callers and QA confirm it is no longer referenced. */}
@@ -805,7 +669,7 @@ export function AdvancedInventoryWorkflows({
   );
 }
 
-type InventoryCsvKind = "count" | "purchase" | "adjustment";
+type InventoryCsvKind = "purchase" | "adjustment";
 type InventoryCsvRow = { rowNumber: number; itemCode: string; productId: string; variantId: string; purchaseUnitCode: string; quantity: string; unitCost: string; note: string };
 
 function InventoryCsvTools({
@@ -817,7 +681,7 @@ function InventoryCsvTools({
   adjustmentReasons: Array<{ code: string; name: string }>;
 }) {
   const router = useRouter();
-  const [kind, setKind] = useState<InventoryCsvKind>("count");
+  const [kind, setKind] = useState<InventoryCsvKind>("purchase");
   const [storeId, setStoreId] = useState(stores[0]?.id ?? "");
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? "");
   const [reasonCode, setReasonCode] = useState(adjustmentReasons[0]?.code ?? "");
@@ -829,10 +693,10 @@ function InventoryCsvTools({
   const [result, setResult] = useState<string | null>(null);
   const [adjustmentApprovalRequestId, setAdjustmentApprovalRequestId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const headers = kind === "count" ? ["item_code", "counted_quantity"] : kind === "purchase" ? ["item_code", "quantity", "unit_cost"] : ["item_code", "quantity_delta", "note"];
+  const headers = kind === "purchase" ? ["item_code", "quantity", "unit_cost"] : ["item_code", "quantity_delta", "note"];
 
   function downloadTemplate() {
-    const sample = kind === "count" ? ["YOUR-SKU-OR-BARCODE", "12"] : kind === "purchase" ? ["YOUR-SKU-OR-BARCODE", "12", "45.00"] : ["YOUR-SKU-OR-BARCODE", "-2", "Damaged during delivery"];
+    const sample = kind === "purchase" ? ["YOUR-SKU-OR-BARCODE", "12", "45.00"] : ["YOUR-SKU-OR-BARCODE", "-2", "Damaged during delivery"];
     const blob = new Blob([csvRows([headers, sample])], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `tindio-${kind}-import-template.csv`; anchor.click(); URL.revokeObjectURL(url);
   }
 
@@ -850,13 +714,12 @@ function InventoryCsvTools({
     records.slice(1).forEach((record, index) => {
       const rowNumber = index + 2; if (record.every((value) => !value.trim())) return;
       const itemCode = cell(record, "item_code"); const matches = items.filter((item) => item.identifiers.some((identifier) => identifier.toLowerCase() === itemCode.toLowerCase()));
-      const quantity = kind === "count" ? cell(record, "counted_quantity") : kind === "adjustment" ? cell(record, "quantity_delta") : cell(record, "quantity"); const unitCost = cell(record, "unit_cost"); const rowNote = cell(record, "note");
+      const quantity = kind === "adjustment" ? cell(record, "quantity_delta") : cell(record, "quantity"); const unitCost = cell(record, "unit_cost"); const rowNote = cell(record, "note");
       if (!itemCode || matches.length !== 1) errors.push(`Row ${rowNumber}: item_code must match exactly one active SKU or barcode.`);
-      if (kind === "count" && !/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity)) errors.push(`Row ${rowNumber}: counted_quantity must be non-negative with up to 3 decimals.`);
       if (kind === "purchase" && (!/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0 || !/^\d{1,8}(?:\.\d{1,2})?$/.test(unitCost))) errors.push(`Row ${rowNumber}: quantity and unit_cost must be valid positive values.`);
       if (kind === "adjustment" && (!/^-?\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) === 0)) errors.push(`Row ${rowNumber}: quantity_delta must be non-zero with up to 3 decimals.`);
       if (kind === "adjustment" && (rowNote.length < 2 || rowNote.length > 500)) errors.push(`Row ${rowNumber}: note must explain the adjustment in 2–500 characters.`);
-      if (!itemCode || matches.length !== 1 || (kind === "count" && !/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity)) || (kind === "purchase" && (!/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0 || !/^\d{1,8}(?:\.\d{1,2})?$/.test(unitCost))) || (kind === "adjustment" && (!/^-?\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) === 0 || rowNote.length < 2 || rowNote.length > 500))) return;
+      if (!itemCode || matches.length !== 1 || (kind === "purchase" && (!/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0 || !/^\d{1,8}(?:\.\d{1,2})?$/.test(unitCost))) || (kind === "adjustment" && (!/^-?\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) === 0 || rowNote.length < 2 || rowNote.length > 500))) return;
       parsedRows.push({ rowNumber, itemCode, productId: matches[0].productId, variantId: matches[0].variantId ?? "", purchaseUnitCode: matches[0].purchaseUnits[0]?.code ?? "", quantity, unitCost, note: rowNote });
     });
     if (parsedRows.length > 500) errors.push("Import at most 500 rows at a time."); if (!parsedRows.length && !errors.length) errors.push("Add at least one data row.");
@@ -935,9 +798,7 @@ function InventoryCsvTools({
       }
 
       const operationScope = "purchase-order-import";
-      const response = kind === "count"
-        ? await completeInventoryCountAction({ storeId, note, lines: rows.map((row) => ({ productId: row.productId, variantId: row.variantId, countedQuantity: row.quantity })) })
-        : await createPurchaseOrderAction({ operationId: pendingOperationId(operationScope), storeId, supplierId, expectedAt, notes: note, lines: rows.map((row) => ({ productId: row.productId, variantId: row.variantId, purchaseUnitCode: row.purchaseUnitCode, quantity: row.quantity, unitCost: row.unitCost })) });
+      const response = await createPurchaseOrderAction({ operationId: pendingOperationId(operationScope), storeId, supplierId, expectedAt, notes: note, lines: rows.map((row) => ({ productId: row.productId, variantId: row.variantId, purchaseUnitCode: row.purchaseUnitCode, quantity: row.quantity, unitCost: row.unitCost })) });
       setResult(response.message);
       if (response.ok) {
         if (kind === "purchase") clearPendingOperation(operationScope);
@@ -953,12 +814,12 @@ function InventoryCsvTools({
       <CardHeader><CardTitle>Inventory CSV</CardTitle><CardDescription>Preview and confirm one controlled inventory operation. This never writes stock projections directly.</CardDescription></CardHeader>
       <CardContent className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-1 text-sm font-medium">Operation<select className={selectClassName} onChange={(event) => { setKind(event.target.value as InventoryCsvKind); setRows([]); setErrors([]); setFilename(""); setAdjustmentApprovalRequestId(null); }} value={kind}><option value="count">Complete inventory count</option><option value="purchase">Create purchase order</option><option value="adjustment">Post stock adjustments</option></select></label>
+          <label className="grid gap-1 text-sm font-medium">Operation<select className={selectClassName} onChange={(event) => { setKind(event.target.value as InventoryCsvKind); setRows([]); setErrors([]); setFilename(""); setAdjustmentApprovalRequestId(null); }} value={kind}><option value="purchase">Create purchase order</option><option value="adjustment">Post stock adjustments</option></select></label>
           <label className="grid gap-1 text-sm font-medium">Store<select className={selectClassName} onChange={(event) => { setStoreId(event.target.value); setAdjustmentApprovalRequestId(null); }} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label>
         </div>
         {kind === "purchase" ? <div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-sm font-medium">Supplier<select className={selectClassName} onChange={(event) => setSupplierId(event.target.value)} value={supplierId}>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label><label className="grid gap-1 text-sm font-medium">Expected date<Input onChange={(event) => setExpectedAt(event.target.value)} type="date" value={expectedAt} /></label></div> : null}
         {kind === "adjustment" ? <label className="grid gap-1 text-sm font-medium">Adjustment reason<select className={selectClassName} onChange={(event) => { setReasonCode(event.target.value); setAdjustmentApprovalRequestId(null); }} value={reasonCode}>{adjustmentReasons.map((reason) => <option key={reason.code} value={reason.code}>{reason.name}</option>)}</select></label> : null}
-        {kind === "adjustment" ? <p className="text-sm text-muted-foreground">Each CSV row must include a specific 2–500 character note explaining the adjustment.</p> : <Input onChange={(event) => setNote(event.target.value)} placeholder={kind === "count" ? "Optional count note" : "Optional purchase order note"} value={note} />}
+        {kind === "adjustment" ? <p className="text-sm text-muted-foreground">Each CSV row must include a specific 2–500 character note explaining the adjustment.</p> : <Input onChange={(event) => setNote(event.target.value)} placeholder="Optional purchase order note" value={note} />}
         <div className="flex flex-wrap items-end gap-3"><div className="grid min-w-0 flex-1 gap-1 sm:min-w-56"><Label htmlFor="inventory-csv-file">Import file</Label><Input accept=".csv,text/csv" id="inventory-csv-file" onChange={(event) => void chooseFile(event.target.files?.[0])} type="file" /></div><Button onClick={downloadTemplate} type="button" variant="outline"><Download /> Template</Button></div>
         {errors.length ? <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><p className="font-medium">Fix the CSV before importing.</p><ul className="mt-1 list-disc pl-5">{errors.slice(0, 4).map((error) => <li key={error}>{error}</li>)}</ul></div> : null}
         {rows.length ? <div className="overflow-hidden rounded-lg border"><div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 text-sm"><span>{filename}: {rows.length} valid row{rows.length === 1 ? "" : "s"}</span><Button disabled={isPending || (kind === "purchase" && !supplierId) || (kind === "adjustment" && !reasonCode)} onClick={confirmImport} size="sm" type="button">{isPending ? <LoaderCircle className="animate-spin" /> : <Upload />} Confirm import</Button></div><div className="max-h-48 overflow-auto"><table className="w-full text-left text-sm"><thead className="sticky top-0 bg-background text-muted-foreground"><tr><th className="px-3 py-2">Row</th><th className="px-3 py-2">Item code</th><th className="px-3 py-2">Quantity</th></tr></thead><tbody>{rows.slice(0, 20).map((row) => <tr className="border-t" key={row.rowNumber}><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2">{row.itemCode}</td><td className="px-3 py-2">{row.quantity}</td></tr>)}</tbody></table></div></div> : null}
@@ -1017,30 +878,6 @@ function DraftPurchaseLines({
         </div>
       ))}
     </DraftList>
-  );
-}
-
-function CountReviewCard({
-  onBack,
-  onPost,
-  pending,
-  review,
-}: {
-  onBack: () => void;
-  onPost: () => void;
-  pending: boolean;
-  review: CountReview;
-}) {
-  const varianceCount = review.lines.filter((line) => line.difference !== 0).length;
-
-  return (
-    <section aria-labelledby="count-review-title" className="rounded-xl border bg-muted/20 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-medium" id="count-review-title">Review count</h3><p className="mt-1 text-sm text-muted-foreground">{review.storeName} · {review.lines.length} item{review.lines.length === 1 ? "" : "s"}</p></div><span className="text-sm text-muted-foreground">{varianceCount} variance{varianceCount === 1 ? "" : "s"}</span></div>
-      <div className="mt-4 overflow-x-auto rounded-lg border"><table className="w-full min-w-[34rem] text-left text-sm"><thead className="border-b bg-muted/30 text-xs text-muted-foreground"><tr><th className="px-3 py-2 font-medium">Product</th><th className="px-3 py-2 text-right font-medium">Expected</th><th className="px-3 py-2 text-right font-medium">Counted</th><th className="px-3 py-2 text-right font-medium">Difference</th></tr></thead><tbody className="divide-y">{review.lines.map((line) => <tr key={`${line.productId}|${line.variantId}`}><td className="px-3 py-2 font-medium">{line.label}</td><td className="px-3 py-2 text-right">{formatQuantity(line.expectedQuantity)} {line.unit}</td><td className="px-3 py-2 text-right">{formatQuantity(line.countedQuantity)} {line.unit}</td><td className={line.difference === 0 ? "px-3 py-2 text-right" : line.difference > 0 ? "px-3 py-2 text-right font-medium text-primary" : "px-3 py-2 text-right font-medium text-destructive"}>{line.difference > 0 ? "+" : ""}{formatQuantity(line.difference)} {line.unit}</td></tr>)}</tbody></table></div>
-      {review.note ? <p className="mt-3 text-sm text-muted-foreground">Notes: {review.note}</p> : null}
-      <p className="mt-3 text-xs text-muted-foreground">The expected quantity is a review preview. TINDIO locks and recalculates each authoritative stock level before posting count variances.</p>
-      <div className="mt-4 flex flex-wrap justify-end gap-2"><Button disabled={pending} onClick={onBack} type="button" variant="outline">Back</Button><Button disabled={pending} onClick={onPost} type="button">{pending ? <LoaderCircle className="animate-spin" /> : <ClipboardCheck />} Post count adjustments</Button></div>
-    </section>
   );
 }
 
@@ -1245,36 +1082,6 @@ function RecentReceiptsCard({ receipts }: { receipts: AdvancedGoodsReceipt[] }) 
         <EmptyWorkflow message="No receiving records yet. Completed deliveries will remain visible here." />
       )}
     </WorkflowCard>
-  );
-}
-
-function DraftCountLines({
-  lines,
-  items,
-  storeId,
-  onChange,
-  onAdd,
-}: {
-  lines: CountDraft[];
-  items: AdvancedInventoryItem[];
-  storeId: string;
-  onChange: (lines: CountDraft[]) => void;
-  onAdd: () => CountDraft;
-}) {
-  return (
-    <DraftList title="Counted items" onAdd={() => onChange([...lines, onAdd()])}>
-      {lines.map((line, index) => {
-        const item = findItem(items, line);
-        return (
-          <div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_8rem_auto] sm:items-end" key={`${index}-${line.productId}-${line.variantId}`}>
-            <ItemSelect label="Item" items={items} productId={line.productId} variantId={line.variantId} onChange={(next) => onChange(lines.map((current, lineIndex) => lineIndex === index ? { ...current, ...next } : current))} />
-            <Field label={`Counted (${item?.unit ?? "units"})`}><Input inputMode="decimal" value={line.countedQuantity} onChange={(event) => onChange(lines.map((current, lineIndex) => lineIndex === index ? { ...current, countedQuantity: event.target.value } : current))} /></Field>
-            <RemoveLine disabled={lines.length === 1} onRemove={() => onChange(lines.filter((_, lineIndex) => lineIndex !== index))} />
-            {item ? <p className="text-xs text-muted-foreground sm:col-span-3">System quantity: {formatQuantity(item.quantitiesByStore[storeId] ?? 0)} {item.unit}</p> : null}
-          </div>
-        );
-      })}
-    </DraftList>
   );
 }
 

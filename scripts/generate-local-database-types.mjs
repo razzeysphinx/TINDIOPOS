@@ -49,7 +49,12 @@ if (!generated.includes("current_profile_id")) {
   process.exit(1);
 }
 
-const output = `${generated.trimEnd()}\n`;
+const output = `${generated.trimEnd()}
+
+// Application convenience alias retained across Supabase CLI type regeneration.
+export type TableRow<TableName extends keyof DefaultSchema["Tables"]> =
+  Tables<TableName>;
+`;
 
 await writeFile(
   new URL(

@@ -6460,15 +6460,6 @@ export type Database = {
           shift_id: string
         }[]
       }
-      complete_inventory_count: {
-        Args: {
-          target_lines: Json
-          target_note: string
-          target_organization_id: string
-          target_store_id: string
-        }
-        Returns: string
-      }
       complete_organization_export: {
         Args: {
           target_export_session_id: string
@@ -6566,21 +6557,13 @@ export type Database = {
         }
         Returns: string
       }
-      create_inventory_count_draft: {
-        Args: {
-          target_note?: string
-          target_organization_id: string
-          target_store_id: string
-        }
-        Returns: string
-      }
-      create_inventory_count_plan: {
+      create_inventory_count_plan_v2: {
         Args: {
           target_count_mode: string
           target_include_zero_stock: boolean
           target_note: string
           target_organization_id: string
-          target_scope_reference_id: string
+          target_scope_reference_id?: string
           target_scope_type: string
           target_selected_items: Json
           target_sort_mode: string
@@ -6588,9 +6571,9 @@ export type Database = {
         }
         Returns: string
       }
-      create_purchase_order: {
+      create_purchase_order_v2: {
         Args: {
-          target_expected_at: string
+          target_expected_at?: string
           target_lines: Json
           target_notes: string
           target_operation_id: string
@@ -7317,22 +7300,14 @@ export type Database = {
           was_replayed: boolean
         }[]
       }
-      post_inventory_count:
-        | {
-            Args: {
-              target_inventory_count_id: string
-              target_organization_id: string
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              target_inventory_count_id: string
-              target_operation_id: string
-              target_organization_id: string
-            }
-            Returns: undefined
-          }
+      post_inventory_count: {
+        Args: {
+          target_inventory_count_id: string
+          target_operation_id: string
+          target_organization_id: string
+        }
+        Returns: undefined
+      }
       prepare_organization_export: {
         Args: { target_organization_id: string }
         Returns: Json
@@ -7430,20 +7405,6 @@ export type Database = {
           was_replayed: boolean
         }[]
       }
-      record_inventory_adjustment: {
-        Args: {
-          target_approval_request_id?: string
-          target_note: string
-          target_operation_id: string
-          target_organization_id: string
-          target_product_id: string
-          target_quantity_delta: number
-          target_reason_code: string
-          target_store_id: string
-          target_variant_id: string
-        }
-        Returns: string
-      }
       record_inventory_adjustment_v2: {
         Args: {
           target_note: string
@@ -7453,6 +7414,20 @@ export type Database = {
           target_reason_code: string
           target_store_id: string
           target_variant_id: string
+        }
+        Returns: string
+      }
+      record_inventory_adjustment_v3: {
+        Args: {
+          target_approval_request_id?: string
+          target_note: string
+          target_operation_id: string
+          target_organization_id: string
+          target_product_id: string
+          target_quantity_delta: number
+          target_reason_code: string
+          target_store_id: string
+          target_variant_id?: string
         }
         Returns: string
       }
@@ -7600,13 +7575,13 @@ export type Database = {
           card_id: string
         }[]
       }
-      save_inventory_count_line: {
+      save_inventory_count_line_v2: {
         Args: {
           target_counted_quantity: number
           target_inventory_count_id: string
           target_organization_id: string
           target_product_id: string
-          target_variant_id: string
+          target_variant_id?: string
         }
         Returns: undefined
       }
@@ -8015,15 +7990,15 @@ export type Database = {
         }
         Returns: undefined
       }
-      upsert_inventory_replenishment_rule: {
+      upsert_inventory_replenishment_rule_v2: {
         Args: {
           target_organization_id: string
-          target_preferred_warehouse_id: string
+          target_preferred_warehouse_id?: string
           target_product_id: string
           target_reorder_point: number
           target_store_id: string
           target_target_stock: number
-          target_variant_id: string
+          target_variant_id?: string
         }
         Returns: string
       }
@@ -8200,3 +8175,7 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
+// Application convenience alias retained across Supabase CLI type regeneration.
+export type TableRow<TableName extends keyof DefaultSchema["Tables"]> =
+  Tables<TableName>;

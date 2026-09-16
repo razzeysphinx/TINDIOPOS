@@ -133,29 +133,6 @@ export const cancelPurchaseOrderSchema = z.object({
   note: z.string().trim().max(500),
 });
 
-export const completeInventoryCountSchema = z
-  .object({
-    storeId: z.uuid("Select a store."),
-    note: z.string().trim().max(500),
-    lines: z
-      .array(
-        saleableLine.extend({
-          countedQuantity,
-        }),
-      )
-      .min(1, "Add an item to the count.")
-      .max(500),
-  })
-  .superRefine((value, context) => {
-    if (!uniqueSaleableLines(value.lines)) {
-      context.addIssue({
-        code: "custom",
-        path: ["lines"],
-        message: "Each item can appear only once in a count.",
-      });
-    }
-  });
-
 export const createInventoryCountDraftSchema = z
   .object({
     storeId: z.uuid("Select a store."),

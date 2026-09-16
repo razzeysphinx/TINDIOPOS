@@ -3,12 +3,30 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(29);
 
+create function pg_temp.record_inventory_adjustment(
+  target_organization_id uuid,
+  target_store_id uuid,
+  target_product_id uuid,
+  target_variant_id uuid,
+  target_quantity_delta numeric,
+  target_reason_code text,
+  target_note text,
+  target_operation_id uuid,
+  target_approval_request_id uuid default null
+) returns uuid language sql as $$
+  select public.record_inventory_adjustment_v3(
+    target_organization_id, target_store_id, target_product_id,
+    target_quantity_delta, target_reason_code, target_note, target_operation_id,
+    target_approval_request_id, target_variant_id
+  );
+$$;
+
 select has_column('public', 'inventory_adjustments', 'operation_id', 'adjustment documents retain a stable operation identity');
 select has_column('public', 'inventory_adjustments', 'import_batch_id', 'CSV adjustment documents retain their import-batch identity');
 select has_table('public', 'inventory_adjustment_import_batches', 'adjustment imports have an immutable batch header');
-select has_function('public', 'record_inventory_adjustment', array['uuid', 'uuid', 'uuid', 'uuid', 'numeric', 'text', 'text', 'uuid', 'uuid'], 'the public controlled-adjustment command is present');
+select has_function('public', 'record_inventory_adjustment_v3', array['uuid', 'uuid', 'uuid', 'numeric', 'text', 'text', 'uuid', 'uuid', 'uuid'], 'the public controlled-adjustment command is present');
 select ok(
-  has_function_privilege('authenticated', 'public.record_inventory_adjustment(uuid,uuid,uuid,uuid,numeric,text,text,uuid,uuid)'::regprocedure, 'execute'),
+  has_function_privilege('authenticated', 'public.record_inventory_adjustment_v3(uuid,uuid,uuid,numeric,text,text,uuid,uuid,uuid)'::regprocedure, 'execute'),
   'authenticated callers may reach the canonical command, which performs its own authorization'
 );
 select ok(
@@ -102,6 +120,10 @@ select context.organization_id, role.id, 'inventory.adjust'
 from controlled_adjustment_context context
 join public.roles role on role.organization_id = context.organization_id and role.code = 'adjustment_operator'
 union all
+select context.organization_id, role.id, 'inventory.adjust.post'
+from controlled_adjustment_context context
+join public.roles role on role.organization_id = context.organization_id and role.code = 'adjustment_operator'
+union all
 select context.organization_id, role.id, 'inventory.view'
 from controlled_adjustment_context context
 join public.roles role on role.organization_id = context.organization_id and role.code = 'adjustment_viewer';
@@ -151,13 +173,13 @@ set local request.jwt.claim.sub = '95000000-0000-4000-8000-000000000002';
 
 select lives_ok(
   format(
-    $$select public.record_inventory_adjustment(%L, %L, %L, null, 7, 'PHASE5_DAMAGE', 'Damaged in the stock room.', %L, null)$$,
+    $$select pg_temp.record_inventory_adjustment(%L, %L, %L, null, 7, 'PHASE5_DAMAGE', 'Damaged in the stock room.', %L, null)$$,
     (select organization_id from controlled_adjustment_context),
     (select store_id from controlled_adjustment_context),
     (select product_id from controlled_adjustment_context),
     (select operation_id from controlled_adjustment_context)
   ),
-  'a custom role with only inventory.adjust and the assigned store can post a controlled adjustment'
+  'a custom adjustment poster with the assigned store can post a controlled adjustment'
 );
 reset role;
 select is(
@@ -179,7 +201,7 @@ set local role authenticated;
 set local request.jwt.claim.sub = '95000000-0000-4000-8000-000000000002';
 select lives_ok(
   format(
-    $$select public.record_inventory_adjustment(%L, %L, %L, null, 7, 'PHASE5_DAMAGE', 'Damaged in the stock room.', %L, null)$$,
+    $$select pg_temp.record_inventory_adjustment(%L, %L, %L, null, 7, 'PHASE5_DAMAGE', 'Damaged in the stock room.', %L, null)$$,
     (select organization_id from controlled_adjustment_context),
     (select store_id from controlled_adjustment_context),
     (select product_id from controlled_adjustment_context),
@@ -197,7 +219,7 @@ set local role authenticated;
 set local request.jwt.claim.sub = '95000000-0000-4000-8000-000000000002';
 select throws_ok(
   format(
-    $$select public.record_inventory_adjustment(%L, %L, %L, null, 8, 'PHASE5_DAMAGE', 'Damaged in the stock room.', %L, null)$$,
+    $$select pg_temp.record_inventory_adjustment(%L, %L, %L, null, 8, 'PHASE5_DAMAGE', 'Damaged in the stock room.', %L, null)$$,
     (select organization_id from controlled_adjustment_context),
     (select store_id from controlled_adjustment_context),
     (select product_id from controlled_adjustment_context),
@@ -209,7 +231,7 @@ select throws_ok(
 );
 select throws_ok(
   format(
-    $$select public.record_inventory_adjustment(%L, %L, %L, null, 1, 'PHASE5_DAMAGE', 'x', gen_random_uuid(), null)$$,
+    $$select pg_temp.record_inventory_adjustment(%L, %L, %L, null, 1, 'PHASE5_DAMAGE', 'x', gen_random_uuid(), null)$$,
     (select organization_id from controlled_adjustment_context),
     (select store_id from controlled_adjustment_context),
     (select product_id from controlled_adjustment_context)
@@ -231,7 +253,7 @@ set local request.jwt.claim.sub = '95000000-0000-4000-8000-000000000003';
 
 select throws_ok(
   format(
-    $$select public.record_inventory_adjustment(%L, %L, %L, null, 1, 'PHASE5_DAMAGE', 'Viewer must not adjust stock.', gen_random_uuid(), null)$$,
+    $$select pg_temp.record_inventory_adjustment(%L, %L, %L, null, 1, 'PHASE5_DAMAGE', 'Viewer must not adjust stock.', gen_random_uuid(), null)$$,
     (select organization_id from controlled_adjustment_context),
     (select store_id from controlled_adjustment_context),
     (select product_id from controlled_adjustment_context)
@@ -317,7 +339,7 @@ select is(
      and context.product_id = movement.product_id
   ),
   2::bigint,
-  'a custom inventory.adjust role can read its assigned store ledger through the same RLS boundary used by Inventory Activity'
+  'a custom adjustment poster can read its assigned store ledger through the same RLS boundary used by Inventory Activity'
 );
 reset role;
 

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import type { createClient } from "@/lib/supabase/server";
 
-export const INVENTORY_SCHEMA_CONTRACT_VERSION = 1;
+export const INVENTORY_SCHEMA_CONTRACT_VERSION = 2;
 
 export type InventorySchemaModule =
   | "count_batches"

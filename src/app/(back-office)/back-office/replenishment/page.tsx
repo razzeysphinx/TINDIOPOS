@@ -178,14 +178,14 @@ export default async function ReplenishmentPage({
     supabase.from("categories").select("id, name").eq("organization_id", organizationId).eq("is_archived", false).order("name"),
     activeTab === "levels"
       ? supabase.rpc("get_inventory_stock_page", {
-          requested_category_id: stockFilters.categoryId,
+          requested_category_id: stockFilters.categoryId ?? undefined,
           requested_page: stockPage,
           requested_page_size: stockPageSize,
           requested_restock_policy: stockFilters.restockPolicy,
-          requested_search: stockFilters.search || null,
+          requested_search: stockFilters.search || undefined,
           requested_sort: stockFilters.sort,
           requested_status: stockFilters.status,
-          requested_store_id: storeScope.selectedStoreId,
+          requested_store_id: storeScope.selectedStoreId ?? undefined,
           target_organization_id: organizationId,
         })
       : Promise.resolve({ data: null, error: null }),

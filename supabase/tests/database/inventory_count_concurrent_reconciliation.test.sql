@@ -14,7 +14,7 @@ select ok(
   'posting a count uses the reconciled expected quantity rather than the stale snapshot'
 );
 select ok(
-  not has_function_privilege('anon', 'public.save_inventory_count_line(uuid,uuid,uuid,uuid,numeric)', 'execute'),
+  not has_function_privilege('anon', 'public.save_inventory_count_line_v2(uuid,uuid,uuid,numeric,uuid)', 'execute'),
   'anonymous callers cannot save count lines'
 );
 
@@ -139,8 +139,8 @@ set local role authenticated;
 set local request.jwt.claim.sub = '94000000-0000-4000-8000-000000000002';
 
 update count_reconciliation_context
-set count_id = public.create_inventory_count_plan(
-  organization_id, store_id, 'Concurrent standard count', 'standard', 'selected', null,
+set count_id = public.create_inventory_count_plan_v2(
+  organization_id, store_id, 'Concurrent standard count', 'standard', 'selected',
   jsonb_build_array(jsonb_build_object('product_id', product_id, 'variant_id', null)),
   'product_name', true
 );
@@ -163,7 +163,7 @@ set local request.jwt.claim.sub = '94000000-0000-4000-8000-000000000002';
 
 select lives_ok(
   format(
-    $$select public.save_inventory_count_line(%L, %L, %L, null, 51)$$,
+    $$select public.save_inventory_count_line_v2(%L, %L, %L, 51)$$,
     (select organization_id from count_reconciliation_context),
     (select count_id from count_reconciliation_context),
     (select product_id from count_reconciliation_context)
@@ -202,7 +202,7 @@ select lives_ok(
   'the reconciled count can be submitted for review'
 );
 select lives_ok(
-  format($$select public.post_inventory_count(%L, %L)$$, (select organization_id from count_reconciliation_context), (select count_id from count_reconciliation_context)),
+  format($$select public.post_inventory_count(%L, %L, %L)$$, (select organization_id from count_reconciliation_context), (select count_id from count_reconciliation_context), '94000000-0000-4000-8000-000000000010'),
   'the reviewed count can be posted'
 );
 select is(
@@ -220,16 +220,14 @@ select is(
   'posted',
   'the count is marked posted exactly once'
 );
-select throws_ok(
-  format($$select public.post_inventory_count(%L, %L)$$, (select organization_id from count_reconciliation_context), (select count_id from count_reconciliation_context)),
-  '23514',
-  'Only a reviewed inventory count can be posted.',
-  'a duplicate count post is rejected'
+select lives_ok(
+  format($$select public.post_inventory_count(%L, %L, %L)$$, (select organization_id from count_reconciliation_context), (select count_id from count_reconciliation_context), '94000000-0000-4000-8000-000000000010'),
+  'a duplicate count post with the same operation ID is a no-op'
 );
 
 update count_reconciliation_context
-set blind_count_id = public.create_inventory_count_plan(
-  organization_id, store_id, 'Blind full-store count', 'blind', 'full_store', null,
+set blind_count_id = public.create_inventory_count_plan_v2(
+  organization_id, store_id, 'Blind full-store count', 'blind', 'full_store',
   '[]'::jsonb, 'sku', true
 );
 select is(
@@ -249,9 +247,9 @@ select is(
 );
 
 update count_reconciliation_context
-set category_count_id = public.create_inventory_count_plan(
-  organization_id, store_id, 'Category cycle count', 'standard', 'category', category_id,
-  '[]'::jsonb, 'category_name', true
+set category_count_id = public.create_inventory_count_plan_v2(
+  organization_id, store_id, 'Category cycle count', 'standard', 'category',
+  '[]'::jsonb, 'category_name', true, category_id
 );
 select is(
   (select count(*) from public.inventory_count_lines line join count_reconciliation_context context on context.category_count_id = line.inventory_count_id),
@@ -277,7 +275,7 @@ set local role authenticated;
 set local request.jwt.claim.sub = '94000000-0000-4000-8000-000000000002';
 
 select lives_ok(
-  format($$select public.save_inventory_count_line(%L, %L, %L, null, 52)$$, (select organization_id from count_reconciliation_context), (select category_count_id from count_reconciliation_context), (select product_id from count_reconciliation_context)),
+  format($$select public.save_inventory_count_line_v2(%L, %L, %L, 52)$$, (select organization_id from count_reconciliation_context), (select category_count_id from count_reconciliation_context), (select product_id from count_reconciliation_context)),
   'a category count saves a physical shortage against the reconciled projection'
 );
 select is(
@@ -298,7 +296,7 @@ select lives_ok(
   'the non-zero count variance can be reviewed'
 );
 select lives_ok(
-  format($$select public.post_inventory_count(%L, %L)$$, (select organization_id from count_reconciliation_context), (select category_count_id from count_reconciliation_context)),
+  format($$select public.post_inventory_count(%L, %L, %L)$$, (select organization_id from count_reconciliation_context), (select category_count_id from count_reconciliation_context), '94000000-0000-4000-8000-000000000011'),
   'the non-zero count variance can be posted'
 );
 select is(

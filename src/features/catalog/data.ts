@@ -8,6 +8,12 @@ import type {
 import type { BusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 
+function normalizeRestockPolicy(
+  value: string,
+): "restock" | "do_not_restock" {
+  return value === "do_not_restock" ? value : "restock";
+}
+
 async function loadCatalogCostEntries(
   supabase: Awaited<ReturnType<typeof createClient>>,
   organizationId: string,
@@ -114,7 +120,10 @@ export async function loadCatalogWorkspace(
     stores: storesResult.data ?? [],
     products,
     variants: variantsResult.data ?? [],
-    settings: settingsResult.data ?? [],
+    settings: (settingsResult.data ?? []).map((setting) => ({
+      ...setting,
+      restock_policy: normalizeRestockPolicy(setting.restock_policy),
+    })),
     costs,
     inventoryLevels: inventoryLevelsResult.data ?? [],
     units: unitsResult.data ?? [],

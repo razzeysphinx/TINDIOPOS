@@ -134,6 +134,10 @@ const INVENTORY_MOVEMENT_SOURCE_TYPES = [
 
 type InventoryMovementSourceType = (typeof INVENTORY_MOVEMENT_SOURCE_TYPES)[number];
 
+function isInventoryTab(value: string | undefined, tabs: readonly string[]): value is InventoryTab {
+  return value !== undefined && tabs.includes(value);
+}
+
 type InventoryDetailPosition = {
   id: string | null;
   product_id: string;
@@ -149,7 +153,7 @@ function resolveInventoryTab(value: string | string[] | undefined, workspace: "c
   if (workspace === "control" && candidate === "health") return "overview";
   if (candidate === "purchasing") return "purchase-orders";
   const allowedTabs = workspace === "purchasing" ? PURCHASING_TABS : INVENTORY_CONTROL_TABS.map((tab) => tab.id);
-  if (allowedTabs.includes(candidate as never)) return candidate as InventoryTab;
+  if (isInventoryTab(candidate, allowedTabs)) return candidate;
   return workspace === "purchasing" ? "purchase-orders" : "overview";
 }
 
@@ -1501,9 +1505,6 @@ export async function InventoryWorkspacePage({
           unitCostMinor: purchaseOrderLineCostById.get(line.id) ?? 0,
         })),
     }));
-  const receivableOrders = purchaseOrderHistory.filter(
-    (order) => (order.status === "ordered" || order.status === "partially_received") && order.lines.some((line) => line.receivedQuantity < line.orderedQuantity),
-  );
   const purchaseOrderLineById = new Map(purchaseOrderLines.map((line) => [line.id, line]));
   const receiptLinesByReceipt = new Map<string, AdvancedGoodsReceipt["lines"]>();
   for (const line of goodsReceiptLines) {
@@ -2240,27 +2241,6 @@ export async function InventoryWorkspacePage({
             stores={stores.map(({ id, name }) => ({ id, name }))}
             suppliers={countSuppliers}
           />
-          {/* CANDIDATE_FOR_REMOVAL: the previous one-step count form remains for source compatibility but is no longer mounted. The document workspace preserves drafts and server-reviewed posting. */}
-          {false ? <>
-        <AdvancedInventoryWorkflows
-          stores={stores.map(({ id, name }) => ({ id, name }))}
-          items={advancedItems}
-          suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, contactName: supplier.contact_name, email: supplier.email, phone: supplier.phone, address: supplier.address, notes: supplier.notes, isActive: supplier.is_active }))}
-          purchaseOrders={receivableOrders}
-          currencyCode={context.organization.currency_code}
-          adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name }))}
-          sections={["counts"]}
-        />
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent count records</CardTitle>
-            <CardDescription>A completed count keeps both the expected and counted quantities. If they differ, TINDIO records the correction in stock activity.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {inventoryCounts.length ? <div className="divide-y rounded-xl border">{inventoryCounts.map((count) => <article className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4" key={count.id}><div><p className="font-medium">Count #{count.count_number} · {storeNames.get(count.store_id) ?? "Inactive store"}</p><p className="mt-1 text-xs text-muted-foreground">{count.note || "No count note"}</p></div><div className="text-sm text-muted-foreground"><p className="capitalize">{count.status === "posted" ? "Posted" : count.status}</p><p className="mt-1 text-xs">{formatDate(count.completed_at ?? count.started_at)}</p></div></article>)}</div> : <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">No posted inventory counts are available in this store scope yet.</p>}
-          </CardContent>
-        </Card>
-          </> : null}
         </>
       ) : null}
 

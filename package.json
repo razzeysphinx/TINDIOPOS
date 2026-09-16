@@ -34,6 +34,7 @@
     "test:inventory-valuation": "node --test scripts/inventory-valuation-correctness-check.mjs",
     "test:inventory-export-framework": "node --test scripts/inventory-export-framework-check.mjs",
     "test:inventory-counts": "node --test scripts/inventory-adjustments-counts-check.mjs",
+    "test:inventory-rpc-contract": "node --test scripts/inventory-rpc-contract-hardening-check.mjs",
     "test:inventory-count-stocktake": "node --test scripts/inventory-count-stocktake-check.mjs",
     "test:inventory-idempotency-recovery": "node --test scripts/inventory-idempotency-failure-recovery-check.mjs",
     "test:inventory-performance-accessibility": "node --test scripts/inventory-performance-accessibility-check.mjs",

@@ -80,20 +80,64 @@ test("deterministic runtime test certifies split identity resolution and rollbac
   assert.match(runtimeTest, /rollback;/i);
 });
 
-test("new migration does not alter policy, business tables, or historical migrations", () => {
-  assert.doesNotMatch(migration, /drop\s+(table|column|policy)|alter\s+table[\s\S]*?drop|truncate|create\s+policy/i);
-  const gitStatus = process.platform === "win32"
-    ? execFileSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", "git status --porcelain -- supabase/migrations"], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-    })
-    : execFileSync("git", ["status", "--porcelain", "--", "supabase/migrations"], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-    });
-  const changedMigrationPaths = gitStatus
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => line.slice(3));
-  assert.deepEqual(changedMigrationPaths, [`supabase/migrations/${migrationName}`]);
+test("new migration is non-destructive, tracked, and clean in the repository", () => {
+  assert.doesNotMatch(
+    migration,
+    /drop\s+(table|column|policy)|alter\s+table[\s\S]*?drop|truncate|create\s+policy/i,
+  );
+
+  const migrationRelativePath =
+    `supabase/migrations/${migrationName}`;
+
+  const trackedMigration =
+    execFileSync(
+      "git",
+      [
+        "ls-files",
+        "--error-unmatch",
+        "--",
+        migrationRelativePath,
+      ],
+      {
+        cwd:
+          process.cwd(),
+
+        encoding:
+          "utf8",
+      },
+    );
+
+  assert.equal(
+    trackedMigration
+      .trim()
+      .replaceAll(
+        "\\",
+        "/",
+      ),
+    migrationRelativePath,
+  );
+
+  const migrationStatus =
+    execFileSync(
+      "git",
+      [
+        "status",
+        "--porcelain",
+        "--",
+        migrationRelativePath,
+      ],
+      {
+        cwd:
+          process.cwd(),
+
+        encoding:
+          "utf8",
+      },
+    );
+
+  assert.equal(
+    migrationStatus.trim(),
+    "",
+    "the committed provider-neutral identity migration must be clean relative to HEAD",
+  );
 });

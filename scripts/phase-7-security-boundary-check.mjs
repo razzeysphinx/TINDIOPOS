@@ -175,8 +175,23 @@ test("sensitive server actions require a business context and their established 
     /hasAnyInventoryCapability\(context,\s*\[[\s\S]*?"inventory\.adjust\.create"[\s\S]*?"inventory\.adjust\.post"[\s\S]*?\]\)/,
     "inventory adjustment checks the granular create/post capability boundary",
   );
-  assert.match(inventoryActions, /\.rpc\("record_inventory_adjustment"/);
-  assert.doesNotMatch(inventoryActions, /\.rpc\("record_inventory_adjustment_v2"/);
+  assert.match(
+    inventoryActions,
+    /\.rpc\("record_inventory_adjustment_v3"\s*,/,
+    "inventory adjustment uses the current v3 command contract",
+  );
+
+  assert.doesNotMatch(
+    inventoryActions,
+    /\.rpc\("record_inventory_adjustment"\s*,/,
+    "retired base inventory adjustment RPC must not be called",
+  );
+
+  assert.doesNotMatch(
+    inventoryActions,
+    /\.rpc\("record_inventory_adjustment_v2"\s*,/,
+    "retired v2 inventory adjustment RPC must not be called",
+  );
   assert.match(catalogService, /price_override_minor/);
   assert.match(catalogService, /organization_id: context\.organization\.id/);
 });

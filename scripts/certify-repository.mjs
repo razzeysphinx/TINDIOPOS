@@ -1,14 +1,17 @@
 import {
-  createHash,
-} from "node:crypto";
-
-import {
   readFile,
-  writeFile,
 } from "node:fs/promises";
 
 import path from "node:path";
 import process from "node:process";
+
+import {
+  verifyGeneratedTextContract,
+} from "./lib/certification-contract.mjs";
+
+import {
+  parseAndValidateLocalSupabaseStatus,
+} from "./lib/certification-safety.mjs";
 
 import {
   runCommand,
@@ -208,25 +211,6 @@ function runCollectableStep({
   return null;
 }
 
-function sha256(value) {
-  return createHash("sha256")
-    .update(value)
-    .digest("hex");
-}
-
-function isLocalHostname(
-  hostname,
-) {
-  return new Set([
-    "localhost",
-    "127.0.0.1",
-    "::1",
-    "[::1]",
-  ]).has(
-    hostname.toLowerCase(),
-  );
-}
-
 async function readPackage() {
   return JSON.parse(
     await readFile(
@@ -322,7 +306,7 @@ function assertTrackedMigrationsClean() {
       [
         "status",
         "--porcelain",
-        "--untracked-files=no",
+        "--untracked-files=all",
         "--",
         "supabase/migrations",
       ],
@@ -355,81 +339,30 @@ function assertTrackedMigrationsClean() {
     );
 
     fail(
-      "Tracked migration files are modified. Historical migrations are immutable.",
+      "Migration directory contains uncommitted changes. Commit approved forward migrations before authoritative certification; historical migrations are immutable.",
     );
   }
 
   console.log(
-    "Tracked migration working tree: CLEAN",
+    "Migration working tree: CLEAN",
   );
 }
 
 function assertLocalSupabaseStatus(
   output,
 ) {
-  let status;
-
   try {
-    status =
-      JSON.parse(
+    return (
+      parseAndValidateLocalSupabaseStatus(
         output,
-      );
-  } catch {
-    fail(
-      "Supabase status did not return unambiguous JSON.",
-    );
-  }
-
-  if (
-    status === null
-    || Array.isArray(status)
-    || typeof status !== "object"
-  ) {
-    fail(
-      "Supabase status did not return a service object.",
-    );
-  }
-
-  const serviceUrls =
-    Object.entries(status)
-      .filter(
-        ([key, value]) =>
-          key.endsWith("_URL")
-          && typeof value === "string",
-      );
-
-  if (
-    serviceUrls.length === 0
-  ) {
-    fail(
-      "Supabase status did not expose a verifiable local service URL.",
-    );
-  }
-
-  for (
-    const [, serviceUrl]
-    of serviceUrls
-  ) {
-    let parsed;
-
-    try {
-      parsed =
-        new URL(serviceUrl);
-    } catch {
-      fail(
-        "Supabase status contained an ambiguous service URL.",
-      );
-    }
-
-    if (
-      !isLocalHostname(
-        parsed.hostname,
       )
-    ) {
-      fail(
-        "Supabase status resolved a non-local service target.",
-      );
-    }
+    );
+  } catch (error) {
+    fail(
+      error instanceof Error
+        ? error.message
+        : "Supabase status validation failed.",
+    );
   }
 }
 
@@ -524,64 +457,84 @@ function ensureLocalSupabase() {
 }
 
 async function verifyGeneratedTypesStable() {
-  const before =
-    await readFile(
-      DATABASE_TYPES_PATH,
-      "utf8",
-    );
+  console.log("");
 
-  const beforeHash =
-    sha256(
-      before.replaceAll(
-        "\r\n",
-        "\n",
-      ),
-    );
+  console.log(
+    "=== Generate database types from local schema ===",
+  );
 
-  runStep({
-    name:
-      "Generate database types from local schema",
-    command: "node",
-    args: [
-      "scripts/generate-local-database-types.mjs",
-    ],
-  });
+  console.log(
+    "$ node scripts/generate-local-database-types.mjs",
+  );
 
-  const after =
-    await readFile(
-      DATABASE_TYPES_PATH,
-      "utf8",
-    );
+  let verification;
 
-  const afterHash =
-    sha256(
-      after.replaceAll(
-        "\r\n",
-        "\n",
-      ),
-    );
+  try {
+    verification =
+      await verifyGeneratedTextContract({
+        filePath:
+          DATABASE_TYPES_PATH,
 
-  if (
-    beforeHash !== afterHash
-  ) {
-    await writeFile(
-      DATABASE_TYPES_PATH,
-      before,
-      "utf8",
-    );
+        label:
+          "Generated database.types.ts",
+
+        generate:
+          () =>
+            runCommand(
+              "node",
+              [
+                "scripts/generate-local-database-types.mjs",
+              ],
+              {
+                cwd:
+                  ROOT,
+
+                env:
+                  process.env,
+
+                capture:
+                  true,
+              },
+            ),
+      });
+  } catch (error) {
+    const commandResult =
+      error
+      && typeof error === "object"
+      && "commandResult" in error
+        ? error.commandResult
+        : null;
+
+    if (
+      commandResult
+      && commandResult.stdout
+    ) {
+      process.stdout.write(
+        commandResult.stdout,
+      );
+    }
+
+    if (
+      commandResult
+      && commandResult.stderr
+    ) {
+      process.stderr.write(
+        commandResult.stderr,
+      );
+    }
 
     fail(
-      "Generated database.types.ts drifted from the checked-in contract. Original bytes were restored.",
+      error instanceof Error
+        ? error.message
+        : "Generated database type verification failed.",
     );
   }
 
   if (
-    before !== after
+    verification.bytesChanged
   ) {
-    await writeFile(
-      DATABASE_TYPES_PATH,
-      before,
-      "utf8",
+    console.log(
+      "Generated database type bytes changed only in an equivalent normalized representation; original bytes restored.",
     );
   }
 

@@ -854,6 +854,15 @@ async function runDatabaseCertification() {
     ],
   });
 
+  runStep({
+    name:
+      "Inventory reconciliation and concurrency evidence",
+    command: "node",
+    args: [
+      "scripts/inventory-reconciliation-concurrency-certification.mjs",
+    ],
+  });
+
   await verifyGeneratedTypesStable();
 
   assertTrackedMigrationsClean();

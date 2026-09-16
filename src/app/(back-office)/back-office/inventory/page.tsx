@@ -623,7 +623,17 @@ export async function InventoryWorkspacePage({
     recentMovementsQuery?.eq("source_type", activitySourceFilter.type).eq("source_id", activitySourceFilter.id);
   }
   if (activeTab === "activity") {
-    recentMovementsQuery?.range(activityPageOffset, activityPageOffset + INVENTORY_ACTIVITY_PAGE_SIZE - 1);
+    /*
+     * PostgREST range bounds are inclusive.
+     *
+     * Fetch pageSize + 1 records so the extra row can prove another
+     * page exists. The rendered collection is sliced back to
+     * INVENTORY_ACTIVITY_PAGE_SIZE below.
+     */
+    recentMovementsQuery?.range(
+      activityPageOffset,
+      activityPageOffset + INVENTORY_ACTIVITY_PAGE_SIZE,
+    );
   } else {
     recentMovementsQuery?.limit(30);
   }

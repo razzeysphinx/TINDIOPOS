@@ -93,7 +93,60 @@ test("navigation remains permission-aware and Inventory uses three sibling works
   // for removal while historical QA is completed.
   assert.match(inventory, /InventoryTransferWorkspace/);
   assert.match(inventory, /sections=\{\["transfer-receipt"\]\}/);
-  assert.match(advancedWorkflows, /export type AdvancedInventorySection = "purchasing" \| "counts" \| "transfers";/);
+  /*
+   * Inventory counts were intentionally removed from
+   * AdvancedInventoryWorkflows when the dedicated, document-based
+   * InventoryCountWorkspace became canonical.
+   *
+   * Do not regress to the retired one-step count workflow.
+   */
+  assert.match(
+    advancedWorkflows,
+    /export type AdvancedInventorySection = "purchasing" \| "transfers";/,
+    "advanced inventory workflows retain purchasing and transfer responsibilities",
+  );
+
+  assert.doesNotMatch(
+    advancedWorkflows,
+    /completeInventoryCountAction/,
+    "retired one-step inventory count completion must not return to advanced workflows",
+  );
+
+  assert.doesNotMatch(
+    advancedWorkflows,
+    /sections\.includes\("counts"\)/,
+    "inventory counts must remain outside AdvancedInventoryWorkflows",
+  );
+
+  assert.match(
+    inventory,
+    /import \{ InventoryCountWorkspace \} from "@\/features\/inventory\/inventory-count-workspace";/,
+    "Inventory Control uses the dedicated inventory count workspace",
+  );
+
+  assert.match(
+    countWorkspace,
+    /createInventoryCountDraftAction/,
+    "dedicated count workspace creates accountable count documents",
+  );
+
+  assert.match(
+    countWorkspace,
+    /saveInventoryCountLineAction/,
+    "dedicated count workspace saves physical count lines",
+  );
+
+  assert.match(
+    countWorkspace,
+    /submitInventoryCountForReviewAction/,
+    "dedicated count workspace preserves the review lifecycle",
+  );
+
+  assert.match(
+    countWorkspace,
+    /postInventoryCountAction/,
+    "dedicated count workspace posts reviewed counts through the canonical command",
+  );
   assert.match(integrityWorkflows, /export type InventoryIntegritySection =/);
 });
 

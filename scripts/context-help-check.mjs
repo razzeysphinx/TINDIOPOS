@@ -4,11 +4,11 @@ import test from "node:test";
 
 const source = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-const [contextHelp, reports, inventoryPage, inventoryStock] = await Promise.all([
+const [contextHelp, reports, inventoryStock, inventoryHealth] = await Promise.all([
   source("../src/components/back-office/context-help.tsx"),
   source("../src/features/reports/reporting-overview.tsx"),
-  source("../src/app/(back-office)/back-office/inventory/page.tsx"),
   source("../src/features/inventory/inventory-stock-view.tsx"),
+  source("../src/features/inventory/inventory-health-workspace.tsx"),
 ]);
 
 test("contextual help uses one accessible interactive popover implementation", () => {
@@ -35,16 +35,21 @@ test("contextual help is compact, meaningful, and has one active popup at a time
   assert.match(contextHelp, /<Popover\.Description/);
 });
 
-test("all existing Back Office question-mark help call sites use the shared component", () => {
+test("existing question-mark help call sites use the shared ContextHelp component", () => {
   for (const [label, content] of [
     ["report metric definitions", reports],
-    ["inventory health", inventoryPage],
     ["inventory stock", inventoryStock],
   ]) {
     assert.match(content, /<ContextHelp/, `${label} must use the shared contextual-help component`);
   }
   assert.match(reports, /Completed sales minus recorded refunds/);
   assert.match(inventoryStock, /quantity TINDIO currently records/);
+});
+
+test("inventory health uses direct explanatory copy instead of requiring an orphan help control", () => {
+  assert.match(inventoryHealth, /Inventory overview/);
+  assert.match(inventoryHealth, /Signals are derived from current stock, completed counts, and open inventory documents/);
+  assert.match(inventoryHealth, /This view never changes stock automatically/);
 });
 
 console.log("Contextual-help interaction and coverage checks passed.");

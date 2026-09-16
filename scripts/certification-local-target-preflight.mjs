@@ -1,0 +1,396 @@
+import {
+  readFile,
+} from "node:fs/promises";
+
+import path from "node:path";
+import process from "node:process";
+
+const ROOT = process.cwd();
+
+const ENV_FILES = [
+  ".env",
+  ".env.local",
+  ".env.development",
+  ".env.development.local",
+];
+
+/*
+ * These values describe the Supabase application target.
+ *
+ * During LOCAL certification, a configured value in this group must be
+ * local. They are part of TINDIO's current Supabase runtime surface.
+ */
+const BLOCKING_LOCAL_TARGETS = [
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "SUPABASE_URL",
+];
+
+/*
+ * These are commonly used by PostgreSQL/Neon tooling, but TINDIO's current
+ * certification engine does NOT consume them.
+ *
+ * All destructive certification commands use an explicit Supabase --local
+ * flag, and certify-repository.mjs additionally validates the actual local
+ * Supabase service URLs returned by `supabase status`.
+ *
+ * Therefore a remote value here is informational, not a blocker.
+ */
+const INFORMATIONAL_DATABASE_TARGETS = [
+  "DATABASE_URL",
+  "DIRECT_URL",
+  "POSTGRES_URL",
+  "SUPABASE_DB_URL",
+  "NEON_DATABASE_URL",
+];
+
+const LOCAL_HOSTS = new Set([
+  "localhost",
+  "127.0.0.1",
+  "::1",
+  "[::1]",
+]);
+
+function parseDotenv(source) {
+  const values = new Map();
+
+  for (
+    const rawLine
+    of source.split(/\r?\n/)
+  ) {
+    const line =
+      rawLine.trim();
+
+    if (
+      line.length === 0
+      || line.startsWith("#")
+    ) {
+      continue;
+    }
+
+    const normalized =
+      line.startsWith("export ")
+        ? line.slice(7).trim()
+        : line;
+
+    const separator =
+      normalized.indexOf("=");
+
+    if (separator <= 0) {
+      continue;
+    }
+
+    const key =
+      normalized
+        .slice(0, separator)
+        .trim();
+
+    let value =
+      normalized
+        .slice(separator + 1)
+        .trim();
+
+    if (
+      (
+        value.startsWith("\"")
+        && value.endsWith("\"")
+      )
+      || (
+        value.startsWith("'")
+        && value.endsWith("'")
+      )
+    ) {
+      value =
+        value.slice(1, -1);
+    }
+
+    values.set(
+      key,
+      value,
+    );
+  }
+
+  return values;
+}
+
+async function readOptionalFile(
+  relativePath,
+) {
+  try {
+    return await readFile(
+      path.join(
+        ROOT,
+        relativePath,
+      ),
+      "utf8",
+    );
+  } catch (error) {
+    if (
+      error
+      && typeof error === "object"
+      && "code" in error
+      && error.code === "ENOENT"
+    ) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function classifyTarget(value) {
+  if (
+    typeof value !== "string"
+    || value.trim() === ""
+  ) {
+    return "MISSING";
+  }
+
+  const normalized =
+    value.trim();
+
+  if (
+    normalized.includes("${")
+    || normalized.includes("$(")
+  ) {
+    return "AMBIGUOUS";
+  }
+
+  try {
+    const parsed =
+      new URL(normalized);
+
+    const supportedProtocols =
+      new Set([
+        "http:",
+        "https:",
+        "postgres:",
+        "postgresql:",
+      ]);
+
+    if (
+      !supportedProtocols.has(
+        parsed.protocol,
+      )
+    ) {
+      return "AMBIGUOUS";
+    }
+
+    return LOCAL_HOSTS.has(
+      parsed.hostname.toLowerCase(),
+    )
+      ? "LOCAL"
+      : "REMOTE";
+  } catch {
+    return "AMBIGUOUS";
+  }
+}
+
+const fileValues =
+  new Map();
+
+for (const file of ENV_FILES) {
+  const source =
+    await readOptionalFile(file);
+
+  if (source === null) {
+    continue;
+  }
+
+  fileValues.set(
+    file,
+    parseDotenv(source),
+  );
+}
+
+function collectCandidates(
+  variable,
+) {
+  const candidates = [];
+
+  for (
+    const [, values]
+    of fileValues
+  ) {
+    if (values.has(variable)) {
+      candidates.push(
+        values.get(variable),
+      );
+    }
+  }
+
+  if (
+    Object.prototype
+      .hasOwnProperty
+      .call(
+        process.env,
+        variable,
+      )
+  ) {
+    candidates.push(
+      process.env[variable],
+    );
+  }
+
+  return candidates;
+}
+
+function overallClassification(
+  candidates,
+) {
+  if (
+    candidates.length === 0
+  ) {
+    return "MISSING";
+  }
+
+  const classifications =
+    candidates.map(
+      classifyTarget,
+    );
+
+  if (
+    classifications.includes(
+      "REMOTE",
+    )
+  ) {
+    return "REMOTE";
+  }
+
+  if (
+    classifications.includes(
+      "AMBIGUOUS",
+    )
+  ) {
+    return "AMBIGUOUS";
+  }
+
+  if (
+    classifications.every(
+      (classification) =>
+        classification ===
+        "MISSING",
+    )
+  ) {
+    return "MISSING";
+  }
+
+  return "LOCAL";
+}
+
+let blocked = false;
+
+console.log(
+  "TINDIO DATABASE CERTIFICATION PREFLIGHT",
+);
+
+console.log(
+  "=======================================",
+);
+
+console.log("");
+
+console.log(
+  "LOCAL CERTIFICATION TARGETS",
+);
+
+console.log(
+  "---------------------------",
+);
+
+for (
+  const variable
+  of BLOCKING_LOCAL_TARGETS
+) {
+  const status =
+    overallClassification(
+      collectCandidates(
+        variable,
+      ),
+    );
+
+  console.log(
+    `${variable}: ${status}`,
+  );
+
+  if (
+    status === "REMOTE"
+    || status === "AMBIGUOUS"
+  ) {
+    blocked = true;
+  }
+}
+
+console.log("");
+
+console.log(
+  "INFORMATIONAL DATABASE CONFIGURATION",
+);
+
+console.log(
+  "------------------------------------",
+);
+
+for (
+  const variable
+  of INFORMATIONAL_DATABASE_TARGETS
+) {
+  const status =
+    overallClassification(
+      collectCandidates(
+        variable,
+      ),
+    );
+
+  const suffix =
+    status === "REMOTE"
+      ? " (NOT USED BY LOCAL CERTIFICATION)"
+      : "";
+
+  console.log(
+    `${variable}: ${status}${suffix}`,
+  );
+}
+
+console.log("");
+
+console.log(
+  "SAFETY MODEL",
+);
+
+console.log(
+  "------------",
+);
+
+console.log(
+  "Destructive certification commands are required to use explicit Supabase --local mode.",
+);
+
+console.log(
+  "The certification engine separately validates actual Supabase service URLs before database reset.",
+);
+
+console.log(
+  "No environment variable value, hostname, username, password, key, or connection string is printed.",
+);
+
+console.log("");
+
+if (blocked) {
+  console.error(
+    "DATABASE CERTIFICATION BLOCKED:",
+  );
+
+  console.error(
+    "the configured Supabase application target is remote or ambiguous.",
+  );
+
+  console.error(
+    "No destructive database certification command was executed.",
+  );
+
+  process.exit(1);
+}
+
+console.log(
+  "PASS â€” local certification target is safe.",
+);

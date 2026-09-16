@@ -25,7 +25,7 @@ select is(
 );
 select ok(to_regprocedure('public.create_supply_chain_warehouse(uuid,uuid,text,text,text)') is not null, 'warehouse routine exists');
 select ok(to_regprocedure('public.update_supplier_lead_time(uuid,uuid,integer)') is not null, 'supplier lead-time routine exists');
-select ok(to_regprocedure('public.upsert_inventory_replenishment_rule(uuid,uuid,uuid,uuid,uuid,numeric,numeric)') is not null, 'replenishment-rule routine exists');
+select ok(to_regprocedure('public.upsert_inventory_replenishment_rule_v2(uuid,uuid,uuid,numeric,numeric,uuid,uuid)') is not null, 'replenishment-rule v2 routine exists');
 select ok(to_regprocedure('public.create_stock_request(uuid,uuid,uuid,text,jsonb,uuid)') is not null, 'idempotent stock-request submission routine exists');
 select ok(to_regprocedure('public.approve_stock_request(uuid,uuid,jsonb)') is not null, 'stock-request approval routine exists');
 select ok(to_regprocedure('public.start_stock_request_picking(uuid,uuid)') is not null, 'stock-request picking routine exists');
@@ -82,8 +82,8 @@ set product_id = public.create_catalog_product(
 select public.create_inventory_adjustment_reason(
   (select organization_id from supply_chain_context), 'SEED', 'Opening supply chain stock', 'ADJUSTMENT'
 );
-select public.record_inventory_adjustment(
-  (select organization_id from supply_chain_context), (select source_store_id from supply_chain_context), (select product_id from supply_chain_context), null, 10, 'SEED', 'Seed warehouse stock', gen_random_uuid(), null
+select public.record_inventory_adjustment_v3(
+  (select organization_id from supply_chain_context), (select source_store_id from supply_chain_context), (select product_id from supply_chain_context), 10, 'SEED', 'Seed warehouse stock', gen_random_uuid()
 );
 
 update supply_chain_context
@@ -93,12 +93,11 @@ select is((select lead_time_days from public.suppliers where id = (select suppli
 create temporary table lead_time_purchase_context (purchase_order_id uuid not null);
 grant select, insert on lead_time_purchase_context to authenticated;
 insert into lead_time_purchase_context (purchase_order_id)
-select public.create_purchase_order(
+select public.create_purchase_order_v2(
   (select organization_id from supply_chain_context),
   (select source_store_id from supply_chain_context),
   (select supplier_id from supply_chain_context),
   'Lead-time test purchase order',
-  null,
   jsonb_build_array(jsonb_build_object('product_id', (select product_id from supply_chain_context), 'variant_id', null, 'purchase_unit_code', 'each', 'quantity', '1', 'unit_cost_minor', 1000)),
   gen_random_uuid()
 );
@@ -112,9 +111,13 @@ update supply_chain_context
 set warehouse_id = public.create_supply_chain_warehouse(organization_id, source_store_id, 'CENTRAL', 'Central warehouse', 'Primary dispatch location');
 select is((select count(*) from public.supply_chain_warehouses), 1::bigint, 'warehouse location is retained');
 
-select public.upsert_inventory_replenishment_rule(
-  (select organization_id from supply_chain_context), (select destination_store_id from supply_chain_context), (select product_id from supply_chain_context), null,
-  (select warehouse_id from supply_chain_context), 3, 10
+select public.upsert_inventory_replenishment_rule_v2(
+  target_organization_id => (select organization_id from supply_chain_context),
+  target_store_id => (select destination_store_id from supply_chain_context),
+  target_product_id => (select product_id from supply_chain_context),
+  target_reorder_point => 3,
+  target_target_stock => 10,
+  target_preferred_warehouse_id => (select warehouse_id from supply_chain_context)
 );
 select is((select target_stock from public.inventory_replenishment_rules), 10::numeric, 'target stock rule is saved');
 

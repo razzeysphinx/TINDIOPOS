@@ -19,13 +19,13 @@ test("Inventory read and count access do not expose unrelated mutation workspace
   const layout = await source("src/app/(back-office)/back-office/layout.tsx");
   const dal = await source("src/lib/auth/dal.ts");
 
-  // Legacy permissions and granular capabilities are both supported so
-  // existing custom roles remain compatible while new roles stay scoped.
+  // The page composes legacy read/manage permissions with the granular
+  // capabilities that authorize specific inventory mutations.
   for (const permission of [
     "inventory.view",
-    "inventory.adjust",
-    "inventory.count",
     "inventory.manage",
+    "inventory.adjust.create",
+    "inventory.adjust.post",
     "inventory.count.create",
     "inventory.count.finalize",
     "inventory.valuation.view",
@@ -43,9 +43,8 @@ test("Inventory read and count access do not expose unrelated mutation workspace
   assert.match(navigation, /canManage \|\| canTransfer \|\| item\.id === "levels"/);
   assert.match(layout, /permission === "inventory\.count\.create"/);
   assert.match(layout, /permission === "inventory\.count\.finalize"/);
-  assert.match(dal, /"inventory\.view"/);
-  assert.match(dal, /"inventory\.count\.create"/);
-  assert.match(dal, /"inventory\.count\.finalize"/);
+  assert.match(dal, /hasInventoryBackOfficeResponsibility/);
+  assert.match(dal, /hasInventoryControlResponsibility/);
 });
 
 test("Phase 8 never serializes raw inventory cost fields to client workspaces", async () => {

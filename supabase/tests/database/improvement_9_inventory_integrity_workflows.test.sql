@@ -34,7 +34,7 @@ select has_column('public', 'inventory_movements', 'unit_cost_minor', 'ledger re
 select has_column('public', 'sale_items', 'cogs_minor', 'sale items retain immutable COGS');
 select ok(to_regprocedure('public.update_inventory_policy(uuid,uuid,text)') is not null, 'negative-stock policy routine exists');
 select ok(to_regprocedure('public.create_inventory_adjustment_reason(uuid,text,text,text)') is not null, 'adjustment reason routine exists');
-select ok(to_regprocedure('public.record_inventory_adjustment(uuid,uuid,uuid,uuid,numeric,text,text,uuid,uuid)') is not null, 'controlled adjustment routine exists');
+select ok(to_regprocedure('public.record_inventory_adjustment_v3(uuid,uuid,uuid,numeric,text,text,uuid,uuid,uuid)') is not null, 'controlled adjustment v3 routine exists');
 select ok(to_regprocedure('public.ship_stock_transfer(uuid,uuid,uuid,jsonb,text)') is not null, 'legacy immediate-shipment routine is retained for migration compatibility');
 select ok(to_regprocedure('public.receive_stock_transfer(uuid,uuid,jsonb,text,uuid)') is not null, 'idempotent legacy transfer-receipt routine exists');
 select ok(to_regprocedure('public.return_to_supplier(uuid,uuid,uuid,jsonb,text,uuid)') is not null, 'idempotent supplier return routine exists');
@@ -49,7 +49,7 @@ select ok(
   exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'supplier_returns'
-      and policyname = 'supplier_returns_select_authorized_scope'
+      and policyname = 'supplier_returns_select_purchasing_scope'
       and qual like '%has_store_read_scope%'
   ),
   'supplier-return headers apply the central store read scope'
@@ -58,7 +58,7 @@ select ok(
   exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'supplier_return_lines'
-      and policyname = 'supplier_return_lines_select_authorized_scope'
+      and policyname = 'supplier_return_lines_select_purchasing_scope'
       and qual like '%has_store_read_scope%'
   ),
   'supplier-return lines inherit the originating store scope'
@@ -131,8 +131,8 @@ select is((select count(*) from public.inventory_adjustment_reasons), 1::bigint,
 create temporary table integrity_purchase_context (purchase_order_id uuid, purchase_order_line_id uuid);
 grant select, insert, update on integrity_purchase_context to authenticated;
 insert into integrity_purchase_context (purchase_order_id)
-select public.create_purchase_order(
-  context.organization_id, context.store_id, context.supplier_id, 'Integrity delivery', null,
+select public.create_purchase_order_v2(
+  context.organization_id, context.store_id, context.supplier_id, 'Integrity delivery',
   jsonb_build_array(jsonb_build_object('product_id', context.product_id, 'variant_id', null, 'purchase_unit_code', 'each', 'quantity', '10', 'unit_cost_minor', 1000)),
   gen_random_uuid()
 )
@@ -251,8 +251,8 @@ select public.update_inventory_policy((select organization_id from inventory_int
 select is((select negative_stock_policy from public.inventory_policies where store_id = (select store_id from inventory_integrity_context)), 'block', 'block policy is stored per store');
 create or replace function pg_temp.blocked_negative_adjustment_is_rejected() returns boolean language plpgsql as $$
 begin
-  perform public.record_inventory_adjustment(
-    (select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), (select product_id from inventory_integrity_context), null, -7, 'DAMAGE', 'Too much damage', gen_random_uuid(), null
+  perform public.record_inventory_adjustment_v3(
+    (select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), (select product_id from inventory_integrity_context), -7, 'DAMAGE', 'Too much damage', gen_random_uuid()
   );
   return false;
 exception when check_violation then
@@ -262,7 +262,7 @@ $$;
 select ok(pg_temp.blocked_negative_adjustment_is_rejected(), 'block policy rejects a negative stock movement');
 select public.update_inventory_policy((select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), 'warn');
 select lives_ok(
-  $$select public.record_inventory_adjustment((select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), (select product_id from inventory_integrity_context), null, -7, 'DAMAGE', 'Approved warning', gen_random_uuid(), null)$$,
+  $$select public.record_inventory_adjustment_v3((select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), (select product_id from inventory_integrity_context), -7, 'DAMAGE', 'Approved warning', gen_random_uuid())$$,
   'warn policy permits an accountable negative movement'
 );
 select is((select quantity from public.inventory_levels where store_id = (select store_id from inventory_integrity_context) and product_id = (select product_id from inventory_integrity_context)), (-1)::numeric, 'warn policy permits the resulting negative projection');
@@ -280,7 +280,7 @@ update public.products set is_composite = true where id = (select composite_prod
 insert into public.product_components (organization_id, product_id, component_product_id, component_variant_id, quantity_per_composite)
 select organization_id, composite_product_id, component_product_id, null, 2 from inventory_integrity_context;
 select lives_ok(
-  $$select public.record_inventory_adjustment((select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), (select component_product_id from inventory_integrity_context), null, 6, 'DAMAGE', 'Seed production component', gen_random_uuid(), null)$$,
+  $$select public.record_inventory_adjustment_v3((select organization_id from inventory_integrity_context), (select store_id from inventory_integrity_context), (select component_product_id from inventory_integrity_context), 6, 'DAMAGE', 'Seed production component', gen_random_uuid())$$,
   'controlled ledger adjustment seeds production components'
 );
 select lives_ok(

@@ -45,3 +45,6 @@ next-env.d.ts
 supabase/.temp/
 supabase/.branches/
 .neon
+
+# Local TINDIO safety/audit snapshots
+.tindio-pre-*

@@ -143,7 +143,7 @@ select public.create_inventory_adjustment_reason(
 
 select lives_ok(
   format(
-    $$select public.record_inventory_adjustment(%L, %L, %L, null, 5, 'OPENING_STOCK', 'Phase 8 offline replay stock', gen_random_uuid(), null)$$,
+    $$select public.record_inventory_adjustment_v3(%L, %L, %L, 5, 'OPENING_STOCK', 'Phase 8 offline replay stock', gen_random_uuid())$$,
     (select organization_id from offline_sync_context),
     (select store_id from offline_sync_context),
     (select product_id from offline_sync_context)

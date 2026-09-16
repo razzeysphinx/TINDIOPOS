@@ -5,6 +5,48 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(1);
 
+insert into auth.users (id, email, raw_user_meta_data)
+values ('91919191-9191-4919-8919-919191919191', 'ledger-integrity@tindio.test', '{"full_name":"Ledger Integrity"}'::jsonb);
+
+create temporary table inventory_ledger_context (
+  organization_id uuid not null,
+  store_id uuid not null,
+  product_id uuid
+);
+grant select, insert, update on inventory_ledger_context to authenticated;
+
+set local role authenticated;
+set local request.jwt.claim.sub = '91919191-9191-4919-8919-919191919191';
+
+insert into inventory_ledger_context (organization_id, store_id)
+select organization_id, store_id
+from public.bootstrap_organization('Ledger Integrity Test', 'Ledger Integrity Store', 'Ledger Integrity Register');
+
+update inventory_ledger_context context
+set product_id = public.create_catalog_product(
+  organization_id, null, 'Ledger Integrity Item', 'Tracked ledger test item',
+  'simple', 'LEDGER-INTEGRITY-ITEM', '480000099191', 1000, 100,
+  true, 'each', array[store_id], '[]'::jsonb
+);
+
+select public.create_inventory_adjustment_reason(
+  (select organization_id from inventory_ledger_context),
+  'SEED',
+  'Ledger test seed',
+  'OPENING_STOCK'
+);
+select public.record_inventory_adjustment_v3(
+  (select organization_id from inventory_ledger_context),
+  (select store_id from inventory_ledger_context),
+  (select product_id from inventory_ledger_context),
+  1,
+  'SEED',
+  'Seed ledger metadata validation.',
+  gen_random_uuid()
+);
+
+reset role;
+
 do $body$
 declare
   candidate record;

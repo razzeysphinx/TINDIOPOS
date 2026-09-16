@@ -134,16 +134,14 @@ returns boolean
 language plpgsql
 as $$
 begin
-  perform public.record_inventory_adjustment(
+  perform public.record_inventory_adjustment_v3(
     (select organization_id from catalog_test_context where label = 'catalog'),
     (select store_id from catalog_test_context where label = 'catalog'),
     (select product_id from catalog_test_context where label = 'catalog'),
-    null,
     1,
     'OPENING_STOCK',
     'Duplicate opening stock',
-    gen_random_uuid(),
-    null
+    gen_random_uuid()
   );
 
   return false;
@@ -239,16 +237,14 @@ returns boolean
 language plpgsql
 as $$
 begin
-  perform public.record_inventory_adjustment(
+  perform public.record_inventory_adjustment_v3(
     (select organization_id from catalog_test_context where label = 'catalog'),
     (select store_id from catalog_test_context where label = 'catalog'),
     (select product_id from catalog_test_context where label = 'catalog'),
-    null,
     1,
     'ADJUSTMENT',
     'Unauthorized adjustment',
-    gen_random_uuid(),
-    null
+    gen_random_uuid()
   );
 
   return false;
@@ -433,7 +429,7 @@ select is(
 
 select lives_ok(
   format(
-    $$select public.record_inventory_adjustment(%L, %L, %L, null, 10.5, 'OPENING_STOCK', 'Initial delivery', gen_random_uuid(), null)$$,
+    $$select public.record_inventory_adjustment_v3(%L, %L, %L, 10.5, 'OPENING_STOCK', 'Initial delivery', gen_random_uuid())$$,
     (select organization_id from catalog_test_context where label = 'catalog'),
     (select store_id from catalog_test_context where label = 'catalog'),
     (select product_id from catalog_test_context where label = 'catalog')
@@ -456,7 +452,7 @@ select is(
 );
 select lives_ok(
   format(
-    $$select public.record_inventory_adjustment(%L, %L, %L, null, -2.25, 'ADJUSTMENT', 'Damaged units', gen_random_uuid(), null)$$,
+    $$select public.record_inventory_adjustment_v3(%L, %L, %L, -2.25, 'ADJUSTMENT', 'Damaged units', gen_random_uuid())$$,
     (select organization_id from catalog_test_context where label = 'catalog'),
     (select store_id from catalog_test_context where label = 'catalog'),
     (select product_id from catalog_test_context where label = 'catalog')

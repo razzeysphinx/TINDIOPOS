@@ -49,7 +49,8 @@ test("the adjustment interface requires a review, explanation, and granular scop
   assert.match(actions, /hasAnyInventoryCapability\(context, \[/);
   assert.match(actions, /"inventory\.adjust\.create"/);
   assert.match(actions, /"inventory\.adjust\.post"/);
-  assert.match(actions, /rpc\("record_inventory_adjustment"/);
+  assert.match(actions, /rpc\("record_inventory_adjustment_v3"/);
+  assert.doesNotMatch(actions, /rpc\("record_inventory_adjustment"/);
 });
 
 test("CSV adjustment retries use the shared payload-specific operation identity", async () => {

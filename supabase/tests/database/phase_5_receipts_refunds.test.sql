@@ -188,7 +188,7 @@ select public.create_inventory_adjustment_reason(
 
 select lives_ok(
   format(
-    $$select public.record_inventory_adjustment(%L, %L, %L, null, 10, 'OPENING_STOCK', 'Initial refund stock', gen_random_uuid(), null)$$,
+    $$select public.record_inventory_adjustment_v3(%L, %L, %L, 10, 'OPENING_STOCK', 'Initial refund stock', gen_random_uuid())$$,
     (select organization_id from refund_test_context where label = 'refund'),
     (select store_id from refund_test_context where label = 'refund'),
     (select tracked_product_id from refund_test_context where label = 'refund')

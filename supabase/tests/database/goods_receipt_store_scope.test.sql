@@ -10,7 +10,7 @@ select ok(
     from pg_policies
     where schemaname = 'public'
       and tablename = 'goods_receipts'
-      and policyname = 'goods_receipts_select_authorized_scope'
+      and policyname = 'goods_receipts_select_purchasing_scope'
       and qual like '%has_store_read_scope%'
   ),
   'goods receipt headers require the authorized store scope'
@@ -22,7 +22,7 @@ select ok(
     from pg_policies
     where schemaname = 'public'
       and tablename = 'goods_receipt_lines'
-      and policyname = 'goods_receipt_lines_select_authorized_scope'
+      and policyname = 'goods_receipt_lines_select_purchasing_scope'
       and qual like '%goods_receipts%'
       and qual like '%has_store_read_scope%'
   ),
@@ -35,7 +35,7 @@ select ok(
     from pg_policies
     where schemaname = 'public'
       and tablename in ('goods_receipts', 'goods_receipt_lines')
-      and policyname in ('goods_receipts_select_inventory_manager', 'goods_receipt_lines_select_inventory_manager')
+      and policyname in ('goods_receipts_select_inventory_manager', 'goods_receipt_lines_select_inventory_manager', 'goods_receipts_select_authorized_scope', 'goods_receipt_lines_select_authorized_scope')
   ),
   'legacy organization-wide goods receipt read policies are removed'
 );

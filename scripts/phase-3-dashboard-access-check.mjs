@@ -18,6 +18,10 @@ const inventoryPage = await readFile(
   new URL("../src/app/(back-office)/back-office/inventory/page.tsx", import.meta.url),
   "utf8",
 );
+const inventoryCapabilities = await readFile(
+  new URL("../src/lib/auth/inventory-capabilities.ts", import.meta.url),
+  "utf8",
+);
 const posPage = await readFile(
   new URL("../src/app/(pos)/pos/page.tsx", import.meta.url),
   "utf8",
@@ -51,14 +55,34 @@ test("business dashboard keeps its server route gate and renders the executive c
   assert.doesNotMatch(ownerDashboard, /label="Completed sales"/);
 });
 
-test("inventory dashboard reuses the action grid behind its inventory permission gate", () => {
-  // View-only inventory users retain the Stock and Activity tabs; management
-  // operations remain separately gated by inventory.manage.
-  assert.match(inventoryPage, /requireBackOfficePermission\(\["inventory\.view", "inventory\.adjust", "inventory\.count", "inventory\.manage"\]\)/);
+test("inventory workspace uses the current granular inventory responsibility gate", () => {
+  assert.match(inventoryPage, /const context = await requireBackOfficeContext\(\);/);
+  assert.match(inventoryPage, /!hasInventoryBackOfficeResponsibility\(\s*context\.permissions,\s*\)/);
+  assert.match(inventoryPage, /redirect\(getBackOfficeHome\(context\)\)/);
+  assert.doesNotMatch(
+    inventoryPage,
+    /requireBackOfficePermission\(\s*\[\s*"inventory\.view"/,
+    "the retired fixed inventory permission list must not return",
+  );
+  assert.match(inventoryCapabilities, /export function hasInventoryBackOfficeResponsibility\(/);
+  assert.match(inventoryCapabilities, /hasInventoryControlResponsibility\(permissions\)/);
+  assert.match(inventoryCapabilities, /hasPurchasingResponsibility\(permissions\)/);
   assert.match(inventoryPage, /<DashboardActionGrid/);
   assert.match(inventoryPage, /permissions=\{context\.permissions\}/);
   assert.match(inventoryPage, /surface="inventory"/);
-  assert.match(dashboardActions, /\/back-office\/inventory\?tab=(overview|adjustments|purchasing|controls)/);
+  for (const href of [
+    "/back-office/inventory?tab=overview",
+    "/back-office/inventory?tab=stock",
+    "/back-office/inventory?tab=activity",
+    "/back-office/inventory?tab=counts",
+    "/back-office/purchasing?tab=purchase-orders",
+    "/back-office/inventory?tab=transfers",
+  ]) {
+    assert.ok(
+      dashboardActions.includes(`href: "${href}"`),
+      `inventory action grid must retain ${href}`,
+    );
+  }
 });
 
 test("reporting remains server-scoped through the established dashboard RPC", () => {

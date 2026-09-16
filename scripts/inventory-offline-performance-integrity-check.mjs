@@ -30,7 +30,7 @@ test("Phase 9 prevents duplicate cross-tab offline delivery attempts", () => {
 test("the authoritative checkout still supplies exactly-once replay protection", () => {
   assert.match(checkoutService, /rpc\("checkout_advanced_sale"/);
   assert.match(checkoutService, /target_idempotency_key: data\.idempotencyKey/);
-  assert.match(checkoutService, /message: result\.was_replayed/);
+  assert.match(checkoutService, /message:\s*result\.was_replayed/);
   assert.match(offlineDatabaseTest, /automatic retry creates exactly one payment/);
   assert.match(offlineDatabaseTest, /automatic retry creates exactly one inventory movement/);
   assert.match(offlineDatabaseTest, /automatic retry creates exactly one receipt/);
@@ -45,12 +45,15 @@ test("POS catalogue loading stays server-authorized and page-bounded", () => {
   assert.match(catalogRoute, /hasMore: items\.length === parsed\.data\.limit/);
 });
 
-test("Inventory activity stays lazy and bounded instead of loading full history", () => {
-  assert.match(inventoryPage, /const recentMovementsQuery = \["overview", "activity"\]\.includes\(activeTab\)/);
-  assert.match(inventoryPage, /\.limit\(30\)/);
-  assert.match(inventoryPage, /const selectedDetailLevel = selectedDetailLevelId/);
-  assert.match(inventoryPage, /const selectedDetailPosition: InventoryDetailPosition \| null = selectedDetailLevel/);
-  assert.match(inventoryPage, /const detailActivityLimit = activeTab === "activity" \? 50 : 12/);
-  assert.match(inventoryPage, /selectedDetailPosition\n    \? await loadInventoryItemActivity/);
-  assert.match(inventoryPage, /limit: detailActivityLimit/);
+test("Inventory activity remains bounded and implements correct page look-ahead", () => {
+  assert.match(inventoryPage, /const INVENTORY_ACTIVITY_PAGE_SIZE = 50;/);
+  assert.match(inventoryPage, /const recentMovementsQuery\s*=\s*\["overview", "activity"\]\.includes\(activeTab\)/);
+  assert.match(inventoryPage, /recentMovementsQuery\?\.range\(\s*activityPageOffset,\s*activityPageOffset \+ INVENTORY_ACTIVITY_PAGE_SIZE,\s*\);/);
+  assert.match(inventoryPage, /recentMovementsQuery\?\.limit\(30\)/);
+  assert.match(inventoryPage, /const movements = activeTab === "activity"\s*\?\s*loadedMovements\.slice\(0, INVENTORY_ACTIVITY_PAGE_SIZE\)/);
+  assert.match(inventoryPage, /loadedMovements\.length > INVENTORY_ACTIVITY_PAGE_SIZE/);
+  assert.match(inventoryPage, /const selectedDetailLevel\s*=\s*selectedDetailLevelId\s*\?/);
+  assert.match(inventoryPage, /const selectedDetailPosition:\s*InventoryDetailPosition \| null\s*=\s*selectedDetailLevel/);
+  assert.match(inventoryPage, /const detailActivityLimit = activeTab === "activity" \? 50 : 12;/);
+  assert.match(inventoryPage, /const detailMovementsResult = selectedDetailPosition\s*\?\s*await loadInventoryItemActivity\(\{[\s\S]*?limit: detailActivityLimit/);
 });

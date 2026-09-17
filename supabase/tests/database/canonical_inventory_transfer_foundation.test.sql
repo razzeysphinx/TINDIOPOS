@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(61);
+select plan(63);
 
 select has_table('private', 'stock_transfer_operations', 'canonical operation registry exists outside the Data API schema');
 select col_is_unique('private', 'stock_transfer_operations', array['organization_id', 'operation_id'], 'operation IDs are unique per organization');
@@ -16,8 +16,13 @@ select ok(has_function_privilege('authenticated', 'public.create_inventory_trans
 select ok(not has_function_privilege('anon', 'public.create_inventory_transfer_draft(uuid,uuid,uuid,jsonb,text,uuid)', 'execute'), 'anonymous callers cannot execute canonical create');
 select ok(
   (select pg_get_constraintdef(oid) from pg_constraint where conrelid = 'public.stock_transfers'::regclass and conname = 'stock_transfers_status_values')
-    like all (array['%draft%', '%submitted%', '%approved%', '%dispatched%', '%partially_received%', '%received%', '%cancelled%', '%in_transit%', '%completed%']),
-  'the transitional constraint contains seven canonical and two compatibility states'
+    like all (array['%draft%', '%submitted%', '%approved%', '%dispatched%', '%partially_received%', '%received%', '%cancelled%']),
+  'the effective constraint contains all seven canonical physical states'
+);
+select ok(
+  (select pg_get_constraintdef(oid) from pg_constraint where conrelid = 'public.stock_transfers'::regclass and conname = 'stock_transfers_status_values')
+    not like all (array['%in_transit%', '%completed%']),
+  'the effective constraint excludes both legacy physical states'
 );
 
 insert into auth.users (id, email, raw_user_meta_data)
@@ -375,7 +380,8 @@ update canonical_transfer_context
 set request_transfer_id = public.dispatch_stock_request(organization_id, request_id, 'Legacy request dispatch', request_dispatch_operation_id);
 update canonical_transfer_context
 set request_transfer_line_id = (select id from public.stock_transfer_lines where stock_transfer_id = canonical_transfer_context.request_transfer_id);
-select is((select status from public.stock_transfers where id = (select request_transfer_id from canonical_transfer_context)), 'in_transit', 'request dispatch preserves temporary in_transit compatibility');
+select is((select status from public.stock_requests where id = (select request_id from canonical_transfer_context)), 'dispatched', 'request document records dispatch');
+select is((select status from public.stock_transfers where id = (select request_transfer_id from canonical_transfer_context)), 'dispatched', 'request dispatch produces a canonical dispatched physical transfer');
 select public.receive_stock_request(
   (select organization_id from canonical_transfer_context),
   (select request_id from canonical_transfer_context),
@@ -386,7 +392,7 @@ select public.receive_stock_request(
   'Legacy request receipt',
   (select request_receipt_operation_id from canonical_transfer_context)
 );
-select is((select status from public.stock_transfers where id = (select request_transfer_id from canonical_transfer_context)), 'completed', 'request receipt preserves temporary completed compatibility');
+select is((select status from public.stock_transfers where id = (select request_transfer_id from canonical_transfer_context)), 'received', 'request final receipt produces a canonical received physical transfer');
 select is((select status from public.stock_requests where id = (select request_id from canonical_transfer_context)), 'received', 'request workflow still completes unchanged');
 
 reset role;

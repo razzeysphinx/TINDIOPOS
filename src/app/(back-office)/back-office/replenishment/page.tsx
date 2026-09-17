@@ -25,6 +25,7 @@ import {
   type StockRestockTab,
 } from "@/features/inventory/inventory-workspace-navigation";
 import { hasAnyInventoryCapability, hasInventoryCapability } from "@/features/inventory/inventory-permissions";
+import { RECEIVABLE_TRANSFER_QUERY_STATUSES } from "@/features/inventory/inventory-transfer-reader-contract";
 import { resolveBackOfficeStoreScope } from "@/lib/server/back-office-store-scope";
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
@@ -272,7 +273,7 @@ export default async function ReplenishmentPage({
       ? supabase.from("stock_transfers").select("id, stock_request_id, destination_store_id, status, transfer_number").eq("organization_id", organizationId).in("stock_request_id", requestIds)
       : Promise.resolve({ data: [], error: null }),
     loadSupplyChain
-      ? supabase.from("stock_transfers").select("id, stock_request_id, destination_store_id, status, transfer_number").eq("organization_id", organizationId).in("status", ["in_transit", "partially_received"])
+      ? supabase.from("stock_transfers").select("id, stock_request_id, destination_store_id, status, transfer_number").eq("organization_id", organizationId).in("status", [...RECEIVABLE_TRANSFER_QUERY_STATUSES])
       : Promise.resolve({ data: [], error: null }),
     purchaseOrderIds.length
       ? supabase.from("purchase_order_lines").select("purchase_order_id, product_id, variant_id, ordered_quantity, received_quantity").eq("organization_id", organizationId).in("purchase_order_id", purchaseOrderIds)

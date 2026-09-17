@@ -1,12 +1,13 @@
 # TINDIO Inventory — Canonical Transfer Lifecycle Design
 
-**Design version:** 1.2
+**Design version:** 1.3
 **Phase:** 04 — Transfer Lifecycle Design
 **Repository baseline:** `e199d532621d2068dd7b1088c41a17a865df1965`
 **Status:** Architecture contract for controlled implementation
 **Implementation begins:** Phase 05 only
 **Correction 01:** separates the seven canonical physical-transfer states from temporary legacy database compatibility states still written by unmigrated transfer workflows.
 **Correction 02:** Phase 05 receiving readers share one transitional reader contract. The direct compatibility adapter preserves the external operation ID as the canonical create identity; submit, approve, and dispatch use deterministic child operation IDs derived from it. Random transition IDs are forbidden for replayable compatibility-adapter lifecycle steps.
+**Phase 06 implementation:** request/replenishment documents retain their workflow-specific states, while their linked physical transfers now use the same private dispatch and receipt cores as direct transfers. The final physical status contract contains only the seven canonical states; `in_transit` and `completed` are deterministically migrated and rejected going forward.
 
 ---
 

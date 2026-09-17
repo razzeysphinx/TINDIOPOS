@@ -13,11 +13,10 @@ const [contract, posData, posTypes, posInbox, inventoryPage, workflows] = await 
   source("../src/features/inventory/inventory-integrity-workflows.tsx"),
 ]);
 
-test("shared transitional reader contract encodes the Phase 05 discriminator", () => {
-  assert.match(contract, /RECEIVABLE_TRANSFER_QUERY_STATUSES[\s\S]*"dispatched"[\s\S]*"in_transit"[\s\S]*"partially_received"/);
-  assert.match(contract, /if \(stockRequestId\)[\s\S]*status === "in_transit" \|\| status === "partially_received"/);
-  assert.match(contract, /return status === "dispatched"[\s\S]*status === "in_transit"[\s\S]*status === "partially_received"/);
-  for (const terminal of ["draft", "submitted", "approved", "received", "cancelled", "completed"]) {
+test("shared canonical reader contract accepts dispatched and partial transfers", () => {
+  assert.match(contract, /RECEIVABLE_TRANSFER_QUERY_STATUSES[\s\S]*"dispatched"[\s\S]*"partially_received"/);
+  assert.match(contract, /return status === "dispatched"[\s\S]*status === "partially_received"/);
+  for (const terminal of ["draft", "submitted", "approved", "in_transit", "received", "cancelled", "completed"]) {
     assert.doesNotMatch(contract, new RegExp(`status === "${terminal}"`));
   }
 });

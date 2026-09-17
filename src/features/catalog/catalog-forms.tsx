@@ -42,10 +42,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ManagerApprovalDialog } from "@/features/approvals/manager-approval-dialog";
-import { requestManagerApprovalAction } from "@/features/approvals/actions";
 import {
-  adjustInventoryAction,
   createCategoryAction,
   createProductAction,
   createProductComponentAction,
@@ -63,13 +60,11 @@ import {
 import type { CatalogActionResult } from "@/features/catalog/catalog-types";
 import { downloadCsvText, exportFilename } from "@/lib/export-framework";
 import {
-  adjustInventorySchema,
   createCategorySchema,
   createProductSchema,
   createProductUnitSchema,
   updateCategorySchema,
   updateProductSchema,
-  type AdjustInventoryValues,
   type CreateCategoryValues,
   type CreateProductValues,
   type UpdateCategoryValues,
@@ -1278,185 +1273,6 @@ export function ProductAvailabilityButton({
       {isPending ? <LoaderCircle className="animate-spin" /> : <Warehouse />}
       {storeName}: {isAvailable ? "On" : "Off"}
     </Button>
-  );
-}
-
-export type InventorySaleableItem = {
-  productId: string;
-  variantId: string | null;
-  label: string;
-  storeIds: string[];
-  identifiers?: string[];
-};
-
-export function InventoryAdjustmentForm({
-  stores,
-  items,
-}: {
-  stores: Array<{ id: string; name: string }>;
-  items: InventorySaleableItem[];
-}) {
-  const router = useRouter();
-  const [result, setResult] = useState<CatalogActionResult<unknown> | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const [approvalRequestId, setApprovalRequestId] = useState<string | null>(null);
-  const initialStoreId = stores[0]?.id ?? "";
-  const initialItem = items.find((item) => item.storeIds.includes(initialStoreId));
-  const form = useForm<AdjustInventoryValues>({
-    resolver: zodResolver(adjustInventorySchema),
-    defaultValues: {
-      storeId: initialStoreId,
-      productId: initialItem?.productId ?? "",
-      variantId: initialItem?.variantId ?? "",
-      quantityDelta: "",
-      movementType: "ADJUSTMENT",
-      reason: "",
-    },
-  });
-  const selectedStoreId = useWatch({ control: form.control, name: "storeId" });
-  const selectedProductId = useWatch({ control: form.control, name: "productId" });
-  const selectedVariantId = useWatch({ control: form.control, name: "variantId" });
-  const availableItems = items.filter((item) => item.storeIds.includes(selectedStoreId));
-  const itemValue = `${selectedProductId}|${selectedVariantId}`;
-  const storeRegistration = form.register("storeId");
-
-  function selectItem(value: string) {
-    const [productId, variantId = ""] = value.split("|");
-    form.setValue("productId", productId, { shouldValidate: true });
-    form.setValue("variantId", variantId, { shouldValidate: true });
-  }
-
-  const completeAdjustment = async (
-    values: AdjustInventoryValues,
-    pendingApprovalRequestId: string | null,
-  ) => {
-    const nextResult = await adjustInventoryAction({
-      ...values,
-      approvalRequestId: pendingApprovalRequestId,
-    });
-    setResult(nextResult);
-    if (nextResult.ok) {
-      form.setValue("quantityDelta", "");
-      form.setValue("reason", "");
-      router.refresh();
-    }
-  };
-
-  const submit = form.handleSubmit((values) => {
-    setResult(null);
-    startTransition(async () => {
-      const approval = await requestManagerApprovalAction({
-        operationCode: "inventory.adjust",
-        reason: values.reason,
-        payload: {
-          store_id: values.storeId,
-          product_id: values.productId,
-          variant_id: values.variantId || null,
-          quantity_delta: Number(values.quantityDelta),
-          movement_type: values.movementType,
-          reason: values.reason.trim(),
-        },
-      });
-
-      if (!approval.ok) {
-        setResult({ ok: false, message: approval.message });
-        return;
-      }
-
-      if (approval.decision === "APPROVAL_REQUIRED") {
-        setApprovalRequestId(approval.data.approvalRequestId);
-        setResult({ ok: true, message: approval.message });
-        return;
-      }
-
-      await completeAdjustment(values, null);
-    });
-  });
-
-  if (stores.length === 0 || items.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>No tracked stock yet</CardTitle>
-          <CardDescription>
-            Create an inventory-tracked product in an active store before recording stock.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
-
-  return (
-    <ManagementCard
-      title="Record stock movement"
-      description="Every change appends a ledger row and updates the locked projection in one transaction."
-      icon={<Boxes aria-hidden="true" />}
-    >
-      <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-6" onSubmit={submit} noValidate>
-        <FormField label="Store" error={form.formState.errors.storeId?.message}>
-          <select
-            className={selectClassName}
-            {...storeRegistration}
-            onChange={(event) => {
-              storeRegistration.onChange(event);
-              const firstItem = items.find((item) => item.storeIds.includes(event.target.value));
-              selectItem(firstItem ? `${firstItem.productId}|${firstItem.variantId ?? ""}` : "|");
-            }}
-          >
-            {stores.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
-            ))}
-          </select>
-        </FormField>
-        <FormField label="Item" error={form.formState.errors.productId?.message}>
-          <select className={selectClassName} onChange={(event) => selectItem(event.target.value)} value={itemValue}>
-            {availableItems.map((item) => (
-              <option key={`${item.productId}|${item.variantId ?? ""}`} value={`${item.productId}|${item.variantId ?? ""}`}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </FormField>
-        <FormField label="Movement" error={form.formState.errors.movementType?.message}>
-          <select className={selectClassName} {...form.register("movementType")}>
-            <option value="ADJUSTMENT">Adjustment</option>
-            <option value="OPENING_STOCK">Opening stock</option>
-          </select>
-        </FormField>
-        <FormField label="Quantity change" error={form.formState.errors.quantityDelta?.message}>
-          <Input inputMode="decimal" placeholder="10 or -2.5" {...form.register("quantityDelta")} />
-        </FormField>
-        <FormField label="Reason" error={form.formState.errors.reason?.message}>
-          <Input placeholder="Initial delivery" {...form.register("reason")} />
-        </FormField>
-        <div className="self-end">
-          <Button className="w-full" disabled={isPending || availableItems.length === 0} type="submit">
-            {isPending ? <LoaderCircle className="animate-spin" /> : <Boxes />}
-            Record
-          </Button>
-        </div>
-        <div className="md:col-span-2 xl:col-span-6">
-          <ResultMessage result={result} />
-        </div>
-      </form>
-      {approvalRequestId ? (
-        <ManagerApprovalDialog
-          approvalRequestId={approvalRequestId}
-          onApproved={() => {
-            const requestId = approvalRequestId;
-            setApprovalRequestId(null);
-            const values = form.getValues();
-            startTransition(async () => {
-              await completeAdjustment(values, requestId);
-            });
-          }}
-          onCancel={() => setApprovalRequestId(null)}
-          operationLabel="Inventory adjustment"
-        />
-      ) : null}
-    </ManagementCard>
   );
 }
 

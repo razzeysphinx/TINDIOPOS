@@ -612,7 +612,7 @@ export async function createAdjustmentReasonAction(
   return { ok: true, message: "Adjustment reason saved." };
 }
 
-export async function recordInventoryAdjustmentV2Action(
+export async function recordInventoryAdjustmentAction(
   input: unknown,
 ): Promise<AdvancedInventoryActionResult<{ movementId: string }>> {
   const { context, error: permissionError } = await requireInventoryAdjuster();

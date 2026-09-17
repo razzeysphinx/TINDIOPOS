@@ -295,20 +295,6 @@ export const importCatalogCsvSchema = z.object({
     .max(500, "Import at most 500 rows at a time."),
 });
 
-export const adjustInventorySchema = z.object({
-  storeId: z.uuid("Select a store."),
-  productId: z.uuid("Select a product."),
-  variantId: optionalUuid,
-  quantityDelta: z
-    .string()
-    .trim()
-    .regex(/^-?\d{1,8}(?:\.\d{1,3})?$/, "Use a non-zero quantity with up to 3 decimals.")
-    .refine((value) => Number(value) !== 0, "Quantity cannot be zero."),
-  movementType: z.enum(["OPENING_STOCK", "ADJUSTMENT"]),
-  reason: z.string().trim().min(2, "Enter a reason.").max(500),
-  approvalRequestId: z.uuid().nullable().optional(),
-});
-
 export const generateCatalogIdentifiersSchema = z.object({
   productName: z
     .string()
@@ -322,7 +308,6 @@ export type UpdateCategoryValues = z.infer<typeof updateCategorySchema>;
 export type ProductVariantValues = z.infer<typeof productVariantSchema>;
 export type CreateProductValues = z.infer<typeof createProductSchema>;
 export type UpdateProductValues = z.infer<typeof updateProductSchema>;
-export type AdjustInventoryValues = z.infer<typeof adjustInventorySchema>;
 export type SetProductStoreConfigurationValues = z.infer<typeof setProductStoreConfigurationSchema>;
 export type CreateProductUnitValues = z.infer<typeof createProductUnitSchema>;
 export type CreateProductComponentValues = z.infer<typeof createProductComponentSchema>;

@@ -15,7 +15,7 @@ import {
   createAdjustmentReasonAction,
   produceCompositeAction,
   receiveStockTransferAction,
-  recordInventoryAdjustmentV2Action,
+  recordInventoryAdjustmentAction,
   removeInventoryPolicyOverrideAction,
   returnToSupplierAction,
   updateInventoryPolicyAction,
@@ -362,7 +362,7 @@ export function InventoryIntegrityWorkflows({
     const payload = adjustmentActionPayload(adjustmentReview);
     const operationScope = "inventory-adjustment:record";
     const operationId = pendingOperationId(operationScope, payload);
-    const result = await recordInventoryAdjustmentV2Action({
+    const result = await recordInventoryAdjustmentAction({
       ...payload,
       operationId,
       approvalRequestId,

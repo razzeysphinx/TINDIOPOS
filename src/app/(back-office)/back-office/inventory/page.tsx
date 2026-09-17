@@ -19,8 +19,15 @@ import {
   type AdvancedGoodsReceipt,
   type AdvancedPurchaseOrder,
 } from "@/features/inventory/advanced-inventory-workflows";
-import type { InventorySaleableItem } from "@/features/catalog/catalog-forms";
 import { InventoryIntegrityWorkflows } from "@/features/inventory/inventory-integrity-workflows";
+
+type InventorySaleableItem = {
+  productId: string;
+  variantId: string | null;
+  label: string;
+  storeIds: string[];
+  identifiers?: string[];
+};
 import {
   RECEIVABLE_TRANSFER_QUERY_STATUSES,
   isReceivableTransferState,

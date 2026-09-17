@@ -1,0 +1,29 @@
+{
+  "phase": "07",
+  "requiredPaths": [
+    "supabase/migrations/20260917122822_canonical_inventory_adjustments_opening_stock.sql",
+    "supabase/tests/database/canonical_inventory_adjustments_opening_stock.test.sql",
+    "scripts/inventory-adjustments-opening-stock-check.mjs",
+    "scripts/inventory-adjustment-concurrency-certification.mjs",
+    "src/features/inventory/advanced-inventory-actions.ts",
+    "src/features/inventory/inventory-integrity-workflows.tsx",
+    "src/features/catalog/actions.ts",
+    "src/features/catalog/catalog-forms.tsx"
+  ],
+  "requiredText": [
+    { "path": "supabase/migrations/20260917122822_canonical_inventory_adjustments_opening_stock.sql", "text": "on conflict (organization_id, operation_id) do nothing" },
+    { "path": "supabase/migrations/20260917122822_canonical_inventory_adjustments_opening_stock.sql", "text": "Opening stock can only be recorded once for an item with no prior movement." },
+    { "path": "supabase/migrations/20260917122822_canonical_inventory_adjustments_opening_stock.sql", "text": "private.apply_inventory_change_v2" },
+    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "recordInventoryAdjustmentAction" },
+    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "record_inventory_adjustment_v3" },
+    { "path": "supabase/tests/database/canonical_inventory_adjustments_opening_stock.test.sql", "text": "opening-stock retry does not duplicate stock" },
+    { "path": "supabase/tests/database/canonical_inventory_adjustments_opening_stock.test.sql", "text": "ledger-derived quantity equals the projection" },
+    { "path": "scripts/inventory-adjustment-concurrency-certification.mjs", "text": "physicalMutations: 1" }
+  ],
+  "forbiddenText": [
+    { "path": "src/features/catalog/actions.ts", "text": "rpc(\"adjust_inventory\"" },
+    { "path": "src/features/catalog/catalog-forms.tsx", "text": "InventoryAdjustmentForm" },
+    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "recordInventoryAdjustmentV2Action" },
+    { "path": "supabase/migrations/20260917122822_canonical_inventory_adjustments_opening_stock.sql", "text": "grant execute on function public.adjust_inventory" }
+  ]
+}

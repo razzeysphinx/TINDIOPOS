@@ -40,7 +40,7 @@ type Transfer = {
   sourceStoreName: string;
   destinationStoreName: string;
   note: string | null;
-  status: "in_transit" | "partially_received";
+  status: "dispatched" | "in_transit" | "partially_received";
   lines: Array<{ id: string; label: string; unit: string; quantity: number; receivedQuantity: number; shortQuantity: number }>;
 };
 type CompositeOption = { id: string; name: string; unit: string; storeIds: string[] };

@@ -6189,6 +6189,15 @@ export type Database = {
         }
         Returns: string
       }
+      approve_inventory_transfer: {
+        Args: {
+          target_note: string
+          target_operation_id: string
+          target_organization_id: string
+          target_stock_transfer_id: string
+        }
+        Returns: string
+      }
       approve_manager_approval: {
         Args: {
           target_approval_request_id: string
@@ -6245,6 +6254,15 @@ export type Database = {
           target_organization_id: string
         }
         Returns: undefined
+      }
+      cancel_inventory_transfer: {
+        Args: {
+          target_note: string
+          target_operation_id: string
+          target_organization_id: string
+          target_stock_transfer_id: string
+        }
+        Returns: string
       }
       cancel_purchase_order: {
         Args: {
@@ -6571,6 +6589,17 @@ export type Database = {
         }
         Returns: string
       }
+      create_inventory_transfer_draft: {
+        Args: {
+          target_destination_store_id: string
+          target_lines: Json
+          target_note: string
+          target_operation_id: string
+          target_organization_id: string
+          target_source_store_id: string
+        }
+        Returns: string
+      }
       create_purchase_order_v2: {
         Args: {
           target_expected_at?: string
@@ -6662,6 +6691,15 @@ export type Database = {
           target_organization_id: string
           target_record_id: string
           target_record_type: string
+        }
+        Returns: string
+      }
+      dispatch_inventory_transfer: {
+        Args: {
+          target_note: string
+          target_operation_id: string
+          target_organization_id: string
+          target_stock_transfer_id: string
         }
         Returns: string
       }
@@ -7359,6 +7397,16 @@ export type Database = {
           was_replayed: boolean
         }[]
       }
+      receive_inventory_transfer: {
+        Args: {
+          target_lines: Json
+          target_note: string
+          target_operation_id: string
+          target_organization_id: string
+          target_stock_transfer_id: string
+        }
+        Returns: string
+      }
       receive_purchase_order: {
         Args: {
           target_lines: Json
@@ -7792,6 +7840,15 @@ export type Database = {
           target_organization_id: string
         }
         Returns: undefined
+      }
+      submit_inventory_transfer: {
+        Args: {
+          target_note: string
+          target_operation_id: string
+          target_organization_id: string
+          target_stock_transfer_id: string
+        }
+        Returns: string
       }
       transfer_stock: {
         Args: {

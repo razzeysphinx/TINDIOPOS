@@ -130,7 +130,7 @@ export type PosIncomingTransfer = {
   sourceStoreName: string;
   destinationStoreId: string;
   destinationStoreName: string;
-  status: "in_transit" | "partially_received";
+  status: "dispatched" | "in_transit" | "partially_received";
   note: string | null;
   lines: Array<{
     id: string;

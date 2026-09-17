@@ -791,7 +791,7 @@ export async function InventoryWorkspacePage({
           .from("stock_transfers")
           .select("id, transfer_number, stock_request_id, source_store_id, destination_store_id, status, note")
           .eq("organization_id", organizationId)
-          .in("status", ["in_transit", "partially_received"])
+          .in("status", ["dispatched", "in_transit", "partially_received"])
       : Promise.resolve({ data: [], error: null }),
     replenishmentRulesQuery ?? Promise.resolve({ data: [], error: null }),
     inventoryCountsQuery ?? Promise.resolve({
@@ -1557,7 +1557,7 @@ export async function InventoryWorkspacePage({
       sourceStoreId: transfer.source_store_id,
       destinationStoreName: storeNames.get(transfer.destination_store_id) ?? "Inactive store",
       note: transfer.note,
-      status: transfer.status as "in_transit" | "partially_received",
+      status: transfer.status as "dispatched" | "in_transit" | "partially_received",
       lines: (transferLinesByTransfer.get(transfer.id) ?? [])
         .filter((line) => Number(line.received_quantity) + Number(line.short_quantity) < Number(line.quantity))
         .map((line) => ({

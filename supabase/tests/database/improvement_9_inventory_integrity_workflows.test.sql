@@ -220,7 +220,7 @@ select lives_ok(
   ),
   'final transfer receipt succeeds'
 );
-select is((select status from public.stock_transfers where id = (select transfer_id from inventory_integrity_context)), 'completed', 'final receipt completes the transfer');
+select is((select status from public.stock_transfers where id = (select transfer_id from inventory_integrity_context)), 'received', 'final direct receipt reaches the canonical received state');
 select is((select quantity from public.inventory_levels where store_id = (select destination_store_id from inventory_integrity_context) and product_id = (select product_id from inventory_integrity_context)), 4::numeric, 'all received stock is available at the destination');
 
 select lives_ok(

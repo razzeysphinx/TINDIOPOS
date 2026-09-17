@@ -863,6 +863,15 @@ async function runDatabaseCertification() {
     ],
   });
 
+  runStep({
+    name:
+      "Canonical transfer concurrency evidence",
+    command: "node",
+    args: [
+      "scripts/inventory-transfer-concurrency-certification.mjs",
+    ],
+  });
+
   await verifyGeneratedTypesStable();
 
   assertTrackedMigrationsClean();

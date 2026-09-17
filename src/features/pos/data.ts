@@ -347,7 +347,10 @@ export async function loadPosWorkspace(
   }));
   const incomingTransfers: PosIncomingTransfer[] = (incomingTransfersResult.data ?? []).flatMap((transfer) => {
     const lines = mapIncomingTransferLines(transfer.lines);
-    if (!lines.length || (transfer.status !== "in_transit" && transfer.status !== "partially_received")) return [];
+    if (
+      !lines.length
+      || (transfer.status !== "dispatched" && transfer.status !== "in_transit" && transfer.status !== "partially_received")
+    ) return [];
     return [{
       id: transfer.transfer_id,
       transferNumber: Number(transfer.transfer_number),

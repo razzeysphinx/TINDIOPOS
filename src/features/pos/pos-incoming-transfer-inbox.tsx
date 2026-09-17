@@ -192,7 +192,11 @@ export function PosIncomingTransferInbox({
                         <p className="mt-1 text-sm text-muted-foreground">From {transfer.sourceStoreName} to {transfer.destinationStoreName}</p>
                       </div>
                       <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
-                        {transfer.status === "partially_received" ? "Partially received" : "In transit"}
+                        {transfer.status === "partially_received"
+                          ? "Partially received"
+                          : transfer.status === "dispatched"
+                            ? "Dispatched"
+                            : "In transit"}
                       </span>
                     </div>
                     <p className="mt-3 text-sm text-muted-foreground">{transfer.lines.length} item{transfer.lines.length === 1 ? "" : "s"} awaiting receipt</p>

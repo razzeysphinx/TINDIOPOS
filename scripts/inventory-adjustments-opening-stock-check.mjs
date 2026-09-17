@@ -3,10 +3,12 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-const [migration, actions, workflow, catalogActions, catalogForms, sqlTest, concurrency] = await Promise.all([
+const [migration, actions, schema, workflow, advancedWorkflows, catalogActions, catalogForms, sqlTest, concurrency] = await Promise.all([
   read("../supabase/migrations/20260917122822_canonical_inventory_adjustments_opening_stock.sql"),
   read("../src/features/inventory/advanced-inventory-actions.ts"),
+  read("../src/features/inventory/advanced-inventory-schema.ts"),
   read("../src/features/inventory/inventory-integrity-workflows.tsx"),
+  read("../src/features/inventory/advanced-inventory-workflows.tsx"),
   read("../src/features/catalog/actions.ts"),
   read("../src/features/catalog/catalog-forms.tsx"),
   read("../supabase/tests/database/canonical_inventory_adjustments_opening_stock.test.sql"),
@@ -20,6 +22,10 @@ test("one canonical application command owns manual adjustments and opening stoc
   assert.doesNotMatch(actions, /recordInventoryAdjustmentV2Action|rpc\("adjust_inventory"|rpc\("record_inventory_adjustment_v2"/);
   assert.doesNotMatch(catalogActions, /adjustInventoryAction|rpc\("adjust_inventory"/);
   assert.doesNotMatch(catalogForms, /InventoryAdjustmentForm|adjustInventoryAction/);
+  assert.doesNotMatch(actions, /import_inventory_adjustments_csv|importInventoryAdjustmentsCsvAction/);
+  assert.doesNotMatch(schema, /importInventoryAdjustmentsCsvSchema/);
+  assert.doesNotMatch(advancedWorkflows, /importInventoryAdjustmentsCsvAction|inventory-adjustment:csv-import|Post stock adjustments/);
+  assert.match(advancedWorkflows, /PurchaseOrderCsvTools/);
 });
 
 test("canonical posting reserves operation identity before physical mutation", () => {

@@ -261,16 +261,6 @@ export const recordInventoryAdjustmentSchema = z.object({
   approvalRequestId: z.uuid().nullable().optional(),
 });
 
-export const importInventoryAdjustmentsCsvSchema = z.object({
-  operationId,
-  storeId: z.uuid("Select a store."),
-  reasonCode: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,39}$/, "Select an adjustment reason."),
-  rows: z.array(z.object({ rowNumber: z.number().int().min(2), productId: z.uuid(), variantId: optionalUuid, quantityDelta, note: z.string().trim().min(2, "Each row needs an explanation.").max(500) })).min(1).max(500),
-  approvalRequestId: z.uuid().nullable().optional(),
-}).superRefine((value, context) => {
-  if (!uniqueSaleableLines(value.rows)) context.addIssue({ code: "custom", path: ["rows"], message: "Each item can appear only once in an adjustment import." });
-});
-
 export const receiveStockTransferSchema = z
   .object({
     operationId,

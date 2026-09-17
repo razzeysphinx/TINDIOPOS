@@ -6,6 +6,8 @@
     "scripts/inventory-adjustments-opening-stock-check.mjs",
     "scripts/inventory-adjustment-concurrency-certification.mjs",
     "src/features/inventory/advanced-inventory-actions.ts",
+    "src/features/inventory/advanced-inventory-schema.ts",
+    "src/features/inventory/advanced-inventory-workflows.tsx",
     "src/features/inventory/inventory-integrity-workflows.tsx",
     "src/features/catalog/actions.ts",
     "src/features/catalog/catalog-forms.tsx"
@@ -24,6 +26,12 @@
     { "path": "src/features/catalog/actions.ts", "text": "rpc(\"adjust_inventory\"" },
     { "path": "src/features/catalog/catalog-forms.tsx", "text": "InventoryAdjustmentForm" },
     { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "recordInventoryAdjustmentV2Action" },
+    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "import_inventory_adjustments_csv" },
+    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "importInventoryAdjustmentsCsvAction" },
+    { "path": "src/features/inventory/advanced-inventory-schema.ts", "text": "importInventoryAdjustmentsCsvSchema" },
+    { "path": "src/features/inventory/advanced-inventory-workflows.tsx", "text": "importInventoryAdjustmentsCsvAction" },
+    { "path": "src/features/inventory/advanced-inventory-workflows.tsx", "text": "Post stock adjustments" },
+    { "path": "src/features/inventory/advanced-inventory-workflows.tsx", "text": "inventory-adjustment:csv-import" },
     { "path": "supabase/migrations/20260917122822_canonical_inventory_adjustments_opening_stock.sql", "text": "grant execute on function public.adjust_inventory" }
   ]
 }

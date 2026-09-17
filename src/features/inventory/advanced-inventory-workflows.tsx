@@ -36,8 +36,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { requestManagerApprovalAction } from "@/features/approvals/actions";
-import { ManagerApprovalDialog } from "@/features/approvals/manager-approval-dialog";
 import {
   cancelPurchaseOrderAction,
   createPurchaseOrderAction,
@@ -45,7 +43,6 @@ import {
   receivePurchaseOrderAction,
   transferStockAction,
   updateSupplierAction,
-  importInventoryAdjustmentsCsvAction,
 } from "@/features/inventory/advanced-inventory-actions";
 import { SupplierCsvTools } from "@/features/inventory/supplier-csv-tools";
 import {
@@ -140,7 +137,6 @@ export function AdvancedInventoryWorkflows({
   canReceivePurchaseOrders = false,
   canUseLegacyCsvTools = false,
   canViewCosts,
-  adjustmentReasons,
   initialPurchasingSection = "orders",
   initialReceiptOrderId,
   receivingHref,
@@ -157,10 +153,9 @@ export function AdvancedInventoryWorkflows({
   canCreatePurchaseOrders?: boolean;
   canManageSuppliers?: boolean;
   canReceivePurchaseOrders?: boolean;
-  /** The retained combined CSV tool remains manager-only until its planned replacement. */
+  /** The retained purchase-order CSV helper remains manager-only. */
   canUseLegacyCsvTools?: boolean;
   canViewCosts?: boolean;
-  adjustmentReasons: Array<{ code: string; name: string }>;
   /** Lets Inventory Control deep-link to one purchasing workflow without duplicating it. */
   initialPurchasingSection?: "orders" | "receiving" | "suppliers";
   /** Keeps a contextual PO → Receiving handoff in the canonical query-driven workspace. */
@@ -558,7 +553,7 @@ export function AdvancedInventoryWorkflows({
             <EmptyWorkflow message="Purchase-order creation requires the existing cost-view permission." />
           )}
         </WorkflowCard> : null}
-        {canUseLegacyCsvTools && canViewCosts ? <details className="xl:col-span-2 rounded-xl border bg-card"><summary className="cursor-pointer px-4 py-3 text-sm font-medium">Import inventory records</summary><div className="border-t p-4"><InventoryCsvTools stores={stores} items={items} suppliers={activeSuppliers} adjustmentReasons={adjustmentReasons} /></div></details> : null}
+        {canUseLegacyCsvTools && canViewCosts ? <details className="xl:col-span-2 rounded-xl border bg-card"><summary className="cursor-pointer px-4 py-3 text-sm font-medium">Import purchase order</summary><div className="border-t p-4"><PurchaseOrderCsvTools stores={stores} items={items} suppliers={activeSuppliers} /></div></details> : null}
         </> : null}
 
         {showPurchasing && purchasingSection === "receiving" ? <>
@@ -669,39 +664,34 @@ export function AdvancedInventoryWorkflows({
   );
 }
 
-type InventoryCsvKind = "purchase" | "adjustment";
-type InventoryCsvRow = { rowNumber: number; itemCode: string; productId: string; variantId: string; purchaseUnitCode: string; quantity: string; unitCost: string; note: string };
+type PurchaseOrderCsvRow = { rowNumber: number; itemCode: string; productId: string; variantId: string; purchaseUnitCode: string; quantity: string; unitCost: string };
 
-function InventoryCsvTools({
-  stores, items, suppliers, adjustmentReasons,
+function PurchaseOrderCsvTools({
+  stores, items, suppliers,
 }: {
   stores: StoreOption[];
   items: AdvancedInventoryItem[];
   suppliers: AdvancedInventorySupplier[];
-  adjustmentReasons: Array<{ code: string; name: string }>;
 }) {
   const router = useRouter();
-  const [kind, setKind] = useState<InventoryCsvKind>("purchase");
   const [storeId, setStoreId] = useState(stores[0]?.id ?? "");
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? "");
-  const [reasonCode, setReasonCode] = useState(adjustmentReasons[0]?.code ?? "");
   const [note, setNote] = useState("");
   const [expectedAt, setExpectedAt] = useState("");
-  const [rows, setRows] = useState<InventoryCsvRow[]>([]);
+  const [rows, setRows] = useState<PurchaseOrderCsvRow[]>([]);
   const [filename, setFilename] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
   const [result, setResult] = useState<string | null>(null);
-  const [adjustmentApprovalRequestId, setAdjustmentApprovalRequestId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const headers = kind === "purchase" ? ["item_code", "quantity", "unit_cost"] : ["item_code", "quantity_delta", "note"];
+  const headers = ["item_code", "quantity", "unit_cost"];
 
   function downloadTemplate() {
-    const sample = kind === "purchase" ? ["YOUR-SKU-OR-BARCODE", "12", "45.00"] : ["YOUR-SKU-OR-BARCODE", "-2", "Damaged during delivery"];
-    const blob = new Blob([csvRows([headers, sample])], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `tindio-${kind}-import-template.csv`; anchor.click(); URL.revokeObjectURL(url);
+    const sample = ["YOUR-SKU-OR-BARCODE", "12", "45.00"];
+    const blob = new Blob([csvRows([headers, sample])], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = "tindio-purchase-order-import-template.csv"; anchor.click(); URL.revokeObjectURL(url);
   }
 
   async function chooseFile(file: File | undefined) {
-    setRows([]); setErrors([]); setResult(null); setFilename(file?.name ?? ""); setAdjustmentApprovalRequestId(null);
+    setRows([]); setErrors([]); setResult(null); setFilename(file?.name ?? "");
     if (!file) return;
     if (file.size > 1024 * 1024) { setErrors(["Choose a CSV file smaller than 1 MB."]); return; }
     const records = parseCsvRecords(await file.text()); if (typeof records === "string") { setErrors([records]); return; }
@@ -710,98 +700,28 @@ function InventoryCsvTools({
     const missing = headers.filter((header) => !actualHeaders.includes(header));
     if (missing.length || new Set(actualHeaders).size !== actualHeaders.length) { setErrors([missing.length ? `Missing required CSV columns: ${missing.join(", ")}.` : "CSV headers must not repeat."]); return; }
     const positions = new Map(actualHeaders.map((header, index) => [header, index])); const cell = (record: string[], header: string) => record[positions.get(header) ?? -1]?.trim() ?? "";
-    const errors: string[] = []; const parsedRows: InventoryCsvRow[] = [];
+    const errors: string[] = []; const parsedRows: PurchaseOrderCsvRow[] = [];
     records.slice(1).forEach((record, index) => {
       const rowNumber = index + 2; if (record.every((value) => !value.trim())) return;
       const itemCode = cell(record, "item_code"); const matches = items.filter((item) => item.identifiers.some((identifier) => identifier.toLowerCase() === itemCode.toLowerCase()));
-      const quantity = kind === "adjustment" ? cell(record, "quantity_delta") : cell(record, "quantity"); const unitCost = cell(record, "unit_cost"); const rowNote = cell(record, "note");
+      const quantity = cell(record, "quantity"); const unitCost = cell(record, "unit_cost");
       if (!itemCode || matches.length !== 1) errors.push(`Row ${rowNumber}: item_code must match exactly one active SKU or barcode.`);
-      if (kind === "purchase" && (!/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0 || !/^\d{1,8}(?:\.\d{1,2})?$/.test(unitCost))) errors.push(`Row ${rowNumber}: quantity and unit_cost must be valid positive values.`);
-      if (kind === "adjustment" && (!/^-?\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) === 0)) errors.push(`Row ${rowNumber}: quantity_delta must be non-zero with up to 3 decimals.`);
-      if (kind === "adjustment" && (rowNote.length < 2 || rowNote.length > 500)) errors.push(`Row ${rowNumber}: note must explain the adjustment in 2–500 characters.`);
-      if (!itemCode || matches.length !== 1 || (kind === "purchase" && (!/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0 || !/^\d{1,8}(?:\.\d{1,2})?$/.test(unitCost))) || (kind === "adjustment" && (!/^-?\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) === 0 || rowNote.length < 2 || rowNote.length > 500))) return;
-      parsedRows.push({ rowNumber, itemCode, productId: matches[0].productId, variantId: matches[0].variantId ?? "", purchaseUnitCode: matches[0].purchaseUnits[0]?.code ?? "", quantity, unitCost, note: rowNote });
+      if (!/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0 || !/^\d{1,8}(?:\.\d{1,2})?$/.test(unitCost)) errors.push(`Row ${rowNumber}: quantity and unit_cost must be valid positive values.`);
+      if (!itemCode || matches.length !== 1 || !/^\d{1,8}(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0 || !/^\d{1,8}(?:\.\d{1,2})?$/.test(unitCost)) return;
+      parsedRows.push({ rowNumber, itemCode, productId: matches[0].productId, variantId: matches[0].variantId ?? "", purchaseUnitCode: matches[0].purchaseUnits[0]?.code ?? "", quantity, unitCost });
     });
     if (parsedRows.length > 500) errors.push("Import at most 500 rows at a time."); if (!parsedRows.length && !errors.length) errors.push("Add at least one data row.");
     if (errors.length) { setErrors(errors); return; } setRows(parsedRows);
   }
 
-  function adjustmentImportPayload() {
-    return {
-      storeId,
-      reasonCode,
-      rows: rows.map((row) => ({
-        rowNumber: row.rowNumber,
-        productId: row.productId,
-        variantId: row.variantId,
-        quantityDelta: row.quantity,
-        note: row.note,
-      })),
-    };
-  }
-
-  function adjustmentApprovalPayload(operationId: string) {
-    return {
-      store_id: storeId,
-      reason_code: reasonCode,
-      operation_id: operationId,
-      rows: rows.map((row) => ({
-        row_number: row.rowNumber,
-        product_id: row.productId,
-        variant_id: row.variantId || null,
-        quantity_delta: Number(row.quantity),
-        note: row.note.trim(),
-      })),
-    };
-  }
-
-  async function executeAdjustmentImport(approvalRequestId: string | null) {
-    const payload = adjustmentImportPayload();
-    const operationScope = "inventory-adjustment:csv-import";
-    const response = await importInventoryAdjustmentsCsvAction({
-      ...payload,
-      operationId: pendingOperationId(operationScope, payload),
-      approvalRequestId,
-    });
-    setResult(response.message);
-    if (response.ok) {
-      clearPendingOperation(operationScope);
-      setAdjustmentApprovalRequestId(null);
-      setRows([]);
-      setFilename("");
-      router.refresh();
-    }
-  }
-
   function confirmImport() {
     setResult(null);
     startTransition(async () => {
-      if (kind === "adjustment") {
-        const payload = adjustmentImportPayload();
-        const operationId = pendingOperationId("inventory-adjustment:csv-import", payload);
-        const approval = await requestManagerApprovalAction({
-          operationCode: "inventory.adjust",
-          reason: `CSV inventory adjustment import: ${rows.length} row${rows.length === 1 ? "" : "s"}.`,
-          payload: adjustmentApprovalPayload(operationId),
-        });
-        if (!approval.ok) {
-          setResult(approval.message);
-          return;
-        }
-        if (approval.decision === "APPROVAL_REQUIRED") {
-          setAdjustmentApprovalRequestId(approval.data.approvalRequestId);
-          setResult(approval.message);
-          return;
-        }
-        await executeAdjustmentImport(null);
-        return;
-      }
-
       const operationScope = "purchase-order-import";
       const response = await createPurchaseOrderAction({ operationId: pendingOperationId(operationScope), storeId, supplierId, expectedAt, notes: note, lines: rows.map((row) => ({ productId: row.productId, variantId: row.variantId, purchaseUnitCode: row.purchaseUnitCode, quantity: row.quantity, unitCost: row.unitCost })) });
       setResult(response.message);
       if (response.ok) {
-        if (kind === "purchase") clearPendingOperation(operationScope);
+        clearPendingOperation(operationScope);
         setRows([]);
         setFilename("");
         router.refresh();
@@ -811,26 +731,19 @@ function InventoryCsvTools({
 
   return <>
     <Card>
-      <CardHeader><CardTitle>Inventory CSV</CardTitle><CardDescription>Preview and confirm one controlled inventory operation. This never writes stock projections directly.</CardDescription></CardHeader>
+      <CardHeader><CardTitle>Purchase order CSV</CardTitle><CardDescription>Preview and create a purchase order without writing stock projections.</CardDescription></CardHeader>
       <CardContent className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-1 text-sm font-medium">Operation<select className={selectClassName} onChange={(event) => { setKind(event.target.value as InventoryCsvKind); setRows([]); setErrors([]); setFilename(""); setAdjustmentApprovalRequestId(null); }} value={kind}><option value="purchase">Create purchase order</option><option value="adjustment">Post stock adjustments</option></select></label>
-          <label className="grid gap-1 text-sm font-medium">Store<select className={selectClassName} onChange={(event) => { setStoreId(event.target.value); setAdjustmentApprovalRequestId(null); }} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label>
+          <label className="grid gap-1 text-sm font-medium">Store<select className={selectClassName} onChange={(event) => setStoreId(event.target.value)} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label>
+          <label className="grid gap-1 text-sm font-medium">Supplier<select className={selectClassName} onChange={(event) => setSupplierId(event.target.value)} value={supplierId}>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
         </div>
-        {kind === "purchase" ? <div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-sm font-medium">Supplier<select className={selectClassName} onChange={(event) => setSupplierId(event.target.value)} value={supplierId}>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label><label className="grid gap-1 text-sm font-medium">Expected date<Input onChange={(event) => setExpectedAt(event.target.value)} type="date" value={expectedAt} /></label></div> : null}
-        {kind === "adjustment" ? <label className="grid gap-1 text-sm font-medium">Adjustment reason<select className={selectClassName} onChange={(event) => { setReasonCode(event.target.value); setAdjustmentApprovalRequestId(null); }} value={reasonCode}>{adjustmentReasons.map((reason) => <option key={reason.code} value={reason.code}>{reason.name}</option>)}</select></label> : null}
-        {kind === "adjustment" ? <p className="text-sm text-muted-foreground">Each CSV row must include a specific 2–500 character note explaining the adjustment.</p> : <Input onChange={(event) => setNote(event.target.value)} placeholder="Optional purchase order note" value={note} />}
+        <div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-sm font-medium">Expected date<Input onChange={(event) => setExpectedAt(event.target.value)} type="date" value={expectedAt} /></label><Input onChange={(event) => setNote(event.target.value)} placeholder="Optional purchase order note" value={note} /></div>
         <div className="flex flex-wrap items-end gap-3"><div className="grid min-w-0 flex-1 gap-1 sm:min-w-56"><Label htmlFor="inventory-csv-file">Import file</Label><Input accept=".csv,text/csv" id="inventory-csv-file" onChange={(event) => void chooseFile(event.target.files?.[0])} type="file" /></div><Button onClick={downloadTemplate} type="button" variant="outline"><Download /> Template</Button></div>
         {errors.length ? <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><p className="font-medium">Fix the CSV before importing.</p><ul className="mt-1 list-disc pl-5">{errors.slice(0, 4).map((error) => <li key={error}>{error}</li>)}</ul></div> : null}
-        {rows.length ? <div className="overflow-hidden rounded-lg border"><div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 text-sm"><span>{filename}: {rows.length} valid row{rows.length === 1 ? "" : "s"}</span><Button disabled={isPending || (kind === "purchase" && !supplierId) || (kind === "adjustment" && !reasonCode)} onClick={confirmImport} size="sm" type="button">{isPending ? <LoaderCircle className="animate-spin" /> : <Upload />} Confirm import</Button></div><div className="max-h-48 overflow-auto"><table className="w-full text-left text-sm"><thead className="sticky top-0 bg-background text-muted-foreground"><tr><th className="px-3 py-2">Row</th><th className="px-3 py-2">Item code</th><th className="px-3 py-2">Quantity</th></tr></thead><tbody>{rows.slice(0, 20).map((row) => <tr className="border-t" key={row.rowNumber}><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2">{row.itemCode}</td><td className="px-3 py-2">{row.quantity}</td></tr>)}</tbody></table></div></div> : null}
+        {rows.length ? <div className="overflow-hidden rounded-lg border"><div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 text-sm"><span>{filename}: {rows.length} valid row{rows.length === 1 ? "" : "s"}</span><Button disabled={isPending || !supplierId} onClick={confirmImport} size="sm" type="button">{isPending ? <LoaderCircle className="animate-spin" /> : <Upload />} Confirm import</Button></div><div className="max-h-48 overflow-auto"><table className="w-full text-left text-sm"><thead className="sticky top-0 bg-background text-muted-foreground"><tr><th className="px-3 py-2">Row</th><th className="px-3 py-2">Item code</th><th className="px-3 py-2">Quantity</th></tr></thead><tbody>{rows.slice(0, 20).map((row) => <tr className="border-t" key={row.rowNumber}><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2">{row.itemCode}</td><td className="px-3 py-2">{row.quantity}</td></tr>)}</tbody></table></div></div> : null}
         {result ? <p aria-live="polite" className="text-sm text-muted-foreground">{result}</p> : null}
       </CardContent>
     </Card>
-    {adjustmentApprovalRequestId ? <ManagerApprovalDialog approvalRequestId={adjustmentApprovalRequestId} onApproved={() => {
-      const requestId = adjustmentApprovalRequestId;
-      setAdjustmentApprovalRequestId(null);
-      startTransition(async () => { await executeAdjustmentImport(requestId); });
-    }} onCancel={() => setAdjustmentApprovalRequestId(null)} operationLabel="Inventory adjustment import" /> : null}
   </>;
 }
 

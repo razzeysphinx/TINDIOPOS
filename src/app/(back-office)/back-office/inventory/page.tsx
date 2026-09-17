@@ -2182,7 +2182,6 @@ export async function InventoryWorkspacePage({
           canReceivePurchaseOrders={canReceivePurchaseOrders}
           canUseLegacyCsvTools={canManage}
           canViewCosts={canViewCosts}
-          adjustmentReasons={adjustmentReasons.map((reason) => ({ code: reason.code, name: reason.name }))}
           initialReceiptOrderId={requestedPurchaseOrderId}
           initialPurchasingSection={activeTab === "receiving" ? "receiving" : activeTab === "suppliers" ? "suppliers" : "orders"}
           receivingHref={purchasingTabHref("receiving")}

@@ -11,7 +11,6 @@ import {
   createPurchaseOrderSchema,
   createSupplierSchema,
   importSuppliersCsvSchema,
-  importInventoryAdjustmentsCsvSchema,
   inventoryCountTransitionSchema,
   importInventoryCountLinesSchema,
   produceCompositeSchema,
@@ -638,25 +637,6 @@ export async function recordInventoryAdjustmentAction(
   if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not post the stock adjustment.") };
   revalidatePath("/back-office/inventory");
   return { ok: true, message: "Stock adjustment posted to the ledger.", data: { movementId: data } };
-}
-
-export async function importInventoryAdjustmentsCsvAction(input: unknown): Promise<AdvancedInventoryActionResult<{ importedCount: number }>> {
-  const { context, error: permissionError } = await requireInventoryAdjuster();
-  if (permissionError) return { ok: false, message: permissionError };
-  const parsed = importInventoryAdjustmentsCsvSchema.safeParse(input);
-  if (!parsed.success) return validationError();
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("import_inventory_adjustments_csv", {
-    target_organization_id: context.organization.id,
-    target_store_id: parsed.data.storeId,
-    target_reason_code: parsed.data.reasonCode,
-    target_rows: parsed.data.rows.map((row) => ({ row_number: row.rowNumber, product_id: row.productId, variant_id: row.variantId || null, quantity_delta: Number(row.quantityDelta), note: row.note })) as Json,
-    target_operation_id: parsed.data.operationId,
-    target_approval_request_id: parsed.data.approvalRequestId ?? null,
-  });
-  if (error || data === null) return { ok: false, message: error?.message?.startsWith("CSV row") ? error.message : databaseMessage(error?.code, "TINDIO could not import these inventory adjustments.") };
-  revalidatePath("/back-office/inventory");
-  return { ok: true, message: `${data} inventory adjustment${data === 1 ? "" : "s"} posted to the ledger.`, data: { importedCount: data } };
 }
 
 export async function receiveStockTransferAction(

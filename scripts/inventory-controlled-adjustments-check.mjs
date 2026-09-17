@@ -53,8 +53,10 @@ test("the adjustment interface requires a review, explanation, and granular scop
   assert.doesNotMatch(actions, /rpc\("record_inventory_adjustment"/);
 });
 
-test("CSV adjustment retries use the shared payload-specific operation identity", async () => {
-  const [workflow, operationId] = await Promise.all([
+test("retired CSV adjustments have no reachable application call surface", async () => {
+  const [actions, schema, workflow, operationId] = await Promise.all([
+    source("src/features/inventory/advanced-inventory-actions.ts"),
+    source("src/features/inventory/advanced-inventory-schema.ts"),
     source("src/features/inventory/advanced-inventory-workflows.tsx"),
     source("src/features/inventory/inventory-operation-id.ts"),
   ]);
@@ -62,8 +64,9 @@ test("CSV adjustment retries use the shared payload-specific operation identity"
   assert.match(workflow, /getInventoryOperationId as pendingOperationId/);
   assert.match(operationId, /export function getInventoryOperationId\(scope: string, payload\?: unknown\)/);
   assert.match(operationId, /stored\.fingerprint === fingerprint/);
-  assert.match(workflow, /CSV inventory adjustment import/);
-  assert.match(workflow, /Each CSV row must include a specific 2/);
-  assert.match(workflow, /operation_id: operationId/);
-  assert.match(workflow, /setAdjustmentApprovalRequestId\(null\)/);
+  assert.match(workflow, /PurchaseOrderCsvTools/);
+  assert.match(workflow, /createPurchaseOrderAction/);
+  assert.doesNotMatch(actions, /import_inventory_adjustments_csv|importInventoryAdjustmentsCsvAction/);
+  assert.doesNotMatch(schema, /importInventoryAdjustmentsCsvSchema/);
+  assert.doesNotMatch(workflow, /importInventoryAdjustmentsCsvAction|inventory-adjustment:csv-import|Post stock adjustments/);
 });

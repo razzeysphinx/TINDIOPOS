@@ -169,7 +169,7 @@ with transfer_fixture as (
     status, note, transferred_by_employee_id
   )
   select context.organization_id, nextval('private.tindio_stock_transfer_number_sequence'), gen_random_uuid(), context.store_id, context.destination_store_id,
-    'in_transit', 'Historic transfer fixture', employee.id
+    'dispatched', 'Canonicalized historic transfer fixture', employee.id
   from inventory_integrity_context context
   join public.employees employee on employee.organization_id = context.organization_id and employee.profile_id = '92929292-9292-4929-8929-929292929292'
   returning id
@@ -199,7 +199,7 @@ select private.apply_inventory_change_v2(
 );
 set local role authenticated;
 set local request.jwt.claim.sub = '92929292-9292-4929-8929-929292929292';
-select is((select status from public.stock_transfers where id = (select transfer_id from inventory_integrity_context)), 'in_transit', 'historic fixture remains an in-transit transfer');
+select is((select status from public.stock_transfers where id = (select transfer_id from inventory_integrity_context)), 'dispatched', 'canonicalized historic fixture begins as dispatched');
 select is((select quantity from public.inventory_levels where store_id = (select store_id from inventory_integrity_context) and product_id = (select product_id from inventory_integrity_context)), 6::numeric, 'historic transfer fixture reduces source stock through the ledger');
 select is((select quantity from public.inventory_levels where store_id = (select destination_store_id from inventory_integrity_context) and product_id = (select product_id from inventory_integrity_context)), 0::numeric, 'historic fixture does not increase destination stock yet');
 select lives_ok(

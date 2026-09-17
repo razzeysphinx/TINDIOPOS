@@ -1,0 +1,46 @@
+{
+  "phase": "06",
+  "requiredPaths": [
+    "supabase/migrations/20260917073801_canonical_request_transfer_migration.sql",
+    "supabase/tests/database/canonical_request_transfer_migration.test.sql",
+    "supabase/tests/database/canonical_inventory_transfer_foundation.test.sql",
+    "supabase/tests/database/improvement_14_supply_chain_replenishment.test.sql",
+    "supabase/tests/database/improvement_9_inventory_integrity_workflows.test.sql",
+    "scripts/inventory-request-transfer-migration-check.mjs",
+    "scripts/inventory-request-transfer-concurrency-certification.mjs",
+    "src/features/inventory/inventory-transfer-reader-contract.ts",
+    "src/app/(back-office)/back-office/replenishment/page.tsx",
+    "src/features/pos/data.ts",
+    "src/features/pos/pos-types.ts",
+    "src/features/pos/pos-incoming-transfer-inbox.tsx",
+    "src/lib/supabase/database.types.ts"
+  ],
+  "requiredText": [
+    { "path": "supabase/migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "private.dispatch_inventory_transfer_core" },
+    { "path": "supabase/migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "private.receive_inventory_transfer_core" },
+    { "path": "supabase/migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "private.inventory_transfer_child_operation_id(target_operation_id, 'dispatch')" },
+    { "path": "supabase/migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "status in ('draft', 'submitted', 'approved', 'dispatched', 'partially_received', 'received', 'cancelled')" },
+    { "path": "supabase/migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "Legacy transfer statuses remain after deterministic cleanup." },
+    { "path": "src/features/inventory/inventory-transfer-reader-contract.ts", "text": "\"dispatched\"" },
+    { "path": "src/features/inventory/inventory-transfer-reader-contract.ts", "text": "\"partially_received\"" },
+    { "path": "supabase/tests/database/canonical_inventory_transfer_foundation.test.sql", "text": "request dispatch produces a canonical dispatched physical transfer" },
+    { "path": "supabase/tests/database/canonical_inventory_transfer_foundation.test.sql", "text": "request final receipt produces a canonical received physical transfer" },
+    { "path": "supabase/tests/database/canonical_inventory_transfer_foundation.test.sql", "text": "historical direct retry does not fabricate transition operations" },
+    { "path": "supabase/tests/database/canonical_inventory_transfer_foundation.test.sql", "text": "unknown transfer states are rejected" },
+    { "path": "supabase/tests/database/canonical_request_transfer_migration.test.sql", "text": "request preserves discrepancy terminal state" },
+    { "path": "supabase/tests/database/improvement_14_supply_chain_replenishment.test.sql", "text": "dispatch creates the canonical dispatched physical transfer" },
+    { "path": "supabase/tests/database/improvement_14_supply_chain_replenishment.test.sql", "text": "the physical transfer is received once every dispatched quantity is accounted" },
+    { "path": "supabase/tests/database/improvement_14_supply_chain_replenishment.test.sql", "text": "received_with_discrepancy" },
+    { "path": "supabase/tests/database/improvement_9_inventory_integrity_workflows.test.sql", "text": "canonicalized historic fixture begins as dispatched" },
+    { "path": "supabase/tests/database/improvement_9_inventory_integrity_workflows.test.sql", "text": "partial receipt retains the transfer state" },
+    { "path": "supabase/tests/database/improvement_9_inventory_integrity_workflows.test.sql", "text": "final direct receipt reaches the canonical received state" }
+  ],
+  "forbiddenText": [
+    { "path": "src/features/inventory/inventory-transfer-reader-contract.ts", "text": "\"in_transit\"" },
+    { "path": "supabase/migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "gen_random_uuid()" },
+    { "path": "src/app/(back-office)/back-office/replenishment/page.tsx", "text": "[\"in_transit\", \"partially_received\"]" },
+    { "path": "supabase/tests/database/improvement_14_supply_chain_replenishment.test.sql", "text": "'in_transit'" },
+    { "path": "supabase/tests/database/improvement_14_supply_chain_replenishment.test.sql", "text": "'completed'" },
+    { "path": "supabase/tests/database/improvement_9_inventory_integrity_workflows.test.sql", "text": "'in_transit'" }
+  ]
+}

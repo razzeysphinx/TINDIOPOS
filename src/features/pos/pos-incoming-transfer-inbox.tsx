@@ -25,7 +25,6 @@ type ActionResult = { ok: boolean; message: string } | null;
 
 const transferStatusLabels: Record<ReceivableTransferStatus, string> = {
   dispatched: "Dispatched",
-  in_transit: "In transit",
   partially_received: "Partially received",
 };
 

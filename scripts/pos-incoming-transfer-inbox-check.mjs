@@ -5,18 +5,19 @@ import test from "node:test";
 const source = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("POS incoming-transfer query is capability- and destination-store-scoped", async () => {
-  const migration = await source("../supabase/migrations/20260911012610_pos_incoming_transfer_inbox.sql");
+  const migration = await source("../supabase/migrations/20260917073801_canonical_request_transfer_migration.sql");
+  const reader = migration.match(/create or replace function public\.get_pos_incoming_stock_transfers[\s\S]*?\n\$\$;/i)?.[0] ?? "";
 
-  assert.match(migration, /public\.get_pos_incoming_stock_transfers/);
-  assert.match(migration, /\(select auth\.uid\(\)\) is not null/);
-  assert.match(migration, /private\.has_inventory_capability[\s\S]*inventory\.transfer\.receive/);
-  assert.match(migration, /private\.has_store_read_scope[\s\S]*transfer\.destination_store_id/);
-  assert.match(migration, /public\.organization_features feature/);
-  assert.match(migration, /feature\.feature_key in \('inventory', 'transfers'\)/);
-  assert.match(migration, /transfer\.status in \('in_transit', 'partially_received'\)/);
+  assert.match(reader, /public\.get_pos_incoming_stock_transfers/);
+  assert.match(reader, /\(select auth\.uid\(\)\) is not null/);
+  assert.match(reader, /private\.has_inventory_capability[\s\S]*inventory\.transfer\.receive/);
+  assert.match(reader, /private\.has_store_read_scope[\s\S]*transfer\.destination_store_id/);
+  assert.match(reader, /public\.organization_features feature/);
+  assert.match(reader, /feature\.feature_key in \('inventory', 'transfers'\)/);
+  assert.match(reader, /transfer\.status in \('dispatched', 'partially_received'\)/);
   assert.match(migration, /revoke all on function public\.get_pos_incoming_stock_transfers/);
   assert.match(migration, /grant execute on function public\.get_pos_incoming_stock_transfers[\s\S]*authenticated/);
-  assert.doesNotMatch(migration, /insert into public\.|update public\.|delete from public\./i);
+  assert.doesNotMatch(reader, /insert into public\.|update public\.|delete from public\./i);
 });
 
 test("POS inbox reuses canonical receipt actions and never queues inventory receiving offline", async () => {
@@ -37,7 +38,7 @@ test("POS inbox reuses canonical receipt actions and never queues inventory rece
   assert.doesNotMatch(inbox, /queueOffline|offline-checkout|cachePosCatalog/);
 });
 
-test("POS incoming transfers use the shared transitional status contract", async () => {
+test("POS incoming transfers use the shared canonical status contract", async () => {
   const [contract, data, types] = await Promise.all([
     source("../src/features/inventory/inventory-transfer-reader-contract.ts"),
     source("../src/features/pos/data.ts"),

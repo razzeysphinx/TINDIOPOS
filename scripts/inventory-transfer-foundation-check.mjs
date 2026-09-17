@@ -7,6 +7,7 @@ const source = (relativePath) => readFile(new URL(relativePath, import.meta.url)
 const [
   migration,
   repairMigration,
+  requestMigration,
   granularRbacMigration,
   advancedActions,
   supplyChainActions,
@@ -20,6 +21,7 @@ const [
 ] = await Promise.all([
   source("../supabase/migrations/20260917033614_canonical_inventory_transfer_foundation.sql"),
   source("../supabase/migrations/20260917070409_phase_05_direct_transfer_contract_repair.sql"),
+  source("../supabase/migrations/20260917073801_canonical_request_transfer_migration.sql"),
   source("../supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql"),
   source("../src/features/inventory/advanced-inventory-actions.ts"),
   source("../src/features/inventory/supply-chain-actions.ts"),
@@ -73,7 +75,7 @@ test("canonical commands never assign legacy transfer states", () => {
   }
 });
 
-test("transitional status contract keeps only canonical plus compatibility values", () => {
+test("Phase 05 transition is finalized by the Phase 06 seven-state contract", () => {
   for (const state of [
     "draft",
     "submitted",
@@ -82,13 +84,12 @@ test("transitional status contract keeps only canonical plus compatibility value
     "partially_received",
     "received",
     "cancelled",
-    "in_transit",
-    "completed",
   ]) {
-    assert.match(migration, new RegExp(`'${state}'`));
+    assert.match(requestMigration, new RegExp(`'${state}'`));
   }
-  assert.match(migration, /stock_request_id is null[\s\S]*status = 'in_transit'/i);
-  assert.match(migration, /set status = 'dispatched'/i);
+  assert.match(requestMigration, /status = 'dispatched' where status = 'in_transit'/i);
+  assert.match(requestMigration, /status = 'received'[\s\S]*where status = 'completed'/i);
+  assert.match(requestMigration, /status in \('in_transit', 'completed'\)[\s\S]*raise exception/i);
 });
 
 test("direct compatibility adapters route through canonical engines", () => {
@@ -105,11 +106,13 @@ test("direct compatibility adapters route through canonical engines", () => {
   assert.match(receiptAdapter, /private\.receive_inventory_transfer/);
 });
 
-test("request writers remain present and outside the Phase 05 migration", () => {
+test("request writers are forward-replaced only by Phase 06", () => {
   assert.match(granularRbacMigration, /create or replace function private\.dispatch_stock_request/);
   assert.match(granularRbacMigration, /create or replace function private\.receive_stock_request/);
   assert.doesNotMatch(migration, /create or replace function private\.dispatch_stock_request/);
   assert.doesNotMatch(migration, /create or replace function private\.receive_stock_request/);
+  assert.match(requestMigration, /create or replace function private\.dispatch_stock_request/);
+  assert.match(requestMigration, /create or replace function private\.receive_stock_request/);
   assert.match(supplyChainActions, /supabase\.rpc\("dispatch_stock_request"/);
   assert.match(supplyChainActions, /supabase\.rpc\("receive_stock_request"/);
 });
@@ -119,8 +122,8 @@ test("application command callers retain the direct RPC signatures", () => {
   assert.match(advancedActions, /supabase\.rpc\("receive_stock_transfer"/);
 });
 
-test("all active receiving readers accept canonical dispatched compatibility", () => {
-  assert.match(migration, /transfer\.status in \('dispatched', 'in_transit', 'partially_received'\)/);
+test("all active receiving readers accept only canonical receivable states", () => {
+  assert.match(requestMigration, /transfer\.status in \('dispatched', 'partially_received'\)/);
   assert.match(readerContract, /RECEIVABLE_TRANSFER_QUERY_STATUSES/);
   assert.match(posData, /isReceivableTransferState/);
   assert.match(posTypes, /ReceivableTransferStatus/);
@@ -155,8 +158,8 @@ test("SQL regression covers lifecycle, replay, adapters, and request compatibili
     "conflicting dispatch replay is rejected",
     "historical direct retry returns the existing transfer",
     "historical receipt retry returns the original receipt",
-    "request dispatch preserves temporary in_transit compatibility",
-    "request receipt preserves temporary completed compatibility",
+    "request dispatch produces a canonical dispatched physical transfer",
+    "request final receipt produces a canonical received physical transfer",
     "unknown transfer states are rejected",
   ]) {
     assert.match(sqlTest, new RegExp(evidence));

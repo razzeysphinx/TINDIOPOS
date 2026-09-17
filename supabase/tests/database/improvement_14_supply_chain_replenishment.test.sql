@@ -150,7 +150,7 @@ set transfer_id = public.dispatch_stock_request(organization_id, request_id, 'Pa
 update supply_chain_context
 set transfer_line_id = (select id from public.stock_transfer_lines where stock_transfer_id = supply_chain_context.transfer_id);
 select is((select status from public.stock_requests where id = (select request_id from supply_chain_context)), 'dispatched', 'dispatch advances the request');
-select is((select status from public.stock_transfers where id = (select transfer_id from supply_chain_context)), 'in_transit', 'dispatch creates the authoritative in-transit transfer');
+select is((select status from public.stock_transfers where id = (select transfer_id from supply_chain_context)), 'dispatched', 'dispatch creates the canonical dispatched physical transfer');
 select is((select quantity from public.inventory_levels where store_id = (select source_store_id from supply_chain_context) and product_id = (select product_id from supply_chain_context)), 0::numeric, 'dispatch reduces source stock');
 select is((select quantity from public.inventory_levels where store_id = (select destination_store_id from supply_chain_context) and product_id = (select product_id from supply_chain_context)), 0::numeric, 'dispatch still does not increase destination stock');
 
@@ -162,7 +162,7 @@ select lives_ok(
   ),
   'partial receipt with a shortage succeeds'
 );
-select is((select status from public.stock_transfers where id = (select transfer_id from supply_chain_context)), 'completed', 'the transfer completes once every dispatched quantity is received or formally short');
+select is((select status from public.stock_transfers where id = (select transfer_id from supply_chain_context)), 'received', 'the physical transfer is received once every dispatched quantity is accounted');
 select is((select status from public.stock_requests where id = (select request_id from supply_chain_context)), 'received_with_discrepancy', 'the request visibly retains its shortage outcome');
 select is((select quantity from public.inventory_levels where store_id = (select destination_store_id from supply_chain_context) and product_id = (select product_id from supply_chain_context)), 9::numeric, 'only physically received stock reaches the destination');
 select is((select short_quantity from public.stock_request_lines where id = (select request_line_id from supply_chain_context)), 1::numeric, 'the request line retains the missing quantity');

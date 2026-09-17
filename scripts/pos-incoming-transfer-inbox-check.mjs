@@ -37,6 +37,17 @@ test("POS inbox reuses canonical receipt actions and never queues inventory rece
   assert.doesNotMatch(inbox, /queueOffline|offline-checkout|cachePosCatalog/);
 });
 
+test("POS incoming transfers use the shared transitional status contract", async () => {
+  const [contract, data, types] = await Promise.all([
+    source("../src/features/inventory/inventory-transfer-reader-contract.ts"),
+    source("../src/features/pos/data.ts"),
+    source("../src/features/pos/pos-types.ts"),
+  ]);
+  assert.match(contract, /isReceivableTransferState/);
+  assert.match(data, /isReceivableTransferState/);
+  assert.match(types, /ReceivableTransferStatus/);
+});
+
 test("shared POS header exposes incoming transfers without adding a duplicate POS navigation route", async () => {
   const [header, drawer, data, ...pages] = await Promise.all([
     source("../src/features/pos/pos-workspace-header.tsx"),

@@ -1,11 +1,12 @@
 # TINDIO Inventory — Canonical Transfer Lifecycle Design
 
-**Design version:** 1.1
+**Design version:** 1.2
 **Phase:** 04 — Transfer Lifecycle Design
 **Repository baseline:** `e199d532621d2068dd7b1088c41a17a865df1965`
 **Status:** Architecture contract for controlled implementation
 **Implementation begins:** Phase 05 only
 **Correction 01:** separates the seven canonical physical-transfer states from temporary legacy database compatibility states still written by unmigrated transfer workflows.
+**Correction 02:** Phase 05 receiving readers share one transitional reader contract. The direct compatibility adapter preserves the external operation ID as the canonical create identity; submit, approve, and dispatch use deterministic child operation IDs derived from it. Random transition IDs are forbidden for replayable compatibility-adapter lifecycle steps.
 
 ---
 
@@ -666,6 +667,19 @@ stock_requests.operation_id
 must be preserved during migration for compatibility and historical evidence.
 
 Do not drop them in the first implementation slice.
+
+For the direct compatibility adapter, the external operation ID is both the
+stable transfer identity and the canonical create-transition identity. Its
+remaining lifecycle identities are derived deterministically:
+
+```text
+external operation ID + submit   → submit transition ID
+external operation ID + approve  → approve transition ID
+external operation ID + dispatch → dispatch transition ID
+```
+
+The same external operation ID must therefore produce the same four transition
+identities on every retry. Random child IDs are forbidden.
 
 ---
 

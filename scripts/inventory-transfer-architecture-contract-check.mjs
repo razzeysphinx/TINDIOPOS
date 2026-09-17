@@ -427,3 +427,11 @@ test(
     );
   },
 );
+
+test("design v1.2 records the Phase 05 post-merge operation and reader contracts", () => {
+  assert.match(design, /Design version:\*\* 1\.2/);
+  assert.match(design, /external operation ID[\s\S]*canonical create-transition identity/i);
+  assert.match(design, /submit[\s\S]*approve[\s\S]*dispatch[\s\S]*deterministic/i);
+  assert.match(design, /Random child IDs are forbidden/i);
+  assert.match(design, /receiving readers share one transitional reader contract/i);
+});

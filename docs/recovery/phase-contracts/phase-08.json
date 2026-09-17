@@ -1,0 +1,27 @@
+{
+  "phase": "08",
+  "requiredPaths": [
+    "supabase/migrations/20260917152516_canonical_inventory_counts_stocktake.sql",
+    "supabase/tests/database/canonical_inventory_counts_stocktake.test.sql",
+    "scripts/inventory-counts-stocktake-check.mjs",
+    "scripts/inventory-count-concurrency-certification.mjs",
+    "src/features/inventory/advanced-inventory-actions.ts",
+    "src/features/inventory/inventory-count-workspace.tsx"
+  ],
+  "requiredText": [
+    { "path": "supabase/migrations/20260917152516_canonical_inventory_counts_stocktake.sql", "text": "alter column status set default 'draft'" },
+    { "path": "supabase/migrations/20260917152516_canonical_inventory_counts_stocktake.sql", "text": "INVENTORY_COUNT_LINE_SAVED" },
+    { "path": "supabase/migrations/20260917152516_canonical_inventory_counts_stocktake.sql", "text": "revoke execute on function private.post_inventory_count(uuid, uuid)" },
+    { "path": "supabase/tests/database/canonical_inventory_counts_stocktake.test.sql", "text": "posting reserves operation identity while holding the count lock" },
+    { "path": "supabase/tests/database/canonical_inventory_counts_stocktake.test.sql", "text": "multi-store batch creation coordinates independent stock-neutral documents" },
+    { "path": "scripts/inventory-count-concurrency-certification.mjs", "text": "physicalMutations === 1" },
+    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "create_inventory_count_plan_v2" },
+    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "save_inventory_count_line_v2" }
+  ],
+  "forbiddenText": [
+    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "rpc(\"create_inventory_count_draft\"" },
+    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "rpc(\"complete_inventory_count\"" },
+    { "path": "src/features/inventory/inventory-count-workspace.tsx", "text": "update inventory_levels" },
+    { "path": "supabase/migrations/20260917152516_canonical_inventory_counts_stocktake.sql", "text": "grant execute on function private.post_inventory_count(uuid, uuid)" }
+  ]
+}

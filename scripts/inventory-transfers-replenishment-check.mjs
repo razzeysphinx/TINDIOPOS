@@ -112,6 +112,17 @@ test("direct transfers are retry-safe while request receipts remain canonical", 
   assert.match(legacyGuardMigration, /revoke execute on function public\.transfer_stock[\s\S]*from authenticated/);
 });
 
+test("direct receiving reads one shared Phase 05 status contract", async () => {
+  const [inventoryPage, workflows, contract] = await Promise.all([
+    source("src/app/(back-office)/back-office/inventory/page.tsx"),
+    source("src/features/inventory/inventory-integrity-workflows.tsx"),
+    source("src/features/inventory/inventory-transfer-reader-contract.ts"),
+  ]);
+  assert.match(contract, /RECEIVABLE_TRANSFER_QUERY_STATUSES/);
+  assert.match(inventoryPage, /isReceivableTransferState/);
+  assert.match(workflows, /ReceivableTransferStatus/);
+});
+
 test("store filtering keeps authorized source warehouses available for transfer requests", async () => {
   const replenishmentPage = await source("src/app/(back-office)/back-office/replenishment/page.tsx");
 

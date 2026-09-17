@@ -130,7 +130,7 @@ export type PosIncomingTransfer = {
   sourceStoreName: string;
   destinationStoreId: string;
   destinationStoreName: string;
-  status: "dispatched" | "in_transit" | "partially_received";
+  status: ReceivableTransferStatus;
   note: string | null;
   lines: Array<{
     id: string;
@@ -163,3 +163,4 @@ export function posItemKey(item: Pick<PosCatalogItem, "productId" | "variantId">
 
   return `${item.productId}:${item.variantId ?? "simple"}:${item.manualPriceMinor ?? "catalog"}:${[...(item.modifierOptionIds ?? [])].sort().join(",")}:${item.itemNote ?? ""}`;
 }
+import type { ReceivableTransferStatus } from "@/features/inventory/inventory-transfer-reader-contract";

@@ -26,6 +26,7 @@ import {
   getInventoryOperationId as pendingOperationId,
 } from "@/features/inventory/inventory-operation-id";
 import type { AdvancedInventoryItem } from "@/features/inventory/advanced-inventory-workflows";
+import type { ReceivableTransferStatus } from "@/features/inventory/inventory-transfer-reader-contract";
 
 const selectClassName =
   "h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -40,7 +41,7 @@ type Transfer = {
   sourceStoreName: string;
   destinationStoreName: string;
   note: string | null;
-  status: "dispatched" | "in_transit" | "partially_received";
+  status: ReceivableTransferStatus;
   lines: Array<{ id: string; label: string; unit: string; quantity: number; receivedQuantity: number; shortQuantity: number }>;
 };
 type CompositeOption = { id: string; name: string; unit: string; storeIds: string[] };

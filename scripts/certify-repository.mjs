@@ -49,6 +49,11 @@ const MANUAL_INTEGRATION_TESTS =
     "test:tenant-load",
   ]);
 
+const REQUIRED_CONTROLLER_TESTS = new Set([
+  "test:inventory-transfer-reader-contract",
+  "test:phase-05-controller-contract",
+]);
+
 const VALID_MODES =
   new Set([
     "--static",
@@ -234,6 +239,12 @@ function validateTestCatalogue(
             "test:",
           ),
       );
+
+  for (const requiredTest of REQUIRED_CONTROLLER_TESTS) {
+    if (!Object.hasOwn(scripts, requiredTest)) {
+      fail(`Missing controller contract test script: ${requiredTest}`);
+    }
+  }
 
   if (allTests.length === 0) {
     fail(

@@ -1,0 +1,28 @@
+{
+  "phase": "05",
+  "requiredPaths": [
+    "supabase/migrations/20260917033614_canonical_inventory_transfer_foundation.sql",
+    "supabase/migrations/20260917070409_phase_05_direct_transfer_contract_repair.sql",
+    "scripts/inventory-transfer-foundation-check.mjs",
+    "scripts/inventory-transfer-concurrency-certification.mjs",
+    "scripts/inventory-transfer-reader-contract-check.mjs",
+    "src/features/inventory/inventory-transfer-reader-contract.ts",
+    "src/features/pos/data.ts",
+    "src/features/pos/pos-types.ts",
+    "src/features/pos/pos-incoming-transfer-inbox.tsx",
+    "src/app/(back-office)/back-office/inventory/page.tsx",
+    "src/features/inventory/inventory-integrity-workflows.tsx"
+  ],
+  "requiredText": [
+    { "path": "supabase/migrations/20260917033614_canonical_inventory_transfer_foundation.sql", "text": "create table private.stock_transfer_operations" },
+    { "path": "supabase/migrations/20260917033614_canonical_inventory_transfer_foundation.sql", "text": "create or replace function private.create_inventory_transfer_draft" },
+    { "path": "supabase/migrations/20260917033614_canonical_inventory_transfer_foundation.sql", "text": "create or replace function private.receive_inventory_transfer" },
+    { "path": "supabase/migrations/20260917070409_phase_05_direct_transfer_contract_repair.sql", "text": "private.inventory_transfer_child_operation_id" },
+    { "path": "supabase/migrations/20260917070409_phase_05_direct_transfer_contract_repair.sql", "text": "private.create_inventory_transfer_draft" },
+    { "path": "src/features/inventory/inventory-transfer-reader-contract.ts", "text": "isReceivableTransferState" },
+    { "path": "docs/TINDIO_INVENTORY_TRANSFER_LIFECYCLE_DESIGN.md", "text": "request/replenishment workflow is intentionally not migrated in Phase 05" }
+  ],
+  "forbiddenText": [
+    { "path": "supabase/migrations/20260917070409_phase_05_direct_transfer_contract_repair.sql", "text": "gen_random_uuid()" }
+  ]
+}

@@ -6,6 +6,7 @@ const source = (relativePath) => readFile(new URL(relativePath, import.meta.url)
 
 const [
   migration,
+  repairMigration,
   granularRbacMigration,
   advancedActions,
   supplyChainActions,
@@ -15,8 +16,10 @@ const [
   inventoryPage,
   integrityWorkflows,
   sqlTest,
+  readerContract,
 ] = await Promise.all([
   source("../supabase/migrations/20260917033614_canonical_inventory_transfer_foundation.sql"),
+  source("../supabase/migrations/20260917070409_phase_05_direct_transfer_contract_repair.sql"),
   source("../supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql"),
   source("../src/features/inventory/advanced-inventory-actions.ts"),
   source("../src/features/inventory/supply-chain-actions.ts"),
@@ -26,6 +29,7 @@ const [
   source("../src/app/(back-office)/back-office/inventory/page.tsx"),
   source("../src/features/inventory/inventory-integrity-workflows.tsx"),
   source("../supabase/tests/database/canonical_inventory_transfer_foundation.test.sql"),
+  source("../src/features/inventory/inventory-transfer-reader-contract.ts"),
 ]);
 
 const canonicalPrivateBody = (command) => {
@@ -88,11 +92,14 @@ test("transitional status contract keeps only canonical plus compatibility value
 });
 
 test("direct compatibility adapters route through canonical engines", () => {
-  const directAdapter = canonicalPrivateBody("create_direct_stock_transfer");
+  const directAdapter = repairMigration.match(/create or replace function private\.create_direct_stock_transfer\([\s\S]*?\n\$\$;/i)?.[0] ?? "";
   assert.match(directAdapter, /private\.create_inventory_transfer_draft/);
   assert.match(directAdapter, /private\.submit_inventory_transfer/);
   assert.match(directAdapter, /private\.approve_inventory_transfer/);
   assert.match(directAdapter, /private\.dispatch_inventory_transfer/);
+  assert.match(repairMigration, /private\.inventory_transfer_child_operation_id/);
+  assert.match(directAdapter, /target_operation_id[\s\S]*'submit'[\s\S]*target_operation_id[\s\S]*'approve'[\s\S]*target_operation_id[\s\S]*'dispatch'/);
+  assert.doesNotMatch(directAdapter, /gen_random_uuid\(\)/);
 
   const receiptAdapter = canonicalPrivateBody("receive_stock_transfer");
   assert.match(receiptAdapter, /private\.receive_inventory_transfer/);
@@ -114,11 +121,13 @@ test("application command callers retain the direct RPC signatures", () => {
 
 test("all active receiving readers accept canonical dispatched compatibility", () => {
   assert.match(migration, /transfer\.status in \('dispatched', 'in_transit', 'partially_received'\)/);
-  assert.match(posData, /transfer\.status !== "dispatched"[\s\S]*transfer\.status !== "in_transit"[\s\S]*transfer\.status !== "partially_received"/);
-  assert.match(posTypes, /"dispatched" \| "in_transit" \| "partially_received"/);
-  assert.match(posInbox, /transfer\.status === "dispatched"/);
-  assert.match(inventoryPage, /\.in\("status", \["dispatched", "in_transit", "partially_received"\]\)/);
-  assert.match(integrityWorkflows, /"dispatched" \| "in_transit" \| "partially_received"/);
+  assert.match(readerContract, /RECEIVABLE_TRANSFER_QUERY_STATUSES/);
+  assert.match(posData, /isReceivableTransferState/);
+  assert.match(posTypes, /ReceivableTransferStatus/);
+  assert.match(posInbox, /transferStatusLabels[\s\S]*dispatched: "Dispatched"/);
+  assert.match(inventoryPage, /RECEIVABLE_TRANSFER_QUERY_STATUSES/);
+  assert.match(inventoryPage, /isReceivableTransferState/);
+  assert.match(integrityWorkflows, /ReceivableTransferStatus/);
 });
 
 test("canonical stock effects use the immutable inventory engine", () => {

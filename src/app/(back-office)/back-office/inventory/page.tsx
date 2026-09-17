@@ -21,6 +21,10 @@ import {
 } from "@/features/inventory/advanced-inventory-workflows";
 import type { InventorySaleableItem } from "@/features/catalog/catalog-forms";
 import { InventoryIntegrityWorkflows } from "@/features/inventory/inventory-integrity-workflows";
+import {
+  RECEIVABLE_TRANSFER_QUERY_STATUSES,
+  isReceivableTransferState,
+} from "@/features/inventory/inventory-transfer-reader-contract";
 import { InventoryActivityList } from "@/features/inventory/inventory-activity-list";
 import { InventoryCountWorkspace } from "@/features/inventory/inventory-count-workspace";
 import {
@@ -791,7 +795,7 @@ export async function InventoryWorkspacePage({
           .from("stock_transfers")
           .select("id, transfer_number, stock_request_id, source_store_id, destination_store_id, status, note")
           .eq("organization_id", organizationId)
-          .in("status", ["dispatched", "in_transit", "partially_received"])
+          .in("status", [...RECEIVABLE_TRANSFER_QUERY_STATUSES])
       : Promise.resolve({ data: [], error: null }),
     replenishmentRulesQuery ?? Promise.resolve({ data: [], error: null }),
     inventoryCountsQuery ?? Promise.resolve({
@@ -1548,7 +1552,9 @@ export async function InventoryWorkspacePage({
   }
 
   const inTransitTransfers = stockTransfers
-    .map((transfer) => ({
+    .flatMap((transfer) => {
+      if (!isReceivableTransferState(transfer.status, transfer.stock_request_id)) return [];
+      return [{
       destinationStoreId: transfer.destination_store_id,
       id: transfer.id,
       transferNumber: Number(transfer.transfer_number),
@@ -1557,7 +1563,7 @@ export async function InventoryWorkspacePage({
       sourceStoreId: transfer.source_store_id,
       destinationStoreName: storeNames.get(transfer.destination_store_id) ?? "Inactive store",
       note: transfer.note,
-      status: transfer.status as "dispatched" | "in_transit" | "partially_received",
+      status: transfer.status,
       lines: (transferLinesByTransfer.get(transfer.id) ?? [])
         .filter((line) => Number(line.received_quantity) + Number(line.short_quantity) < Number(line.quantity))
         .map((line) => ({
@@ -1568,7 +1574,8 @@ export async function InventoryWorkspacePage({
           receivedQuantity: Number(line.received_quantity),
           shortQuantity: Number(line.short_quantity),
         })),
-    }))
+      }];
+    })
     .filter((transfer) => transfer.lines.length > 0);
   // Request-linked replenishment transfers retain their dedicated receipt
   // path. Direct transfers use the canonical generic receipt path below.

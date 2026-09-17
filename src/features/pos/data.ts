@@ -3,6 +3,7 @@ import "server-only";
 
 import type { PosCustomerDisplaySession } from "@/features/customer-display/customer-display-types";
 import type { TimeClockEntry } from "@/features/time-clock/time-clock-types";
+import { isReceivableTransferState } from "@/features/inventory/inventory-transfer-reader-contract";
 import {
   hasPermission,
   type BusinessContext,
@@ -349,7 +350,7 @@ export async function loadPosWorkspace(
     const lines = mapIncomingTransferLines(transfer.lines);
     if (
       !lines.length
-      || (transfer.status !== "dispatched" && transfer.status !== "in_transit" && transfer.status !== "partially_received")
+      || !isReceivableTransferState(transfer.status, transfer.stock_request_id)
     ) return [];
     return [{
       id: transfer.transfer_id,

@@ -2,14 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 
-import { adjustInventorySchema } from "@/features/catalog/catalog-schema";
 import type { CatalogActionResult } from "@/features/catalog/catalog-types";
 import {
   createCategory,
   createProduct,
   createProductComponent,
   createProductUnit,
-  databaseMessage,
   deleteCatalogProduct,
   generateCatalogIdentifiers,
   importCatalogCsv,
@@ -20,10 +18,8 @@ import {
   setProductStoreConfiguration,
   updateCategory,
   updateProduct,
-  validationError,
 } from "@/features/catalog/service";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
 
 export async function createCategoryAction(
   input: unknown,
@@ -257,49 +253,4 @@ export async function importCatalogCsvAction(
   }
 
   return result;
-}
-
-// Deferred from the catalog layer split: this entry point performs stock
-// adjustments, opening-stock movements, and inventory ledger mutations via the
-// controlled `adjust_inventory` RPC. Its implementation is intentionally left
-// untouched until the inventory slice.
-export async function adjustInventoryAction(
-  input: unknown,
-): Promise<CatalogActionResult<{ movementId: string }>> {
-  const context = await requireBusinessContext();
-
-  if (!context.features.inventory) {
-    return { ok: false, message: "Inventory is disabled for this business." };
-  }
-
-  const parsed = adjustInventorySchema.safeParse(input);
-  if (!parsed.success) return validationError();
-
-  if (!hasPermission(context, "inventory.manage") && !parsed.data.approvalRequestId) {
-    return { ok: false, message: "You do not have permission to adjust inventory." };
-  }
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("adjust_inventory", {
-    target_organization_id: context.organization.id,
-    target_store_id: parsed.data.storeId,
-    target_product_id: parsed.data.productId,
-    target_variant_id: (parsed.data.variantId || null) as never,
-    target_quantity_delta: Number(parsed.data.quantityDelta),
-    target_movement_type: parsed.data.movementType,
-    target_reason: parsed.data.reason,
-    ...(parsed.data.approvalRequestId
-      ? { target_approval_request_id: parsed.data.approvalRequestId }
-      : {}),
-  });
-
-  if (error || !data) {
-    return {
-      ok: false,
-      message: databaseMessage(error?.code, "TINDIO could not record the stock movement."),
-    };
-  }
-
-  revalidatePath("/back-office/inventory");
-  return { ok: true, message: "Inventory updated.", data: { movementId: data } };
 }

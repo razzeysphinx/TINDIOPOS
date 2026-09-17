@@ -54,6 +54,8 @@ const REQUIRED_CONTROLLER_TESTS = new Set([
   "test:phase-05-controller-contract",
   "test:inventory-request-transfer-migration",
   "test:phase-06-controller-contract",
+  "test:inventory-adjustments-opening-stock",
+  "test:phase-07-controller-contract",
 ]);
 
 const VALID_MODES =
@@ -891,6 +893,15 @@ async function runDatabaseCertification() {
     command: "node",
     args: [
       "scripts/inventory-request-transfer-concurrency-certification.mjs",
+    ],
+  });
+
+  runStep({
+    name:
+      "Canonical adjustment concurrency evidence",
+    command: "node",
+    args: [
+      "scripts/inventory-adjustment-concurrency-certification.mjs",
     ],
   });
 

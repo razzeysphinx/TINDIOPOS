@@ -19,7 +19,7 @@ test("manual adjustments keep a review before the existing immutable document RP
   assert.match(workflows, /label="Current"/);
   assert.match(workflows, /label="Adjustment"/);
   assert.match(workflows, /label="Result"/);
-  assert.match(workflows, /recordInventoryAdjustmentV2Action\(/);
+  assert.match(workflows, /recordInventoryAdjustmentAction\(/);
   assert.match(lifecycleMigration, /create table if not exists public\.inventory_adjustments/);
   assert.match(lifecycleMigration, /source_id links every adjustment to this document/);
 });

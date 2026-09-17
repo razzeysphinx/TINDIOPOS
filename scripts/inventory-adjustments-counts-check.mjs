@@ -18,7 +18,7 @@ test("controlled adjustments retain their approval review and authoritative ledg
 
   assert.match(workflow, /function reviewAdjustment\(/);
   assert.match(workflow, />Review adjustment</);
-  assert.match(workflow, /recordInventoryAdjustmentV2Action\(/);
+  assert.match(workflow, /recordInventoryAdjustmentAction\(/);
   assert.match(actions, /rpc\("record_inventory_adjustment_v3"/);
   assert.doesNotMatch(actions, /as never|@ts-ignore|@ts-expect-error/);
 });

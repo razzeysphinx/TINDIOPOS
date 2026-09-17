@@ -53,6 +53,8 @@
     "test:phase-06-controller-contract": "node scripts/recovery/phase-contract-check.mjs docs/recovery/phase-contracts/phase-06.json",
     "test:inventory-adjustments-opening-stock": "node --test scripts/inventory-adjustments-opening-stock-check.mjs",
     "test:phase-07-controller-contract": "node scripts/recovery/phase-contract-check.mjs docs/recovery/phase-contracts/phase-07.json",
+    "test:inventory-counts-stocktake": "node --test scripts/inventory-counts-stocktake-check.mjs",
+    "test:phase-08-controller-contract": "node scripts/recovery/phase-contract-check.mjs docs/recovery/phase-contracts/phase-08.json",
     "test:inventory-performance-accessibility": "node --test scripts/inventory-performance-accessibility-check.mjs",
     "test:inventory-health": "node --test scripts/inventory-health-awareness-check.mjs",
     "test:inventory-transfers": "node --test scripts/inventory-transfer-chain-check.mjs",

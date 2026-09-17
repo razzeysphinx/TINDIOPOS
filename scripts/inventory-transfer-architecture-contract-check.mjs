@@ -251,6 +251,56 @@ test(
 );
 
 test(
+  "architecture separates canonical states from legacy transfer-status compatibility",
+  () => {
+    assert.match(
+      directTransferMigration,
+      /'in_transit'/,
+    );
+
+    assert.match(
+      granularRbacMigration,
+      /then\s+'completed'\s+else\s+'partially_received'/,
+    );
+
+    assert.match(
+      design,
+      /Temporary legacy database compatibility states/,
+    );
+
+    assert.match(
+      design,
+      /in_transit[\s\S]*completed/,
+    );
+
+    assert.match(
+      design,
+      /compatibility values, not canonical lifecycle states/i,
+    );
+
+    assert.match(
+      design,
+      /stock_request_id IS NULL[\s\S]*status = in_transit[\s\S]*dispatched/,
+    );
+
+    assert.match(
+      design,
+      /stock_request_id IS NOT NULL[\s\S]*status IN \(in_transit, partially_received, completed\)/,
+    );
+
+    assert.match(
+      design,
+      /New canonical commands must never create `in_transit` or `completed`/,
+    );
+
+    assert.match(
+      design,
+      /removed only after every legacy writer[\s\S]*has been migrated/i,
+    );
+  },
+);
+
+test(
   "target architecture fixes stock effects, partial receipt accounting, and permission ownership",
   () => {
     assert.match(

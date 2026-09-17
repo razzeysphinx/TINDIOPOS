@@ -1,10 +1,11 @@
 # TINDIO Inventory — Canonical Transfer Lifecycle Design
 
-**Design version:** 1.0
+**Design version:** 1.1
 **Phase:** 04 — Transfer Lifecycle Design
 **Repository baseline:** `e199d532621d2068dd7b1088c41a17a865df1965`
 **Status:** Architecture contract for controlled implementation
 **Implementation begins:** Phase 05 only
+**Correction 01:** separates the seven canonical physical-transfer states from temporary legacy database compatibility states still written by unmigrated transfer workflows.
 
 ---
 
@@ -258,6 +259,64 @@ may remain temporarily on `stock_requests`.
 They are not canonical `stock_transfers` lifecycle states.
 
 Discrepancy is orthogonal to physical transfer lifecycle state.
+
+### 4.1 Temporary legacy database compatibility states
+
+The seven states above remain the **only canonical physical-transfer states**.
+
+During incremental migration, the database status constraint must temporarily continue accepting legacy states still written by transfer workflows that have not yet been migrated:
+
+```text
+in_transit
+completed
+```
+
+These are compatibility values, not canonical lifecycle states.
+
+Current ownership:
+
+```text
+in_transit
+→ current direct-store dispatch
+→ current request/replenishment dispatch
+
+completed
+→ current request/replenishment physical transfer once receipt accounting is complete
+```
+
+Phase 05 migrates only the direct-store path.
+
+Therefore:
+
+```text
+direct, non-request rows:
+stock_request_id IS NULL
+AND status = in_transit
+→ may be backfilled to dispatched
+
+request-linked rows:
+stock_request_id IS NOT NULL
+AND status IN (in_transit, completed)
+→ remain unchanged until the request/replenishment migration
+```
+
+New canonical commands must never create `in_transit` or `completed`.
+
+The temporary database constraint during Phase 05 may accept:
+
+```text
+draft
+submitted
+approved
+dispatched
+partially_received
+received
+cancelled
+in_transit
+completed
+```
+
+The compatibility values may be removed only after every legacy writer that can still produce them has been migrated and repository/database verification proves no supported caller depends on them.
 
 ---
 
@@ -792,30 +851,101 @@ It must never be used as the canonical implementation because it credits destina
 
 ## 16. Current-to-target state mapping
 
-For existing physical transfer rows:
+Canonical lifecycle targets remain:
+
+```text
+draft
+submitted
+approved
+dispatched
+partially_received
+received
+cancelled
+```
+
+### Direct-store legacy rows
+
+For direct physical transfer rows:
+
+```text
+stock_request_id IS NULL
+AND status = in_transit
+→ dispatched
+```
+
+Phase 05 may perform this deterministic backfill because the direct-store path itself is being migrated in that phase.
+
+Existing direct rows already in:
+
+```text
+partially_received
+received
+```
+
+remain unchanged.
+
+### Request/replenishment legacy rows
+
+The request/replenishment workflow is intentionally not migrated in Phase 05.
+
+Its physical transfer rows may still use:
 
 ```text
 in_transit
-→ dispatched
-
 partially_received
-→ partially_received
-
-received
-→ received
+completed
 ```
 
-Existing request-specific:
+Therefore Phase 05 must preserve request-linked:
 
 ```text
+stock_request_id IS NOT NULL
+AND status IN (in_transit, partially_received, completed)
+```
+
+without canonical backfill.
+
+The later request/replenishment migration is responsible for converting its physical lifecycle to:
+
+```text
+dispatched
+partially_received
+received
+```
+
+and only after that conversion may the database drop legacy compatibility values.
+
+### Request document statuses
+
+Request-specific `stock_requests` statuses such as:
+
+```text
+picking
+received
 received_with_discrepancy
 ```
 
-remains request metadata/status during compatibility migration.
+remain request metadata/workflow states.
 
-It must not become a canonical `stock_transfers` lifecycle state.
+They are not canonical `stock_transfers` lifecycle states.
 
-Any additional historical transfer status discovered during Phase 05 migration preparation must cause the implementation to stop and report the unmapped value before altering the constraint.
+### Fail-closed rule
+
+If migration preparation discovers any `stock_transfers.status` outside:
+
+```text
+draft
+submitted
+approved
+dispatched
+partially_received
+received
+cancelled
+in_transit
+completed
+```
+
+implementation must stop and report the unmapped value.
 
 No guessed mapping is allowed.
 
@@ -837,6 +967,12 @@ retain old operation IDs and human references
 A migration must fail closed if it encounters a state it cannot map safely.
 
 No destructive cleanup belongs in the same migration that introduces the canonical lifecycle.
+
+Phase 05 must keep `in_transit` and `completed` temporarily legal in the `stock_transfers` database status constraint because the request/replenishment writer remains unmigrated.
+
+Only direct, non-request `in_transit` rows may be backfilled to `dispatched` in Phase 05.
+
+Request-linked `in_transit` and `completed` rows must remain unchanged until the request/replenishment migration.
 
 ---
 

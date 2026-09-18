@@ -577,6 +577,7 @@ export function CreateProductForm({
       description: "",
       categoryId: "",
       productType: "simple",
+      compositeInventoryMode: "made_to_order",
       sku: "",
       barcode: "",
       price: "0.00",
@@ -710,6 +711,14 @@ export function CreateProductForm({
                   <FormField label="Base unit" error={form.formState.errors.unit?.message}>
                     <ProductUnitSelector options={unitOptions} {...form.register("unit")} />
                   </FormField>
+                  {productType === "composite" ? (
+                    <FormField label="Composite stock mode" error={form.formState.errors.compositeInventoryMode?.message}>
+                      <select className={selectClassName} {...form.register("compositeInventoryMode")}>
+                        <option value="made_to_order">Made to order — consume recipe when sold</option>
+                        <option value="stocked_assembly">Stocked assembly — produce finished stock first</option>
+                      </select>
+                    </FormField>
+                  ) : null}
                   <FormField label="Description" error={form.formState.errors.description?.message}>
                     <Input placeholder="Optional product description" {...form.register("description")} />
                   </FormField>

@@ -298,7 +298,6 @@ from public, anon, authenticated, service_role;
 -- Production evidence is immutable and snapshots the exact recipe and cost used.
 alter table public.production_runs
   add column if not exists normalized_payload jsonb,
-  add column if not exists output_unit_cost_minor bigint,
   add column if not exists composite_inventory_mode_snapshot text;
 
 update public.production_runs production_run
@@ -309,29 +308,12 @@ set normalized_payload = jsonb_build_object(
       'note', production_run.note,
       'composite_inventory_mode', 'stocked_assembly'
     ),
-    composite_inventory_mode_snapshot = 'stocked_assembly',
-    output_unit_cost_minor = coalesce(
-      (
-        select movement.unit_cost_minor
-        from public.inventory_movements movement
-        where movement.organization_id = production_run.organization_id
-          and movement.source_type = 'production_run'
-          and movement.source_id = production_run.id
-          and movement.product_id = production_run.product_id
-          and movement.quantity_delta > 0
-        order by movement.created_at desc, movement.id desc
-        limit 1
-      ),
-      0
-    )
+    composite_inventory_mode_snapshot = 'stocked_assembly'
 where normalized_payload is null
-   or composite_inventory_mode_snapshot is null
-   or output_unit_cost_minor is null;
+   or composite_inventory_mode_snapshot is null;
 
 alter table public.production_runs
   alter column normalized_payload set not null,
-  alter column output_unit_cost_minor set not null,
-  alter column output_unit_cost_minor set default 0,
   alter column composite_inventory_mode_snapshot set not null,
   alter column composite_inventory_mode_snapshot set default 'stocked_assembly';
 
@@ -417,7 +399,17 @@ do nothing;
 
 alter table public.production_run_components enable row level security;
 revoke all on public.production_run_components from public, anon, authenticated, service_role;
-grant select on public.production_run_components to authenticated;
+grant select (
+  id,
+  organization_id,
+  production_run_id,
+  component_product_id,
+  component_variant_id,
+  quantity_per_composite_snapshot,
+  quantity_consumed,
+  unit_snapshot,
+  created_at
+) on public.production_run_components to authenticated;
 
 create policy production_run_components_select_authorized_scope
 on public.production_run_components
@@ -560,6 +552,20 @@ begin
       using errcode = '23514';
   end if;
 
+  if exists (
+    select 1
+    from public.product_components recipe
+    join public.products component_product
+      on component_product.id = recipe.component_product_id
+     and component_product.organization_id = recipe.organization_id
+    where recipe.organization_id = target_organization_id
+      and recipe.product_id = target_product_id
+      and not component_product.track_inventory
+  ) then
+    raise exception 'Stocked assembly recipe components must track inventory.'
+      using errcode = '23514';
+  end if;
+
   select coalesce(
     jsonb_agg(
       jsonb_build_object(
@@ -681,7 +687,6 @@ begin
     operation_id,
     cost_is_known,
     normalized_payload,
-    output_unit_cost_minor,
     composite_inventory_mode_snapshot
   ) values (
     run_id,
@@ -694,7 +699,6 @@ begin
     target_operation_id,
     components_cost_known,
     normalized_payload,
-    output_unit_cost,
     'stocked_assembly'
   );
 

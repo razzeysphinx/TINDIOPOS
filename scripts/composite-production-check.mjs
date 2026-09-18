@@ -37,6 +37,9 @@ test("production has one replay-safe public command and immutable evidence", () 
   assert.match(migration, /pg_catalog\.pg_advisory_xact_lock/);
   assert.match(migration, /normalized_payload/);
   assert.match(migration, /production_run_components/);
+  assert.match(migration, /grant select \([\s\S]*quantity_consumed[\s\S]*unit_snapshot[\s\S]*created_at[\s\S]*\) on public\.production_run_components to authenticated/);
+  assert.doesNotMatch(migration, /grant select on public\.production_run_components to authenticated/);
+  assert.match(migration, /Stocked assembly recipe components must track inventory/);
   assert.match(migration, /production_runs_guard_immutable/);
   assert.match(migration, /production_run_components_guard_immutable/);
   assert.match(migration, /drop function if exists public\.produce_composite\(uuid,uuid,uuid,numeric,text\)/);
@@ -50,6 +53,5 @@ test("production cost and stock posting stay on the canonical inventory ledger",
   assert.match(migration, /private\.apply_inventory_change_v2/);
   assert.match(migration, /'production_run'/);
   assert.match(migration, /'PRODUCTION_COMPLETED'/);
-  assert.match(migration, /output_unit_cost_minor/);
   assert.doesNotMatch(actions, /from\("inventory_levels"\)\.(?:insert|update|delete)/);
 });

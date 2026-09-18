@@ -14,6 +14,12 @@ alter table public.products
   add constraint products_composite_inventory_mode_values
   check (composite_inventory_mode in ('made_to_order', 'stocked_assembly'));
 
+alter table public.products
+  drop constraint if exists products_composite_inventory_mode_consistency;
+alter table public.products
+  add constraint products_composite_inventory_mode_consistency
+  check (is_composite or composite_inventory_mode = 'made_to_order');
+
 -- Preserve observed behavior for existing products. A composite with historical
 -- production evidence is a stocked assembly; every other existing composite
 -- retains the legacy sale-time recipe behavior.
@@ -39,7 +45,8 @@ security definer
 set search_path = ''
 as $function$
 begin
-  if new.composite_inventory_mode is distinct from old.composite_inventory_mode
+  if (new.composite_inventory_mode is distinct from old.composite_inventory_mode
+      or new.is_composite is distinct from old.is_composite)
     and (
       exists (
         select 1
@@ -66,7 +73,7 @@ from public, anon, authenticated, service_role;
 
 drop trigger if exists products_protect_composite_inventory_mode on public.products;
 create trigger products_protect_composite_inventory_mode
-before update of composite_inventory_mode on public.products
+before update of composite_inventory_mode, is_composite on public.products
 for each row execute function private.protect_composite_inventory_mode();
 
 -- New application creation route with an explicit composite inventory contract.

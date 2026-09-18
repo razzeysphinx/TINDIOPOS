@@ -725,15 +725,15 @@ begin
   select
     target_organization_id,
     run_id,
-    component.component_product_id,
-    component.component_variant_id,
-    component.quantity_per_composite,
-    component.quantity_consumed,
-    component.unit_snapshot,
-    component.unit_cost_minor,
-    component.cost_is_known,
-    component.total_cost_minor
-  from jsonb_to_recordset(cost_snapshot) as component(
+    snapshot_component.component_product_id,
+    snapshot_component.component_variant_id,
+    snapshot_component.quantity_per_composite,
+    snapshot_component.quantity_consumed,
+    snapshot_component.unit_snapshot,
+    snapshot_component.unit_cost_minor,
+    snapshot_component.cost_is_known,
+    snapshot_component.total_cost_minor
+  from jsonb_to_recordset(cost_snapshot) as snapshot_component(
     component_product_id uuid,
     component_variant_id uuid,
     quantity_per_composite numeric,

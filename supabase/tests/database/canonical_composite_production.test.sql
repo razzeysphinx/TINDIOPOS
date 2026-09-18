@@ -81,10 +81,10 @@ set stocked_product_id = public.create_catalog_product_v3(
 insert into public.product_components (
   organization_id, product_id, component_product_id, component_variant_id, quantity_per_composite
 )
-select organization_id, made_to_order_product_id, component_product_id, null, 2
+select organization_id, made_to_order_product_id, component_product_id, null::uuid, 2
 from phase12_context
 union all
-select organization_id, stocked_product_id, component_product_id, null, 2
+select organization_id, stocked_product_id, component_product_id, null::uuid, 2
 from phase12_context;
 
 select public.create_inventory_adjustment_reason(

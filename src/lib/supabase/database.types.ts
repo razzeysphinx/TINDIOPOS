@@ -3659,7 +3659,11 @@ export type Database = {
           },
           {
             foreignKeyName: "production_run_components_variant_product_organization_fkey"
-            columns: ["component_variant_id", "component_product_id", "organization_id"]
+            columns: [
+              "component_variant_id",
+              "component_product_id",
+              "organization_id",
+            ]
             isOneToOne: false
             referencedRelation: "product_variants"
             referencedColumns: ["id", "product_id", "organization_id"]

@@ -6,7 +6,8 @@
     "scripts/composite-production-check.mjs",
     "scripts/composite-production-concurrency-certification.mjs",
     "src/features/catalog/service.ts",
-    "src/features/inventory/advanced-inventory-actions.ts"
+    "src/features/inventory/advanced-inventory-actions.ts",
+    ".github/workflows/phase-12-certification.yml"
   ],
   "requiredText": [
     {
@@ -72,6 +73,14 @@
     {
       "path": "scripts/composite-production-concurrency-certification.mjs",
       "text": "Scenario C"
+    },
+    {
+      "path": ".github/workflows/phase-12-certification.yml",
+      "text": "run: pnpm certify"
+    },
+    {
+      "path": ".github/workflows/phase-12-certification.yml",
+      "text": "node scripts/composite-production-concurrency-certification.mjs"
     }
   ],
   "forbiddenText": [

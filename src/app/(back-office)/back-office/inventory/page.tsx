@@ -735,7 +735,7 @@ export async function InventoryWorkspacePage({
       .order("name", { ascending: true }),
     supabase
       .from("products")
-      .select("id, category_id, name, sku, barcode, product_type, is_composite, unit, status, track_inventory, price_minor")
+      .select("id, category_id, name, sku, barcode, product_type, is_composite, composite_inventory_mode, unit, status, track_inventory, price_minor")
       .eq("organization_id", organizationId)
       .eq("status", "active")
       .eq("track_inventory", true)
@@ -1594,7 +1594,7 @@ export async function InventoryWorkspacePage({
     ]),
   );
   const compositeProducts = products
-    .filter((product) => product.is_composite)
+    .filter((product) => product.is_composite && product.composite_inventory_mode === "stocked_assembly")
     .map((product) => ({
       id: product.id,
       name: product.name,

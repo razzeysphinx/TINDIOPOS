@@ -29,6 +29,7 @@ export type CatalogProductRow = {
   is_variable_price: boolean;
   allow_fractional_quantity: boolean;
   is_composite: boolean;
+  composite_inventory_mode: "made_to_order" | "stocked_assembly";
   status: string;
   created_at: string;
 };

@@ -464,10 +464,11 @@ revoke insert, update, delete on public.production_run_components from authentic
 -- Retire direct and non-idempotent production engines. The public six-argument
 -- command below is the sole application write boundary.
 drop function if exists public.produce_composite(uuid,uuid,uuid,numeric,text);
+drop function if exists public.produce_composite(uuid,uuid,uuid,numeric,text,uuid);
 drop function if exists private.produce_composite(uuid,uuid,uuid,numeric,text);
 drop function if exists private.produce_composite(uuid,uuid,uuid,numeric,text,uuid);
 
-create or replace function public.produce_composite(
+create function public.produce_composite(
   target_organization_id uuid,
   target_store_id uuid,
   target_product_id uuid,

@@ -72,13 +72,17 @@ select is((select product_type from public.products where id = (select parent_pr
 select ok((select is_composite from public.products where id = (select parent_product_id from catalog_improvement_context)), 'composite flag marks the recipe parent');
 select is((select count(*) from public.product_units where product_id in ((select parent_product_id from catalog_improvement_context), (select component_product_id from catalog_improvement_context)) and is_base), 2::bigint, 'every product receives one base unit');
 
-insert into public.product_units (organization_id, product_id, unit_code, unit_name, factor_to_base, is_sale_unit, is_purchase_unit)
-select organization_id, component_product_id, 'gram', 'Gram', 0.001, true, true
+select public.create_product_unit(
+  organization_id, component_product_id, 'gram', 'Gram', 0.001, true, true,
+  '24242424-2424-4424-8424-242424242401'
+)
 from catalog_improvement_context;
 select is((select factor_to_base from public.product_units where product_id = (select component_product_id from catalog_improvement_context) and unit_code = 'gram'), 0.001::numeric, 'exact gram-to-kilogram conversion is stored');
 
-insert into public.product_units (organization_id, product_id, unit_code, unit_name, factor_to_base, is_sale_unit, is_purchase_unit)
-select organization_id, component_product_id, '1', 'One pack', 24, true, true
+select public.create_product_unit(
+  organization_id, component_product_id, '1', 'One pack', 24, true, true,
+  '24242424-2424-4424-8424-242424242402'
+)
 from catalog_improvement_context;
 select ok(
   exists (

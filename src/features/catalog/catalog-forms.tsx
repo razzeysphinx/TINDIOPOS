@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, useTransition, type ComponentProps, type FormEvent, type ReactNode } from "react";
+import { useId, useRef, useState, useTransition, type ComponentProps, type FormEvent, type ReactNode } from "react";
 import { Menu } from "@base-ui/react/menu";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -896,6 +896,7 @@ export function CatalogExtensionForms({
   const [componentResult, setComponentResult] = useState<CatalogActionResult<unknown> | null>(null);
   const defaultProductId = products[0]?.id ?? "";
   const [unitProductId, setUnitProductId] = useState(defaultProductId);
+  const unitOperationId = useRef(crypto.randomUUID());
   const [storeProductId, setStoreProductId] = useState(defaultProductId);
   const [storeId, setStoreId] = useState(stores[0]?.id ?? "");
   const compositeProducts = products.filter((product) => product.isComposite);
@@ -923,6 +924,7 @@ export function CatalogExtensionForms({
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const values = {
+      operationId: unitOperationId.current,
       productId: unitProductId,
       unitCode: String(form.get("unitCode") ?? ""),
       unitName: String(form.get("unitName") ?? ""),
@@ -946,6 +948,7 @@ export function CatalogExtensionForms({
         setUnitFieldErrors(productUnitFieldErrors(next.fieldErrors));
       }
       if (next.ok) router.refresh();
+      if (next.ok) unitOperationId.current = crypto.randomUUID();
     });
   };
 

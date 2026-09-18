@@ -13,7 +13,7 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, Dia
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip } from "@/components/ui/tooltip";
-import { createProductComponentAction, createProductUnitAction, deleteCatalogProductAction, setProductArchivedAction, setProductStoreConfigurationAction, updateProductAction } from "@/features/catalog/actions";
+import { createProductComponentAction, createProductUnitAction, deleteCatalogProductAction, deleteProductUnitAction, setProductArchivedAction, setProductStoreConfigurationAction, updateProductAction, updateProductUnitAction } from "@/features/catalog/actions";
 import { CatalogCsvTools, CreateProductForm, ProductAvailabilityButton } from "@/features/catalog/catalog-forms";
 import { printProductLabelDocument } from "@/features/catalog/catalog-label-print";
 import { formatMinorMoney } from "@/features/catalog/catalog-money";
@@ -359,9 +359,46 @@ function StoreSettings({ currencyCode, product, setting, store }: { currencyCode
 }
 
 function ProductUnits(props: ProductDrawerProps) {
-  const router = useRouter(); const [isPending, startTransition] = useTransition(); const [result, setResult] = useState<CatalogActionResult<unknown> | null>(null);
-  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const form = new FormData(event.currentTarget); const unitName = String(form.get("unitName") ?? ""); const explicitCode = String(form.get("unitCode") ?? "").trim(); const generatedCode = unitName.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 24); startTransition(async () => { const next = await createProductUnitAction({ productId: props.product.id, unitCode: explicitCode || generatedCode, unitName, factorToBase: form.get("factorToBase"), isSaleUnit: form.get("isSaleUnit") === "on", isPurchaseUnit: form.get("isPurchaseUnit") === "on" }); setResult(next); if (next.ok) { (event.currentTarget as HTMLFormElement).reset(); router.refresh(); } }); };
-  return <section className="space-y-5"><div><ConceptHeading help="Add a unit when you buy or sell this item in a different quantity, such as a case containing 24 each." label="Selling & purchasing units" /><p className="mt-1 text-sm text-muted-foreground">Use this when you buy or sell the same product by piece, pack, case, kilo, or another unit.</p></div><div className="divide-y rounded-xl border px-4">{props.units.map((unit) => <div className="flex items-start justify-between gap-3 py-3" key={unit.id}><div><p className="font-medium">{unit.unit_name}{unit.is_base ? " · Base unit" : ""}</p><p className="mt-1 text-xs text-muted-foreground">1 {unit.unit_name} contains {unit.factor_to_base} {props.product.unit}{Number(unit.factor_to_base) === 1 ? "" : "s"}</p></div><span className="text-right text-xs text-muted-foreground">{[unit.is_sale_unit ? "Selling" : "", unit.is_purchase_unit ? "Purchasing" : ""].filter(Boolean).join(" · ")}</span></div>)}</div><form className="space-y-4 rounded-xl border p-4" onSubmit={submit}><h4 className="font-semibold">Add another unit</h4><div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1.5 text-sm font-medium">Unit name<Input name="unitName" placeholder="Case" required /></label><label className="grid gap-1.5 text-sm font-medium">Contains<Input inputMode="decimal" name="factorToBase" placeholder={`24 ${props.product.unit}`} required /></label></div><div className="flex flex-wrap gap-3"><Label className="flex items-center gap-2"><input defaultChecked name="isPurchaseUnit" type="checkbox" />Purchasing</Label><Label className="flex items-center gap-2"><input name="isSaleUnit" type="checkbox" />Selling</Label></div><details><summary className="cursor-pointer text-sm font-medium">Advanced unit details</summary><label className="mt-3 grid gap-1.5 text-sm font-medium">Unit code<Input maxLength={24} name="unitCode" placeholder="Generated from unit name" /></label></details><Button disabled={isPending} type="submit">{isPending ? <LoaderCircle className="animate-spin" /> : <Plus />}Add unit</Button><ResultMessage result={result} /></form></section>;
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [result, setResult] = useState<CatalogActionResult<unknown> | null>(null);
+  const operationId = useRef(crypto.randomUUID());
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const unitName = String(form.get("unitName") ?? "");
+    const explicitCode = String(form.get("unitCode") ?? "").trim();
+    const generatedCode = unitName.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 24);
+    startTransition(async () => {
+      const next = await createProductUnitAction({ operationId: operationId.current, productId: props.product.id, unitCode: explicitCode || generatedCode, unitName, factorToBase: form.get("factorToBase"), isSaleUnit: form.get("isSaleUnit") === "on", isPurchaseUnit: form.get("isPurchaseUnit") === "on" });
+      setResult(next);
+      if (next.ok) { operationId.current = crypto.randomUUID(); formElement.reset(); router.refresh(); }
+    });
+  };
+  return <section className="space-y-5"><div><ConceptHeading help="Add or manage a unit when you buy or sell this item in a different quantity, such as a case containing 24 each." label="Selling & purchasing units" /><p className="mt-1 text-sm text-muted-foreground">Base identity is fixed. Non-base settings can change without rewriting historical purchase and receipt snapshots.</p></div><div className="divide-y rounded-xl border px-4">{props.units.map((unit) => <ProductUnitAdminRow baseUnit={props.product.unit} key={unit.id} unit={unit} />)}</div><form className="space-y-4 rounded-xl border p-4" onSubmit={submit}><h4 className="font-semibold">Add another unit</h4><div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1.5 text-sm font-medium">Unit name<Input name="unitName" placeholder="Case" required /></label><label className="grid gap-1.5 text-sm font-medium">Contains<Input inputMode="decimal" name="factorToBase" placeholder={`24 ${props.product.unit}`} required /></label></div><div className="flex flex-wrap gap-3"><Label className="flex items-center gap-2"><input defaultChecked name="isPurchaseUnit" type="checkbox" />Purchasing</Label><Label className="flex items-center gap-2"><input name="isSaleUnit" type="checkbox" />Selling</Label></div><details><summary className="cursor-pointer text-sm font-medium">Advanced unit details</summary><label className="mt-3 grid gap-1.5 text-sm font-medium">Unit code<Input maxLength={24} name="unitCode" placeholder="Generated from unit name" /></label></details><Button disabled={isPending} type="submit">{isPending ? <LoaderCircle className="animate-spin" /> : <Plus />}Add unit</Button><ResultMessage result={result} /></form></section>;
+}
+
+function ProductUnitAdminRow({ baseUnit, unit }: { baseUnit: string; unit: ProductDrawerProps["units"][number] }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [result, setResult] = useState<CatalogActionResult<unknown> | null>(null);
+  const operationId = useRef(crypto.randomUUID());
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    startTransition(async () => {
+      const next = await updateProductUnitAction({ operationId: operationId.current, unitId: unit.id, unitCode: form.get("unitCode"), unitName: form.get("unitName"), factorToBase: form.get("factorToBase"), isSaleUnit: form.get("isSaleUnit") === "on", isPurchaseUnit: form.get("isPurchaseUnit") === "on" });
+      setResult(next);
+      if (next.ok) { operationId.current = crypto.randomUUID(); router.refresh(); }
+    });
+  };
+  const remove = () => startTransition(async () => {
+    const next = await deleteProductUnitAction({ operationId: operationId.current, unitId: unit.id });
+    setResult(next);
+    if (next.ok) { operationId.current = crypto.randomUUID(); router.refresh(); }
+  });
+  return <form className="space-y-3 py-4" onSubmit={submit}><div className="grid gap-3 sm:grid-cols-3"><label className="grid gap-1 text-xs font-medium">Name<Input defaultValue={unit.unit_name} name="unitName" required /></label><label className="grid gap-1 text-xs font-medium">Code<Input defaultValue={unit.unit_code} maxLength={24} name="unitCode" readOnly={unit.is_base} required /></label><label className="grid gap-1 text-xs font-medium">Contains ({baseUnit})<Input defaultValue={unit.factor_to_base} inputMode="decimal" name="factorToBase" readOnly={unit.is_base} required /></label></div><div className="flex flex-wrap items-center gap-3"><Label className="flex items-center gap-2"><input defaultChecked={unit.is_sale_unit} name="isSaleUnit" type="checkbox" />Selling</Label><Label className="flex items-center gap-2"><input defaultChecked={unit.is_purchase_unit} name="isPurchaseUnit" type="checkbox" />Purchasing</Label><span className="text-xs text-muted-foreground">{unit.is_base ? "Base code and factor are immutable." : "Historical transactions keep their snapshots."}</span><div className="ml-auto flex gap-2"><Button disabled={isPending} size="sm" type="submit" variant="outline">Save</Button>{unit.is_base ? null : <Button disabled={isPending} onClick={remove} size="sm" type="button" variant="destructive"><Trash2 aria-hidden="true" />Delete</Button>}</div></div><ResultMessage result={result} /></form>;
 }
 
 function ProductComponents(props: ProductDrawerProps) {

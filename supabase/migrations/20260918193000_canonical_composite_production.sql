@@ -32,6 +32,43 @@ comment on column public.products.composite_inventory_mode is
 
 grant select (composite_inventory_mode) on public.products to authenticated;
 
+create or replace function private.protect_composite_inventory_mode()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+begin
+  if new.composite_inventory_mode is distinct from old.composite_inventory_mode
+    and (
+      exists (
+        select 1
+        from public.inventory_movements movement
+        where movement.organization_id = old.organization_id
+          and movement.product_id = old.id
+      )
+      or exists (
+        select 1
+        from public.production_runs production_run
+        where production_run.organization_id = old.organization_id
+          and production_run.product_id = old.id
+      )
+    ) then
+    raise exception 'Composite stock mode cannot change after inventory history begins.'
+      using errcode = '55000';
+  end if;
+  return new;
+end;
+$function$;
+
+revoke execute on function private.protect_composite_inventory_mode()
+from public, anon, authenticated, service_role;
+
+drop trigger if exists products_protect_composite_inventory_mode on public.products;
+create trigger products_protect_composite_inventory_mode
+before update of composite_inventory_mode on public.products
+for each row execute function private.protect_composite_inventory_mode();
+
 -- New application creation route with an explicit composite inventory contract.
 create or replace function public.create_catalog_product_v3(
   target_organization_id uuid,

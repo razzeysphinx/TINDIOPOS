@@ -104,6 +104,16 @@ select public.record_inventory_adjustment_v3(
   gen_random_uuid()
 );
 
+select public.record_inventory_adjustment_v3(
+  (select organization_id from phase12_context),
+  (select store_id from phase12_context),
+  (select made_to_order_product_id from phase12_context),
+  1,
+  'P12SEED',
+  'Seed one made-to-order saleable parent',
+  gen_random_uuid()
+);
+
 select is(
   (select composite_inventory_mode from public.products where id = (select made_to_order_product_id from phase12_context)),
   'made_to_order',

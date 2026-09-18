@@ -9,24 +9,83 @@
     "src/features/inventory/advanced-inventory-actions.ts"
   ],
   "requiredText": [
-    { "path": "supabase/migrations/20260918193000_canonical_composite_production.sql", "text": "composite_inventory_mode" },
-    { "path": "supabase/migrations/20260918193000_canonical_composite_production.sql", "text": "made_to_order" },
-    { "path": "supabase/migrations/20260918193000_canonical_composite_production.sql", "text": "stocked_assembly" },
-    { "path": "supabase/migrations/20260918193000_canonical_composite_production.sql", "text": "production_run_components" },
-    { "path": "supabase/migrations/20260918193000_canonical_composite_production.sql", "text": "pg_catalog.pg_advisory_xact_lock" },
-    { "path": "supabase/migrations/20260918193000_canonical_composite_production.sql", "text": "production_runs_guard_immutable" },
-    { "path": "supabase/migrations/20260918193000_canonical_composite_production.sql", "text": "drop function if exists private.produce_composite(uuid,uuid,uuid,numeric,text,uuid)" },
-    { "path": "src/features/catalog/service.ts", "text": "rpc(\"create_catalog_product_v3\"" },
-    { "path": "src/features/catalog/service.ts", "text": "rpc(\"update_catalog_product_v3\"" },
-    { "path": "src/features/inventory/inventory-integrity-workflows.tsx", "text": "production:post" },
-    { "path": "src/app/(back-office)/back-office/inventory/page.tsx", "text": "composite_inventory_mode === \"stocked_assembly\"" },
-    { "path": "scripts/composite-production-concurrency-certification.mjs", "text": "Scenario A" },
-    { "path": "scripts/composite-production-concurrency-certification.mjs", "text": "Scenario B" },
-    { "path": "scripts/composite-production-concurrency-certification.mjs", "text": "Scenario C" }
+    {
+      "path": "supabase/migrations/20260918193000_canonical_composite_production.sql",
+      "text": "composite_inventory_mode"
+    },
+    {
+      "path": "supabase/migrations/20260918193000_canonical_composite_production.sql",
+      "text": "made_to_order"
+    },
+    {
+      "path": "supabase/migrations/20260918193000_canonical_composite_production.sql",
+      "text": "stocked_assembly"
+    },
+    {
+      "path": "supabase/migrations/20260918193000_canonical_composite_production.sql",
+      "text": "products_protect_composite_inventory_mode"
+    },
+    {
+      "path": "supabase/migrations/20260918193000_canonical_composite_production.sql",
+      "text": "Composite stock mode cannot change after inventory history begins."
+    },
+    {
+      "path": "supabase/migrations/20260918193000_canonical_composite_production.sql",
+      "text": "production_run_components"
+    },
+    {
+      "path": "supabase/migrations/20260918193000_canonical_composite_production.sql",
+      "text": "pg_catalog.pg_advisory_xact_lock"
+    },
+    {
+      "path": "supabase/migrations/20260918193000_canonical_composite_production.sql",
+      "text": "production_runs_guard_immutable"
+    },
+    {
+      "path": "supabase/migrations/20260918193000_canonical_composite_production.sql",
+      "text": "drop function if exists private.produce_composite(uuid,uuid,uuid,numeric,text,uuid)"
+    },
+    {
+      "path": "src/features/catalog/service.ts",
+      "text": "rpc(\"create_catalog_product_v3\""
+    },
+    {
+      "path": "src/features/catalog/service.ts",
+      "text": "rpc(\"update_catalog_product_v3\""
+    },
+    {
+      "path": "src/features/inventory/inventory-integrity-workflows.tsx",
+      "text": "production:post"
+    },
+    {
+      "path": "src/app/(back-office)/back-office/inventory/page.tsx",
+      "text": "composite_inventory_mode === \"stocked_assembly\""
+    },
+    {
+      "path": "scripts/composite-production-concurrency-certification.mjs",
+      "text": "Scenario A"
+    },
+    {
+      "path": "scripts/composite-production-concurrency-certification.mjs",
+      "text": "Scenario B"
+    },
+    {
+      "path": "scripts/composite-production-concurrency-certification.mjs",
+      "text": "Scenario C"
+    }
   ],
   "forbiddenText": [
-    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "schema(\"private\")" },
-    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "from(\"inventory_levels\").update" },
-    { "path": "supabase/migrations/20260918193000_canonical_composite_production.sql", "text": "grant execute on function private.produce_composite" }
+    {
+      "path": "src/features/inventory/advanced-inventory-actions.ts",
+      "text": "schema(\"private\")"
+    },
+    {
+      "path": "src/features/inventory/advanced-inventory-actions.ts",
+      "text": "from(\"inventory_levels\").update"
+    },
+    {
+      "path": "supabase/migrations/20260918193000_canonical_composite_production.sql",
+      "text": "grant execute on function private.produce_composite"
+    }
   ]
 }

@@ -54,7 +54,7 @@ export async function loadCatalogWorkspace(
       supabase
         .from("products")
         .select(
-          "id, category_id, name, description, product_type, sku, barcode, price_minor, track_inventory, unit, image_url, is_variable_price, allow_fractional_quantity, is_composite, status, created_at",
+          "id, category_id, name, description, product_type, sku, barcode, price_minor, track_inventory, unit, image_url, is_variable_price, allow_fractional_quantity, is_composite, composite_inventory_mode, status, created_at",
         )
         .eq("organization_id", organizationId)
         .order("created_at", { ascending: false }),

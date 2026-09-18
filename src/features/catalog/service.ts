@@ -325,12 +325,16 @@ export async function updateProduct(
   if (error || !productType) {
     const baseUnitIsImmutable = error?.code === "23514"
       && error.message.startsWith("The base unit is fixed after product creation");
+    const compositeModeIsImmutable = error?.code === "55000"
+      && error.message.startsWith("Composite stock mode cannot change after inventory history begins");
 
     return {
       ok: false,
       message: baseUnitIsImmutable
         ? "The base unit is fixed after product creation to protect inventory and conversion history. Create a new product to use a different unit."
-        : databaseMessage(error?.code, "TINDIO could not update the product."),
+        : compositeModeIsImmutable
+          ? "Composite stock mode is fixed after inventory history begins so recipe consumption cannot change midstream."
+          : databaseMessage(error?.code, "TINDIO could not update the product."),
     };
   }
 

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(24);
 
 select has_column('public', 'products', 'composite_inventory_mode', 'products expose a composite inventory mode');
 select has_table('public', 'production_run_components', 'production component snapshots exist');
@@ -19,6 +19,11 @@ select ok(
       and qual like '%has_store_read_scope%'
   ),
   'production component evidence inherits store read scope'
+);
+select ok(
+  not has_column_privilege('authenticated', 'public.production_run_components', 'unit_cost_minor', 'select')
+  and not has_column_privilege('authenticated', 'public.production_run_components', 'total_cost_minor', 'select'),
+  'production cost snapshots are not exposed through direct table reads'
 );
 
 insert into auth.users (id, email, raw_user_meta_data)

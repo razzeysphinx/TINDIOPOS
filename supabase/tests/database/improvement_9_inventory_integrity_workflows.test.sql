@@ -276,7 +276,7 @@ update inventory_integrity_context
 set composite_product_id = public.create_catalog_product(
   organization_id, null, 'Produced Bundle', 'Composite output', 'simple', 'PRODUCED-BUNDLE', '480000099003', 3000, 0, true, 'each', array[store_id], '[]'::jsonb
 );
-update public.products set is_composite = true where id = (select composite_product_id from inventory_integrity_context);
+update public.products set is_composite = true, composite_inventory_mode = 'stocked_assembly' where id = (select composite_product_id from inventory_integrity_context);
 insert into public.product_components (organization_id, product_id, component_product_id, component_variant_id, quantity_per_composite)
 select organization_id, composite_product_id, component_product_id, null, 2 from inventory_integrity_context;
 select lives_ok(

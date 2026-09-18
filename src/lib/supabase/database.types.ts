@@ -3675,7 +3675,6 @@ export type Database = {
           note: string | null
           operation_id: string | null
           organization_id: string
-          output_unit_cost_minor: number
           produced_at: string
           produced_by_employee_id: string
           product_id: string
@@ -3690,7 +3689,6 @@ export type Database = {
           note?: string | null
           operation_id?: string | null
           organization_id: string
-          output_unit_cost_minor?: number
           produced_at?: string
           produced_by_employee_id: string
           product_id: string
@@ -3705,7 +3703,6 @@ export type Database = {
           note?: string | null
           operation_id?: string | null
           organization_id?: string
-          output_unit_cost_minor?: number
           produced_at?: string
           produced_by_employee_id?: string
           product_id?: string

@@ -14,6 +14,12 @@ function normalizeRestockPolicy(
   return value === "do_not_restock" ? value : "restock";
 }
 
+function normalizeCompositeInventoryMode(
+  value: string,
+): "made_to_order" | "stocked_assembly" {
+  return value === "stocked_assembly" ? value : "made_to_order";
+}
+
 async function loadCatalogCostEntries(
   supabase: Awaited<ReturnType<typeof createClient>>,
   organizationId: string,
@@ -100,7 +106,10 @@ export async function loadCatalogWorkspace(
     throw new Error(`Unable to load the catalog: ${baseError.message}`);
   }
 
-  const products = productsResult.data ?? [];
+  const products = (productsResult.data ?? []).map((product) => ({
+    ...product,
+    composite_inventory_mode: normalizeCompositeInventoryMode(product.composite_inventory_mode),
+  }));
   let costs: CatalogCostEntry[] = [];
 
   if (options.includeCosts && products.length > 0) {

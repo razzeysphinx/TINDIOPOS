@@ -1026,25 +1026,40 @@ export type Database = {
       }
       goods_receipt_lines: {
         Row: {
+          base_quantity_received: number
           goods_receipt_id: string
           id: string
           organization_id: string
           purchase_order_line_id: string
+          purchase_unit_code_snapshot: string
+          purchase_unit_cost_minor: number
+          purchase_unit_factor_to_base: number
           quantity_received: number
+          stock_unit_cost_minor: number
         }
         Insert: {
+          base_quantity_received: number
           goods_receipt_id: string
           id?: string
           organization_id: string
           purchase_order_line_id: string
+          purchase_unit_code_snapshot: string
+          purchase_unit_cost_minor: number
+          purchase_unit_factor_to_base: number
           quantity_received: number
+          stock_unit_cost_minor: number
         }
         Update: {
+          base_quantity_received?: number
           goods_receipt_id?: string
           id?: string
           organization_id?: string
           purchase_order_line_id?: string
+          purchase_unit_code_snapshot?: string
+          purchase_unit_cost_minor?: number
+          purchase_unit_factor_to_base?: number
           quantity_received?: number
+          stock_unit_cost_minor?: number
         }
         Relationships: [
           {
@@ -6266,7 +6281,7 @@ export type Database = {
       }
       cancel_purchase_order: {
         Args: {
-          target_note: string
+          target_note?: string
           target_organization_id: string
           target_purchase_order_id: string
         }

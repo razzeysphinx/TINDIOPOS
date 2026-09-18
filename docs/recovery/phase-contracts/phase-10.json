@@ -1,0 +1,24 @@
+{
+  "phase": "10",
+  "requiredPaths": ["supabase/migrations/20260918030903_canonical_product_units.sql", "supabase/tests/database/canonical_product_units.test.sql", "scripts/product-units-conversion-check.mjs", "scripts/product-unit-concurrency-certification.mjs", "src/features/catalog/service.ts", "src/features/catalog/catalog-product-workspace.tsx"],
+  "requiredText": [
+    { "path": "supabase/migrations/20260918030903_canonical_product_units.sql", "text": "product_units_protect_identity" },
+    { "path": "supabase/migrations/20260918030903_canonical_product_units.sql", "text": "create_product_unit" },
+    { "path": "supabase/migrations/20260918030903_canonical_product_units.sql", "text": "private.product_unit_operations" },
+    { "path": "supabase/migrations/20260918030903_canonical_product_units.sql", "text": "PRODUCT_UNIT_UPDATED" },
+    { "path": "supabase/migrations/20260918030903_canonical_product_units.sql", "text": "The base unit code and conversion factor are immutable." },
+    { "path": "supabase/migrations/20260918030903_canonical_product_units.sql", "text": "revoke insert, update, delete on public.product_units from authenticated" },
+    { "path": "src/features/catalog/service.ts", "text": "rpc(\"create_product_unit\"" },
+    { "path": "src/features/catalog/service.ts", "text": "rpc(\"update_product_unit\"" },
+    { "path": "src/features/catalog/service.ts", "text": "rpc(\"delete_product_unit\"" },
+    { "path": "src/features/catalog/catalog-product-workspace.tsx", "text": "Historical transactions keep their snapshots." },
+    { "path": "scripts/product-unit-concurrency-certification.mjs", "text": "exactCreateCallers: 2" }
+  ],
+  "forbiddenText": [
+    { "path": "src/features/catalog/service.ts", "text": "from(\"product_units\").insert" },
+    { "path": "src/features/catalog/service.ts", "text": "from(\"product_units\").update" },
+    { "path": "src/features/catalog/service.ts", "text": "from(\"product_units\").delete" },
+    { "path": "supabase/migrations/20260918030903_canonical_product_units.sql", "text": "update public.purchase_order_lines" },
+    { "path": "supabase/migrations/20260918030903_canonical_product_units.sql", "text": "update public.goods_receipt_lines" }
+  ]
+}

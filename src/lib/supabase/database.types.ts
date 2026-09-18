@@ -6615,6 +6615,19 @@ export type Database = {
         }
         Returns: string
       }
+      create_product_unit: {
+        Args: {
+          target_factor_to_base: number
+          target_is_purchase_unit: boolean
+          target_is_sale_unit: boolean
+          target_operation_id: string
+          target_organization_id: string
+          target_product_id: string
+          target_unit_code: string
+          target_unit_name: string
+        }
+        Returns: string
+      }
       create_purchase_order_v2: {
         Args: {
           target_expected_at?: string
@@ -6697,6 +6710,14 @@ export type Database = {
           target_confirmation_number: string
           target_employee_id: string
           target_organization_id: string
+        }
+        Returns: string
+      }
+      delete_product_unit: {
+        Args: {
+          target_operation_id: string
+          target_organization_id: string
+          target_unit_id: string
         }
         Returns: string
       }
@@ -8003,6 +8024,19 @@ export type Database = {
           target_sort_order: number
         }
         Returns: boolean
+      }
+      update_product_unit: {
+        Args: {
+          target_factor_to_base: number
+          target_is_purchase_unit: boolean
+          target_is_sale_unit: boolean
+          target_operation_id: string
+          target_organization_id: string
+          target_unit_code: string
+          target_unit_id: string
+          target_unit_name: string
+        }
+        Returns: string
       }
       update_receipt_delivery_status: {
         Args: {

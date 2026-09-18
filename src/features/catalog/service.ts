@@ -7,6 +7,7 @@ import {
   createProductSchema,
   deleteCatalogProductSchema,
   createProductUnitSchema,
+  deleteProductUnitSchema,
   generateCatalogIdentifiersSchema,
   importCatalogCsvSchema,
   setCategoryArchivedSchema,
@@ -16,6 +17,7 @@ import {
   setProductStoreConfigurationSchema,
   updateCategorySchema,
   updateProductSchema,
+  updateProductUnitSchema,
 } from "@/features/catalog/catalog-schema";
 import type { CatalogActionResult } from "@/features/catalog/catalog-types";
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
@@ -448,17 +450,49 @@ export async function createProductUnit(
     };
   }
   const supabase = await createClient();
-  const { error } = await supabase.from("product_units").insert({
-    organization_id: context.organization.id,
-    product_id: parsed.data.productId,
-    unit_code: parsed.data.unitCode.toLowerCase(),
-    unit_name: parsed.data.unitName,
-    factor_to_base: Number(parsed.data.factorToBase),
-    is_sale_unit: parsed.data.isSaleUnit,
-    is_purchase_unit: parsed.data.isPurchaseUnit,
+  const { error } = await supabase.rpc("create_product_unit", {
+    target_organization_id: context.organization.id,
+    target_product_id: parsed.data.productId,
+    target_unit_code: parsed.data.unitCode,
+    target_unit_name: parsed.data.unitName,
+    target_factor_to_base: Number(parsed.data.factorToBase),
+    target_is_sale_unit: parsed.data.isSaleUnit,
+    target_is_purchase_unit: parsed.data.isPurchaseUnit,
+    target_operation_id: parsed.data.operationId,
   });
   if (error) return { ok: false, message: databaseMessage(error.code, "The product unit could not be added.") };
   return { ok: true, message: "Product unit added." };
+}
+
+export async function updateProductUnit(context: BusinessContext, input: unknown): Promise<CatalogActionResult> {
+  const parsed = updateProductUnitSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("update_product_unit", {
+    target_organization_id: context.organization.id,
+    target_unit_id: parsed.data.unitId,
+    target_unit_code: parsed.data.unitCode,
+    target_unit_name: parsed.data.unitName,
+    target_factor_to_base: Number(parsed.data.factorToBase),
+    target_is_sale_unit: parsed.data.isSaleUnit,
+    target_is_purchase_unit: parsed.data.isPurchaseUnit,
+    target_operation_id: parsed.data.operationId,
+  });
+  if (error) return { ok: false, message: databaseMessage(error.code, "The product unit could not be updated.") };
+  return { ok: true, message: "Product unit updated." };
+}
+
+export async function deleteProductUnit(context: BusinessContext, input: unknown): Promise<CatalogActionResult> {
+  const parsed = deleteProductUnitSchema.safeParse(input);
+  if (!parsed.success) return validationError();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_product_unit", {
+    target_organization_id: context.organization.id,
+    target_unit_id: parsed.data.unitId,
+    target_operation_id: parsed.data.operationId,
+  });
+  if (error) return { ok: false, message: databaseMessage(error.code, "The product unit could not be deleted.") };
+  return { ok: true, message: "Product unit deleted. Historical transactions keep their original unit snapshots." };
 }
 
 export async function createProductComponent(

@@ -8,6 +8,7 @@ import {
   createProduct,
   createProductComponent,
   createProductUnit,
+  deleteProductUnit,
   deleteCatalogProduct,
   generateCatalogIdentifiers,
   importCatalogCsv,
@@ -18,6 +19,7 @@ import {
   setProductStoreConfiguration,
   updateCategory,
   updateProduct,
+  updateProductUnit,
 } from "@/features/catalog/service";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 
@@ -225,6 +227,28 @@ export async function createProductUnitAction(input: unknown): Promise<CatalogAc
   if (!hasPermission(context, "products.manage")) return { ok: false, message: "You do not have permission to manage product units." };
   const result = await createProductUnit(context, input);
   if (result.ok) revalidatePath("/back-office/catalog");
+  return result;
+}
+
+export async function updateProductUnitAction(input: unknown): Promise<CatalogActionResult> {
+  const context = await requireBusinessContext();
+  if (!hasPermission(context, "products.manage")) return { ok: false, message: "You do not have permission to manage product units." };
+  const result = await updateProductUnit(context, input);
+  if (result.ok) {
+    revalidatePath("/back-office/catalog");
+    revalidatePath("/back-office/inventory");
+  }
+  return result;
+}
+
+export async function deleteProductUnitAction(input: unknown): Promise<CatalogActionResult> {
+  const context = await requireBusinessContext();
+  if (!hasPermission(context, "products.manage")) return { ok: false, message: "You do not have permission to manage product units." };
+  const result = await deleteProductUnit(context, input);
+  if (result.ok) {
+    revalidatePath("/back-office/catalog");
+    revalidatePath("/back-office/inventory");
+  }
   return result;
 }
 

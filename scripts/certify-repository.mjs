@@ -62,6 +62,8 @@ const REQUIRED_CONTROLLER_TESTS = new Set([
   "test:phase-09-controller-contract",
   "test:product-units-conversion",
   "test:phase-10-controller-contract",
+  "test:supplier-returns",
+  "test:phase-11-controller-contract",
 ]);
 
 const VALID_MODES =
@@ -935,6 +937,15 @@ async function runDatabaseCertification() {
     command: "node",
     args: [
       "scripts/product-unit-concurrency-certification.mjs",
+    ],
+  });
+
+  runStep({
+    name:
+      "Canonical supplier-return concurrency evidence",
+    command: "node",
+    args: [
+      "scripts/supplier-return-concurrency-certification.mjs",
     ],
   });
 

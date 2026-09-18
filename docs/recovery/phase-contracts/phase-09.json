@@ -1,0 +1,31 @@
+{
+  "phase": "09",
+  "requiredPaths": [
+    "supabase/migrations/20260918023953_canonical_purchasing_receiving.sql",
+    "supabase/tests/database/canonical_purchasing_receiving.test.sql",
+    "scripts/purchasing-receiving-check.mjs",
+    "scripts/purchase-order-receipt-concurrency-certification.mjs",
+    "src/features/inventory/advanced-inventory-actions.ts",
+    "src/features/inventory/advanced-inventory-workflows.tsx"
+  ],
+  "requiredText": [
+    { "path": "supabase/migrations/20260918023953_canonical_purchasing_receiving.sql", "text": "base_quantity_received" },
+    { "path": "supabase/migrations/20260918023953_canonical_purchasing_receiving.sql", "text": "purchase_unit_factor_to_base" },
+    { "path": "supabase/migrations/20260918023953_canonical_purchasing_receiving.sql", "text": "stock_unit_cost_minor" },
+    { "path": "supabase/migrations/20260918023953_canonical_purchasing_receiving.sql", "text": "pg_catalog.pg_advisory_xact_lock" },
+    { "path": "supabase/migrations/20260918023953_canonical_purchasing_receiving.sql", "text": "products.view_cost" },
+    { "path": "supabase/migrations/20260918023953_canonical_purchasing_receiving.sql", "text": "Posted goods-receipt evidence is immutable." },
+    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "create_purchase_order_v2" },
+    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "receive_purchase_order" },
+    { "path": "src/features/inventory/advanced-inventory-workflows.tsx", "text": "PurchaseOrderCsvTools" },
+    { "path": "src/features/inventory/advanced-inventory-workflows.tsx", "text": "SupplierCsvTools" },
+    { "path": "scripts/purchase-order-receipt-concurrency-certification.mjs", "text": "successfulCompeting === 1" }
+  ],
+  "forbiddenText": [
+    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "rpc(\"create_purchase_order\"" },
+    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "from(\"inventory_levels\").update" },
+    { "path": "src/features/inventory/advanced-inventory-workflows.tsx", "text": "from(\"inventory_levels\").update" },
+    { "path": "supabase/migrations/20260918023953_canonical_purchasing_receiving.sql", "text": "grant execute on function private.receive_purchase_order" },
+    { "path": "supabase/migrations/20260918023953_canonical_purchasing_receiving.sql", "text": "supplier_returns" }
+  ]
+}

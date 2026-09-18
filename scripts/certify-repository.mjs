@@ -58,6 +58,8 @@ const REQUIRED_CONTROLLER_TESTS = new Set([
   "test:phase-07-controller-contract",
   "test:inventory-counts-stocktake",
   "test:phase-08-controller-contract",
+  "test:purchasing-receiving",
+  "test:phase-09-controller-contract",
 ]);
 
 const VALID_MODES =
@@ -913,6 +915,15 @@ async function runDatabaseCertification() {
     command: "node",
     args: [
       "scripts/inventory-count-concurrency-certification.mjs",
+    ],
+  });
+
+  runStep({
+    name:
+      "Canonical purchase-order receipt concurrency evidence",
+    command: "node",
+    args: [
+      "scripts/purchase-order-receipt-concurrency-certification.mjs",
     ],
   });
 

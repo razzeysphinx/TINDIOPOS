@@ -221,7 +221,7 @@ export async function createProduct(
   }));
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("create_catalog_product_v2", {
+  const { data, error } = await supabase.rpc("create_catalog_product_v3", {
     target_organization_id: context.organization.id,
     // Supabase's generated RPC types do not preserve nullable PostgreSQL
     // function arguments. The database accepts null for an uncategorized item.
@@ -240,6 +240,7 @@ export async function createProduct(
     target_image_url: parsed.data.imageUrl,
     target_is_variable_price: parsed.data.isVariablePrice,
     target_allow_fractional_quantity: parsed.data.allowFractionalQuantity,
+    target_composite_inventory_mode: parsed.data.compositeInventoryMode,
   });
 
   if (error || !data) {
@@ -300,7 +301,7 @@ export async function updateProduct(
   const productCost = moneyInputToMinor(parsed.data.cost);
 
   const supabase = await createClient();
-  const { data: productType, error } = await supabase.rpc("update_catalog_product_v2", {
+  const { data: productType, error } = await supabase.rpc("update_catalog_product_v3", {
     target_organization_id: context.organization.id,
     target_product_id: parsed.data.productId,
     target_name: parsed.data.name,
@@ -318,6 +319,7 @@ export async function updateProduct(
     target_image_url: parsed.data.imageUrl,
     target_is_variable_price: parsed.data.isVariablePrice,
     target_allow_fractional_quantity: parsed.data.allowFractionalQuantity,
+    target_composite_inventory_mode: parsed.data.compositeInventoryMode,
   });
 
   if (error || !productType) {

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(20);
+select plan(23);
 
 select has_column('public', 'products', 'composite_inventory_mode', 'products expose a composite inventory mode');
 select has_table('public', 'production_run_components', 'production component snapshots exist');
@@ -183,6 +183,15 @@ select throws_ok(
 );
 
 reset role;
+
+select throws_ok(
+  $update public.products
+    set composite_inventory_mode = 'made_to_order'
+    where id = (select stocked_product_id from phase12_context)$,
+  '55000',
+  'Composite stock mode cannot change after inventory history begins.',
+  'composite stock authority is frozen after production history exists'
+);
 
 -- The compatibility sale bridge must not consume the stocked assembly recipe.
 select private.apply_inventory_change_v2(

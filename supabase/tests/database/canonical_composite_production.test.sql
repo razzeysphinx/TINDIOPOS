@@ -200,18 +200,18 @@ select throws_ok(
 reset role;
 
 select throws_ok(
-  $update public.products
+  $$update public.products
     set composite_inventory_mode = 'made_to_order'
-    where id = (select stocked_product_id from phase12_context)$,
+    where id = (select stocked_product_id from phase12_context)$$,
   '55000',
   'Composite stock mode cannot change after inventory history begins.',
   'composite stock authority is frozen after production history exists'
 );
 
 select throws_ok(
-  $update public.products
+  $$update public.products
     set is_composite = false
-    where id = (select stocked_product_id from phase12_context)$,
+    where id = (select stocked_product_id from phase12_context)$$,
   '55000',
   'Composite stock mode cannot change after inventory history begins.',
   'composite classification is frozen after production history exists'

@@ -7605,28 +7605,17 @@ export type Database = {
         }
         Returns: string
       }
-      return_to_supplier:
-        | {
-            Args: {
-              target_lines: Json
-              target_note: string
-              target_organization_id: string
-              target_store_id: string
-              target_supplier_id: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              target_lines: Json
-              target_note: string
-              target_operation_id: string
-              target_organization_id: string
-              target_store_id: string
-              target_supplier_id: string
-            }
-            Returns: string
-          }
+      return_to_supplier: {
+        Args: {
+          target_lines: Json
+          target_note: string
+          target_operation_id: string
+          target_organization_id: string
+          target_store_id: string
+          target_supplier_id: string
+        }
+        Returns: string
+      }
       revoke_loyalty_card: {
         Args: {
           target_loyalty_card_id: string

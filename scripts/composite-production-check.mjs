@@ -21,6 +21,8 @@ test("composite recipe consumption has one explicit mode contract", () => {
   assert.match(migration, /parent\.composite_inventory_mode = 'made_to_order'/);
   assert.match(migration, /product\.composite_inventory_mode = 'stocked_assembly'/);
   assert.match(migration, /products_protect_composite_inventory_mode/);
+  assert.match(migration, /before update of composite_inventory_mode, is_composite on public\.products/);
+  assert.match(migration, /products_composite_inventory_mode_consistency/);
   assert.match(migration, /Composite stock mode cannot change after inventory history begins/);
   assert.match(catalogService, /create_catalog_product_v3/);
   assert.match(catalogService, /update_catalog_product_v3/);

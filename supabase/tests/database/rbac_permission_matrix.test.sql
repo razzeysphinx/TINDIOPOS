@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(23);
 
 insert into auth.users (id, email, raw_user_meta_data)
 values
@@ -135,34 +135,23 @@ where assignment.organization_id = employee.organization_id
 
 create or replace function pg_temp.can_write_store_configuration(
   target_store_id uuid,
-  target_low_stock_level integer
+  target_price_override_minor integer
 )
 returns boolean
 language plpgsql
 as $$
 begin
-  insert into public.product_store_settings (
-    organization_id,
-    product_id,
-    store_id,
-    is_available,
-    price_override_minor,
-    low_stock_level
-  )
-  select
-    organization_id,
-    product_id,
+  perform public.set_catalog_product_store_configuration_v3(
+    context.organization_id,
+    context.product_id,
     target_store_id,
-    true,
-    12500,
-    target_low_stock_level
-  from rbac_permission_matrix_context
-  on conflict (store_id, product_id) do update
-  set price_override_minor = excluded.price_override_minor,
-      low_stock_level = excluded.low_stock_level;
+    target_price_override_minor,
+    'restock'
+  )
+  from rbac_permission_matrix_context context;
   return true;
 exception
-  when insufficient_privilege then
+  when insufficient_privilege or raise_exception then
     return false;
 end;
 $$;
@@ -178,6 +167,12 @@ select ok(
 select ok(
   not has_function_privilege('authenticated', 'private.has_organization_store_scope(uuid)', 'EXECUTE'),
   'authenticated callers cannot invoke the internal organization-scope predicate directly'
+);
+
+select ok(
+  not has_column_privilege('authenticated','public.product_store_settings','low_stock_level','insert')
+    and not has_column_privilege('authenticated','public.product_store_settings','low_stock_level','update'),
+  'no role can use authenticated column grants to mutate the legacy low-stock threshold'
 );
 
 select ok(
@@ -347,7 +342,7 @@ select ok(
     (select secondary_store_id from rbac_permission_matrix_context),
     11
   ),
-  'Owner can change a secondary-store price and low-stock setting without an employee-store row'
+  'Owner can change a secondary-store price through capabilities without an employee-store row'
 );
 
 set local request.jwt.claim.sub = '9b900000-0000-4000-8000-000000000002';

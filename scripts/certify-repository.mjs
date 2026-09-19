@@ -64,6 +64,8 @@ const REQUIRED_CONTROLLER_TESTS = new Set([
   "test:phase-10-controller-contract",
   "test:supplier-returns",
   "test:phase-11-controller-contract",
+  "test:inventory-replenishment-settings",
+  "test:phase-13-controller-contract",
 ]);
 
 const VALID_MODES =
@@ -947,6 +949,12 @@ async function runDatabaseCertification() {
     args: [
       "scripts/supplier-return-concurrency-certification.mjs",
     ],
+  });
+
+  runStep({
+    name: "Canonical replenishment-settings concurrency evidence",
+    command: "node",
+    args: ["scripts/inventory-replenishment-settings-concurrency-certification.mjs"],
   });
 
   await verifyGeneratedTypesStable();

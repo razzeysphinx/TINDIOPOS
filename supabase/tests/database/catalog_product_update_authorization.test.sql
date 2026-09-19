@@ -147,14 +147,16 @@ select ok(
 );
 
 select ok(
-  to_regprocedure('public.set_catalog_product_store_configuration(uuid,uuid,uuid,bigint,numeric)') is not null,
-  'the catalog store-configuration routine exists'
+  to_regprocedure('public.set_catalog_product_store_configuration_v3(uuid,uuid,uuid,bigint,text)') is not null
+    and to_regprocedure('public.set_catalog_product_store_configuration(uuid,uuid,uuid,bigint,numeric)') is null
+    and to_regprocedure('public.set_catalog_product_store_configuration_v2(uuid,uuid,uuid,bigint,numeric,text)') is null,
+  'the v3 catalog store-configuration routine replaces legacy overloads'
 );
 
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.set_catalog_product_store_configuration(uuid,uuid,uuid,bigint,numeric)',
+    'public.set_catalog_product_store_configuration_v3(uuid,uuid,uuid,bigint,text)',
     'EXECUTE'
   ),
   'authenticated callers can invoke the guarded store-configuration routine'
@@ -163,7 +165,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'anon',
-    'public.set_catalog_product_store_configuration(uuid,uuid,uuid,bigint,numeric)',
+    'public.set_catalog_product_store_configuration_v3(uuid,uuid,uuid,bigint,text)',
     'EXECUTE'
   ),
   'anonymous callers cannot invoke the guarded store-configuration routine'
@@ -219,8 +221,9 @@ set local request.jwt.claim.sub = '28282828-2828-4828-8828-282828282828';
 
 select ok(
   has_column_privilege('authenticated', 'public.product_store_settings', 'price_override_minor', 'INSERT')
-    and has_column_privilege('authenticated', 'public.product_store_settings', 'low_stock_level', 'INSERT'),
-  'the product-store configuration columns are insertable for capability-checked upserts'
+    and not has_column_privilege('authenticated', 'public.product_store_settings', 'low_stock_level', 'INSERT')
+    and not has_column_privilege('authenticated', 'public.product_store_settings', 'low_stock_level', 'UPDATE'),
+  'price configuration remains available while legacy threshold mutation is revoked'
 );
 
 select throws_ok(
@@ -240,29 +243,28 @@ select throws_ok(
     (select store_id from catalog_update_context)
   ),
   '42501',
-  'permission denied for table product_store_settings',
-  'a raw PostgREST-style full-row merge upsert remains denied by identifier-column grants'
+  null,
+  'a raw PostgREST-style legacy threshold merge remains denied'
 );
 
 select lives_ok(
   format(
-    $$select public.set_catalog_product_store_configuration(%L, %L, %L, 12500, 3)$$,
+    $$select public.set_catalog_product_store_configuration_v3(%L, %L, %L, 12500, 'do_not_restock')$$,
     (select organization_id from catalog_update_context),
     (select product_id from catalog_update_context),
     (select store_id from catalog_update_context)
   ),
-  'an Owner can save store price and low-stock settings through the guarded configuration routine'
+  'an Owner can save store price and restock intention through the guarded v3 routine'
 );
 
-select is(
-  (
-    select low_stock_level
-    from public.product_store_settings
-    where product_id = (select product_id from catalog_update_context)
-      and store_id = (select store_id from catalog_update_context)
-  ),
-  3::numeric,
-  'the Owner store configuration upsert persists the low-stock setting'
+select ok(
+  (select price_override_minor = 12500
+      and restock_policy = 'do_not_restock'
+      and low_stock_level is null
+   from public.product_store_settings
+   where product_id = (select product_id from catalog_update_context)
+     and store_id = (select store_id from catalog_update_context)),
+  'the v3 upsert persists price and restock intention without a legacy threshold'
 );
 
 select is(

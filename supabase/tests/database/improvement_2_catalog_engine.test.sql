@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(30);
+select plan(33);
 
 select has_table('public', 'product_units', 'product_units table exists');
 select has_table('public', 'product_components', 'product_components table exists');
@@ -119,9 +119,10 @@ select is((select quantity_delta from public.inventory_movements where source_ty
 set local role authenticated;
 set local request.jwt.claim.sub = '24242424-2424-4424-8424-242424242424';
 
-select ok(to_regprocedure('public.import_catalog_products_v2(uuid,uuid[],jsonb)') is not null, 'atomic catalog CSV import function exists');
+select ok(to_regprocedure('public.import_catalog_products_v3(uuid,uuid[],jsonb)') is not null, 'atomic catalog CSV import v3 exists');
+select ok(to_regprocedure('public.import_catalog_products_v2(uuid,uuid[],jsonb)') is null, 'legacy catalog CSV import v2 is retired');
 select is(
-  public.import_catalog_products_v2(
+  public.import_catalog_products_v3(
     (select organization_id from catalog_improvement_context),
     array[(select store_id from catalog_improvement_context)],
     jsonb_build_array(jsonb_build_object(
@@ -129,16 +130,18 @@ select is(
       'sku', 'IMPORT-OK', 'barcode', '480000002499', 'price_minor', 12500,
       'cost_minor', 5000, 'track_inventory', true, 'unit', 'each', 'image_url', '',
       'is_variable_price', false, 'allow_fractional_quantity', false,
-      'price_override_minor', null, 'low_stock_level', null
+      'price_override_minor', null
     ))
   ),
   1,
   'a validated CSV batch imports every row'
 );
 select is((select count(*) from public.products where sku = 'IMPORT-OK'), 1::bigint, 'the validated CSV product was created');
+select is((select low_stock_level from public.product_store_settings where product_id=(select id from public.products where sku='IMPORT-OK') limit 1),null::numeric,'CSV import does not create a legacy threshold');
+select is((select count(*) from public.inventory_replenishment_rules where product_id=(select id from public.products where sku='IMPORT-OK')),0::bigint,'CSV import synthesizes neither reorder point nor target stock');
 select throws_ok(
   $$
-    select public.import_catalog_products_v2(
+    select public.import_catalog_products_v3(
       (select organization_id from catalog_improvement_context),
       array[(select store_id from catalog_improvement_context)],
       jsonb_build_array(
@@ -147,14 +150,14 @@ select throws_ok(
           'sku', 'ROLLBACK-ONE', 'barcode', '480000002497', 'price_minor', 12500,
           'cost_minor', 0, 'track_inventory', false, 'unit', 'each', 'image_url', '',
           'is_variable_price', false, 'allow_fractional_quantity', false,
-          'price_override_minor', null, 'low_stock_level', null
+          'price_override_minor', null
         ),
         jsonb_build_object(
           'row_number', 3, 'name', 'Rollback duplicate row', 'description', '', 'category_id', null,
           'sku', 'IMPORT-OK', 'barcode', '480000002496', 'price_minor', 12500,
           'cost_minor', 0, 'track_inventory', false, 'unit', 'each', 'image_url', '',
           'is_variable_price', false, 'allow_fractional_quantity', false,
-          'price_override_minor', null, 'low_stock_level', null
+          'price_override_minor', null
         )
       )
     );

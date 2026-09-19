@@ -7368,7 +7368,7 @@ export type Database = {
           status: string
         }[]
       }
-      import_catalog_products_v2: {
+      import_catalog_products_v3: {
         Args: {
           target_organization_id: string
           target_rows: Json
@@ -7846,19 +7846,8 @@ export type Database = {
         }
         Returns: number
       }
-      set_catalog_product_store_configuration: {
+      set_catalog_product_store_configuration_v3: {
         Args: {
-          target_low_stock_level: number
-          target_organization_id: string
-          target_price_override_minor: number
-          target_product_id: string
-          target_store_id: string
-        }
-        Returns: undefined
-      }
-      set_catalog_product_store_configuration_v2: {
-        Args: {
-          target_low_stock_level: number
           target_organization_id: string
           target_price_override_minor: number
           target_product_id: string

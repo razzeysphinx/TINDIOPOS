@@ -44,7 +44,7 @@ export async function loadCatalogWorkspace(
   const supabase = await createClient();
   const organizationId = context.organization.id;
 
-  const [categoriesResult, storesResult, productsResult, variantsResult, settingsResult, inventoryLevelsResult, unitsResult, componentsResult] =
+  const [categoriesResult, storesResult, productsResult, variantsResult, settingsResult, inventoryLevelsResult, replenishmentRulesResult, unitsResult, componentsResult] =
     await Promise.all([
       supabase
         .from("categories")
@@ -80,6 +80,10 @@ export async function loadCatalogWorkspace(
         .select("product_id, variant_id, store_id, quantity")
         .eq("organization_id", organizationId),
       supabase
+        .from("inventory_replenishment_rules")
+        .select("product_id, variant_id, store_id, reorder_point")
+        .eq("organization_id", organizationId),
+      supabase
         .from("product_units")
         .select("id, product_id, unit_code, unit_name, factor_to_base, is_base, is_sale_unit, is_purchase_unit")
         .eq("organization_id", organizationId)
@@ -98,6 +102,7 @@ export async function loadCatalogWorkspace(
     variantsResult,
     settingsResult,
     inventoryLevelsResult,
+    replenishmentRulesResult,
     unitsResult,
     componentsResult,
   ].find((result) => result.error)?.error;
@@ -135,6 +140,7 @@ export async function loadCatalogWorkspace(
     })),
     costs,
     inventoryLevels: inventoryLevelsResult.data ?? [],
+    replenishmentRules: replenishmentRulesResult.data ?? [],
     units: unitsResult.data ?? [],
     components: componentsResult.data ?? [],
   };

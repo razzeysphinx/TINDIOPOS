@@ -58,7 +58,6 @@ export async function GET() {
       "variable_price",
       "allow_fractional_quantity",
       "store_price",
-      "low_stock_level",
     ],
     ...products.map((product) => [
       product.name,
@@ -73,7 +72,6 @@ export async function GET() {
       product.image_url ?? "",
       product.is_variable_price ? "yes" : "no",
       product.allow_fractional_quantity ? "yes" : "no",
-      "",
       "",
     ]),
   ];

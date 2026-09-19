@@ -3,8 +3,9 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const [migration, service, schema, csv, forms, workspace, data, exportRoute, workflows, actions] = await Promise.all([
+const [migration, stockPageFallbackMigration, service, schema, csv, forms, workspace, data, exportRoute, workflows, actions] = await Promise.all([
   source("supabase/migrations/20260919013635_canonical_inventory_replenishment_settings.sql"),
+  source("supabase/migrations/20260919021500_phase_13_effective_low_stock_fallback.sql"),
   source("src/features/catalog/service.ts"), source("src/features/catalog/catalog-schema.ts"),
   source("src/features/catalog/catalog-csv.ts"), source("src/features/catalog/catalog-forms.tsx"),
   source("src/features/catalog/catalog-product-workspace.tsx"), source("src/features/catalog/data.ts"),
@@ -29,6 +30,29 @@ test("catalog CSV and display use the canonical effective threshold contract", (
   assert.match(data, /inventory_replenishment_rules/);
   assert.match(workspace, /rule\?\.reorder_point \?\? legacyFallback/);
   assert.match(workspace, /candidate\.variant_id === level\.variant_id/);
+  assert.match(
+    workspace,
+    /level\.variant_id === null && product\.product_type === "simple"/,
+  );
+  assert.match(
+    stockPageFallbackMigration,
+    /coalesce\([\s\S]*rule\.reorder_point[\s\S]*setting\.low_stock_level[\s\S]*\)/,
+  );
+  assert.match(
+    stockPageFallbackMigration,
+    /level\.variant_id is null[\s\S]*product\.product_type = 'simple'/,
+  );
+  assert.match(
+    stockPageFallbackMigration,
+    /uninitialized_variant_positions[\s\S]*rule\.reorder_point/,
+  );
+
+  const variantSection = stockPageFallbackMigration.slice(
+    stockPageFallbackMigration.indexOf("uninitialized_variant_positions"),
+    stockPageFallbackMigration.indexOf("positions as materialized"),
+  );
+
+  assert.doesNotMatch(variantSection, /setting\.low_stock_level/);
 });
 
 test("replenishment remains advisory and stock-safe", () => {

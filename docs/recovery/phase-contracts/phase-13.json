@@ -2,6 +2,7 @@
   "phase": "13",
   "requiredPaths": [
     "supabase/migrations/20260919013635_canonical_inventory_replenishment_settings.sql",
+    "supabase/migrations/20260919021500_phase_13_effective_low_stock_fallback.sql",
     "supabase/tests/database/canonical_inventory_replenishment_settings.test.sql",
     "scripts/inventory-replenishment-settings-check.mjs",
     "scripts/inventory-replenishment-settings-concurrency-certification.mjs",
@@ -12,8 +13,12 @@
     { "path": "supabase/migrations/20260919013635_canonical_inventory_replenishment_settings.sql", "text": "canonical replenishment rule" },
     { "path": "supabase/migrations/20260919013635_canonical_inventory_replenishment_settings.sql", "text": "set_catalog_product_store_configuration_v3" },
     { "path": "supabase/migrations/20260919013635_canonical_inventory_replenishment_settings.sql", "text": "import_catalog_products_v3" },
+    { "path": "supabase/migrations/20260919021500_phase_13_effective_low_stock_fallback.sql", "text": "setting.low_stock_level" },
+    { "path": "supabase/migrations/20260919021500_phase_13_effective_low_stock_fallback.sql", "text": "product.product_type = 'simple'" },
     { "path": "src/features/catalog/catalog-product-workspace.tsx", "text": "rule?.reorder_point ?? legacyFallback" },
+    { "path": "src/features/catalog/catalog-product-workspace.tsx", "text": "level.variant_id === null && product.product_type === \"simple\"" },
     { "path": "src/features/catalog/catalog-product-workspace.tsx", "text": "Reorder point and target stock are managed in Stock & Restock." },
+    { "path": "src/features/catalog/service.ts", "text": "Store price and restock settings updated." },
     { "path": "src/features/inventory/supply-chain-workflows.tsx", "text": "Suggestions never create inventory documents on their own." },
     { "path": "scripts/inventory-replenishment-settings-concurrency-certification.mjs", "text": "Scenario A" },
     { "path": "scripts/inventory-replenishment-settings-concurrency-certification.mjs", "text": "Scenario B" },
@@ -23,6 +28,7 @@
     { "path": "src/features/catalog/service.ts", "text": "set_catalog_product_store_configuration_v2" },
     { "path": "src/features/catalog/service.ts", "text": "import_catalog_products_v2" },
     { "path": "src/features/catalog/service.ts", "text": "target_low_stock_level" },
+    { "path": "src/features/catalog/service.ts", "text": "Store price, low-stock, and restock settings updated." },
     { "path": "src/features/catalog/catalog-forms.tsx", "text": "lowStockLevel" },
     { "path": "src/app/api/catalog/export/route.ts", "text": "low_stock_level" }
   ]

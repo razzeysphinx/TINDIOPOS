@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(32);
 
 select has_table('public','inventory_replenishment_rules','canonical replenishment table exists');
 select ok(to_regprocedure('public.upsert_inventory_replenishment_rule_v2(uuid,uuid,uuid,numeric,numeric,uuid,uuid)') is not null,'canonical upsert exists');
@@ -48,9 +48,54 @@ set local request.jwt.claim.sub='13131313-1313-4313-8313-131313131313';
 select is((select low_stock_level from public.product_store_settings where product_id=(select product_id from phase13_context)),3::numeric,'historical legacy threshold survives');
 select throws_ok(format($$update public.product_store_settings set low_stock_level=4 where product_id=%L$$,(select product_id from phase13_context)),'42501',null,'new direct legacy threshold update rejected');
 select is((select coalesce(r.reorder_point,s.low_stock_level) from public.product_store_settings s left join public.inventory_replenishment_rules r on r.organization_id=s.organization_id and r.store_id=s.store_id and r.product_id=s.product_id and r.variant_id is null where s.product_id=(select product_id from phase13_context)),2::numeric,'effective threshold prefers canonical rule');
+select is(
+  (
+    select stock.reorder_point
+    from public.get_inventory_stock_page(
+      (select organization_id from phase13_context),
+      (select store_id from phase13_context),
+      null,
+      null,
+      'all',
+      'all',
+      'priority',
+      1,
+      50
+    ) stock
+    where stock.product_id = (select product_id from phase13_context)
+      and stock.variant_id is null
+    limit 1
+  ),
+  2::numeric,
+  'Stock & Restock prefers the canonical reorder point over legacy fallback'
+);
 reset role;
 delete from public.inventory_replenishment_rules where product_id=(select product_id from phase13_context);
 select ok((select coalesce(r.reorder_point,s.low_stock_level)=3 and r.target_stock is null from public.product_store_settings s left join public.inventory_replenishment_rules r on r.organization_id=s.organization_id and r.store_id=s.store_id and r.product_id=s.product_id and r.variant_id is null where s.product_id=(select product_id from phase13_context)),'legacy fallback supplies a threshold but never target stock');
+
+set local role authenticated;
+set local request.jwt.claim.sub='13131313-1313-4313-8313-131313131313';
+select is(
+  (
+    select stock.reorder_point
+    from public.get_inventory_stock_page(
+      (select organization_id from phase13_context),
+      (select store_id from phase13_context),
+      null,
+      null,
+      'all',
+      'all',
+      'priority',
+      1,
+      50
+    ) stock
+    where stock.product_id = (select product_id from phase13_context)
+      and stock.variant_id is null
+    limit 1
+  ),
+  3::numeric,
+  'Stock & Restock uses legacy low-stock fallback for a simple product only when no canonical rule exists'
+);
 
 select * from finish();
 rollback;

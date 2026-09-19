@@ -224,7 +224,12 @@ function stockStatus(product: ListRowProps["product"], levels: ListRowProps["inv
   if (total === 0) return { attention: "Out of stock", label: "0 on hand", tone: "text-destructive" };
   const lowStores = new Set(levels.filter((level) => {
     const rule = replenishmentRules.find((candidate) => candidate.store_id === level.store_id && candidate.variant_id === level.variant_id);
-    const legacyFallback = settings.find((setting) => setting.store_id === level.store_id)?.low_stock_level;
+    const legacyFallback =
+      level.variant_id === null && product.product_type === "simple"
+        ? settings.find(
+            (setting) => setting.store_id === level.store_id,
+          )?.low_stock_level
+        : null;
     const threshold = rule?.reorder_point ?? legacyFallback;
     return threshold !== null && threshold !== undefined && Number(level.quantity) <= Number(threshold);
   }).map((level) => level.store_id));

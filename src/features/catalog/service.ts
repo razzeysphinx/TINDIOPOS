@@ -437,7 +437,7 @@ export async function setProductStoreConfiguration(
     target_restock_policy: parsed.data.restockPolicy,
   });
   if (error) return { ok: false, message: databaseMessage(error.code, "Store product settings could not be updated.") };
-  return { ok: true, message: "Store price, low-stock, and restock settings updated." };
+  return { ok: true, message: "Store price and restock settings updated." };
 }
 
 export async function createProductUnit(

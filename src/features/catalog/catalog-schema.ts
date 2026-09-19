@@ -226,10 +226,6 @@ export const setProductStoreConfigurationSchema = z.object({
     .string()
     .trim()
     .refine((value) => value === "" || /^\d{1,8}(?:\.\d{1,2})?$/.test(value), "Enter a non-negative price with up to 2 decimals."),
-  lowStockLevel: z
-    .string()
-    .trim()
-    .refine((value) => value === "" || /^\d{1,8}(?:\.\d{1,3})?$/.test(value), "Enter a non-negative quantity with up to 3 decimals."),
 });
 
 export const createProductUnitSchema = z.object({
@@ -300,13 +296,6 @@ export const importCatalogCsvSchema = z.object({
         isVariablePrice: z.boolean(),
         allowFractionalQuantity: z.boolean(),
         priceOverride: optionalMoneyInput,
-        lowStockLevel: z
-          .string()
-          .trim()
-          .refine(
-            (value) => value === "" || /^\d{1,8}(?:\.\d{1,3})?$/.test(value),
-            "Enter a non-negative quantity with up to 3 decimals.",
-          ),
       }),
     )
     .min(1, "Choose a CSV file with at least one data row.")

@@ -30,7 +30,14 @@ test("stock levels default to action priority and expose interactive summary fil
 
 test("restock intention is durable and only changes recommendation eligibility", () => {
   assert.match(catalogSchema, /restockPolicy: z\.enum\(\["restock", "do_not_restock"\]\)/);
-  assert.match(catalogService, /set_catalog_product_store_configuration_v2/);
+  assert.match(
+    catalogService,
+    /set_catalog_product_store_configuration_v3/,
+  );
+  assert.doesNotMatch(
+    catalogService,
+    /set_catalog_product_store_configuration_v2/,
+  );
   assert.match(catalogWorkspace, /Restock intention/);
   assert.match(catalogWorkspace, /Do not restock/);
   assert.match(catalogWorkspace, /does not archive the product or change stock history/);

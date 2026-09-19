@@ -63,6 +63,8 @@
     "test:composite-production": "node --test scripts/composite-production-check.mjs",
     "test:phase-11-controller-contract": "node scripts/recovery/phase-contract-check.mjs docs/recovery/phase-contracts/phase-11.json",
     "test:phase-12-controller-contract": "node scripts/recovery/phase-contract-check.mjs docs/recovery/phase-contracts/phase-12.json",
+    "test:inventory-replenishment-settings": "node --test scripts/inventory-replenishment-settings-check.mjs",
+    "test:phase-13-controller-contract": "node scripts/recovery/phase-contract-check.mjs docs/recovery/phase-contracts/phase-13.json",
     "test:inventory-performance-accessibility": "node --test scripts/inventory-performance-accessibility-check.mjs",
     "test:inventory-health": "node --test scripts/inventory-health-awareness-check.mjs",
     "test:inventory-transfers": "node --test scripts/inventory-transfer-chain-check.mjs",

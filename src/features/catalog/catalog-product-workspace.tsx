@@ -44,7 +44,7 @@ function productTypeLabel(productType: string, isComposite: boolean) {
 }
 
 export function CatalogProductWorkspace(props: ProductWorkspaceProps) {
-  const { categories, stores, products, variants, settings, costs, inventoryLevels, units, components, canTrackInventory, canUseWeightedProducts, canViewCost, currencyCode, unitOptions } = props;
+  const { categories, stores, products, variants, settings, costs, inventoryLevels, replenishmentRules, units, components, canTrackInventory, canUseWeightedProducts, canViewCost, currencyCode, unitOptions } = props;
   const activeStores = useMemo(() => stores.filter((store) => store.is_active), [stores]);
   const activeCategories = useMemo(() => categories.filter((category) => !category.is_archived), [categories]);
   const categoryNames = useMemo(() => new Map(categories.map((category) => [category.id, category.name])), [categories]);
@@ -60,6 +60,11 @@ export function CatalogProductWorkspace(props: ProductWorkspaceProps) {
     for (const level of inventoryLevels) index.set(level.product_id, [...(index.get(level.product_id) ?? []), level]);
     return index;
   }, [inventoryLevels]);
+  const rulesByProduct = useMemo(() => {
+    const index = new Map<string, CatalogWorkspace["replenishmentRules"]>();
+    for (const rule of replenishmentRules) index.set(rule.product_id, [...(index.get(rule.product_id) ?? []), rule]);
+    return index;
+  }, [replenishmentRules]);
   const unitsByProduct = useMemo(() => {
     const index = new Map<string, CatalogWorkspace["units"]>();
     for (const unit of units) index.set(unit.product_id, [...(index.get(unit.product_id) ?? []), unit]);
@@ -181,10 +186,10 @@ export function CatalogProductWorkspace(props: ProductWorkspaceProps) {
           <div className="hidden overflow-x-auto lg:block">
             <table className="w-full min-w-190 text-left text-sm">
               <thead className="border-y bg-muted/40 text-xs text-muted-foreground"><tr><th className="px-5 py-2.5 font-medium">Product</th><th className="px-3 py-2.5 font-medium">Category</th><th className="px-3 py-2.5 text-right font-medium">Price</th><th className="px-3 py-2.5 font-medium">Stock</th><th className="px-3 py-2.5 font-medium">Stores</th><th className="px-5 py-2.5 font-medium">Status</th></tr></thead>
-              <tbody className="divide-y">{visibleProducts.map((product) => <ProductTableRow activeStoreCount={activeStores.length} categoryName={categoryNames.get(product.category_id ?? "") ?? "Uncategorized"} currencyCode={currencyCode} inventoryLevels={inventoryByProduct.get(product.id) ?? []} isSelected={drawerOpen && selectedProductId === product.id} key={product.id} onSelect={() => chooseProduct(product.id)} product={product} settings={settingsByProduct.get(product.id) ?? []} />)}</tbody>
+              <tbody className="divide-y">{visibleProducts.map((product) => <ProductTableRow activeStoreCount={activeStores.length} categoryName={categoryNames.get(product.category_id ?? "") ?? "Uncategorized"} currencyCode={currencyCode} inventoryLevels={inventoryByProduct.get(product.id) ?? []} isSelected={drawerOpen && selectedProductId === product.id} key={product.id} onSelect={() => chooseProduct(product.id)} product={product} replenishmentRules={rulesByProduct.get(product.id) ?? []} settings={settingsByProduct.get(product.id) ?? []} />)}</tbody>
             </table>
           </div>
-          <div className="divide-y lg:hidden">{visibleProducts.map((product) => <ProductMobileRow activeStoreCount={activeStores.length} categoryName={categoryNames.get(product.category_id ?? "") ?? "Uncategorized"} currencyCode={currencyCode} inventoryLevels={inventoryByProduct.get(product.id) ?? []} isSelected={drawerOpen && selectedProductId === product.id} key={product.id} onSelect={() => chooseProduct(product.id)} product={product} settings={settingsByProduct.get(product.id) ?? []} />)}</div>
+          <div className="divide-y lg:hidden">{visibleProducts.map((product) => <ProductMobileRow activeStoreCount={activeStores.length} categoryName={categoryNames.get(product.category_id ?? "") ?? "Uncategorized"} currencyCode={currencyCode} inventoryLevels={inventoryByProduct.get(product.id) ?? []} isSelected={drawerOpen && selectedProductId === product.id} key={product.id} onSelect={() => chooseProduct(product.id)} product={product} replenishmentRules={rulesByProduct.get(product.id) ?? []} settings={settingsByProduct.get(product.id) ?? []} />)}</div>
           {pageCount > 1 ? <div className="flex items-center justify-between gap-3 border-t px-5 py-3 text-sm"><span className="text-muted-foreground">Page {safePage} of {pageCount}</span><div className="flex gap-2"><Button disabled={safePage === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} size="sm" type="button" variant="outline">Previous</Button><Button disabled={safePage === pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} size="sm" type="button" variant="outline">Next</Button></div></div> : null}
         </> : <div className="px-5 py-12 text-center"><Package aria-hidden="true" className="mx-auto size-8 text-muted-foreground" /><p className="mt-3 font-medium">{products.length === 0 ? "No products yet." : status === "archived" && !query && !categoryId && !productType && !storeId ? "No archived products." : "No products found."}</p><p className="mt-1 text-sm text-muted-foreground">{products.length === 0 ? "Add your first product to start building your catalog." : "Clear the search or choose broader filters."}</p>{filtersAreActive ? <Button className="mt-4" onClick={clearFilters} type="button" variant="outline">Clear filters</Button> : null}</div>}
       </CardContent>
@@ -192,7 +197,7 @@ export function CatalogProductWorkspace(props: ProductWorkspaceProps) {
 
     <Dialog.Root modal={false} onOpenChange={(open) => { if (!open) closeDrawer(); }} open={drawerOpen}>
       <BackOfficeDetailDrawer closeLabel="Close product details" nonBlocking>
-        {selectedProduct ? <ProductDrawer activeCategories={activeCategories} activeStores={activeStores} allProducts={products} canTrackInventory={canTrackInventory} canUseWeightedProducts={canUseWeightedProducts} canViewCost={canViewCost} components={componentsByProduct.get(selectedProduct.id) ?? []} costMinor={costByProduct.get(selectedProduct.id) ?? 0} currencyCode={currencyCode} inventoryLevels={inventoryByProduct.get(selectedProduct.id) ?? []} key={selectedProduct.id} product={selectedProduct} settings={settingsByProduct.get(selectedProduct.id) ?? []} units={unitsByProduct.get(selectedProduct.id) ?? []} variants={variantsByProduct.get(selectedProduct.id) ?? []} /> : null}
+        {selectedProduct ? <ProductDrawer activeCategories={activeCategories} activeStores={activeStores} allProducts={products} canTrackInventory={canTrackInventory} canUseWeightedProducts={canUseWeightedProducts} canViewCost={canViewCost} components={componentsByProduct.get(selectedProduct.id) ?? []} costMinor={costByProduct.get(selectedProduct.id) ?? 0} currencyCode={currencyCode} inventoryLevels={inventoryByProduct.get(selectedProduct.id) ?? []} key={selectedProduct.id} product={selectedProduct} replenishmentRules={rulesByProduct.get(selectedProduct.id) ?? []} settings={settingsByProduct.get(selectedProduct.id) ?? []} units={unitsByProduct.get(selectedProduct.id) ?? []} variants={variantsByProduct.get(selectedProduct.id) ?? []} /> : null}
       </BackOfficeDetailDrawer>
     </Dialog.Root>
   </>;
@@ -206,17 +211,28 @@ type ListRowProps = {
   isSelected: boolean;
   onSelect: () => void;
   product: CatalogWorkspace["products"][number];
+  replenishmentRules: CatalogWorkspace["replenishmentRules"];
   settings: CatalogWorkspace["settings"];
 };
 
-function stockStatus(product: ListRowProps["product"], levels: ListRowProps["inventoryLevels"], settings: ListRowProps["settings"]) {
+function stockStatus(product: ListRowProps["product"], levels: ListRowProps["inventoryLevels"], settings: ListRowProps["settings"], replenishmentRules: ListRowProps["replenishmentRules"]) {
   if (!product.track_inventory) return { attention: null, label: "Not tracked", tone: "text-muted-foreground" };
   const total = levels.reduce((sum, level) => sum + Number(level.quantity), 0);
   if (total < 0) return { attention: "Negative total", label: `${total} on hand`, tone: "text-destructive" };
   const negativeStores = new Set(levels.filter((level) => Number(level.quantity) < 0).map((level) => level.store_id));
   if (negativeStores.size > 0) return { attention: `${negativeStores.size} store${negativeStores.size === 1 ? "" : "s"} negative`, label: `${total} on hand`, tone: "text-destructive" };
   if (total === 0) return { attention: "Out of stock", label: "0 on hand", tone: "text-destructive" };
-  const lowStores = new Set(levels.filter((level) => { const threshold = settings.find((setting) => setting.store_id === level.store_id)?.low_stock_level; return threshold !== null && threshold !== undefined && Number(level.quantity) <= Number(threshold); }).map((level) => level.store_id));
+  const lowStores = new Set(levels.filter((level) => {
+    const rule = replenishmentRules.find((candidate) => candidate.store_id === level.store_id && candidate.variant_id === level.variant_id);
+    const legacyFallback =
+      level.variant_id === null && product.product_type === "simple"
+        ? settings.find(
+            (setting) => setting.store_id === level.store_id,
+          )?.low_stock_level
+        : null;
+    const threshold = rule?.reorder_point ?? legacyFallback;
+    return threshold !== null && threshold !== undefined && Number(level.quantity) <= Number(threshold);
+  }).map((level) => level.store_id));
   return { attention: lowStores.size > 0 ? `${lowStores.size} store${lowStores.size === 1 ? "" : "s"} low` : null, label: `${total} on hand`, tone: lowStores.size > 0 ? "text-amber-700 dark:text-amber-400" : "text-foreground" };
 }
 
@@ -228,8 +244,8 @@ function sellingAvailability(availableStores: number, activeStoreCount: number) 
   return `${availableStores} of ${activeStoreCount} selling`;
 }
 
-function ProductTableRow({ activeStoreCount, categoryName, currencyCode, inventoryLevels, isSelected, onSelect, product, settings }: ListRowProps) {
-  const stock = stockStatus(product, inventoryLevels, settings);
+function ProductTableRow({ activeStoreCount, categoryName, currencyCode, inventoryLevels, isSelected, onSelect, product, replenishmentRules, settings }: ListRowProps) {
+  const stock = stockStatus(product, inventoryLevels, settings, replenishmentRules);
   const availableStores = settings.filter((setting) => setting.is_available).length;
   return <tr aria-label={`Open ${product.name}`} aria-pressed={isSelected} className={`cursor-pointer transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 ${isSelected ? "bg-primary/10 hover:bg-primary/10" : ""}`} id={`catalog-product-${product.id}`} onClick={onSelect} onKeyDown={(event) => { if (event.currentTarget !== event.target || (event.key !== "Enter" && event.key !== " ")) return; event.preventDefault(); onSelect(); }} role="button" tabIndex={0}>
     <td className="px-5 py-3"><div className="flex min-w-0 items-center gap-3">{product.image_url ? <span aria-hidden="true" className="size-10 shrink-0 rounded-lg border bg-cover bg-center" style={{ backgroundImage: `url(${product.image_url})` }} /> : <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-secondary text-primary"><Package aria-hidden="true" className="size-4" /></span>}<span className="min-w-0"><span className="block truncate font-semibold">{product.name}</span><span className="block truncate text-xs text-muted-foreground">{product.sku || product.barcode || productTypeLabel(product.product_type, product.is_composite)}</span></span></div></td>
@@ -238,8 +254,8 @@ function ProductTableRow({ activeStoreCount, categoryName, currencyCode, invento
 }
 
 function ProductMobileRow(props: ListRowProps) {
-  const { activeStoreCount, categoryName, currencyCode, inventoryLevels, isSelected, onSelect, product, settings } = props;
-  const stock = stockStatus(product, inventoryLevels, settings);
+  const { activeStoreCount, categoryName, currencyCode, inventoryLevels, isSelected, onSelect, product, replenishmentRules, settings } = props;
+  const stock = stockStatus(product, inventoryLevels, settings, replenishmentRules);
   const availableStores = settings.filter((setting) => setting.is_available).length;
   return <button aria-pressed={isSelected} className={`w-full px-4 py-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 ${isSelected ? "bg-primary/10" : ""}`} id={`catalog-product-mobile-${product.id}`} onClick={onSelect} type="button"><span className="flex items-start justify-between gap-3"><span className="min-w-0"><span className="block truncate font-semibold">{product.name}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{categoryName} · {productTypeLabel(product.product_type, product.is_composite)}</span></span><Badge variant={product.status === "archived" ? "outline" : "secondary"}>{product.status === "archived" ? "Archived" : "Active"}</Badge></span><span className="mt-3 grid grid-cols-2 gap-3 text-xs text-muted-foreground"><span className="min-w-0">Price<strong className="block truncate text-foreground">{product.product_type === "variable" ? "Varies" : formatMinorMoney(product.price_minor, currencyCode)}</strong></span><span className="min-w-0">Stock<StockSummary stock={stock} /></span><span className="col-span-2 min-w-0">Stores<strong className="block truncate text-foreground" title={sellingAvailability(availableStores, activeStoreCount)}>{sellingAvailability(availableStores, activeStoreCount)}</strong></span></span></button>;
 }
@@ -256,6 +272,7 @@ type ProductDrawerProps = {
   currencyCode: string;
   inventoryLevels: CatalogWorkspace["inventoryLevels"];
   product: CatalogWorkspace["products"][number];
+  replenishmentRules: CatalogWorkspace["replenishmentRules"];
   settings: CatalogWorkspace["settings"];
   units: CatalogWorkspace["units"];
   variants: CatalogWorkspace["variants"];
@@ -342,20 +359,20 @@ function DeleteProductControl({ productId, productName }: { productId: string; p
 }
 
 function ProductInventory(props: ProductDrawerProps) {
-  const stock = stockStatus(props.product, props.inventoryLevels, props.settings);
+  const stock = stockStatus(props.product, props.inventoryLevels, props.settings, props.replenishmentRules);
   return <section className="space-y-5"><div><h3 className="font-semibold">Inventory summary</h3><p className="mt-1 text-sm text-muted-foreground">A light product snapshot. Movement history and stock actions stay in Inventory.</p></div><div className="divide-y rounded-xl border px-4"><SummaryRow label="Tracked" value={props.product.track_inventory ? "Yes" : "No"} /><SummaryRow label="Total on hand" value={stock.label} /><SummaryRow label="Status" value={stock.attention ?? (props.product.track_inventory ? "In stock" : "Not tracked")} /></div><Button nativeButton={false} render={<a href={`/back-office/inventory?search=${encodeURIComponent(props.product.name)}`} />} variant="outline"><Warehouse aria-hidden="true" />View in Inventory</Button></section>;
 }
 
 function ProductStores(props: ProductDrawerProps) {
-  return <section className="space-y-4"><div><ConceptHeading help="A store can use the organization price or a different price, and can have its own low-stock alert." label="Store settings" /><p className="mt-1 text-sm text-muted-foreground">Set store availability, store-specific price, and low-stock alert levels.</p></div>{props.activeStores.map((store) => <StoreSettings key={store.id} product={props.product} currencyCode={props.currencyCode} setting={props.settings.find((setting) => setting.store_id === store.id)} store={store} />)}</section>;
+  return <section className="space-y-4"><div><ConceptHeading help="A store can use the organization price or a different price, with a separate restock intention." label="Store settings" /><p className="mt-1 text-sm text-muted-foreground">Set store availability, store-specific price, and restock intention. Reorder point and target stock are managed in Stock & Restock.</p></div>{props.activeStores.map((store) => <StoreSettings key={store.id} product={props.product} currencyCode={props.currencyCode} setting={props.settings.find((setting) => setting.store_id === store.id)} store={store} />)}</section>;
 }
 
 function StoreSettings({ currencyCode, product, setting, store }: { currencyCode: string; product: ProductDrawerProps["product"]; setting: ProductDrawerProps["settings"][number] | undefined; store: ProductDrawerProps["activeStores"][number] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<CatalogActionResult<unknown> | null>(null);
-  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const form = new FormData(event.currentTarget); setResult(null); startTransition(async () => { const next = await setProductStoreConfigurationAction({ productId: product.id, storeId: store.id, priceOverride: form.get("priceOverride"), lowStockLevel: form.get("lowStockLevel"), restockPolicy: form.get("restockPolicy") }); setResult(next); if (next.ok) router.refresh(); }); };
-  return <form className="rounded-xl border p-4" onSubmit={submit}><div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-semibold">{store.name}</h4><p className="text-xs text-muted-foreground">Default selling price: {formatMinorMoney(product.price_minor, currencyCode)}</p></div><ProductAvailabilityButton isAvailable={setting?.is_available ?? false} productId={product.id} storeId={store.id} storeName={store.name} /></div><div className="mt-4 grid gap-3 sm:grid-cols-3"><label className="grid gap-1.5 text-sm font-medium">Override price<Input defaultValue={setting?.price_override_minor == null ? "" : moneyInput(setting.price_override_minor)} inputMode="decimal" name="priceOverride" placeholder="Use organization default" /></label><label className="grid gap-1.5 text-sm font-medium">Low-stock alert<Input defaultValue={setting?.low_stock_level ?? ""} inputMode="decimal" name="lowStockLevel" placeholder="Optional" /></label><label className="grid gap-1.5 text-sm font-medium">Restock intention<select className={selectClassName} defaultValue={setting?.restock_policy ?? "restock"} name="restockPolicy"><option value="restock">Restock normally</option><option value="do_not_restock">Do not restock</option></select></label></div><p className="mt-3 text-xs text-muted-foreground">“Do not restock” removes this item from restock suggestions at this store. It does not archive the product or change stock history.</p><div className="mt-3 flex flex-wrap items-center gap-3"><Button disabled={isPending} size="sm" type="submit" variant="outline">{isPending ? <LoaderCircle className="animate-spin" /> : null}Save store settings</Button><ResultMessage result={result} /></div></form>;
+  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const form = new FormData(event.currentTarget); setResult(null); startTransition(async () => { const next = await setProductStoreConfigurationAction({ productId: product.id, storeId: store.id, priceOverride: form.get("priceOverride"), restockPolicy: form.get("restockPolicy") }); setResult(next); if (next.ok) router.refresh(); }); };
+  return <form className="rounded-xl border p-4" onSubmit={submit}><div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-semibold">{store.name}</h4><p className="text-xs text-muted-foreground">Default selling price: {formatMinorMoney(product.price_minor, currencyCode)}</p></div><ProductAvailabilityButton isAvailable={setting?.is_available ?? false} productId={product.id} storeId={store.id} storeName={store.name} /></div><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="grid gap-1.5 text-sm font-medium">Override price<Input defaultValue={setting?.price_override_minor == null ? "" : moneyInput(setting.price_override_minor)} inputMode="decimal" name="priceOverride" placeholder="Use organization default" /></label><label className="grid gap-1.5 text-sm font-medium">Restock intention<select className={selectClassName} defaultValue={setting?.restock_policy ?? "restock"} name="restockPolicy"><option value="restock">Restock normally</option><option value="do_not_restock">Do not restock</option></select></label></div><p className="mt-3 text-xs text-muted-foreground">Reorder point and target stock are managed in Stock & Restock. “Do not restock” does not archive the product or change stock history.</p><div className="mt-3 flex flex-wrap items-center gap-3"><Button disabled={isPending} size="sm" type="submit" variant="outline">{isPending ? <LoaderCircle className="animate-spin" /> : null}Save store settings</Button><ResultMessage result={result} /></div></form>;
 }
 
 function ProductUnits(props: ProductDrawerProps) {

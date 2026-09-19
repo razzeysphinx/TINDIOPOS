@@ -427,20 +427,17 @@ export async function setProductStoreConfiguration(
   const parsed = setProductStoreConfigurationSchema.safeParse(input);
   if (!parsed.success) return validationError();
   const supabase = await createClient();
-  const { error } = await supabase.rpc("set_catalog_product_store_configuration_v2", {
+  const { error } = await supabase.rpc("set_catalog_product_store_configuration_v3", {
     target_organization_id: context.organization.id,
     target_product_id: parsed.data.productId,
     target_store_id: parsed.data.storeId,
     target_price_override_minor: (parsed.data.priceOverride
       ? moneyInputToMinor(parsed.data.priceOverride)
       : null) as never,
-    target_low_stock_level: (parsed.data.lowStockLevel
-      ? Number(parsed.data.lowStockLevel)
-      : null) as never,
     target_restock_policy: parsed.data.restockPolicy,
   });
   if (error) return { ok: false, message: databaseMessage(error.code, "Store product settings could not be updated.") };
-  return { ok: true, message: "Store price, low-stock, and restock settings updated." };
+  return { ok: true, message: "Store price and restock settings updated." };
 }
 
 export async function createProductUnit(
@@ -596,9 +593,8 @@ export async function importCatalogCsv(
     is_variable_price: row.isVariablePrice,
     allow_fractional_quantity: row.allowFractionalQuantity,
     price_override_minor: row.priceOverride ? moneyInputToMinor(row.priceOverride) : null,
-    low_stock_level: row.lowStockLevel ? Number(row.lowStockLevel) : null,
   }));
-  const { data, error } = await supabase.rpc("import_catalog_products_v2", {
+  const { data, error } = await supabase.rpc("import_catalog_products_v3", {
     target_organization_id: context.organization.id,
     target_store_ids: parsed.data.storeIds,
     target_rows: rows,

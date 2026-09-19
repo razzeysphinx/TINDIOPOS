@@ -921,7 +921,6 @@ export function CatalogExtensionForms({
         productId: storeProductId,
         storeId,
         priceOverride: form.get("priceOverride"),
-        lowStockLevel: form.get("lowStockLevel"),
         restockPolicy: form.get("restockPolicy"),
       });
       setStoreConfigurationResult(next);
@@ -989,13 +988,13 @@ export function CatalogExtensionForms({
 
   return (
     <section className="grid gap-5 xl:grid-cols-3">
-      <ManagementCard title="Store pricing & stock" description="Override a simple/composite price and set a per-store low-stock threshold." icon={<Warehouse aria-hidden="true" />}>
+      <ManagementCard title="Store pricing & restock" description="Override a simple/composite price and set the store restock intention." icon={<Warehouse aria-hidden="true" />}>
         <form className="grid gap-3" onSubmit={submitStoreConfiguration}>
           <select className={selectClassName} onChange={(event) => setStoreProductId(event.target.value)} value={storeProductId}>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>
           <select className={selectClassName} onChange={(event) => setStoreId(event.target.value)} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select>
           <Input inputMode="decimal" name="priceOverride" placeholder="Store price override (optional)" />
-          <Input inputMode="decimal" name="lowStockLevel" placeholder="Low-stock level (optional)" />
           <select aria-label="Restock intention" className={selectClassName} defaultValue="restock" name="restockPolicy"><option value="restock">Restock normally</option><option value="do_not_restock">Do not restock</option></select>
+          <p className="text-xs text-muted-foreground">Reorder point and target stock are managed in Stock & Restock.</p>
           <Button disabled={isStoreConfigurationPending} type="submit">{isStoreConfigurationPending ? <LoaderCircle className="animate-spin" /> : <Warehouse />} Save settings</Button>
         </form>
         <ResultMessage result={storeConfigurationResult} />

@@ -1,0 +1,96 @@
+{
+  "phase": "14",
+  "requiredPaths": [
+    "scripts/inventory-final-recovery-certification-check.mjs",
+    "scripts/phase-14-migration-rehearsal.mjs",
+    "scripts/phase-14-local-restore-drill.mjs",
+    "docs/recovery/phase-14-manual-certification.md",
+    ".github/workflows/phase-14-final-certification.yml",
+    "playwright.config.ts",
+    "scripts/phase-14-playwright-run.mjs",
+    "scripts/phase-14-browser-evidence.mjs",
+    "tests/e2e/phase-14/fixtures.ts",
+    "tests/e2e/phase-14/evidence.ts",
+    "tests/e2e/phase-14/phase-14-browser.spec.ts"
+  ],
+  "requiredText": [
+    {
+      "path": "scripts/certify-repository.mjs",
+      "text": "test:composite-production"
+    },
+    {
+      "path": "scripts/certify-repository.mjs",
+      "text": "test:phase-12-controller-contract"
+    },
+    {
+      "path": "scripts/certify-repository.mjs",
+      "text": "scripts/composite-production-concurrency-certification.mjs"
+    },
+    {
+      "path": "scripts/certify-repository.mjs",
+      "text": "test:phase-14-final-recovery"
+    },
+    {
+      "path": "scripts/certify-repository.mjs",
+      "text": "test:phase-14-controller-contract"
+    },
+    {
+      "path": "docs/recovery/phase-14-manual-certification.md",
+      "text": "FINAL_MANUAL_STATUS: PASS"
+    },
+    {
+      "path": "scripts/phase-14-migration-rehearsal.mjs",
+      "text": "PHASE 14 MIGRATION REHEARSAL: PASS"
+    },
+    {
+      "path": "scripts/phase-14-local-restore-drill.mjs",
+      "text": "PHASE 14 ISOLATED LOCAL RESTORE DRILL: PASS"
+    },
+    {
+      "path": ".github/workflows/phase-14-final-certification.yml",
+      "text": "pnpm certify"
+    },
+    {
+      "path": ".github/workflows/phase-14-final-certification.yml",
+      "text": "phase-14-migration-rehearsal.mjs"
+    },
+    {
+      "path": ".github/workflows/phase-14-final-certification.yml",
+      "text": "phase-14-local-restore-drill.mjs"
+    },
+    {
+      "path": "scripts/phase-14-playwright-run.mjs",
+      "text": "PHASE 14 PLAYWRIGHT BROWSER CERTIFICATION: PASS"
+    },
+    {
+      "path": "tests/e2e/phase-14/phase-14-browser.spec.ts",
+      "text": "P14-BR-01"
+    },
+    {
+      "path": "tests/e2e/phase-14/phase-14-browser.spec.ts",
+      "text": "P14-BR-20"
+    },
+    {
+      "path": "playwright.config.ts",
+      "text": "http://127.0.0.1:3100"
+    },
+    {
+      "path": "scripts/phase-14-playwright-run.mjs",
+      "text": "TINDIO_E2E_SERVICE_ROLE_KEY"
+    }
+  ],
+  "forbiddenText": [
+    {
+      "path": "docs/recovery/phase-14-manual-certification.md",
+      "text": "FINAL_MANUAL_STATUS: PENDING"
+    },
+    {
+      "path": "docs/recovery/phase-14-manual-certification.md",
+      "text": "| P14-BR-01 | PENDING |"
+    },
+    {
+      "path": "docs/recovery/phase-14-manual-certification.md",
+      "text": "| P14-BR-20 | PENDING |"
+    }
+  ]
+}

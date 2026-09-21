@@ -76,3 +76,45 @@ test("Phase 8 keeps inventory cost retrieval permission-checked and store-scoped
   assert.match(migration, /security definer/);
   assert.match(migration, /set search_path = ''/);
 });
+
+test(
+  "purchase-order operational unit snapshots remain readable without exposing raw cost",
+  async () => {
+    const [
+      grantMigration,
+      inventoryPage,
+    ] = await Promise.all([
+      source(
+        "supabase/migrations/20260921090000_purchase_order_line_operational_snapshot_read_grants.sql",
+      ),
+      source(
+        "src/app/(back-office)/back-office/inventory/page.tsx",
+      ),
+    ]);
+
+    assert.match(
+      grantMigration,
+      /grant select\s*\(\s*purchase_unit_code_snapshot,\s*purchase_unit_factor_to_base\s*\)\s*on table public\.purchase_order_lines\s*to authenticated/is,
+    );
+
+    assert.doesNotMatch(
+      grantMigration,
+      /grant select on table public\.purchase_order_lines to authenticated/i,
+    );
+
+    assert.doesNotMatch(
+      grantMigration,
+      /grant select\s*\([^)]*unit_cost_minor[^)]*\)\s*on table public\.purchase_order_lines/is,
+    );
+
+    assert.match(
+      inventoryPage,
+      /from\("purchase_order_lines"\)[\s\S]{0,500}purchase_unit_code_snapshot[\s\S]{0,500}purchase_unit_factor_to_base/,
+    );
+
+    assert.match(
+      inventoryPage,
+      /rpc\("get_purchase_order_line_costs"/,
+    );
+  },
+);

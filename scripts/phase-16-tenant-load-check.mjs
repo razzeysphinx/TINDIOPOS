@@ -49,6 +49,12 @@ const summary = responses.reduce((counts, status) => {
 }, {});
 
 const unexpectedStatuses = responses.filter((status) => status !== 200 && status !== 429);
+const successfulResponses =
+  summary[200] ?? 0;
+
+const rateLimitedResponses =
+  summary[429] ?? 0;
+
 const elapsedMilliseconds = Math.round(performance.now() - startedAt);
 
 console.log(JSON.stringify({
@@ -62,7 +68,22 @@ if (unexpectedStatuses.length > 0) {
   process.exit(1);
 }
 
-if (requestCount > 3 && !responses.includes(429)) {
-  console.error("Expected at least one 429 after the three-per-hour export limit, but none was returned.");
+if (successfulResponses > 3) {
+  console.error(
+    `Organization-export rate limit admitted ${successfulResponses} successful requests; maximum allowed is 3 per hour.`,
+  );
+
+  process.exit(1);
+}
+
+if (
+  requestCount > 3
+  && rateLimitedResponses
+    < requestCount - 3
+) {
+  console.error(
+    `Expected at least ${requestCount - 3} rate-limited responses for ${requestCount} concurrent requests, but received ${rateLimitedResponses}.`,
+  );
+
   process.exit(1);
 }

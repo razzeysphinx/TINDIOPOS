@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const [migration, actions, schema, workflows, catalogService, catalogData, catalogWorkspace, inventoryPage] = await Promise.all([
+const [migration, actions, schema, workflows, catalogService, catalogData, catalogWorkspace, inventoryPage, checkoutMigration] = await Promise.all([
   source("supabase/migrations/20260918193000_canonical_composite_production.sql"),
   source("src/features/inventory/advanced-inventory-actions.ts"),
   source("src/features/inventory/advanced-inventory-schema.ts"),
@@ -12,6 +12,7 @@ const [migration, actions, schema, workflows, catalogService, catalogData, catal
   source("src/features/catalog/data.ts"),
   source("src/features/catalog/catalog-product-workspace.tsx"),
   source("src/app/(back-office)/back-office/inventory/page.tsx"),
+  source("supabase/migrations/20260921190000_made_to_order_composite_checkout_stock.sql"),
 ]);
 
 test("composite recipe consumption has one explicit mode contract", () => {
@@ -56,4 +57,12 @@ test("production cost and stock posting stay on the canonical inventory ledger",
   assert.match(migration, /'production_run'/);
   assert.match(migration, /'PRODUCTION_COMPLETED'/);
   assert.doesNotMatch(actions, /from\("inventory_levels"\)\.(?:insert|update|delete)/);
+});
+
+test("made-to-order checkout consumes recipe components without parent finished-stock deduction", () => {
+  assert.match(checkoutMigration, /private\.is_made_to_order_composite/);
+  assert.match(checkoutMigration, /private\.consume_made_to_order_composite_sale/);
+  assert.match(checkoutMigration, /elsif tracks_inventory then/);
+  assert.match(checkoutMigration, /private\.checkout_catalog_special_sale/);
+  assert.match(checkoutMigration, /'composite_sale'/);
 });

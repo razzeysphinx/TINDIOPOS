@@ -5,12 +5,13 @@ import test from "node:test";
 const root = new URL("..", import.meta.url);
 const source = (path) => readFile(new URL(path, root), "utf8");
 
-const [terminal, warning, service, settings, migration] = await Promise.all([
+const [terminal, warning, service, settings, migration, madeToOrderCheckoutMigration] = await Promise.all([
   source("src/features/pos/pos-terminal.tsx"),
   source("src/features/checkout/negative-stock-warning.tsx"),
   source("src/features/checkout/checkout-service.ts"),
   source("src/features/inventory/inventory-integrity-workflows.tsx"),
   source("supabase/migrations/20260903084457_pos_negative_stock_preflight.sql"),
+  source("supabase/migrations/20260921190000_made_to_order_composite_checkout_stock.sql"),
 ]);
 
 test("Charge performs a fresh server-side stock check before payment", () => {
@@ -43,4 +44,14 @@ test("cart warnings are consolidated and settings reuse the three existing value
   assert.match(settings, /value="allow">Allow sale without warning/);
   assert.match(migration, /inventory_policies/);
   assert.doesNotMatch(migration, /negative_stock_policy_v2|pos_stock_warning_mode|new_negative_policy/);
+});
+
+test("made-to-order composites validate recipe stock instead of finished stock", () => {
+  assert.match(madeToOrderCheckoutMigration, /composite_inventory_mode = 'made_to_order'/);
+  assert.match(madeToOrderCheckoutMigration, /made_to_order_requirements/);
+  assert.match(madeToOrderCheckoutMigration, /recipe\.quantity_per_composite/);
+  assert.match(madeToOrderCheckoutMigration, /private\.consume_made_to_order_composite_sale/);
+  assert.match(madeToOrderCheckoutMigration, /private\.checkout_sale_v1/);
+  assert.match(madeToOrderCheckoutMigration, /private\.checkout_catalog_special_sale/);
+  assert.match(madeToOrderCheckoutMigration, /'composite_sale'/);
 });

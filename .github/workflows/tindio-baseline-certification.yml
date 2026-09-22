@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - TINDIO-PREPRODUCTION
-      - "mobile/**"
-      - "migration/**"
   pull_request:
     branches:
       - TINDIO-PREPRODUCTION

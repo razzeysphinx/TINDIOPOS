@@ -8,12 +8,14 @@ const [
   offlineSync,
   checkoutService,
   catalogRoute,
+  posContract,
   inventoryPage,
   offlineDatabaseTest,
 ] = await Promise.all([
   source("../src/features/offline/offline-sync.ts"),
   source("../src/features/checkout/checkout-service.ts"),
   source("../src/app/api/pos/catalog/route.ts"),
+  source("../src/contracts/pos-v1.ts"),
   source("../src/app/(back-office)/back-office/inventory/page.tsx"),
   source("../supabase/tests/database/improvement_13_offline_sync_foundation.test.sql"),
 ]);
@@ -39,7 +41,17 @@ test("the authoritative checkout still supplies exactly-once replay protection",
 test("POS catalogue loading stays server-authorized and page-bounded", () => {
   assert.match(catalogRoute, /hasPermission\(context, "pos\.access"\)/);
   assert.match(catalogRoute, /hasPermission\(context, "sales\.create"\)/);
-  assert.match(catalogRoute, /max\(24\)/);
+  assert.match(
+    catalogRoute,
+    /posCatalogQuerySchema as catalogRequestSchema/,
+    "POS catalogue route must consume the canonical shared bounded query contract",
+  );
+
+  assert.match(
+    posContract,
+    /limit:[\s\S]*?\.max\(24\)/,
+    "canonical POS catalogue contract must keep the page limit bounded at 24",
+  );
   assert.match(catalogRoute, /target_offset: parsed\.data\.offset/);
   assert.match(catalogRoute, /target_limit: parsed\.data\.limit/);
   assert.match(catalogRoute, /hasMore: items\.length === parsed\.data\.limit/);

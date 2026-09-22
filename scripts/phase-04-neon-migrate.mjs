@@ -134,6 +134,16 @@ function remoteSourceUrl() {
     );
   }
 
+  if (
+    process.env
+      .TINDIO_PHASE_04_WRITE_FREEZE_CONFIRMED
+    !== "YES"
+  ) {
+    fail(
+      "Remote cutover requires an explicit PREPRODUCTION write freeze. Set TINDIO_PHASE_04_WRITE_FREEZE_CONFIRMED=YES only after confirming no PREPRODUCTION merchant/test writes can occur during the copy.",
+    );
+  }
+
   const value =
     process.env
       .TINDIO_SOURCE_DATABASE_URL;
@@ -141,6 +151,48 @@ function remoteSourceUrl() {
   if (!value) {
     fail(
       "TINDIO_SOURCE_DATABASE_URL is required for remote cutover.",
+    );
+  }
+
+  const parsed =
+    new URL(
+      value,
+    );
+
+  const hostname =
+    parsed.hostname
+      .replace(
+        /^\[/,
+        "",
+      )
+      .replace(
+        /\]$/,
+        "",
+      )
+      .toLowerCase();
+
+  if (
+    [
+      "localhost",
+      "127.0.0.1",
+      "::1",
+      "host.docker.internal",
+    ].includes(
+      hostname,
+    )
+  ) {
+    fail(
+      "Remote cutover source may not be the local Supabase database.",
+    );
+  }
+
+  if (
+    hostname.endsWith(
+      ".neon.tech",
+    )
+  ) {
+    fail(
+      "Remote cutover source unexpectedly points to Neon. Refusing possible source/target reversal.",
     );
   }
 
@@ -276,6 +328,28 @@ select
       ? "TINDIO PHASE 04 NEON CUTOVER"
       : "TINDIO PHASE 04 NEON REHEARSAL",
   );
+
+  const countKeys = [
+    "profiles",
+    "organizations",
+    "stores",
+    "employees",
+    "products",
+    "inventory_levels",
+    "inventory_movements",
+    "sales",
+    "payments",
+    "receipts",
+    "identity_links",
+  ];
+
+  const sourceEvidenceBefore =
+    JSON.parse(
+      runSql(
+        source,
+        evidenceSql(),
+      ),
+    );
 
   console.log(
     "Installing Neon compatibility roles...",
@@ -452,7 +526,7 @@ select
     data,
   );
 
-  const sourceEvidence =
+  const sourceEvidenceAfter =
     JSON.parse(
       runSql(
         source,
@@ -468,19 +542,17 @@ select
       ),
     );
 
-  const countKeys = [
-    "profiles",
-    "organizations",
-    "stores",
-    "employees",
-    "products",
-    "inventory_levels",
-    "inventory_movements",
-    "sales",
-    "payments",
-    "receipts",
-    "identity_links",
-  ];
+
+  for (
+    const key
+    of countKeys
+  ) {
+    assert.equal(
+      sourceEvidenceAfter[key],
+      sourceEvidenceBefore[key],
+      `PREPRODUCTION source changed during the approved copy window: ${key}`,
+    );
+  }
 
   for (
     const key
@@ -488,7 +560,7 @@ select
   ) {
     assert.equal(
       targetEvidence[key],
-      sourceEvidence[key],
+      sourceEvidenceAfter[key],
       `${key} row count differs between source and Neon target`,
     );
   }
@@ -513,7 +585,8 @@ select
             ? "cutover"
             : "rehearsal",
 
-        sourceEvidence,
+        sourceEvidenceBefore,
+        sourceEvidenceAfter,
         targetEvidence,
       },
       null,

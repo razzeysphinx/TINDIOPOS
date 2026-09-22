@@ -6,7 +6,7 @@ import { receiveStockRequestSchema } from "@/features/inventory/supply-chain-sch
 import type { BusinessContext } from "@/lib/auth/dal";
 import { postgresCodeMessage, validationFailure } from "@/lib/server/db-errors";
 import type { Json } from "@/lib/supabase/database.types";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 export type PosTransferResult<T> =
   | { ok: true; message: string; data?: T }
@@ -50,7 +50,7 @@ export async function receivePosStockTransfer({ context, input }: { context: Bus
   const parsed = receiveStockTransferSchema.safeParse(input);
   if (!parsed.success) return validationFailure();
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("receive_stock_transfer", {
     target_organization_id: context.organization.id,
     target_stock_transfer_id: parsed.data.stockTransferId,
@@ -73,7 +73,7 @@ export async function receivePosStockRequest({ context, input }: { context: Busi
   }
   const parsed = receiveStockRequestSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Check the highlighted replenishment details and try again." };
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("receive_stock_request", {
     target_organization_id: context.organization.id,
     target_stock_request_id: parsed.data.stockRequestId,

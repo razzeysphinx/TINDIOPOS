@@ -4,7 +4,7 @@ import { receiptDeliverySchema } from "@/features/receipts/improvement-6-schema"
 import { refundSaleSchema, type RefundSaleValues } from "@/features/receipts/refund-schema";
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 export type RefundSaleActionResult =
   | {
@@ -58,7 +58,7 @@ export async function refundSale({
   }
 
   const data = parsed.data satisfies RefundSaleValues;
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data: refund, error } = await supabase.rpc("refund_sale", {
     target_organization_id: context.organization.id,
     target_sale_id: data.saleId,
@@ -103,7 +103,7 @@ export async function queueReceiptDelivery({
   const parsed = receiptDeliverySchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Enter a valid recipient email address." };
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("queue_receipt_delivery", {
     target_organization_id: context.organization.id,
     target_receipt_id: parsed.data.receiptId,

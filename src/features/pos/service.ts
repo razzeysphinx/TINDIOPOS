@@ -3,7 +3,7 @@ import "server-only";
 import { favoriteTileSchema } from "@/features/pos/pos-schema";
 import type { PosFavoriteTileActionResult } from "@/features/pos/pos-types";
 import type { BusinessContext } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 export async function setPosFavoriteTile({
   context,
@@ -17,7 +17,7 @@ export async function setPosFavoriteTile({
     return { ok: false, message: "Choose a product in one of your assigned stores." };
   }
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("set_pos_favorite_tile", {
     target_organization_id: context.organization.id,
     target_store_id: parsed.data.storeId,

@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { hasPermission } from "@/lib/auth/dal";
 import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 const schema = z.object({ product: z.string().uuid(), store: z.string().uuid() });
 export async function GET(request: NextRequest) {
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   if (!hasPermission(context, "pos.access") || !hasPermission(context, "sales.create")) return NextResponse.json({ error: "POS access is not permitted." }, { status: 403 });
   const parsed = schema.safeParse({ product: request.nextUrl.searchParams.get("product"), store: request.nextUrl.searchParams.get("store") });
   if (!parsed.success || !context.storeIds.includes(parsed.data.store)) return NextResponse.json({ error: "The requested product is unavailable." }, { status: 400 });
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const database = supabase as unknown as { rpc: (name: string, args: unknown) => Promise<any> };
   const { data, error } = await database.rpc("get_pos_product_modifiers", {
     target_organization_id: context.organization.id,

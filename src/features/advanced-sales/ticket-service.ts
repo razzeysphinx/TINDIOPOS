@@ -5,7 +5,7 @@ import { z } from "zod";
 import { posDeviceCredentialSchema, posDeviceRequestHeaders } from "@/features/devices/device-schema";
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 const cartLineSchema = z.object({
   productId: z.uuid(),
@@ -133,7 +133,7 @@ export async function saveOpenTicket({ context, input }: { context: BusinessCont
   }
 
   const data = parsed.data;
-  const supabase = await createClient({ headers: posDeviceRequestHeaders(data.device) });
+  const supabase = await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(data.device) });
   const { data: ticket, error } = await supabase.rpc("save_open_ticket_v2", {
     target_organization_id: context.organization.id,
     target_store_id: data.storeId,
@@ -153,7 +153,7 @@ export async function saveOpenTicket({ context, input }: { context: BusinessCont
 export async function cancelOpenTicket({ context, input }: { context: BusinessContext; input: unknown }): Promise<TicketMutationResult> {
   const parsed = cancelSchema.safeParse(input);
   if (!hasTicketContext(context) || !parsed.success) return { ok: false, message: "This ticket is unavailable." };
-  const database = await createClient({ headers: posDeviceRequestHeaders(parsed.data.device) }) as unknown as {
+  const database = await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(parsed.data.device) }) as unknown as {
     rpc: (name: string, args: Record<string, string>) => Promise<{ error: { code?: string; message?: string } | null }>;
   };
   const { error } = await database.rpc("cancel_open_ticket", {
@@ -167,7 +167,7 @@ export async function cancelOpenTicket({ context, input }: { context: BusinessCo
 export async function moveOpenTicketLines({ context, input }: { context: BusinessContext; input: unknown }): Promise<TicketMutationResult> {
   const parsed = moveSchema.safeParse(input);
   if (!hasTicketContext(context) || !parsed.success) return { ok: false, message: "Choose valid source, destination, and ticket lines." };
-  const { error } = await (await createClient({ headers: posDeviceRequestHeaders(parsed.data.device) })).rpc("move_open_ticket_lines", {
+  const { error } = await (await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(parsed.data.device) })).rpc("move_open_ticket_lines", {
     target_organization_id: context.organization.id,
     target_source_ticket_id: parsed.data.sourceTicketId,
     target_destination_ticket_id: parsed.data.destinationTicketId,
@@ -180,7 +180,7 @@ export async function moveOpenTicketLines({ context, input }: { context: Busines
 export async function splitOpenTicket({ context, input }: { context: BusinessContext; input: unknown }): Promise<TicketActionResult> {
   const parsed = splitSchema.safeParse(input);
   if (!hasTicketContext(context) || !parsed.success) return { ok: false, message: "Enter a name and choose valid ticket items." };
-  const { data: ticketId, error } = await (await createClient({ headers: posDeviceRequestHeaders(parsed.data.device) })).rpc("split_open_ticket", {
+  const { data: ticketId, error } = await (await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(parsed.data.device) })).rpc("split_open_ticket", {
     target_organization_id: context.organization.id,
     target_source_ticket_id: parsed.data.sourceTicketId,
     target_label: parsed.data.label,
@@ -193,7 +193,7 @@ export async function splitOpenTicket({ context, input }: { context: BusinessCon
 export async function mergeOpenTickets({ context, input }: { context: BusinessContext; input: unknown }): Promise<TicketMutationResult> {
   const parsed = mergeSchema.safeParse(input);
   if (!hasTicketContext(context) || !parsed.success) return { ok: false, message: "Choose two different open tickets." };
-  const { error } = await (await createClient({ headers: posDeviceRequestHeaders(parsed.data.device) })).rpc("merge_open_tickets", {
+  const { error } = await (await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(parsed.data.device) })).rpc("merge_open_tickets", {
     target_organization_id: context.organization.id,
     target_source_ticket_id: parsed.data.sourceTicketId,
     target_destination_ticket_id: parsed.data.destinationTicketId,

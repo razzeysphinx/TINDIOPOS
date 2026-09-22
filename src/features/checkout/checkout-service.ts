@@ -18,7 +18,7 @@ import type {
 } from "@/features/checkout/checkout-types";
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 type StockValidationRpc = {
   rpc: (name: "validate_pos_cart_stock", args: {
@@ -74,7 +74,7 @@ export async function validateCartStock(
     return { ok: false, message: "You are not assigned to this store." };
   }
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data: result, error } = await (supabase as unknown as StockValidationRpc).rpc(
     "validate_pos_cart_stock",
     {
@@ -312,7 +312,7 @@ export async function completeCheckout(
     };
   }
 
-  const supabase = await createClient({ headers: posDeviceRequestHeaders(wrapped.success ? wrapped.data.device : null) });
+  const supabase = await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(wrapped.success ? wrapped.data.device : null) });
   if (options.guardOfflineTotal) {
     const payment = data.payments[0];
     if (!payment || data.payments.length !== 1 || !payment.tenderedAmount) {

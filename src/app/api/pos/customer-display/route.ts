@@ -4,7 +4,7 @@ import { z } from "zod";
 import { customerDisplayStateSchema } from "@/features/customer-display/customer-display-types";
 import { hasPermission } from "@/lib/auth/dal";
 import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 const updateSchema = z.object({
   sessionId: z.uuid(),
@@ -28,7 +28,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "The customer display update is invalid." }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { error } = await supabase.rpc("set_customer_display_state", {
     target_organization_id: context.organization.id,
     target_session_id: parsed.data.sessionId,

@@ -115,7 +115,11 @@ test("checkout keeps session-derived organization scope and capability-derived s
   assert.match(authDal, /export function hasOrganizationWideStoreScope/);
   assert.match(authDal, /context\.permissions\.includes\("stores\.manage"\)/);
   assert.match(authDal, /\.from\("stores"\)/);
-  assert.match(authDal, /storeIds = \[\.\.\.new Set\(\(organizationStores \?\? \[\]\)\.map/);
+  assert.match(
+    authDal,
+    /storeIds\s*=\s*\[\s*\.\.\.new Set\(\s*\(organizationStores\s*\?\?\s*\[\]\)\s*\.map\(/,
+    "organization-wide store scope remains derived from organization stores",
+  );
   assert.match(backOfficeStoreScope, /hasOrganizationWideStoreScope\(context\)/);
 });
 
@@ -203,8 +207,16 @@ test("device validation rejects a caller-supplied organization that differs from
 });
 
 test("every authenticated export and offline API has its capability or service authorization boundary", () => {
-  assert.match(offlineCheckoutRoute, /getPosApiBusinessContext\(request\)/);
-  assert.match(offlineCheckoutRoute, /completeCheckout\(context, input, \{ guardOfflineTotal: true \}\)/);
+  assert.match(
+    offlineCheckoutRoute,
+    /getPosApiBusinessContext\(\s*request\s*,?\s*\)/,
+    "offline checkout resolves the authenticated POS API business context",
+  );
+  assert.match(
+    offlineCheckoutRoute,
+    /completeCheckout\(\s*context\s*,\s*input\s*,\s*\{\s*guardOfflineTotal:\s*true\s*,?\s*\}\s*,?\s*\)/,
+    "offline checkout keeps the authoritative total guard enabled",
+  );
 
   for (const [name, content, capability] of [
     ["report export", reportsExportRoute, "reports.view"],

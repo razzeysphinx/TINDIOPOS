@@ -9,7 +9,7 @@ import {
   type BusinessContext,
 } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 import type {
   PosActiveShift,
   PosCatalogItem,
@@ -182,7 +182,7 @@ export async function loadPosWorkspace(
   const canReceiveIncomingTransfers = features.inventory
     && features.transfers
     && hasPermission(context, "inventory.transfer.receive");
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const database = supabase as unknown as { from: (table: string) => any };
   const [storesResult, categoriesResult, registersResult, paymentMethodsResult, storePaymentMethodsResult, openShiftsResult, loyaltyProgramResult, discountsResult, taxRatesResult, diningOptionsResult, ticketTemplatesResult, customerDisplaySessionsResult, timeClockResult, incomingTransfersResult] = await Promise.all([
     supabase
@@ -472,7 +472,7 @@ export async function loadPosReceiptHistory(
   context: BusinessContext,
   input: { beforeReceiptNumber?: number; query?: string } = {},
 ) {
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const database = supabase as unknown as PosReceiptRpc;
   const { data, error } = await database.rpc("get_pos_receipt_history", {
     target_organization_id: context.organization.id,
@@ -489,7 +489,7 @@ export async function loadPosReceiptDetail(
   context: BusinessContext,
   receiptId: string,
 ) {
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const database = supabase as unknown as PosReceiptRpc;
   const { data, error } = await database.rpc("get_pos_receipt_detail", {
     target_organization_id: context.organization.id,

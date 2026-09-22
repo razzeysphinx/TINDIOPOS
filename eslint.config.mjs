@@ -36,6 +36,8 @@ const eslintConfig = defineConfig([
       "src/features/**/advanced-inventory-actions.ts",
       "src/features/**/data.ts",
       "src/features/**/service.ts",
+      "src/features/**/ticket-service.ts",
+      "src/features/**/pos-transfer-service.ts",
       // Backend modules whose filename does not follow the data/service
       // convention but which carry "import \"server-only\"":
       "src/features/reports/reporting.ts",
@@ -76,6 +78,8 @@ const eslintConfig = defineConfig([
     files: [
       "src/features/**/data.ts",
       "src/features/**/service.ts",
+      "src/features/**/ticket-service.ts",
+      "src/features/**/pos-transfer-service.ts",
       "src/lib/server/**/*.ts",
     ],
     rules: {

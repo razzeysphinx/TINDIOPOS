@@ -9,7 +9,7 @@ revoke all on schema private from public;
 -- PostgreSQL database dump
 --
 
--- \restrict HxqQunYeCe6o9vZC3YP1O3i9lTrohO2QcuyQzNFxZ3K7wKIuAwifBdhrCnjthAm
+-- \restrict jq1B1nOOlzi9a1e5NF8ApzgvLNTpIjj7YaZqq1V692gaczQIAsVWeuu92N6R6iH
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -143,42 +143,71 @@ declare
   request public.approval_requests%rowtype;
   required_permission text;
 begin
-  actor_employee_id := private.current_employee_id(target_organization_id);
+  actor_employee_id :=
+    private.current_employee_id(target_organization_id);
+
   if actor_employee_id is null then
-    raise exception 'An active employee is required.' using errcode = '42501';
+    raise exception
+      'An active employee is required.'
+      using errcode = '42501';
   end if;
 
-  select * into request
+  select *
+  into request
   from public.approval_requests approval_request
   where approval_request.id = target_approval_request_id
-    and approval_request.organization_id = target_organization_id
+    and approval_request.organization_id =
+      target_organization_id
   for update;
 
   if request.id is null
-    or request.requested_by_employee_id is distinct from actor_employee_id
-    or request.operation_code is distinct from target_operation_code
-    or request.request_payload is distinct from target_expected_payload then
-    raise exception 'The manager approval does not match this operation.' using errcode = '42501';
+    or request.requested_by_employee_id
+      is distinct from actor_employee_id
+    or request.operation_code
+      is distinct from target_operation_code
+    or request.request_payload
+      is distinct from target_expected_payload
+  then
+    raise exception
+      'The manager approval does not match this operation.'
+      using errcode = '42501';
   end if;
 
-  required_permission := private.approval_operation_permission(target_operation_code);
+  required_permission :=
+    private.approval_operation_permission(
+      target_operation_code
+    );
+
   if required_permission is null then
-    raise exception 'This approval operation is not supported.' using errcode = '23514';
+    raise exception
+      'This approval operation is not supported.'
+      using errcode = '23514';
   end if;
 
   if request.status = 'CONSUMED' then
+
     if target_execution_idempotency_key is null
-      or request.execution_idempotency_key is distinct from target_execution_idempotency_key then
-      raise exception 'This manager approval was already used.' using errcode = '23514';
+      or request.execution_idempotency_key
+        is distinct from target_execution_idempotency_key
+    then
+      raise exception
+        'This manager approval was already used.'
+        using errcode = '23514';
     end if;
-  elsif request.status = 'APPROVED' and request.expires_at > now() then
+
+  elsif request.status = 'APPROVED'
+    and request.expires_at > now()
+  then
+
     update public.approval_requests
     set
       status = 'CONSUMED',
       consumed_at = now(),
-      execution_idempotency_key = target_execution_idempotency_key,
+      execution_idempotency_key =
+        target_execution_idempotency_key,
       updated_at = now()
-    where id = request.id and organization_id = request.organization_id;
+    where id = request.id
+      and organization_id = request.organization_id;
 
     perform private.write_audit_log(
       target_organization_id,
@@ -193,13 +222,32 @@ begin
       request.reason,
       '{}'::jsonb
     );
+
   else
-    raise exception 'The manager approval is no longer valid.' using errcode = '42501';
+
+    raise exception
+      'The manager approval is no longer valid.'
+      using errcode = '42501';
+
   end if;
 
-  perform set_config('tindio.approval_profile_id', (select auth.uid())::text, true);
-  perform set_config('tindio.approval_organization_id', target_organization_id::text, true);
-  perform set_config('tindio.approval_permission', required_permission, true);
+  perform set_config(
+    'tindio.approval_profile_id',
+    (select private.current_profile_id())::text,
+    true
+  );
+
+  perform set_config(
+    'tindio.approval_organization_id',
+    target_organization_id::text,
+    true
+  );
+
+  perform set_config(
+    'tindio.approval_permission',
+    required_permission,
+    true
+  );
 end;
 $$;
 
@@ -596,6 +644,82 @@ COMMENT ON FUNCTION "private"."approval_operation_permission"("target_operation_
 
 
 --
+-- Name: approve_inventory_transfer("uuid", "uuid", "text", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_id uuid;
+  existing_operation private.stock_transfer_operations%rowtype;
+  normalized_note text;
+  operation_payload jsonb;
+  transfer public.stock_transfers%rowtype;
+begin
+  if target_operation_id is null then
+    raise exception 'A stable approval operation ID is required.' using errcode = '23514';
+  end if;
+  if target_note is not null and char_length(btrim(target_note)) > 500 then
+    raise exception 'The transfer note is too long.' using errcode = '23514';
+  end if;
+  select * into transfer from public.stock_transfers item
+  where item.organization_id = target_organization_id and item.id = target_stock_transfer_id;
+  if transfer.id is null or transfer.stock_request_id is not null then
+    raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514';
+  end if;
+  if (select auth.uid()) is null
+     or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
+    raise exception 'Transfer send permission is required.' using errcode = '42501';
+  end if;
+  actor_id := private.inventory_actor(target_organization_id, transfer.source_store_id);
+  if actor_id is null then
+    raise exception 'An active employee assigned to the source store is required.' using errcode = '42501';
+  end if;
+
+  normalized_note := nullif(btrim(target_note), '');
+  operation_payload := jsonb_build_object('stock_transfer_id', target_stock_transfer_id, 'note', normalized_note);
+  perform pg_advisory_xact_lock(hashtextextended(target_organization_id::text || ':' || target_operation_id::text, 0));
+  select * into existing_operation
+  from private.stock_transfer_operations operation
+  where operation.organization_id = target_organization_id and operation.operation_id = target_operation_id
+  for update;
+  if found then
+    if existing_operation.command = 'approve' and existing_operation.normalized_payload = operation_payload then
+      return existing_operation.result_id;
+    end if;
+    raise exception 'This operation ID is already assigned to a different transfer command.' using errcode = '23505';
+  end if;
+
+  select * into transfer from public.stock_transfers item
+  where item.organization_id = target_organization_id and item.id = target_stock_transfer_id
+  for update;
+  if transfer.status <> 'submitted' then
+    raise exception 'Only a submitted transfer can be approved.' using errcode = '23514';
+  end if;
+
+  update public.stock_transfers set status = 'approved' where id = transfer.id;
+  insert into private.stock_transfer_operations (
+    organization_id, stock_transfer_id, operation_id, command, normalized_payload,
+    from_status, to_status, actor_employee_id, result_id, note
+  ) values (
+    target_organization_id, transfer.id, target_operation_id, 'approve', operation_payload,
+    'submitted', 'approved', actor_id, transfer.id, normalized_note
+  );
+  perform private.write_audit_log(
+    target_organization_id, 'STOCK_TRANSFER_APPROVED', 'inventory.transfer.send', actor_id,
+    null, transfer.source_store_id, null, null, null, normalized_note,
+    jsonb_build_object('stock_transfer_id', transfer.id, 'transfer_number', transfer.transfer_number, 'operation_id', target_operation_id)
+  );
+  return transfer.id;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
 -- Name: approve_manager_approval("uuid", "uuid", "text", "text"); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -977,6 +1101,64 @@ $$;
 
 
 ALTER FUNCTION "private"."audit_cash_movement"() OWNER TO "postgres";
+
+--
+-- Name: audit_inventory_count_line_saved(); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."audit_inventory_count_line_saved"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  count_document public.inventory_counts%rowtype;
+  actor_id uuid;
+begin
+  if new.counted_quantity is null then
+    return new;
+  end if;
+
+  select count_row.*
+  into count_document
+  from public.inventory_counts count_row
+  where count_row.id = new.inventory_count_id
+    and count_row.organization_id = new.organization_id;
+
+  actor_id := private.inventory_count_actor(new.organization_id, count_document.store_id);
+
+  perform private.write_audit_log(
+    new.organization_id,
+    'INVENTORY_COUNT_LINE_SAVED',
+    'inventory.count',
+    actor_id,
+    null,
+    count_document.store_id,
+    null,
+    null,
+    null,
+    'Physical count quantity saved',
+    jsonb_build_object(
+      'inventory_count_id', new.inventory_count_id,
+      'count_number', count_document.count_number,
+      'inventory_count_line_id', new.id,
+      'counted_quantity', new.counted_quantity,
+      'reconciled_expected_quantity', new.reconciled_expected_quantity
+    )
+  );
+
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."audit_inventory_count_line_saved"() OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "audit_inventory_count_line_saved"(); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."audit_inventory_count_line_saved"() IS 'Records immutable audit evidence whenever a manual or CSV physical count quantity is saved.';
+
 
 --
 -- Name: audit_inventory_movement(); Type: FUNCTION; Schema: private; Owner: postgres
@@ -1497,13 +1679,27 @@ CREATE OR REPLACE FUNCTION "private"."can_view_employee_profile"("target_profile
     SET "search_path" TO ''
     AS $$
   select
-    target_profile_id = (select auth.uid())
+    target_profile_id =
+      (select private.current_profile_id())
+
     or exists (
       select 1
       from public.employees target_employee
       where target_employee.profile_id = target_profile_id
-        and (select private.has_permission(target_employee.organization_id, 'employees.manage'))
-        and (select private.can_access_employee_store_scope(target_employee.organization_id, target_employee.id))
+
+        and (
+          select private.has_permission(
+            target_employee.organization_id,
+            'employees.manage'
+          )
+        )
+
+        and (
+          select private.can_access_employee_store_scope(
+            target_employee.organization_id,
+            target_employee.id
+          )
+        )
     );
 $$;
 
@@ -1522,26 +1718,135 @@ declare
   count_document public.inventory_counts%rowtype;
   actor_id uuid;
 begin
-  select count_row.* into count_document from public.inventory_counts count_row
-  where count_row.id = target_inventory_count_id and count_row.organization_id = target_organization_id
+  select count_row.*
+  into count_document
+  from public.inventory_counts count_row
+  where count_row.id = target_inventory_count_id
+    and count_row.organization_id = target_organization_id
   for update;
-  if count_document.id is null or count_document.status in ('posted', 'completed', 'cancelled') then
-    raise exception 'Only an open count can be cancelled.' using errcode = '23514';
+
+  if count_document.id is null
+    or count_document.status not in ('draft', 'in_progress', 'ready_for_review') then
+    raise exception 'Only a canonical active count can be cancelled.' using errcode = '23514';
   end if;
-  actor_id := private.inventory_count_actor(target_organization_id, count_document.store_id, array['inventory.count.finalize']::text[]);
+
+  actor_id := private.inventory_count_actor(
+    target_organization_id,
+    count_document.store_id,
+    array['inventory.count.finalize']::text[]
+  );
+
   update public.inventory_counts
-  set status = 'cancelled', note = coalesce(nullif(btrim(target_note), ''), note), updated_at = now()
+  set status = 'cancelled',
+      note = coalesce(nullif(btrim(target_note), ''), note),
+      updated_at = clock_timestamp()
   where id = target_inventory_count_id;
+
   perform private.write_audit_log(
-    target_organization_id, 'INVENTORY_COUNT_CANCELLED', 'inventory.count', actor_id,
-    null, count_document.store_id, null, null, null, target_note,
-    jsonb_build_object('inventory_count_id', count_document.id, 'count_number', count_document.count_number)
+    target_organization_id,
+    'INVENTORY_COUNT_CANCELLED',
+    'inventory.count',
+    actor_id,
+    null,
+    count_document.store_id,
+    null,
+    null,
+    null,
+    target_note,
+    jsonb_build_object(
+      'inventory_count_id', count_document.id,
+      'count_number', count_document.count_number
+    )
   );
 end;
 $$;
 
 
 ALTER FUNCTION "private"."cancel_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_note" "text") OWNER TO "postgres";
+
+--
+-- Name: cancel_inventory_transfer("uuid", "uuid", "text", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_id uuid;
+  existing_operation private.stock_transfer_operations%rowtype;
+  normalized_note text;
+  operation_payload jsonb;
+  required_capability text;
+  transfer public.stock_transfers%rowtype;
+begin
+  if target_operation_id is null then
+    raise exception 'A stable cancellation operation ID is required.' using errcode = '23514';
+  end if;
+  if target_note is not null and char_length(btrim(target_note)) > 500 then
+    raise exception 'The transfer cancellation note is too long.' using errcode = '23514';
+  end if;
+  select * into transfer from public.stock_transfers item
+  where item.organization_id = target_organization_id and item.id = target_stock_transfer_id;
+  if transfer.id is null or transfer.stock_request_id is not null then
+    raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514';
+  end if;
+  if (select auth.uid()) is null
+     or not (
+       (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.create'))
+       or (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send'))
+     ) then
+    raise exception 'Transfer cancellation permission is required.' using errcode = '42501';
+  end if;
+  actor_id := private.inventory_actor(target_organization_id, transfer.source_store_id);
+  if actor_id is null then
+    raise exception 'An active employee assigned to the source store is required.' using errcode = '42501';
+  end if;
+
+  normalized_note := nullif(btrim(target_note), '');
+  operation_payload := jsonb_build_object('stock_transfer_id', target_stock_transfer_id, 'note', normalized_note);
+  perform pg_advisory_xact_lock(hashtextextended(target_organization_id::text || ':' || target_operation_id::text, 0));
+  select * into existing_operation
+  from private.stock_transfer_operations operation
+  where operation.organization_id = target_organization_id and operation.operation_id = target_operation_id
+  for update;
+  if found then
+    if existing_operation.command = 'cancel' and existing_operation.normalized_payload = operation_payload then
+      return existing_operation.result_id;
+    end if;
+    raise exception 'This operation ID is already assigned to a different transfer command.' using errcode = '23505';
+  end if;
+
+  select * into transfer from public.stock_transfers item
+  where item.organization_id = target_organization_id and item.id = target_stock_transfer_id
+  for update;
+  if transfer.status not in ('draft', 'submitted', 'approved') then
+    raise exception 'Only a pre-dispatch transfer can be cancelled.' using errcode = '23514';
+  end if;
+  required_capability := case when transfer.status = 'approved' then 'inventory.transfer.send' else 'inventory.transfer.create' end;
+  if not (select private.has_inventory_capability(target_organization_id, required_capability)) then
+    raise exception 'The required transfer cancellation permission is missing.' using errcode = '42501';
+  end if;
+
+  update public.stock_transfers set status = 'cancelled' where id = transfer.id;
+  insert into private.stock_transfer_operations (
+    organization_id, stock_transfer_id, operation_id, command, normalized_payload,
+    from_status, to_status, actor_employee_id, result_id, note
+  ) values (
+    target_organization_id, transfer.id, target_operation_id, 'cancel', operation_payload,
+    transfer.status, 'cancelled', actor_id, transfer.id, normalized_note
+  );
+  perform private.write_audit_log(
+    target_organization_id, 'STOCK_TRANSFER_CANCELLED', required_capability, actor_id,
+    null, transfer.source_store_id, null, null, null, normalized_note,
+    jsonb_build_object('stock_transfer_id', transfer.id, 'transfer_number', transfer.transfer_number, 'operation_id', target_operation_id)
+  );
+  return transfer.id;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
 
 --
 -- Name: cancel_open_ticket("uuid", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -1731,10 +2036,11 @@ CREATE OR REPLACE FUNCTION "private"."capture_stock_transfer_line_cost_truth"() 
     SET "search_path" TO ''
     AS $$
 declare
+  transfer_status text;
   source_cost_is_known boolean;
 begin
-  select level.cost_is_known
-  into source_cost_is_known
+  select transfer.status, level.cost_is_known
+  into transfer_status, source_cost_is_known
   from public.stock_transfers transfer
   join public.inventory_levels level
     on level.organization_id = transfer.organization_id
@@ -1744,7 +2050,11 @@ begin
   where transfer.id = new.stock_transfer_id
     and transfer.organization_id = new.organization_id;
 
-  new.unit_cost_is_known := coalesce(source_cost_is_known, false);
+  if transfer_status in ('draft', 'submitted', 'approved') then
+    new.unit_cost_is_known := false;
+  else
+    new.unit_cost_is_known := coalesce(source_cost_is_known, false);
+  end if;
   return new;
 end;
 $$;
@@ -2363,9 +2673,25 @@ begin
       and inventory_level.variant_id is not distinct from checkout_line.variant_id
     for update;
 
-    if exists (
-      select 1 from public.products product
-      where product.id = checkout_line.product_id and product.organization_id = target_organization_id
+    if checkout_line.variant_id is null
+      and private.is_made_to_order_composite(
+        target_organization_id,
+        checkout_line.product_id
+      ) then
+      perform private.consume_made_to_order_composite_sale(
+        target_organization_id,
+        target_store_id,
+        checkout_line.product_id,
+        checkout_line.quantity,
+        actor_employee_id,
+        new_sale_id,
+        'Catalog checkout'
+      );
+    elsif exists (
+      select 1
+      from public.products product
+      where product.id = checkout_line.product_id
+        and product.organization_id = target_organization_id
         and product.track_inventory
     ) then
       if current_quantity is null then
@@ -3290,7 +3616,22 @@ begin
       next_line_total_minor
     );
 
-    if tracks_inventory then
+    if tracks_inventory
+      and checkout_line.variant_id is null
+      and private.is_made_to_order_composite(
+        target_organization_id,
+        checkout_line.product_id
+      ) then
+      perform private.consume_made_to_order_composite_sale(
+        target_organization_id,
+        target_store_id,
+        checkout_line.product_id,
+        checkout_line.quantity,
+        actor_employee_id,
+        new_sale_id,
+        'POS checkout'
+      );
+    elsif tracks_inventory then
       select inventory_level.quantity
       into current_quantity
       from public.inventory_levels inventory_level
@@ -3507,6 +3848,50 @@ ALTER FUNCTION "private"."checkout_sale_v1"("target_organization_id" "uuid", "ta
 
 COMMENT ON FUNCTION "private"."checkout_sale_v1"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb") IS 'Internal Phase 4 transaction implementation retained for migration compatibility. Calls are routed through private.checkout_sale.';
 
+
+--
+-- Name: claim_product_unit_operation("uuid", "uuid", "text", "jsonb", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."claim_product_unit_operation"("target_organization_id" "uuid", "target_operation_id" "uuid", "target_command" "text", "target_payload" "jsonb", "target_result_unit_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  existing private.product_unit_operations%rowtype;
+begin
+  if target_operation_id is null then
+    raise exception 'A stable product-unit operation ID is required.' using errcode = '23514';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(target_organization_id::text || ':product-unit-operation:' || target_operation_id::text, 0)
+  );
+
+  select operation.* into existing
+  from private.product_unit_operations operation
+  where operation.organization_id = target_organization_id
+    and operation.operation_id = target_operation_id;
+
+  if found then
+    if existing.command <> target_command or existing.normalized_payload <> target_payload then
+      raise exception 'This operation ID is already assigned to a different product-unit command.' using errcode = '23505';
+    end if;
+    return existing.result_unit_id;
+  end if;
+
+  insert into private.product_unit_operations (
+    organization_id, operation_id, command, normalized_payload, result_unit_id, actor_profile_id
+  ) values (
+    target_organization_id, target_operation_id, target_command, target_payload,
+    target_result_unit_id, (select auth.uid())
+  );
+  return null;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."claim_product_unit_operation"("target_organization_id" "uuid", "target_operation_id" "uuid", "target_command" "text", "target_payload" "jsonb", "target_result_unit_id" "uuid") OWNER TO "postgres";
 
 --
 -- Name: clock_in_employee("uuid", "uuid", "text"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -4099,6 +4484,100 @@ $$;
 ALTER FUNCTION "private"."complete_organization_export"("target_export_session_id" "uuid", "target_record_count" integer, "target_manifest" "jsonb") OWNER TO "postgres";
 
 --
+-- Name: consume_made_to_order_composite_sale("uuid", "uuid", "uuid", numeric, "uuid", "uuid", "text"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."consume_made_to_order_composite_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_actor_employee_id" "uuid", "target_sale_id" "uuid", "target_reason" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  component record;
+  component_level public.inventory_levels%rowtype;
+  component_quantity numeric(14,3);
+begin
+  if target_organization_id is null
+    or target_store_id is null
+    or target_product_id is null
+    or target_actor_employee_id is null
+    or target_sale_id is null
+    or target_quantity is null
+    or target_quantity <= 0
+    or target_quantity <> round(target_quantity, 3) then
+    raise exception 'A valid made-to-order sale quantity is required.'
+      using errcode = '23514';
+  end if;
+
+  if not private.is_made_to_order_composite(
+    target_organization_id,
+    target_product_id
+  ) then
+    raise exception 'That product is not a made-to-order composite.'
+      using errcode = '23514';
+  end if;
+
+  for component in
+    select
+      recipe.component_product_id,
+      recipe.component_variant_id,
+      recipe.quantity_per_composite,
+      component_product.name
+    from public.product_components recipe
+    join public.products component_product
+      on component_product.id = recipe.component_product_id
+     and component_product.organization_id = recipe.organization_id
+    where recipe.organization_id = target_organization_id
+      and recipe.product_id = target_product_id
+      and component_product.track_inventory
+    order by recipe.component_product_id, recipe.component_variant_id
+  loop
+    component_quantity :=
+      round(component.quantity_per_composite * target_quantity, 3);
+
+    select level.*
+    into component_level
+    from public.inventory_levels level
+    where level.organization_id = target_organization_id
+      and level.store_id = target_store_id
+      and level.product_id = component.component_product_id
+      and level.variant_id is not distinct from component.component_variant_id
+    for update;
+
+    if component_level.id is null then
+      raise exception
+        'The stock projection is not initialized for composite component %.',
+        component.name
+        using errcode = '23514';
+    end if;
+
+    perform private.apply_inventory_change_v2(
+      target_organization_id,
+      target_store_id,
+      component.component_product_id,
+      component.component_variant_id,
+      -component_quantity,
+      'SALE',
+      target_actor_employee_id,
+      coalesce(nullif(btrim(target_reason), ''), 'Made-to-order composite sale'),
+      'composite_sale',
+      target_sale_id,
+      component_level.average_cost_minor
+    );
+  end loop;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."consume_made_to_order_composite_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_actor_employee_id" "uuid", "target_sale_id" "uuid", "target_reason" "text") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "consume_made_to_order_composite_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_actor_employee_id" "uuid", "target_sale_id" "uuid", "target_reason" "text"); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."consume_made_to_order_composite_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_actor_employee_id" "uuid", "target_sale_id" "uuid", "target_reason" "text") IS 'Consumes tracked recipe components once for a made_to_order sale without decrementing the composite finished-stock projection.';
+
+
+--
 -- Name: consume_organization_rate_limit("uuid", "text"); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -4107,36 +4586,68 @@ CREATE OR REPLACE FUNCTION "private"."consume_organization_rate_limit"("target_o
     SET "search_path" TO ''
     AS $$
 declare
-  normalized_action_code text := lower(btrim(coalesce(target_action_code, '')));
+  normalized_action_code text :=
+    lower(btrim(coalesce(target_action_code, '')));
+
   configured_limit integer;
-  current_window_start timestamptz := date_trunc('hour', clock_timestamp());
+
+  current_window_start timestamptz :=
+    date_trunc('hour', clock_timestamp());
+
   current_window_ends_at timestamptz;
+
   observed_request_count integer;
+
+  request_was_allowed boolean := false;
 begin
   case normalized_action_code
     when 'organization.export' then
       configured_limit := 3;
-      if not private.has_organization_export_access(target_organization_id) then
-        raise exception 'You do not have permission to export this organization.' using errcode = '42501';
+
+      if not private.has_organization_export_access(
+        target_organization_id
+      ) then
+        raise exception
+          'You do not have permission to export this organization.'
+          using errcode = '42501';
       end if;
+
     when 'organization.lifecycle' then
       configured_limit := 10;
-      if not private.has_organization_lifecycle_access(target_organization_id) then
-        raise exception 'Only an organization owner can change this lifecycle.' using errcode = '42501';
+
+      if not private.has_organization_lifecycle_access(
+        target_organization_id
+      ) then
+        raise exception
+          'Only an organization owner can change this lifecycle.'
+          using errcode = '42501';
       end if;
+
     when 'organization.recovery_drill' then
       configured_limit := 10;
-      if not private.has_organization_recovery_manage_access(target_organization_id) then
-        raise exception 'Only an owner can record a recovery drill.' using errcode = '42501';
+
+      if not private.has_organization_recovery_manage_access(
+        target_organization_id
+      ) then
+        raise exception
+          'Only an owner can record a recovery drill.'
+          using errcode = '42501';
       end if;
+
     else
-      raise exception 'Unsupported organization rate-limit action.' using errcode = '22023';
+      raise exception
+        'Unsupported organization rate-limit action.'
+        using errcode = '22023';
   end case;
 
-  current_window_ends_at := current_window_start + interval '1 hour';
+  current_window_ends_at :=
+    current_window_start + interval '1 hour';
 
   delete from public.organization_rate_limit_windows rate_window
-  where rate_window.window_started_at < current_window_start - interval '2 days';
+  where rate_window.window_started_at
+    < current_window_start - interval '2 days';
+
+  observed_request_count := null;
 
   insert into public.organization_rate_limit_windows (
     organization_id,
@@ -4152,14 +4663,26 @@ begin
     current_window_start,
     1
   )
-  on conflict (organization_id, profile_id, action_code, window_started_at)
+  on conflict (
+    organization_id,
+    profile_id,
+    action_code,
+    window_started_at
+  )
   do update
-    set request_count = public.organization_rate_limit_windows.request_count + 1,
-        updated_at = now()
-  where public.organization_rate_limit_windows.request_count < configured_limit
-  returning request_count into observed_request_count;
+    set
+      request_count =
+        public.organization_rate_limit_windows.request_count + 1,
+      updated_at = clock_timestamp()
+  where public.organization_rate_limit_windows.request_count
+    < configured_limit
+  returning request_count
+  into observed_request_count;
 
-  if observed_request_count is null then
+  request_was_allowed :=
+    observed_request_count is not null;
+
+  if not request_was_allowed then
     select rate_window.request_count
     into observed_request_count
     from public.organization_rate_limit_windows rate_window
@@ -4167,22 +4690,52 @@ begin
       and rate_window.profile_id = (select auth.uid())
       and rate_window.action_code = normalized_action_code
       and rate_window.window_started_at = current_window_start;
+
+    if observed_request_count is null then
+      raise exception
+        'The organization rate-limit window could not be resolved.'
+        using errcode = 'P0001';
+    end if;
   end if;
 
   return jsonb_build_object(
-    'allowed', coalesce(observed_request_count, configured_limit) <= configured_limit,
-    'limit', configured_limit,
-    'remaining', greatest(configured_limit - coalesce(observed_request_count, configured_limit), 0),
-    'retry_after_seconds', greatest(
-      floor(extract(epoch from current_window_ends_at - clock_timestamp()))::integer,
-      0
-    )
+    'allowed',
+      request_was_allowed,
+
+    'limit',
+      configured_limit,
+
+    'remaining',
+      greatest(
+        configured_limit - observed_request_count,
+        0
+      ),
+
+    'retry_after_seconds',
+      greatest(
+        floor(
+          extract(
+            epoch
+            from (
+              current_window_ends_at - clock_timestamp()
+            )
+          )
+        )::integer,
+        0
+      )
   );
 end;
 $$;
 
 
 ALTER FUNCTION "private"."consume_organization_rate_limit"("target_organization_id" "uuid", "target_action_code" "text") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "consume_organization_rate_limit"("target_organization_id" "uuid", "target_action_code" "text"); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."consume_organization_rate_limit"("target_organization_id" "uuid", "target_action_code" "text") IS 'Atomically consumes an organization action rate-limit slot. A request is allowed only when its capped INSERT/UPDATE returns a row; reloading the saturated count never grants another slot.';
+
 
 --
 -- Name: create_catalog_product("uuid", "uuid", "text", "text", "text", "text", "text", bigint, bigint, boolean, "text", "uuid"[], "jsonb"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -4388,96 +4941,29 @@ ALTER FUNCTION "private"."create_catalog_product_v2"("target_organization_id" "u
 CREATE OR REPLACE FUNCTION "private"."create_direct_stock_transfer"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
-    AS $_$
+    AS $$
 declare
   actor_id uuid;
   destination_actor_id uuid;
   existing_transfer public.stock_transfers%rowtype;
-  source_level public.inventory_levels%rowtype;
-  product_row record;
-  line jsonb;
-  transfer_id uuid;
-  transfer_number bigint;
+  normalized_lines jsonb;
   normalized_note text;
-  requested_payload jsonb;
-  persisted_payload jsonb;
+  persisted_lines jsonb;
+  transfer_id uuid;
 begin
   if (select auth.uid()) is null
-     or (
-       not (select private.has_permission(target_organization_id, 'inventory.manage'))
-       and not (select private.has_all_inventory_capabilities(
-         target_organization_id,
-         array['inventory.transfer.create', 'inventory.transfer.send']::text[]
-       ))
-     ) then
-    raise exception 'Inventory permission is required.' using errcode = '42501';
+     or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.create'))
+     or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
+    raise exception 'Transfer create and send permissions are required.' using errcode = '42501';
   end if;
-
   if target_operation_id is null then
     raise exception 'A stable transfer operation ID is required.' using errcode = '23514';
   end if;
-
   if target_source_store_id is null
      or target_destination_store_id is null
      or target_source_store_id = target_destination_store_id
-     or target_lines is null
-     or jsonb_typeof(target_lines) <> 'array'
-     or jsonb_array_length(target_lines) not between 1 and 100
      or (target_note is not null and char_length(btrim(target_note)) > 500) then
-    raise exception 'Choose two different stores, one to 100 items, and a valid note.' using errcode = '23514';
-  end if;
-
-  if exists (
-    select 1
-    from jsonb_array_elements(target_lines) transfer_line(value)
-    where jsonb_typeof(transfer_line.value) <> 'object'
-      or coalesce(transfer_line.value ->> 'product_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-      or (nullif(transfer_line.value ->> 'variant_id', '') is not null
-        and nullif(transfer_line.value ->> 'variant_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
-      or coalesce(transfer_line.value ->> 'quantity', '') !~ '^\d+(\.\d{1,3})?$'
-      or (transfer_line.value ->> 'quantity')::numeric <= 0
-  )
-  or (select count(*) from jsonb_array_elements(target_lines)) <> (
-    select count(distinct format('%s|%s', value ->> 'product_id', coalesce(nullif(value ->> 'variant_id', ''), '')))
-    from jsonb_array_elements(target_lines)
-  ) then
-    raise exception 'Transfer lines must contain unique, valid items and positive quantities.' using errcode = '23514';
-  end if;
-
-  select coalesce(
-    jsonb_agg(
-      jsonb_build_object(
-        'product_id', normalized.product_id,
-        'variant_id', normalized.variant_id,
-        'quantity', normalized.quantity
-      )
-      order by normalized.product_id, normalized.variant_id
-    ),
-    '[]'::jsonb
-  )
-  into requested_payload
-  from (
-    select
-      lower(btrim(value ->> 'product_id')) as product_id,
-      nullif(lower(btrim(value ->> 'variant_id')), '') as variant_id,
-      ((value ->> 'quantity')::numeric(14,3))::text as quantity
-    from jsonb_array_elements(target_lines)
-  ) normalized;
-
-  if not exists (
-    select 1
-    from public.stores store
-    where store.organization_id = target_organization_id
-      and store.id = target_source_store_id
-      and store.is_active
-  ) or not exists (
-    select 1
-    from public.stores store
-    where store.organization_id = target_organization_id
-      and store.id = target_destination_store_id
-      and store.is_active
-  ) then
-    raise exception 'Choose active source and destination stores in this organization.' using errcode = '23514';
+    raise exception 'Choose two different stores and a valid note.' using errcode = '23514';
   end if;
 
   actor_id := private.inventory_actor(target_organization_id, target_source_store_id);
@@ -4485,15 +4971,15 @@ begin
   if actor_id is null or destination_actor_id is null then
     raise exception 'An active employee with access to both stores is required for this transfer.' using errcode = '42501';
   end if;
-
   normalized_note := nullif(btrim(target_note), '');
-  select *
-  into existing_transfer
+  normalized_lines := private.normalize_inventory_transfer_lines(target_lines);
+
+  perform pg_advisory_xact_lock(hashtextextended(target_organization_id::text || ':' || target_operation_id::text, 0));
+  select * into existing_transfer
   from public.stock_transfers transfer
   where transfer.organization_id = target_organization_id
     and transfer.operation_id = target_operation_id
   for update;
-
   if found then
     select coalesce(
       jsonb_agg(
@@ -4501,12 +4987,10 @@ begin
           'product_id', existing_line.product_id,
           'variant_id', existing_line.variant_id,
           'quantity', existing_line.quantity::text
-        )
-        order by existing_line.product_id, existing_line.variant_id
+        ) order by existing_line.product_id, existing_line.variant_id
       ),
       '[]'::jsonb
-    )
-    into persisted_payload
+    ) into persisted_lines
     from public.stock_transfer_lines existing_line
     where existing_line.organization_id = target_organization_id
       and existing_line.stock_transfer_id = existing_transfer.id;
@@ -4516,156 +5000,41 @@ begin
        and existing_transfer.destination_store_id = target_destination_store_id
        and existing_transfer.transferred_by_employee_id = actor_id
        and existing_transfer.note is not distinct from normalized_note
-       and persisted_payload = requested_payload then
+       and persisted_lines = normalized_lines then
       return existing_transfer.id;
     end if;
-
     raise exception 'This operation ID is already assigned to a different transfer.' using errcode = '23505';
   end if;
 
-  transfer_number := nextval('private.tindio_stock_transfer_number_sequence'::regclass);
-  insert into public.stock_transfers (
-    organization_id,
-    transfer_number,
-    operation_id,
-    source_store_id,
-    destination_store_id,
-    stock_request_id,
-    status,
-    note,
-    transferred_by_employee_id
-  )
-  values (
+  transfer_id := private.create_inventory_transfer_draft(
     target_organization_id,
-    transfer_number,
-    target_operation_id,
     target_source_store_id,
     target_destination_store_id,
-    null,
-    'in_transit',
+    normalized_lines,
     normalized_note,
-    actor_id
-  )
-  returning id into transfer_id;
-
-  for line in select value from jsonb_array_elements(target_lines)
-  loop
-    select product.id, product.name, variant.id as variant_id
-    into product_row
-    from public.products product
-    left join public.product_variants variant
-      on variant.id = nullif(line ->> 'variant_id', '')::uuid
-      and variant.product_id = product.id
-      and variant.organization_id = product.organization_id
-      and variant.is_active
-    where product.id = (line ->> 'product_id')::uuid
-      and product.organization_id = target_organization_id
-      and product.status = 'active'
-      and product.track_inventory
-      and (nullif(line ->> 'variant_id', '') is null or variant.id is not null);
-
-    if product_row.id is null then
-      raise exception 'Every transfer item must be an active tracked product in this organization.' using errcode = '23514';
-    end if;
-
-    if not exists (
-      select 1
-      from public.product_store_settings setting
-      where setting.organization_id = target_organization_id
-        and setting.product_id = product_row.id
-        and setting.store_id in (target_source_store_id, target_destination_store_id)
-        and setting.is_available
-      group by setting.product_id
-      having count(*) = 2
-    ) then
-      raise exception 'Each transfer item must be available in both stores.' using errcode = '23514';
-    end if;
-
-    select *
-    into source_level
-    from public.inventory_levels level
-    where level.organization_id = target_organization_id
-      and level.store_id = target_source_store_id
-      and level.product_id = product_row.id
-      and level.variant_id is not distinct from nullif(line ->> 'variant_id', '')::uuid
-    for update;
-
-    if source_level.id is null
-       or source_level.quantity < (line ->> 'quantity')::numeric(14,3) then
-      raise exception 'Source stock is insufficient for this transfer.' using errcode = '23514';
-    end if;
-
-    if not exists (
-      select 1
-      from public.inventory_levels level
-      where level.organization_id = target_organization_id
-        and level.store_id = target_destination_store_id
-        and level.product_id = product_row.id
-        and level.variant_id is not distinct from nullif(line ->> 'variant_id', '')::uuid
-    ) then
-      raise exception 'The destination stock projection is not initialized for one transfer item.' using errcode = '23514';
-    end if;
-
-    insert into public.stock_transfer_lines (
-      organization_id,
-      stock_transfer_id,
-      stock_request_line_id,
-      product_id,
-      variant_id,
-      quantity,
-      unit_cost_minor
-    )
-    values (
-      target_organization_id,
-      transfer_id,
-      null,
-      product_row.id,
-      nullif(line ->> 'variant_id', '')::uuid,
-      (line ->> 'quantity')::numeric(14,3),
-      source_level.average_cost_minor
-    );
-
-    -- Transfers always require real source stock. The POS negative-stock
-    -- policy is deliberately not consulted for this operational command.
-    perform private.apply_inventory_change_v2(
-      target_organization_id,
-      target_source_store_id,
-      product_row.id,
-      nullif(line ->> 'variant_id', '')::uuid,
-      -(line ->> 'quantity')::numeric(14,3),
-      'TRANSFER_OUT',
-      actor_id,
-      format('Direct transfer TR-%s sent', lpad(transfer_number::text, 6, '0')),
-      'stock_transfer',
-      transfer_id,
-      source_level.average_cost_minor
-    );
-  end loop;
-
-  perform private.write_audit_log(
-    target_organization_id,
-    'STOCK_TRANSFER_SENT',
-    'inventory.manage',
-    actor_id,
-    null,
-    target_source_store_id,
-    null,
-    null,
-    null,
-    normalized_note,
-    jsonb_build_object(
-      'stock_transfer_id', transfer_id,
-      'transfer_number', transfer_number,
-      'source_store_id', target_source_store_id,
-      'destination_store_id', target_destination_store_id,
-      'operation_id', target_operation_id,
-      'lines', requested_payload
-    )
+    target_operation_id
   );
-
+  perform private.submit_inventory_transfer(
+    target_organization_id,
+    transfer_id,
+    null,
+    private.inventory_transfer_child_operation_id(target_operation_id, 'submit')
+  );
+  perform private.approve_inventory_transfer(
+    target_organization_id,
+    transfer_id,
+    null,
+    private.inventory_transfer_child_operation_id(target_operation_id, 'approve')
+  );
+  perform private.dispatch_inventory_transfer(
+    target_organization_id,
+    transfer_id,
+    null,
+    private.inventory_transfer_child_operation_id(target_operation_id, 'dispatch')
+  );
   return transfer_id;
 end;
-$_$;
+$$;
 
 
 ALTER FUNCTION "private"."create_direct_stock_transfer"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
@@ -4969,6 +5338,225 @@ $$;
 
 
 ALTER FUNCTION "private"."create_inventory_count_plan"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_scope_reference_id" "uuid", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean) OWNER TO "postgres";
+
+--
+-- Name: create_inventory_transfer_draft("uuid", "uuid", "uuid", "jsonb", "text", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_id uuid;
+  existing_operation private.stock_transfer_operations%rowtype;
+  line jsonb;
+  normalized_lines jsonb;
+  normalized_note text;
+  operation_payload jsonb;
+  product_row record;
+  transfer_id uuid;
+  transfer_number bigint;
+begin
+  if (select auth.uid()) is null
+     or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.create')) then
+    raise exception 'Transfer creation permission is required.' using errcode = '42501';
+  end if;
+
+  actor_id := private.inventory_actor(target_organization_id, target_source_store_id);
+  if actor_id is null then
+    raise exception 'An active employee assigned to the source store is required.' using errcode = '42501';
+  end if;
+
+  if target_operation_id is null then
+    raise exception 'A stable transfer operation ID is required.' using errcode = '23514';
+  end if;
+  if target_source_store_id is null
+     or target_destination_store_id is null
+     or target_source_store_id = target_destination_store_id
+     or (target_note is not null and char_length(btrim(target_note)) > 500) then
+    raise exception 'Choose two different stores and a valid note.' using errcode = '23514';
+  end if;
+
+  normalized_note := nullif(btrim(target_note), '');
+  normalized_lines := private.normalize_inventory_transfer_lines(target_lines);
+  operation_payload := jsonb_build_object(
+    'source_store_id', target_source_store_id,
+    'destination_store_id', target_destination_store_id,
+    'note', normalized_note,
+    'lines', normalized_lines
+  );
+
+  perform pg_advisory_xact_lock(hashtextextended(
+    target_organization_id::text || ':' || target_operation_id::text,
+    0
+  ));
+
+  select *
+  into existing_operation
+  from private.stock_transfer_operations operation
+  where operation.organization_id = target_organization_id
+    and operation.operation_id = target_operation_id
+  for update;
+
+  if found then
+    if existing_operation.command = 'create'
+       and existing_operation.normalized_payload = operation_payload then
+      return existing_operation.result_id;
+    end if;
+    raise exception 'This operation ID is already assigned to a different transfer command.' using errcode = '23505';
+  end if;
+
+  if exists (
+    select 1
+    from public.stock_transfers transfer
+    where transfer.organization_id = target_organization_id
+      and transfer.operation_id = target_operation_id
+  ) then
+    raise exception 'This operation ID is already assigned to a historical transfer.' using errcode = '23505';
+  end if;
+
+  if not exists (
+    select 1 from public.stores store
+    where store.organization_id = target_organization_id
+      and store.id = target_source_store_id
+      and store.is_active
+  ) or not exists (
+    select 1 from public.stores store
+    where store.organization_id = target_organization_id
+      and store.id = target_destination_store_id
+      and store.is_active
+  ) then
+    raise exception 'Choose active source and destination stores in this organization.' using errcode = '23514';
+  end if;
+
+  transfer_number := nextval('private.tindio_stock_transfer_number_sequence'::regclass);
+  insert into public.stock_transfers (
+    organization_id,
+    transfer_number,
+    operation_id,
+    source_store_id,
+    destination_store_id,
+    stock_request_id,
+    status,
+    note,
+    transferred_by_employee_id
+  ) values (
+    target_organization_id,
+    transfer_number,
+    target_operation_id,
+    target_source_store_id,
+    target_destination_store_id,
+    null,
+    'draft',
+    normalized_note,
+    actor_id
+  ) returning id into transfer_id;
+
+  for line in
+    select value
+    from jsonb_array_elements(normalized_lines)
+    order by value ->> 'product_id', value ->> 'variant_id'
+  loop
+    select product.id, variant.id as variant_id
+    into product_row
+    from public.products product
+    left join public.product_variants variant
+      on variant.id = nullif(line ->> 'variant_id', '')::uuid
+     and variant.product_id = product.id
+     and variant.organization_id = product.organization_id
+     and variant.is_active
+    where product.id = (line ->> 'product_id')::uuid
+      and product.organization_id = target_organization_id
+      and product.status = 'active'
+      and product.track_inventory
+      and (nullif(line ->> 'variant_id', '') is null or variant.id is not null);
+
+    if product_row.id is null then
+      raise exception 'Every transfer item must be an active tracked product in this organization.' using errcode = '23514';
+    end if;
+
+    if not exists (
+      select 1
+      from public.product_store_settings setting
+      where setting.organization_id = target_organization_id
+        and setting.product_id = product_row.id
+        and setting.store_id in (target_source_store_id, target_destination_store_id)
+        and setting.is_available
+      group by setting.product_id
+      having count(*) = 2
+    ) then
+      raise exception 'Each transfer item must be available in both stores.' using errcode = '23514';
+    end if;
+
+    if (
+      select count(*)
+      from public.inventory_levels level
+      where level.organization_id = target_organization_id
+        and level.store_id in (target_source_store_id, target_destination_store_id)
+        and level.product_id = product_row.id
+        and level.variant_id is not distinct from nullif(line ->> 'variant_id', '')::uuid
+    ) <> 2 then
+      raise exception 'Both store stock projections must exist before drafting a transfer.' using errcode = '23514';
+    end if;
+
+    insert into public.stock_transfer_lines (
+      organization_id,
+      stock_transfer_id,
+      stock_request_line_id,
+      product_id,
+      variant_id,
+      quantity,
+      unit_cost_minor,
+      unit_cost_is_known
+    ) values (
+      target_organization_id,
+      transfer_id,
+      null,
+      product_row.id,
+      nullif(line ->> 'variant_id', '')::uuid,
+      (line ->> 'quantity')::numeric(14,3),
+      0,
+      false
+    );
+  end loop;
+
+  insert into private.stock_transfer_operations (
+    organization_id, stock_transfer_id, operation_id, command,
+    normalized_payload, from_status, to_status, actor_employee_id,
+    result_id, note
+  ) values (
+    target_organization_id, transfer_id, target_operation_id, 'create',
+    operation_payload, null, 'draft', actor_id, transfer_id, normalized_note
+  );
+
+  perform private.write_audit_log(
+    target_organization_id,
+    'STOCK_TRANSFER_DRAFT_CREATED',
+    'inventory.transfer.create',
+    actor_id,
+    null,
+    target_source_store_id,
+    null,
+    null,
+    null,
+    normalized_note,
+    jsonb_build_object(
+      'stock_transfer_id', transfer_id,
+      'transfer_number', transfer_number,
+      'source_store_id', target_source_store_id,
+      'destination_store_id', target_destination_store_id,
+      'operation_id', target_operation_id,
+      'lines', normalized_lines
+    )
+  );
+
+  return transfer_id;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
 
 --
 -- Name: create_purchase_order("uuid", "uuid", "uuid", "text", "date", "jsonb", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -5465,7 +6053,8 @@ CREATE OR REPLACE FUNCTION "private"."current_employee_id"("target_organization_
     on organization.id = employee.organization_id
    and organization.status = 'active'
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id =
+      (select private.current_profile_id())
     and employee.status = 'active'
   order by employee.created_at
   limit 1;
@@ -5473,6 +6062,20 @@ $$;
 
 
 ALTER FUNCTION "private"."current_employee_id"("target_organization_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: current_identity_subject(); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."current_identity_subject"() RETURNS "text"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select (select auth.uid())::text;
+$$;
+
+
+ALTER FUNCTION "private"."current_identity_subject"() OWNER TO "postgres";
 
 --
 -- Name: current_organization_member_employee_id("uuid"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -5493,6 +6096,24 @@ $$;
 
 
 ALTER FUNCTION "private"."current_organization_member_employee_id"("target_organization_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: current_profile_id(); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."current_profile_id"() RETURNS "uuid"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select identity_link.profile_id
+  from private.identity_links identity_link
+  where identity_link.provider = 'supabase'
+    and identity_link.provider_subject =
+      (select private.current_identity_subject());
+$$;
+
+
+ALTER FUNCTION "private"."current_profile_id"() OWNER TO "postgres";
 
 --
 -- Name: decide_manager_approval("uuid", "uuid", "text"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -5865,6 +6486,110 @@ $$;
 ALTER FUNCTION "private"."delete_employee_if_eligible"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_confirmation_number" "text") OWNER TO "postgres";
 
 --
+-- Name: dispatch_inventory_transfer("uuid", "uuid", "text", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare transfer public.stock_transfers%rowtype;
+begin
+  select * into transfer from public.stock_transfers where organization_id = target_organization_id and id = target_stock_transfer_id;
+  if transfer.id is null or transfer.stock_request_id is not null then raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514'; end if;
+  if (select auth.uid()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
+    raise exception 'Transfer send permission is required.' using errcode = '42501';
+  end if;
+  return private.dispatch_inventory_transfer_core(target_organization_id, target_stock_transfer_id, target_note, target_operation_id, false);
+end;
+$$;
+
+
+ALTER FUNCTION "private"."dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: dispatch_inventory_transfer_core("uuid", "uuid", "text", "uuid", boolean); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."dispatch_inventory_transfer_core"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid", "allow_request_transfer" boolean) RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_id uuid;
+  existing_operation private.stock_transfer_operations%rowtype;
+  normalized_note text := nullif(btrim(target_note), '');
+  operation_payload jsonb;
+  source_level public.inventory_levels%rowtype;
+  transfer public.stock_transfers%rowtype;
+  transfer_line public.stock_transfer_lines%rowtype;
+  line_count integer := 0;
+begin
+  if target_operation_id is null then raise exception 'A stable dispatch operation ID is required.' using errcode = '23514'; end if;
+  if target_note is not null and char_length(btrim(target_note)) > 500 then raise exception 'The transfer note is too long.' using errcode = '23514'; end if;
+  operation_payload := jsonb_build_object('stock_transfer_id', target_stock_transfer_id, 'note', normalized_note);
+  perform pg_advisory_xact_lock(hashtextextended(target_organization_id::text || ':' || target_operation_id::text, 0));
+  select * into existing_operation from private.stock_transfer_operations operation
+   where operation.organization_id = target_organization_id and operation.operation_id = target_operation_id for update;
+  if found then
+    if existing_operation.command = 'dispatch' and existing_operation.normalized_payload = operation_payload then return existing_operation.result_id; end if;
+    raise exception 'This operation ID is already assigned to a different transfer command.' using errcode = '23505';
+  end if;
+  select * into transfer from public.stock_transfers item
+   where item.organization_id = target_organization_id and item.id = target_stock_transfer_id for update;
+  if transfer.id is null or (transfer.stock_request_id is not null) <> allow_request_transfer then
+    raise exception 'Choose a transfer in the expected workflow.' using errcode = '23514';
+  end if;
+  if transfer.status <> 'approved' then raise exception 'Only an approved transfer can be dispatched.' using errcode = '23514'; end if;
+  actor_id := private.inventory_actor(target_organization_id, transfer.source_store_id);
+  if actor_id is null then raise exception 'An active employee assigned to the source store is required.' using errcode = '42501'; end if;
+  for transfer_line in
+    select * from public.stock_transfer_lines line
+     where line.organization_id = target_organization_id and line.stock_transfer_id = transfer.id
+       and ((allow_request_transfer and line.stock_request_line_id is not null) or (not allow_request_transfer and line.stock_request_line_id is null))
+     order by line.product_id, line.variant_id nulls first for update
+  loop
+    line_count := line_count + 1;
+    select * into source_level from public.inventory_levels level
+     where level.organization_id = target_organization_id and level.store_id = transfer.source_store_id
+       and level.product_id = transfer_line.product_id and level.variant_id is not distinct from transfer_line.variant_id for update;
+    if source_level.id is null or source_level.quantity < transfer_line.quantity then raise exception 'Source stock is insufficient for this transfer.' using errcode = '23514'; end if;
+    if not exists (select 1 from public.inventory_levels level where level.organization_id = target_organization_id
+      and level.store_id = transfer.destination_store_id and level.product_id = transfer_line.product_id
+      and level.variant_id is not distinct from transfer_line.variant_id) then
+      raise exception 'The destination stock projection is not initialized for one transfer item.' using errcode = '23514';
+    end if;
+    update public.stock_transfer_lines set unit_cost_minor = source_level.average_cost_minor,
+      unit_cost_is_known = source_level.cost_is_known where id = transfer_line.id;
+    perform private.apply_inventory_change_v2(target_organization_id, transfer.source_store_id,
+      transfer_line.product_id, transfer_line.variant_id, -transfer_line.quantity, 'TRANSFER_OUT', actor_id,
+      format('Transfer TR-%s dispatched', lpad(transfer.transfer_number::text, 6, '0')),
+      'stock_transfer', transfer.id, source_level.average_cost_minor);
+  end loop;
+  if line_count = 0 then raise exception 'A transfer must contain at least one eligible transfer line.' using errcode = '23514'; end if;
+  update public.stock_transfers set status = 'dispatched' where id = transfer.id;
+  insert into private.stock_transfer_operations (organization_id, stock_transfer_id, operation_id, command,
+    normalized_payload, from_status, to_status, actor_employee_id, result_id, note)
+  values (target_organization_id, transfer.id, target_operation_id, 'dispatch', operation_payload,
+    'approved', 'dispatched', actor_id, transfer.id, normalized_note);
+  perform private.write_audit_log(target_organization_id, 'STOCK_TRANSFER_DISPATCHED', 'inventory.transfer.send', actor_id,
+    null, transfer.source_store_id, null, null, null, normalized_note,
+    jsonb_build_object('stock_transfer_id', transfer.id, 'transfer_number', transfer.transfer_number, 'operation_id', target_operation_id));
+  return transfer.id;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."dispatch_inventory_transfer_core"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid", "allow_request_transfer" boolean) OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "dispatch_inventory_transfer_core"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid", "allow_request_transfer" boolean); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."dispatch_inventory_transfer_core"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid", "allow_request_transfer" boolean) IS 'Shared locked canonical physical dispatch core for direct and request adapters; never exposed to API roles.';
+
+
+--
 -- Name: dispatch_stock_request("uuid", "uuid", "text", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -5875,197 +6600,72 @@ CREATE OR REPLACE FUNCTION "private"."dispatch_stock_request"("target_organizati
 declare
   request_row public.stock_requests%rowtype;
   existing_transfer public.stock_transfers%rowtype;
-  actor_id uuid;
-  warehouse_store_id uuid;
-  transfer_id uuid;
-  transfer_number bigint;
   request_line public.stock_request_lines%rowtype;
-  source_level public.inventory_levels%rowtype;
-  normalized_note text;
+  actor_id uuid; warehouse_store_id uuid; transfer_id uuid; transfer_number bigint;
+  normalized_note text := nullif(btrim(target_note), '');
   effective_note text;
+  create_payload jsonb; transition_payload jsonb;
+  submit_id uuid; approve_id uuid; dispatch_id uuid;
 begin
-  if (select auth.uid()) is null
-     or (
-       not (select private.has_permission(target_organization_id, 'inventory.manage'))
-       and not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send'))
-     ) then
-    raise exception 'Inventory permission is required.' using errcode = '42501';
+  if (select auth.uid()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
+    raise exception 'Transfer send permission is required.' using errcode = '42501';
   end if;
-
-  if target_operation_id is null then
-    raise exception 'A stable transfer-dispatch operation ID is required.' using errcode = '23514';
-  end if;
-
-  if target_note is not null and char_length(btrim(target_note)) > 500 then
-    raise exception 'Dispatch note is too long.' using errcode = '23514';
-  end if;
-
-  select *
-  into request_row
-  from public.stock_requests request_item
-  where request_item.id = target_stock_request_id
-    and request_item.organization_id = target_organization_id
-  for update;
-
-  if request_row.id is null then
-    raise exception 'Choose a stock request in this organization.' using errcode = '23514';
-  end if;
-
-  select warehouse.store_id
-  into warehouse_store_id
-  from public.supply_chain_warehouses warehouse
-  where warehouse.id = request_row.source_warehouse_id
-    and warehouse.organization_id = target_organization_id
-    and warehouse.is_active;
-
+  if target_operation_id is null then raise exception 'A stable transfer-dispatch operation ID is required.' using errcode = '23514'; end if;
+  if target_note is not null and char_length(btrim(target_note)) > 500 then raise exception 'Dispatch note is too long.' using errcode = '23514'; end if;
+  perform pg_advisory_xact_lock(hashtextextended(target_organization_id::text || ':' || target_operation_id::text, 0));
+  select * into request_row from public.stock_requests item
+   where item.id = target_stock_request_id and item.organization_id = target_organization_id for update;
+  if request_row.id is null then raise exception 'Choose a stock request in this organization.' using errcode = '23514'; end if;
+  select warehouse.store_id into warehouse_store_id from public.supply_chain_warehouses warehouse
+   where warehouse.id = request_row.source_warehouse_id and warehouse.organization_id = target_organization_id and warehouse.is_active;
   actor_id := private.inventory_actor(target_organization_id, warehouse_store_id);
-  if actor_id is null then
-    raise exception 'An assigned employee is required for the source warehouse.' using errcode = '42501';
-  end if;
-
-  normalized_note := nullif(btrim(target_note), '');
+  if actor_id is null then raise exception 'An assigned employee is required for the source warehouse.' using errcode = '42501'; end if;
   effective_note := coalesce(normalized_note, request_row.note);
-
-  select *
-  into existing_transfer
-  from public.stock_transfers transfer
-  where transfer.organization_id = target_organization_id
-    and transfer.operation_id = target_operation_id
-  for update;
-
+  select * into existing_transfer from public.stock_transfers transfer
+   where transfer.organization_id = target_organization_id and transfer.operation_id = target_operation_id for update;
   if found then
-    if existing_transfer.stock_request_id = request_row.id
-       and existing_transfer.source_store_id = warehouse_store_id
-       and existing_transfer.destination_store_id = request_row.requesting_store_id
-       and existing_transfer.transferred_by_employee_id = actor_id
-       and existing_transfer.note is not distinct from effective_note then
-      return existing_transfer.id;
-    end if;
-
+    if existing_transfer.stock_request_id = request_row.id and existing_transfer.source_store_id = warehouse_store_id
+      and existing_transfer.destination_store_id = request_row.requesting_store_id
+      and existing_transfer.transferred_by_employee_id = actor_id and existing_transfer.note is not distinct from effective_note then return existing_transfer.id; end if;
     raise exception 'This operation ID is already assigned to a different transfer dispatch.' using errcode = '23505';
   end if;
-
-  if request_row.status <> 'picking' then
-    raise exception 'Only a picked request can be dispatched.' using errcode = '23514';
-  end if;
-
+  if request_row.status <> 'picking' then raise exception 'Only a picked request can be dispatched.' using errcode = '23514'; end if;
   transfer_number := nextval('private.tindio_stock_transfer_number_sequence'::regclass);
-  insert into public.stock_transfers (
-    organization_id,
-    transfer_number,
-    operation_id,
-    source_store_id,
-    destination_store_id,
-    stock_request_id,
-    status,
-    note,
-    transferred_by_employee_id
-  )
-  values (
-    target_organization_id,
-    transfer_number,
-    target_operation_id,
-    warehouse_store_id,
-    request_row.requesting_store_id,
-    request_row.id,
-    'in_transit',
-    effective_note,
-    actor_id
-  )
-  returning id into transfer_id;
-
-  for request_line in
-    select *
-    from public.stock_request_lines item
-    where item.stock_request_id = request_row.id
-      and item.picked_quantity > 0
-    order by item.product_id, item.variant_id
+  insert into public.stock_transfers (organization_id, transfer_number, operation_id, source_store_id,
+    destination_store_id, stock_request_id, status, note, transferred_by_employee_id)
+  values (target_organization_id, transfer_number, target_operation_id, warehouse_store_id,
+    request_row.requesting_store_id, request_row.id, 'draft', effective_note, actor_id) returning id into transfer_id;
+  for request_line in select * from public.stock_request_lines item
+    where item.stock_request_id = request_row.id and item.picked_quantity > 0 order by item.product_id, item.variant_id
   loop
-    select *
-    into source_level
-    from public.inventory_levels level
-    where level.organization_id = target_organization_id
-      and level.store_id = warehouse_store_id
-      and level.product_id = request_line.product_id
-      and level.variant_id is not distinct from request_line.variant_id
-    for update;
-
-    if source_level.id is null or source_level.quantity < request_line.picked_quantity then
-      raise exception 'Source warehouse stock is insufficient for this request.' using errcode = '23514';
-    end if;
-
-    if not exists (
-      select 1
-      from public.inventory_levels level
-      where level.organization_id = target_organization_id
-        and level.store_id = request_row.requesting_store_id
-        and level.product_id = request_line.product_id
-        and level.variant_id is not distinct from request_line.variant_id
-    ) then
-      raise exception 'The destination stock projection is not initialized for one requested item.' using errcode = '23514';
-    end if;
-
-    insert into public.stock_transfer_lines (
-      organization_id,
-      stock_transfer_id,
-      stock_request_line_id,
-      product_id,
-      variant_id,
-      quantity,
-      unit_cost_minor
-    )
-    values (
-      target_organization_id,
-      transfer_id,
-      request_line.id,
-      request_line.product_id,
-      request_line.variant_id,
-      request_line.picked_quantity,
-      source_level.average_cost_minor
-    );
-
-    perform private.apply_inventory_change_v2(
-      target_organization_id,
-      warehouse_store_id,
-      request_line.product_id,
-      request_line.variant_id,
-      -request_line.picked_quantity,
-      'TRANSFER_OUT',
-      actor_id,
-      format('Stock transfer TR-%s dispatched', lpad(transfer_number::text, 6, '0')),
-      'stock_transfer',
-      transfer_id,
-      source_level.average_cost_minor
-    );
-
-    update public.stock_request_lines
-    set dispatched_quantity = request_line.picked_quantity
-    where id = request_line.id;
+    insert into public.stock_transfer_lines (organization_id, stock_transfer_id, stock_request_line_id,
+      product_id, variant_id, quantity, unit_cost_minor, unit_cost_is_known)
+    values (target_organization_id, transfer_id, request_line.id, request_line.product_id,
+      request_line.variant_id, request_line.picked_quantity, 0, false);
   end loop;
-
-  update public.stock_requests
-  set status = 'dispatched', dispatched_by_employee_id = actor_id, dispatched_at = now()
-  where id = request_row.id;
-
-  perform private.write_audit_log(
-    target_organization_id,
-    'STOCK_REQUEST_DISPATCHED',
-    'inventory.manage',
-    actor_id,
-    null,
-    warehouse_store_id,
-    null,
-    null,
-    null,
-    effective_note,
-    jsonb_build_object(
-      'stock_request_id', request_row.id,
-      'request_number', request_row.request_number,
-      'stock_transfer_id', transfer_id,
-      'transfer_number', transfer_number,
-      'destination_store_id', request_row.requesting_store_id
-    )
-  );
+  if not found then raise exception 'A picked request must contain at least one item.' using errcode = '23514'; end if;
+  create_payload := jsonb_build_object('stock_request_id', request_row.id, 'source_store_id', warehouse_store_id,
+    'destination_store_id', request_row.requesting_store_id, 'note', effective_note);
+  insert into private.stock_transfer_operations (organization_id, stock_transfer_id, operation_id, command,
+    normalized_payload, from_status, to_status, actor_employee_id, result_id, note)
+  values (target_organization_id, transfer_id, target_operation_id, 'create', create_payload, null, 'draft', actor_id, transfer_id, effective_note);
+  submit_id := private.inventory_transfer_child_operation_id(target_operation_id, 'submit');
+  approve_id := private.inventory_transfer_child_operation_id(target_operation_id, 'approve');
+  dispatch_id := private.inventory_transfer_child_operation_id(target_operation_id, 'dispatch');
+  transition_payload := jsonb_build_object('stock_transfer_id', transfer_id, 'note', normalized_note);
+  update public.stock_transfers set status = 'submitted' where id = transfer_id;
+  insert into private.stock_transfer_operations (organization_id, stock_transfer_id, operation_id, command, normalized_payload, from_status, to_status, actor_employee_id, result_id, note)
+  values (target_organization_id, transfer_id, submit_id, 'submit', transition_payload, 'draft', 'submitted', actor_id, transfer_id, normalized_note);
+  update public.stock_transfers set status = 'approved' where id = transfer_id;
+  insert into private.stock_transfer_operations (organization_id, stock_transfer_id, operation_id, command, normalized_payload, from_status, to_status, actor_employee_id, result_id, note)
+  values (target_organization_id, transfer_id, approve_id, 'approve', transition_payload, 'submitted', 'approved', actor_id, transfer_id, normalized_note);
+  perform private.dispatch_inventory_transfer_core(target_organization_id, transfer_id, normalized_note, dispatch_id, true);
+  update public.stock_request_lines set dispatched_quantity = picked_quantity where stock_request_id = request_row.id and picked_quantity > 0;
+  update public.stock_requests set status = 'dispatched', dispatched_by_employee_id = actor_id, dispatched_at = now() where id = request_row.id;
+  perform private.write_audit_log(target_organization_id, 'STOCK_REQUEST_DISPATCHED', 'inventory.transfer.send', actor_id,
+    null, warehouse_store_id, null, null, null, effective_note,
+    jsonb_build_object('stock_request_id', request_row.id, 'request_number', request_row.request_number,
+      'stock_transfer_id', transfer_id, 'transfer_number', transfer_number, 'destination_store_id', request_row.requesting_store_id));
   return transfer_id;
 end;
 $$;
@@ -6542,15 +7142,28 @@ declare
   negative_item_count integer;
 begin
   if (select auth.uid()) is null
-    or not (select private.has_permission(target_organization_id, 'sales.create')) then
-    raise exception 'Sales permission is required.' using errcode = '42501';
+    or not (
+      select private.has_permission(target_organization_id, 'sales.create')
+    ) then
+    raise exception 'Sales permission is required.'
+      using errcode = '42501';
   end if;
-  if private.inventory_actor(target_organization_id, target_store_id) is null then
-    raise exception 'You are not assigned to this store.' using errcode = '42501';
+
+  if private.inventory_actor(
+    target_organization_id,
+    target_store_id
+  ) is null then
+    raise exception 'You are not assigned to this store.'
+      using errcode = '42501';
   end if;
-  if private.resolve_negative_stock_policy(target_organization_id, target_store_id) <> 'warn' then
+
+  if private.resolve_negative_stock_policy(
+    target_organization_id,
+    target_store_id
+  ) <> 'warn' then
     return 0;
   end if;
+
   if not exists (
     select 1
     from public.sales sale
@@ -6558,34 +7171,75 @@ begin
       and sale.organization_id = target_organization_id
       and sale.store_id = target_store_id
   ) then
-    raise exception 'The completed sale was not found in this store.' using errcode = 'P0002';
+    raise exception 'The completed sale was not found in this store.'
+      using errcode = 'P0002';
   end if;
 
-  select count(*)::integer
-  into negative_item_count
-  from (
+  with direct_positions as (
     select item.product_id, item.variant_id
     from public.sale_items item
     join public.products product
       on product.id = item.product_id
      and product.organization_id = item.organization_id
      and product.track_inventory
-    join public.inventory_levels level
-      on level.organization_id = item.organization_id
-     and level.store_id = target_store_id
-     and level.product_id = item.product_id
-     and level.variant_id is not distinct from item.variant_id
-     and level.quantity < 0
     where item.organization_id = target_organization_id
       and item.sale_id = target_sale_id
-    group by item.product_id, item.variant_id
-  ) affected;
+      and not (
+        item.variant_id is null
+        and product.is_composite
+        and product.composite_inventory_mode = 'made_to_order'
+      )
+  ),
+  made_to_order_positions as (
+    select
+      recipe.component_product_id as product_id,
+      recipe.component_variant_id as variant_id
+    from public.sale_items item
+    join public.products parent
+      on parent.id = item.product_id
+     and parent.organization_id = item.organization_id
+     and parent.track_inventory
+     and parent.is_composite
+     and parent.composite_inventory_mode = 'made_to_order'
+    join public.product_components recipe
+      on recipe.organization_id = parent.organization_id
+     and recipe.product_id = parent.id
+    join public.products component_product
+      on component_product.id = recipe.component_product_id
+     and component_product.organization_id = recipe.organization_id
+     and component_product.track_inventory
+    where item.organization_id = target_organization_id
+      and item.sale_id = target_sale_id
+      and item.variant_id is null
+  ),
+  sale_stock_positions as (
+    select * from direct_positions
+    union
+    select * from made_to_order_positions
+  )
+  select count(*)::integer
+  into negative_item_count
+  from sale_stock_positions position
+  join public.inventory_levels level
+    on level.organization_id = target_organization_id
+   and level.store_id = target_store_id
+   and level.product_id = position.product_id
+   and level.variant_id is not distinct from position.variant_id
+   and level.quantity < 0;
+
   return negative_item_count;
 end;
 $$;
 
 
 ALTER FUNCTION "private"."get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid", "target_sale_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid", "target_sale_id" "uuid"); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid", "target_sale_id" "uuid") IS 'Warn-policy post-sale stock check. made_to_order lines use tracked recipe components; ordinary products and stocked assemblies use directly sold stock.';
+
 
 --
 -- Name: get_current_time_clock_entry("uuid"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -7604,6 +8258,111 @@ $$;
 ALTER FUNCTION "private"."guard_employee_lifecycle_transition"() OWNER TO "postgres";
 
 --
+-- Name: guard_inventory_count_lifecycle(); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."guard_inventory_count_lifecycle"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if tg_op = 'DELETE' then
+    if old.status in ('posted', 'completed') then
+      raise exception 'Posted inventory counts are immutable.' using errcode = '23514';
+    end if;
+    return old;
+  end if;
+
+  if tg_op = 'INSERT' and new.status in ('open', 'completed') then
+    raise exception 'Legacy inventory count states are read-only compatibility evidence.' using errcode = '23514';
+  end if;
+
+  if tg_op = 'UPDATE' then
+    if old.status in ('posted', 'completed') then
+      raise exception 'Posted inventory counts are immutable.' using errcode = '23514';
+    end if;
+    if new.status in ('open', 'completed') and new.status is distinct from old.status then
+      raise exception 'Legacy inventory count states are read-only compatibility evidence.' using errcode = '23514';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."guard_inventory_count_lifecycle"() OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "guard_inventory_count_lifecycle"(); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."guard_inventory_count_lifecycle"() IS 'Prevents new legacy open/completed states and makes posted/completed count documents immutable while retaining historical rows.';
+
+
+--
+-- Name: guard_inventory_count_line_lifecycle(); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."guard_inventory_count_line_lifecycle"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  parent_status text;
+  parent_organization_id uuid;
+  parent_count_id uuid;
+begin
+  parent_organization_id := case when tg_op = 'DELETE' then old.organization_id else new.organization_id end;
+  parent_count_id := case when tg_op = 'DELETE' then old.inventory_count_id else new.inventory_count_id end;
+
+  select count_document.status
+  into parent_status
+  from public.inventory_counts count_document
+  where count_document.id = parent_count_id
+    and count_document.organization_id = parent_organization_id;
+
+  if parent_status in ('posted', 'completed', 'cancelled') then
+    raise exception 'Terminal inventory count lines are immutable.' using errcode = '23514';
+  end if;
+
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."guard_inventory_count_line_lifecycle"() OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "guard_inventory_count_line_lifecycle"(); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."guard_inventory_count_line_lifecycle"() IS 'Prevents mutation of count lines after their count document becomes posted, completed, or cancelled.';
+
+
+--
+-- Name: guard_legacy_low_stock_level(); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."guard_legacy_low_stock_level"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if tg_op = 'INSERT' and new.low_stock_level is not null then
+    raise exception 'Legacy low-stock thresholds are read-only. Configure a replenishment rule instead.' using errcode = '55000';
+  end if;
+  if tg_op = 'UPDATE' and new.low_stock_level is distinct from old.low_stock_level then
+    raise exception 'Legacy low-stock thresholds are read-only. Configure a replenishment rule instead.' using errcode = '55000';
+  end if;
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."guard_legacy_low_stock_level"() OWNER TO "postgres";
+
+--
 -- Name: guard_offline_checkout_total(); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -7683,6 +8442,67 @@ ALTER FUNCTION "private"."guard_offline_payment_total_marker"() OWNER TO "postgr
 --
 
 COMMENT ON FUNCTION "private"."guard_offline_payment_total_marker"() IS 'Phase 13: rejects an offline-marked payment when the server-calculated checkout total no longer matches its locally captured amount.';
+
+
+--
+-- Name: guard_purchasing_evidence_immutability(); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."guard_purchasing_evidence_immutability"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  parent_status text;
+begin
+  if tg_table_name in ('goods_receipts', 'goods_receipt_lines') then
+    raise exception 'Posted goods-receipt evidence is immutable.' using errcode = '23514';
+  end if;
+
+  if tg_table_name = 'purchase_orders' then
+    if old.status in ('received', 'cancelled') then
+      raise exception 'Terminal purchase orders are immutable.' using errcode = '23514';
+    end if;
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  select purchase_order.status
+  into parent_status
+  from public.purchase_orders purchase_order
+  where purchase_order.id = old.purchase_order_id
+    and purchase_order.organization_id = old.organization_id;
+
+  if parent_status in ('received', 'cancelled') then
+    raise exception 'Terminal purchase-order lines are immutable.' using errcode = '23514';
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."guard_purchasing_evidence_immutability"() OWNER TO "postgres";
+
+--
+-- Name: guard_supplier_return_evidence(); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."guard_supplier_return_evidence"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  raise exception 'Posted supplier-return evidence is immutable.' using errcode = '55000';
+end;
+$$;
+
+
+ALTER FUNCTION "private"."guard_supplier_return_evidence"() OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "guard_supplier_return_evidence"(); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."guard_supplier_return_evidence"() IS 'Prevents mutation or deletion of posted supplier-return header and line evidence.';
 
 
 --
@@ -7794,55 +8614,111 @@ CREATE OR REPLACE FUNCTION "private"."has_inventory_capability"("target_organiza
     SET "search_path" TO ''
     AS $$
   select coalesce(
-    (select auth.uid()) is not null
+    (select private.current_profile_id())
+      is not null
+
     and exists (
       select 1
       from public.organizations organization
-      where organization.id = target_organization_id
-        and organization.status = 'active'
+      where organization.id =
+        target_organization_id
+        and organization.status =
+          'active'
     )
+
     and exists (
       select 1
       from public.employees employee
-      join public.employee_roles employee_role
-        on employee_role.employee_id = employee.id
-       and employee_role.organization_id = employee.organization_id
-      join public.role_permissions role_permission
-        on role_permission.role_id = employee_role.role_id
-       and role_permission.organization_id = employee_role.organization_id
-      where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
-        and employee.status = 'active'
+
+      join public.employee_roles
+        employee_role
+        on employee_role.employee_id =
+          employee.id
+       and employee_role.organization_id =
+          employee.organization_id
+
+      join public.role_permissions
+        role_permission
+        on role_permission.role_id =
+          employee_role.role_id
+       and role_permission.organization_id =
+          employee_role.organization_id
+
+      where employee.organization_id =
+        target_organization_id
+
+        and employee.profile_id =
+          (
+            select
+              private.current_profile_id()
+          )
+
+        and employee.status =
+          'active'
+
         and (
-          role_permission.permission_code = requested_capability
-          or role_permission.permission_code = 'inventory.manage'
+          role_permission.permission_code =
+            requested_capability
+
+          or role_permission.permission_code =
+            'inventory.manage'
+
           or (
-            requested_capability in ('inventory.transfer.create', 'inventory.transfer.send', 'inventory.transfer.receive')
-            and role_permission.permission_code = 'inventory.transfers'
+            requested_capability in (
+              'inventory.transfer.create',
+              'inventory.transfer.send',
+              'inventory.transfer.receive'
+            )
+            and role_permission.permission_code =
+              'inventory.transfers'
           )
+
           or (
-            requested_capability in ('inventory.count.create', 'inventory.count.finalize')
-            and role_permission.permission_code = 'inventory.count'
+            requested_capability in (
+              'inventory.count.create',
+              'inventory.count.finalize'
+            )
+            and role_permission.permission_code =
+              'inventory.count'
           )
+
           or (
-            requested_capability in ('inventory.adjust.create', 'inventory.adjust.post')
-            and role_permission.permission_code = 'inventory.adjust'
+            requested_capability in (
+              'inventory.adjust.create',
+              'inventory.adjust.post'
+            )
+            and role_permission.permission_code =
+              'inventory.adjust'
           )
+
           or (
-            requested_capability in ('purchasing.view', 'purchasing.po.create')
-            and role_permission.permission_code = 'inventory.purchase_orders'
+            requested_capability in (
+              'purchasing.view',
+              'purchasing.po.create'
+            )
+            and role_permission.permission_code =
+              'inventory.purchase_orders'
           )
+
           or (
-            requested_capability = 'purchasing.receive'
-            and role_permission.permission_code = 'inventory.receive'
+            requested_capability =
+              'purchasing.receive'
+            and role_permission.permission_code =
+              'inventory.receive'
           )
+
           or (
-            requested_capability = 'purchasing.suppliers.manage'
-            and role_permission.permission_code = 'inventory.suppliers'
+            requested_capability =
+              'purchasing.suppliers.manage'
+            and role_permission.permission_code =
+              'inventory.suppliers'
           )
+
           or (
-            requested_capability = 'inventory.valuation.view'
-            and role_permission.permission_code = 'products.view_cost'
+            requested_capability =
+              'inventory.valuation.view'
+            and role_permission.permission_code =
+              'products.view_cost'
           )
         )
     ),
@@ -7857,7 +8733,7 @@ ALTER FUNCTION "private"."has_inventory_capability"("target_organization_id" "uu
 -- Name: FUNCTION "has_inventory_capability"("target_organization_id" "uuid", "requested_capability" "text"); Type: COMMENT; Schema: private; Owner: postgres
 --
 
-COMMENT ON FUNCTION "private"."has_inventory_capability"("target_organization_id" "uuid", "requested_capability" "text") IS 'Capability-based inventory authorization with explicit legacy inventory permission compatibility. No role names are used.';
+COMMENT ON FUNCTION "private"."has_inventory_capability"("target_organization_id" "uuid", "requested_capability" "text") IS 'Provider-neutral capability-based inventory authorization using the permanent TINDIO profile identity, while preserving explicit legacy inventory permission compatibility. No role names are used.';
 
 
 --
@@ -8015,14 +8891,26 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_store_scope"("target_orga
     SET "search_path" TO ''
     AS $$
   select coalesce(
-    (select auth.uid()) is not null
+    (
+      select private.current_profile_id()
+    ) is not null
+
     and exists (
       select 1
       from public.organizations organization
-      where organization.id = target_organization_id
-        and organization.status = 'active'
+      where organization.id =
+        target_organization_id
+        and organization.status =
+          'active'
     )
-    and (select private.has_permission(target_organization_id, 'stores.manage')),
+
+    and (
+      select private.has_permission(
+        target_organization_id,
+        'stores.manage'
+      )
+    ),
+
     false
   );
 $$;
@@ -8034,7 +8922,7 @@ ALTER FUNCTION "private"."has_organization_store_scope"("target_organization_id"
 -- Name: FUNCTION "has_organization_store_scope"("target_organization_id" "uuid"); Type: COMMENT; Schema: private; Owner: postgres
 --
 
-COMMENT ON FUNCTION "private"."has_organization_store_scope"("target_organization_id" "uuid") IS 'Capability-defined organization-wide store scope. Requires an active employee, active organization, and stores.manage.';
+COMMENT ON FUNCTION "private"."has_organization_store_scope"("target_organization_id" "uuid") IS 'Provider-neutral capability-defined organization-wide store scope. Requires a mapped permanent TINDIO profile, active organization, active employee permission resolution, and stores.manage.';
 
 
 --
@@ -8046,7 +8934,7 @@ CREATE OR REPLACE FUNCTION "private"."has_permission"("target_organization_id" "
     SET "search_path" TO ''
     AS $$
   select coalesce(
-    (select auth.uid()) is not null
+    (select private.current_profile_id()) is not null
     and exists (
       select 1
       from public.organizations organization
@@ -8064,14 +8952,27 @@ CREATE OR REPLACE FUNCTION "private"."has_permission"("target_organization_id" "
           on role_permission.role_id = employee_role.role_id
          and role_permission.organization_id = employee_role.organization_id
         where employee.organization_id = target_organization_id
-          and employee.profile_id = (select auth.uid())
+          and employee.profile_id =
+            (select private.current_profile_id())
           and employee.status = 'active'
           and role_permission.permission_code = requested_permission
       )
       or (
-        current_setting('tindio.approval_profile_id', true) = (select auth.uid())::text
-        and current_setting('tindio.approval_organization_id', true) = target_organization_id::text
-        and current_setting('tindio.approval_permission', true) = requested_permission
+        current_setting(
+          'tindio.approval_profile_id',
+          true
+        ) =
+          (select private.current_profile_id())::text
+
+        and current_setting(
+          'tindio.approval_organization_id',
+          true
+        ) = target_organization_id::text
+
+        and current_setting(
+          'tindio.approval_permission',
+          true
+        ) = requested_permission
       )
     ),
     false
@@ -8234,26 +9135,53 @@ CREATE OR REPLACE FUNCTION "private"."has_store_read_scope"("target_organization
     SET "search_path" TO ''
     AS $$
   select coalesce(
-    (select auth.uid()) is not null
+    (select private.current_profile_id())
+      is not null
+
     and target_store_id is not null
+
     and exists (
       select 1
       from public.organizations organization
-      where organization.id = target_organization_id
-        and organization.status = 'active'
+      where organization.id =
+        target_organization_id
+        and organization.status =
+          'active'
     )
+
     and (
-      (select private.has_organization_store_scope(target_organization_id))
+      (
+        select
+          private.has_organization_store_scope(
+            target_organization_id
+          )
+      )
+
       or exists (
         select 1
         from public.employees employee
-        join public.employee_stores assignment
-          on assignment.organization_id = employee.organization_id
-         and assignment.employee_id = employee.id
-        where employee.organization_id = target_organization_id
-          and employee.profile_id = (select auth.uid())
-          and employee.status = 'active'
-          and assignment.store_id = target_store_id
+
+        join public.employee_stores
+          assignment
+          on assignment.organization_id =
+            employee.organization_id
+         and assignment.employee_id =
+            employee.id
+
+        where employee.organization_id =
+          target_organization_id
+
+          and employee.profile_id =
+            (
+              select
+                private.current_profile_id()
+            )
+
+          and employee.status =
+            'active'
+
+          and assignment.store_id =
+            target_store_id
       )
     ),
     false
@@ -8267,184 +9195,60 @@ ALTER FUNCTION "private"."has_store_read_scope"("target_organization_id" "uuid",
 -- Name: FUNCTION "has_store_read_scope"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: COMMENT; Schema: private; Owner: postgres
 --
 
-COMMENT ON FUNCTION "private"."has_store_read_scope"("target_organization_id" "uuid", "target_store_id" "uuid") IS 'Requires an active authenticated employee and active organization, then either capability-defined organization-wide stores.manage scope or an assigned store.';
+COMMENT ON FUNCTION "private"."has_store_read_scope"("target_organization_id" "uuid", "target_store_id" "uuid") IS 'Provider-neutral active-employee store read scope using the permanent TINDIO profile identity, active organization state, organization-wide authority, or explicit store assignment.';
 
 
 --
--- Name: import_catalog_products_v2("uuid", "uuid"[], "jsonb"); Type: FUNCTION; Schema: private; Owner: postgres
+-- Name: import_catalog_products_v3("uuid", "uuid"[], "jsonb"); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
-CREATE OR REPLACE FUNCTION "private"."import_catalog_products_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") RETURNS integer
+CREATE OR REPLACE FUNCTION "private"."import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") RETURNS integer
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $_$
 declare
-  import_row record;
-  row_number integer;
-  row_json jsonb;
-  row_name text;
-  row_sku text;
-  row_barcode text;
-  row_category_id uuid;
-  row_unit text;
-  row_price_minor bigint;
-  row_cost_minor bigint;
-  row_price_override_minor bigint;
-  row_low_stock_level numeric(14, 3);
-  row_product_id uuid;
-  seen_skus text[] := '{}';
-  seen_barcodes text[] := '{}';
-  imported_count integer := 0;
+  import_row record; row_number integer; row_json jsonb; row_name text; row_sku text; row_barcode text;
+  row_category_id uuid; row_unit text; row_price_minor bigint; row_cost_minor bigint;
+  row_price_override_minor bigint; row_product_id uuid; seen_skus text[] := '{}'; seen_barcodes text[] := '{}'; imported_count integer := 0;
 begin
-  if (select auth.uid()) is null
-    or not (select private.has_permission(target_organization_id, 'products.manage')) then
-    raise exception 'Product management permission is required.' using errcode = '42501';
-  end if;
-
-  if jsonb_typeof(target_rows) <> 'array'
-    or jsonb_array_length(target_rows) not between 1 and 500 then
-    raise exception 'Import between 1 and 500 product rows at a time.' using errcode = '22023';
-  end if;
-
-  -- Validate every row and its identifiers before inserting anything.
-  for import_row in
-    select value, ordinality
-    from jsonb_array_elements(target_rows) with ordinality
-  loop
-    row_json := import_row.value;
-    row_number := case
-      when coalesce(row_json ->> 'row_number', '') ~ '^[1-9][0-9]*$'
-        then (row_json ->> 'row_number')::integer
-      else import_row.ordinality::integer
-    end;
-    row_name := btrim(coalesce(row_json ->> 'name', ''));
-    row_sku := nullif(upper(btrim(coalesce(row_json ->> 'sku', ''))), '');
-    row_barcode := nullif(btrim(coalesce(row_json ->> 'barcode', '')), '');
-    row_unit := lower(btrim(coalesce(row_json ->> 'unit', 'each')));
-
-    if jsonb_typeof(row_json) <> 'object' then
-      raise exception 'CSV row % must be an object.', row_number using errcode = '22023';
-    end if;
-    if char_length(row_name) not between 1 and 160 then
-      raise exception 'CSV row % needs a product name of at most 160 characters.', row_number using errcode = '22023';
-    end if;
-    if char_length(coalesce(row_json ->> 'description', '')) > 2000 then
-      raise exception 'CSV row % has a description longer than 2,000 characters.', row_number using errcode = '22023';
-    end if;
-    if row_sku is not null and row_sku !~ '^[A-Z0-9][A-Z0-9._-]{0,63}$' then
-      raise exception 'CSV row % has an invalid SKU.', row_number using errcode = '22023';
-    end if;
-    if row_barcode is not null and row_barcode !~ '^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$' then
-      raise exception 'CSV row % has an invalid barcode.', row_number using errcode = '22023';
-    end if;
-    if char_length(row_unit) not between 1 and 24 or row_unit !~ '^[a-z][a-z0-9 _-]*$' then
-      raise exception 'CSV row % has an invalid base unit.', row_number using errcode = '22023';
-    end if;
-    if jsonb_typeof(row_json -> 'track_inventory') <> 'boolean'
-      or jsonb_typeof(row_json -> 'is_variable_price') <> 'boolean'
-      or jsonb_typeof(row_json -> 'allow_fractional_quantity') <> 'boolean' then
-      raise exception 'CSV row % has invalid yes/no values.', row_number using errcode = '22023';
-    end if;
-    if coalesce(row_json ->> 'price_minor', '') !~ '^\d{1,10}$'
-      or coalesce(row_json ->> 'cost_minor', '') !~ '^\d{1,10}$' then
-      raise exception 'CSV row % has an invalid price or cost.', row_number using errcode = '22023';
-    end if;
-    if nullif(btrim(coalesce(row_json ->> 'image_url', '')), '') is not null
-      and btrim(row_json ->> 'image_url') !~* '^https?://' then
-      raise exception 'CSV row % has an invalid image URL.', row_number using errcode = '22023';
-    end if;
-    if jsonb_typeof(row_json -> 'price_override_minor') not in ('number', 'null')
-      or jsonb_typeof(row_json -> 'low_stock_level') not in ('number', 'null') then
-      raise exception 'CSV row % has invalid store price or low-stock data.', row_number using errcode = '22023';
-    end if;
-    if jsonb_typeof(row_json -> 'price_override_minor') = 'number'
-      and row_json ->> 'price_override_minor' !~ '^\d{1,10}$' then
-      raise exception 'CSV row % has an invalid store price.', row_number using errcode = '22023';
-    end if;
-    if jsonb_typeof(row_json -> 'low_stock_level') = 'number'
-      and row_json ->> 'low_stock_level' !~ '^\d{1,8}(\.\d{1,3})?$' then
-      raise exception 'CSV row % has an invalid low-stock level.', row_number using errcode = '22023';
-    end if;
-
-    if nullif(row_json ->> 'category_id', '') is not null then
-      if row_json ->> 'category_id' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-        or not exists (
-          select 1
-          from public.categories category
-          where category.id = (row_json ->> 'category_id')::uuid
-            and category.organization_id = target_organization_id
-            and not category.is_archived
-        ) then
-        raise exception 'CSV row % references an unavailable category.', row_number using errcode = '23503';
-      end if;
-    end if;
-
-    if row_sku is not null and row_sku = any(seen_skus) then
-      raise exception 'CSV row % repeats a SKU in this file.', row_number using errcode = '23505';
-    end if;
-    if row_barcode is not null and row_barcode = any(seen_barcodes) then
-      raise exception 'CSV row % repeats a barcode in this file.', row_number using errcode = '23505';
-    end if;
-    if row_sku is not null then seen_skus := array_append(seen_skus, row_sku); end if;
-    if row_barcode is not null then seen_barcodes := array_append(seen_barcodes, row_barcode); end if;
+  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id,'products.manage')) then raise exception 'Product management permission is required.' using errcode='42501'; end if;
+  if jsonb_typeof(target_rows)<>'array' or jsonb_array_length(target_rows) not between 1 and 500 then raise exception 'Import between 1 and 500 product rows at a time.' using errcode='22023'; end if;
+  if target_store_ids is null or cardinality(target_store_ids) not between 1 and 100 or cardinality(target_store_ids)<>(select count(distinct id) from unnest(target_store_ids) id) then raise exception 'Choose unique stores for this import.' using errcode='22023'; end if;
+  if exists(select 1 from unnest(target_store_ids) id where not private.has_store_read_scope(target_organization_id,id))
+    or exists(select 1 from unnest(target_store_ids) id where not exists(select 1 from public.stores s where s.id=id and s.organization_id=target_organization_id and s.is_active)) then raise exception 'Every import store must be active and authorized.' using errcode='42501'; end if;
+  for import_row in select value,ordinality from jsonb_array_elements(target_rows) with ordinality loop
+    row_json:=import_row.value; row_number:=case when coalesce(row_json->>'row_number','')~'^[1-9][0-9]*$' then (row_json->>'row_number')::integer else import_row.ordinality::integer end;
+    row_name:=btrim(coalesce(row_json->>'name','')); row_sku:=nullif(upper(btrim(coalesce(row_json->>'sku',''))),''); row_barcode:=nullif(btrim(coalesce(row_json->>'barcode','')),''); row_unit:=lower(btrim(coalesce(row_json->>'unit','each')));
+    if jsonb_typeof(row_json)<>'object' then raise exception 'CSV row % must be an object.',row_number using errcode='22023'; end if;
+    if row_json ? 'low_stock_level' then raise exception 'CSV row % contains legacy low_stock_level. Configure replenishment rules in Stock & Restock.',row_number using errcode='55000'; end if;
+    if char_length(row_name) not between 1 and 160 then raise exception 'CSV row % needs a product name of at most 160 characters.',row_number using errcode='22023'; end if;
+    if char_length(coalesce(row_json->>'description',''))>2000 then raise exception 'CSV row % has a description longer than 2,000 characters.',row_number using errcode='22023'; end if;
+    if row_sku is not null and row_sku!~'^[A-Z0-9][A-Z0-9._-]{0,63}$' then raise exception 'CSV row % has an invalid SKU.',row_number using errcode='22023'; end if;
+    if row_barcode is not null and row_barcode!~'^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$' then raise exception 'CSV row % has an invalid barcode.',row_number using errcode='22023'; end if;
+    if char_length(row_unit) not between 1 and 24 or row_unit!~'^[a-z][a-z0-9 _-]*$' then raise exception 'CSV row % has an invalid base unit.',row_number using errcode='22023'; end if;
+    if jsonb_typeof(row_json->'track_inventory')<>'boolean' or jsonb_typeof(row_json->'is_variable_price')<>'boolean' or jsonb_typeof(row_json->'allow_fractional_quantity')<>'boolean' then raise exception 'CSV row % has invalid yes/no values.',row_number using errcode='22023'; end if;
+    if coalesce(row_json->>'price_minor','')!~'^\d{1,10}$' or coalesce(row_json->>'cost_minor','')!~'^\d{1,10}$' then raise exception 'CSV row % has an invalid price or cost.',row_number using errcode='22023'; end if;
+    if nullif(btrim(coalesce(row_json->>'image_url','')),'') is not null and btrim(row_json->>'image_url')!~*'^https?://' then raise exception 'CSV row % has an invalid image URL.',row_number using errcode='22023'; end if;
+    if jsonb_typeof(row_json->'price_override_minor') not in ('number','null') then raise exception 'CSV row % has invalid store price data.',row_number using errcode='22023'; end if;
+    if jsonb_typeof(row_json->'price_override_minor')='number' and row_json->>'price_override_minor'!~'^\d{1,10}$' then raise exception 'CSV row % has an invalid store price.',row_number using errcode='22023'; end if;
+    if nullif(row_json->>'category_id','') is not null and ((row_json->>'category_id')!~*'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' or not exists(select 1 from public.categories c where c.id=(row_json->>'category_id')::uuid and c.organization_id=target_organization_id and not c.is_archived)) then raise exception 'CSV row % references an unavailable category.',row_number using errcode='23503'; end if;
+    if row_sku is not null and row_sku=any(seen_skus) then raise exception 'CSV row % repeats a SKU in this file.',row_number using errcode='23505'; end if;
+    if row_barcode is not null and row_barcode=any(seen_barcodes) then raise exception 'CSV row % repeats a barcode in this file.',row_number using errcode='23505'; end if;
+    if row_sku is not null then seen_skus:=array_append(seen_skus,row_sku); end if; if row_barcode is not null then seen_barcodes:=array_append(seen_barcodes,row_barcode); end if;
   end loop;
-
-  for import_row in
-    select value, ordinality
-    from jsonb_array_elements(target_rows) with ordinality
-  loop
-    row_json := import_row.value;
-    row_category_id := nullif(row_json ->> 'category_id', '')::uuid;
-    row_price_minor := (row_json ->> 'price_minor')::bigint;
-    row_cost_minor := (row_json ->> 'cost_minor')::bigint;
-    row_price_override_minor := case
-      when jsonb_typeof(row_json -> 'price_override_minor') = 'number'
-        then (row_json ->> 'price_override_minor')::bigint
-      else null
-    end;
-    row_low_stock_level := case
-      when jsonb_typeof(row_json -> 'low_stock_level') = 'number'
-        then (row_json ->> 'low_stock_level')::numeric(14, 3)
-      else null
-    end;
-
-    row_product_id := private.create_catalog_product_v2(
-      target_organization_id,
-      row_category_id,
-      btrim(row_json ->> 'name'),
-      coalesce(row_json ->> 'description', ''),
-      'simple',
-      coalesce(row_json ->> 'sku', ''),
-      coalesce(row_json ->> 'barcode', ''),
-      row_price_minor,
-      row_cost_minor,
-      (row_json ->> 'track_inventory')::boolean,
-      coalesce(row_json ->> 'unit', 'each'),
-      target_store_ids,
-      '[]'::jsonb,
-      coalesce(row_json ->> 'image_url', ''),
-      (row_json ->> 'is_variable_price')::boolean,
-      (row_json ->> 'allow_fractional_quantity')::boolean
-    );
-
-    if row_price_override_minor is not null or row_low_stock_level is not null then
-      update public.product_store_settings setting
-      set price_override_minor = row_price_override_minor,
-          low_stock_level = row_low_stock_level
-      where setting.organization_id = target_organization_id
-        and setting.product_id = row_product_id
-        and setting.store_id = any(target_store_ids);
-    end if;
-
-    imported_count := imported_count + 1;
+  for import_row in select value from jsonb_array_elements(target_rows) loop
+    row_json:=import_row.value; row_category_id:=nullif(row_json->>'category_id','')::uuid; row_price_minor:=(row_json->>'price_minor')::bigint; row_cost_minor:=(row_json->>'cost_minor')::bigint;
+    row_price_override_minor:=case when jsonb_typeof(row_json->'price_override_minor')='number' then (row_json->>'price_override_minor')::bigint else null end;
+    row_product_id:=private.create_catalog_product_v2(target_organization_id,row_category_id,btrim(row_json->>'name'),coalesce(row_json->>'description',''),'simple',coalesce(row_json->>'sku',''),coalesce(row_json->>'barcode',''),row_price_minor,row_cost_minor,(row_json->>'track_inventory')::boolean,coalesce(row_json->>'unit','each'),target_store_ids,'[]'::jsonb,coalesce(row_json->>'image_url',''),(row_json->>'is_variable_price')::boolean,(row_json->>'allow_fractional_quantity')::boolean);
+    if row_price_override_minor is not null then update public.product_store_settings set price_override_minor=row_price_override_minor where organization_id=target_organization_id and product_id=row_product_id and store_id=any(target_store_ids); end if;
+    imported_count:=imported_count+1;
   end loop;
-
   return imported_count;
 end;
 $_$;
 
 
-ALTER FUNCTION "private"."import_catalog_products_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") OWNER TO "postgres";
+ALTER FUNCTION "private"."import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") OWNER TO "postgres";
 
 --
 -- Name: import_customers_csv("uuid", "jsonb"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -9071,12 +9875,30 @@ CREATE OR REPLACE FUNCTION "private"."inventory_actor"("target_organization_id" 
     SET "search_path" TO ''
     AS $$
   select employee.id
+
   from public.employees employee
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active'
-    and (select private.has_store_read_scope(target_organization_id, target_store_id))
+
+  where employee.organization_id =
+      target_organization_id
+
+    and employee.profile_id =
+      (
+        select
+          private.current_profile_id()
+      )
+
+    and employee.status =
+      'active'
+
+    and (
+      select private.has_store_read_scope(
+        target_organization_id,
+        target_store_id
+      )
+    )
+
   order by employee.created_at
+
   limit 1;
 $$;
 
@@ -9087,7 +9909,7 @@ ALTER FUNCTION "private"."inventory_actor"("target_organization_id" "uuid", "tar
 -- Name: FUNCTION "inventory_actor"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: COMMENT; Schema: private; Owner: postgres
 --
 
-COMMENT ON FUNCTION "private"."inventory_actor"("target_organization_id" "uuid", "target_store_id" "uuid") IS 'Returns the active authenticated employee when the central capability/store-scope model authorizes the target store. Organization-wide stores.manage roles do not require per-store assignments.';
+COMMENT ON FUNCTION "private"."inventory_actor"("target_organization_id" "uuid", "target_store_id" "uuid") IS 'Resolves the active inventory employee through the permanent provider-neutral TINDIO profile identity while preserving canonical store-scope authorization.';
 
 
 --
@@ -9165,6 +9987,72 @@ $$;
 ALTER FUNCTION "private"."inventory_organization_actor"("target_organization_id" "uuid") OWNER TO "postgres";
 
 --
+-- Name: inventory_transfer_child_operation_id("uuid", "text"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."inventory_transfer_child_operation_id"("target_parent_operation_id" "uuid", "target_command" "text") RETURNS "uuid"
+    LANGUAGE "plpgsql" IMMUTABLE STRICT
+    SET "search_path" TO ''
+    AS $$
+declare
+  digest text;
+begin
+  if target_command not in ('submit', 'approve', 'dispatch') then
+    raise exception 'Unsupported inventory transfer child command.' using errcode = '23514';
+  end if;
+
+  digest := md5(
+    'tindio:inventory-transfer:'
+    || target_parent_operation_id::text
+    || ':'
+    || target_command
+  );
+
+  return (
+    substr(digest, 1, 8) || '-'
+    || substr(digest, 9, 4) || '-'
+    || substr(digest, 13, 4) || '-'
+    || substr(digest, 17, 4) || '-'
+    || substr(digest, 21, 12)
+  )::uuid;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."inventory_transfer_child_operation_id"("target_parent_operation_id" "uuid", "target_command" "text") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "inventory_transfer_child_operation_id"("target_parent_operation_id" "uuid", "target_command" "text"); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."inventory_transfer_child_operation_id"("target_parent_operation_id" "uuid", "target_command" "text") IS 'Derives deterministic submit, approve, and dispatch operation identities from a direct adapter external operation ID without extension dependencies.';
+
+
+--
+-- Name: is_made_to_order_composite("uuid", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."is_made_to_order_composite"("target_organization_id" "uuid", "target_product_id" "uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select exists (
+    select 1
+    from public.products product
+    where product.organization_id = target_organization_id
+      and product.id = target_product_id
+      and product.status = 'active'
+      and product.product_type = 'simple'
+      and product.track_inventory
+      and product.is_composite
+      and product.composite_inventory_mode = 'made_to_order'
+  );
+$$;
+
+
+ALTER FUNCTION "private"."is_made_to_order_composite"("target_organization_id" "uuid", "target_product_id" "uuid") OWNER TO "postgres";
+
+--
 -- Name: is_organization_creator("uuid"); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -9173,14 +10061,17 @@ CREATE OR REPLACE FUNCTION "private"."is_organization_creator"("target_organizat
     SET "search_path" TO ''
     AS $$
   select coalesce(
-    (select auth.uid()) is not null
+    (select private.current_profile_id()) is not null
     and exists (
       select 1
       from public.organizations organization
       where organization.id = target_organization_id
-        and organization.created_by = (select auth.uid())
+        and organization.created_by =
+          (select private.current_profile_id())
         and organization.status = 'active'
-    ), false);
+    ),
+    false
+  );
 $$;
 
 
@@ -9195,7 +10086,7 @@ CREATE OR REPLACE FUNCTION "private"."is_organization_member"("target_organizati
     SET "search_path" TO ''
     AS $$
   select
-    (select auth.uid()) is not null
+    (select private.current_profile_id()) is not null
     and exists (
       select 1
       from public.employees employee
@@ -9203,7 +10094,8 @@ CREATE OR REPLACE FUNCTION "private"."is_organization_member"("target_organizati
         on organization.id = employee.organization_id
        and organization.status = 'active'
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id =
+          (select private.current_profile_id())
         and employee.status = 'active'
     );
 $$;
@@ -9497,6 +10389,204 @@ $$;
 ALTER FUNCTION "private"."manage_organization_lifecycle"("target_organization_id" "uuid", "target_action" "text", "target_reason" "text") OWNER TO "postgres";
 
 --
+-- Name: migrate_legacy_stock_transfer_statuses(); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."migrate_legacy_stock_transfer_statuses"() RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if exists (
+    select 1 from public.stock_transfers transfer
+    where transfer.status = 'completed'
+      and (not exists (select 1 from public.stock_transfer_lines line where line.stock_transfer_id = transfer.id)
+        or exists (select 1 from public.stock_transfer_lines line where line.stock_transfer_id = transfer.id
+          and line.quantity <> line.received_quantity + line.short_quantity))
+  ) then
+    raise exception 'Unsafe completed transfer history blocks canonical status cleanup.' using errcode = '23514';
+  end if;
+  update public.stock_transfers set status = 'dispatched' where status = 'in_transit';
+  update public.stock_transfers
+  set status = 'received',
+      received_by_employee_id = coalesce(received_by_employee_id, transferred_by_employee_id),
+      received_at = coalesce(received_at, completed_at)
+  where status = 'completed';
+  if exists (select 1 from public.stock_transfers where status in ('in_transit', 'completed')) then
+    raise exception 'Legacy transfer statuses remain after deterministic cleanup.' using errcode = '23514';
+  end if;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."migrate_legacy_stock_transfer_statuses"() OWNER TO "postgres";
+
+--
+-- Name: normalize_inventory_transfer_lines("jsonb"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."normalize_inventory_transfer_lines"("target_lines" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" IMMUTABLE
+    SET "search_path" TO ''
+    AS $_$
+declare
+  normalized_lines jsonb;
+begin
+  if target_lines is null
+     or jsonb_typeof(target_lines) <> 'array'
+     or jsonb_array_length(target_lines) not between 1 and 100 then
+    raise exception 'A transfer needs one to 100 items.' using errcode = '23514';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_array_elements(target_lines) transfer_line(value)
+    where jsonb_typeof(transfer_line.value) <> 'object'
+      or coalesce(transfer_line.value ->> 'product_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      or (
+        nullif(transfer_line.value ->> 'variant_id', '') is not null
+        and nullif(transfer_line.value ->> 'variant_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      )
+      or coalesce(transfer_line.value ->> 'quantity', '') !~ '^\d+(\.\d{1,3})?$'
+      or (transfer_line.value ->> 'quantity')::numeric <= 0
+  )
+  or (select count(*) from jsonb_array_elements(target_lines)) <> (
+    select count(distinct format(
+      '%s|%s',
+      lower(btrim(value ->> 'product_id')),
+      coalesce(nullif(lower(btrim(value ->> 'variant_id')), ''), '')
+    ))
+    from jsonb_array_elements(target_lines)
+  ) then
+    raise exception 'Transfer lines must contain unique, valid items and positive quantities.' using errcode = '23514';
+  end if;
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'product_id', normalized.product_id,
+        'variant_id', normalized.variant_id,
+        'quantity', normalized.quantity
+      )
+      order by normalized.product_id, normalized.variant_id
+    ),
+    '[]'::jsonb
+  )
+  into normalized_lines
+  from (
+    select
+      lower(btrim(value ->> 'product_id')) as product_id,
+      nullif(lower(btrim(value ->> 'variant_id')), '') as variant_id,
+      ((value ->> 'quantity')::numeric(14,3))::text as quantity
+    from jsonb_array_elements(target_lines)
+  ) normalized;
+
+  return normalized_lines;
+end;
+$_$;
+
+
+ALTER FUNCTION "private"."normalize_inventory_transfer_lines"("target_lines" "jsonb") OWNER TO "postgres";
+
+--
+-- Name: normalize_inventory_transfer_receipt_lines("jsonb"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."normalize_inventory_transfer_receipt_lines"("target_lines" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" IMMUTABLE
+    SET "search_path" TO ''
+    AS $_$
+declare
+  normalized_lines jsonb;
+  uses_legacy_line_shape boolean;
+begin
+  if target_lines is null
+     or jsonb_typeof(target_lines) <> 'array'
+     or jsonb_array_length(target_lines) not between 1 and 100 then
+    raise exception 'A transfer receipt needs one to 100 items.' using errcode = '23514';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_array_elements(target_lines) receipt(value)
+    where jsonb_typeof(receipt.value) <> 'object'
+      or coalesce(receipt.value ->> 'stock_transfer_line_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      or coalesce(receipt.value ->> 'received_quantity', receipt.value ->> 'quantity', '') !~ '^\d+(\.\d{1,3})?$'
+      or coalesce(receipt.value ->> 'short_quantity', '0') !~ '^\d+(\.\d{1,3})?$'
+      or (
+        (coalesce(receipt.value ->> 'received_quantity', receipt.value ->> 'quantity'))::numeric
+        + (coalesce(receipt.value ->> 'short_quantity', '0'))::numeric
+      ) <= 0
+      or (
+        (coalesce(receipt.value ->> 'short_quantity', '0'))::numeric > 0
+        and char_length(btrim(coalesce(receipt.value ->> 'discrepancy_note', ''))) not between 2 and 500
+      )
+  )
+  or (select count(*) from jsonb_array_elements(target_lines)) <> (
+    select count(distinct lower(btrim(value ->> 'stock_transfer_line_id')))
+    from jsonb_array_elements(target_lines)
+  ) then
+    raise exception 'Receipt lines, quantities, and discrepancy notes are invalid.' using errcode = '23514';
+  end if;
+
+  select bool_and(
+    not (value ? 'received_quantity')
+    and not (value ? 'short_quantity')
+    and not (value ? 'discrepancy_note')
+  )
+  into uses_legacy_line_shape
+  from jsonb_array_elements(target_lines);
+
+  if uses_legacy_line_shape then
+    select coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'stock_transfer_line_id', normalized.stock_transfer_line_id,
+          'quantity', normalized.received_quantity
+        )
+        order by normalized.stock_transfer_line_id
+      ),
+      '[]'::jsonb
+    )
+    into normalized_lines
+    from (
+      select
+        lower(btrim(value ->> 'stock_transfer_line_id')) as stock_transfer_line_id,
+        ((value ->> 'quantity')::numeric(14,3))::text as received_quantity
+      from jsonb_array_elements(target_lines)
+    ) normalized;
+  else
+    select coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'stock_transfer_line_id', normalized.stock_transfer_line_id,
+          'received_quantity', normalized.received_quantity,
+          'short_quantity', normalized.short_quantity,
+          'discrepancy_note', normalized.discrepancy_note
+        )
+        order by normalized.stock_transfer_line_id
+      ),
+      '[]'::jsonb
+    )
+    into normalized_lines
+    from (
+      select
+        lower(btrim(value ->> 'stock_transfer_line_id')) as stock_transfer_line_id,
+        ((coalesce(value ->> 'received_quantity', value ->> 'quantity'))::numeric(14,3))::text as received_quantity,
+        ((coalesce(value ->> 'short_quantity', '0'))::numeric(14,3))::text as short_quantity,
+        nullif(btrim(coalesce(value ->> 'discrepancy_note', '')), '') as discrepancy_note
+      from jsonb_array_elements(target_lines)
+    ) normalized;
+  end if;
+
+  return normalized_lines;
+end;
+$_$;
+
+
+ALTER FUNCTION "private"."normalize_inventory_transfer_receipt_lines"("target_lines" "jsonb") OWNER TO "postgres";
+
+--
 -- Name: normalize_open_ticket_cart("jsonb"); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -9711,8 +10801,7 @@ begin
     raise exception 'An adjustment operation identity is required.' using errcode = '23514';
   end if;
 
-  if target_quantity_delta is null
-    or target_quantity_delta = 0
+  if target_quantity_delta is null or target_quantity_delta = 0
     or target_quantity_delta <> round(target_quantity_delta, 3) then
     raise exception 'Adjustment quantity must be non-zero with at most three decimal places.' using errcode = '23514';
   end if;
@@ -9743,17 +10832,41 @@ begin
       and product.organization_id = target_organization_id
       and product.status = 'active'
       and product.track_inventory
+      and (
+        (product.product_type = 'simple' and target_variant_id is null)
+        or (product.product_type = 'variable' and target_variant_id is not null and exists (
+          select 1 from public.product_variants variant
+          where variant.id = target_variant_id
+            and variant.product_id = product.id
+            and variant.organization_id = product.organization_id
+            and variant.is_active
+        ))
+      )
   ) then
-    raise exception 'Choose an active inventory-tracked item available in this store.' using errcode = '23514';
+    raise exception 'Choose an active inventory-tracked item or variant available in this store.' using errcode = '23514';
   end if;
 
-  select adjustment.* into existing_adjustment
-  from public.inventory_adjustments adjustment
-  where adjustment.organization_id = target_organization_id
-    and adjustment.operation_id = target_operation_id
-  for key share;
+  insert into public.inventory_adjustments (
+    organization_id, store_id, product_id, variant_id, quantity_delta, reason_code,
+    note, operation_id, import_batch_id, created_by_employee_id
+  ) values (
+    target_organization_id, target_store_id, target_product_id, target_variant_id,
+    target_quantity_delta, selected_reason.code, resolved_note, target_operation_id,
+    target_import_batch_id, target_actor_employee_id
+  )
+  on conflict (organization_id, operation_id) do nothing
+  returning id, adjustment_number into adjustment_id, created_adjustment_number;
 
-  if existing_adjustment.id is not null then
+  if adjustment_id is null then
+    select adjustment.* into existing_adjustment
+    from public.inventory_adjustments adjustment
+    where adjustment.organization_id = target_organization_id
+      and adjustment.operation_id = target_operation_id
+    for key share;
+
+    if existing_adjustment.id is null then
+      raise exception 'The adjustment operation could not be recovered.' using errcode = 'P0002';
+    end if;
     if existing_adjustment.store_id <> target_store_id
       or existing_adjustment.product_id <> target_product_id
       or existing_adjustment.variant_id is distinct from target_variant_id
@@ -9784,28 +10897,16 @@ begin
       and level.variant_id is not distinct from target_variant_id
     for update;
 
-    if current_quantity is null
-      or current_quantity <> 0
-      or exists (
-        select 1
-        from public.inventory_movements movement
-        where movement.organization_id = target_organization_id
-          and movement.store_id = target_store_id
-          and movement.product_id = target_product_id
-          and movement.variant_id is not distinct from target_variant_id
-      ) then
+    if current_quantity is null or current_quantity <> 0 or exists (
+      select 1 from public.inventory_movements movement
+      where movement.organization_id = target_organization_id
+        and movement.store_id = target_store_id
+        and movement.product_id = target_product_id
+        and movement.variant_id is not distinct from target_variant_id
+    ) then
       raise exception 'Opening stock can only be recorded once for an item with no prior movement.' using errcode = '23514';
     end if;
   end if;
-
-  insert into public.inventory_adjustments (
-    organization_id, store_id, product_id, variant_id, quantity_delta, reason_code,
-    note, operation_id, import_batch_id, created_by_employee_id
-  ) values (
-    target_organization_id, target_store_id, target_product_id, target_variant_id,
-    target_quantity_delta, selected_reason.code, resolved_note, target_operation_id,
-    target_import_batch_id, target_actor_employee_id
-  ) returning id, adjustment_number into adjustment_id, created_adjustment_number;
 
   perform private.apply_inventory_change_v2(
     target_organization_id, target_store_id, target_product_id, target_variant_id,
@@ -9819,7 +10920,6 @@ begin
   where movement.organization_id = target_organization_id
     and movement.source_type = 'inventory_adjustment'
     and movement.source_id = adjustment_id;
-
   if movement_id is null then
     raise exception 'The adjustment movement was not recorded.' using errcode = 'P0002';
   end if;
@@ -9828,24 +10928,26 @@ begin
     target_organization_id, 'INVENTORY_ADJUSTED', 'inventory.adjust',
     target_actor_employee_id, null, target_store_id, null, null, null, resolved_note,
     jsonb_build_object(
-      'adjustment_id', adjustment_id,
-      'adjustment_number', created_adjustment_number,
-      'operation_id', target_operation_id,
-      'import_batch_id', target_import_batch_id,
-      'reason_code', selected_reason.code,
-      'movement_type', selected_reason.movement_type,
-      'quantity_before', quantity_before,
-      'quantity_delta', target_quantity_delta,
+      'adjustment_id', adjustment_id, 'adjustment_number', created_adjustment_number,
+      'operation_id', target_operation_id, 'import_batch_id', target_import_batch_id,
+      'reason_code', selected_reason.code, 'movement_type', selected_reason.movement_type,
+      'quantity_before', quantity_before, 'quantity_delta', target_quantity_delta,
       'quantity_after', quantity_after
     )
   );
-
   return movement_id;
 end;
 $$;
 
 
 ALTER FUNCTION "private"."post_inventory_adjustment"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_actor_employee_id" "uuid", "target_import_batch_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "post_inventory_adjustment"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_actor_employee_id" "uuid", "target_import_batch_id" "uuid"); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."post_inventory_adjustment"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_actor_employee_id" "uuid", "target_import_batch_id" "uuid") IS 'Canonical immutable adjustment posting core. Operation reservation makes exact concurrent retries replay-safe; opening stock remains restricted to an untouched zero-quantity position.';
+
 
 --
 -- Name: post_inventory_count("uuid", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -10155,229 +11257,104 @@ $$;
 ALTER FUNCTION "private"."prevent_organization_recovery_drill_mutation"() OWNER TO "postgres";
 
 --
--- Name: produce_composite("uuid", "uuid", "uuid", numeric, "text"); Type: FUNCTION; Schema: private; Owner: postgres
+-- Name: prevent_production_evidence_mutation(); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
-CREATE OR REPLACE FUNCTION "private"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text") RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "private"."prevent_production_evidence_mutation"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-declare actor_id uuid; run_id uuid; recipe_item record; component_level public.inventory_levels%rowtype; output_level public.inventory_levels%rowtype; component_quantity numeric(14,3); total_cost numeric := 0; output_unit_cost bigint;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
-  if target_quantity is null or target_quantity <= 0 or target_quantity <> round(target_quantity, 3) then raise exception 'Production quantity must be positive and use at most three decimals.' using errcode = '23514'; end if;
-  actor_id := private.inventory_actor(target_organization_id, target_store_id);
-  if actor_id is null then raise exception 'An assigned employee is required for this store.' using errcode = '42501'; end if;
-  if not exists (select 1 from public.products product where product.id = target_product_id and product.organization_id = target_organization_id and product.is_composite and product.track_inventory and product.status = 'active') then raise exception 'Choose an active composite inventory product.' using errcode = '23514'; end if;
-  if not exists (select 1 from public.product_components recipe where recipe.organization_id = target_organization_id and recipe.product_id = target_product_id) then raise exception 'This composite product needs at least one component recipe item.' using errcode = '23514'; end if;
-  perform 1 from public.inventory_levels level where level.organization_id = target_organization_id and level.store_id = target_store_id and (level.product_id = target_product_id or exists (select 1 from public.product_components recipe where recipe.organization_id = target_organization_id and recipe.product_id = target_product_id and recipe.component_product_id = level.product_id and recipe.component_variant_id is not distinct from level.variant_id)) order by level.product_id, level.variant_id for update;
-  select * into output_level from public.inventory_levels level where level.organization_id = target_organization_id and level.store_id = target_store_id and level.product_id = target_product_id and level.variant_id is null for update;
-  if output_level.id is null then raise exception 'The composite output stock projection is not initialized.' using errcode = '23514'; end if;
-  insert into public.production_runs (organization_id, store_id, product_id, quantity_produced, produced_by_employee_id, note)
-  values (target_organization_id, target_store_id, target_product_id, target_quantity, actor_id, nullif(btrim(target_note), '')) returning id into run_id;
-  for recipe_item in select * from public.product_components recipe where recipe.organization_id = target_organization_id and recipe.product_id = target_product_id order by recipe.component_product_id, recipe.component_variant_id loop
-    component_quantity := recipe_item.quantity_per_composite * target_quantity;
-    select * into component_level from public.inventory_levels level where level.organization_id = target_organization_id and level.store_id = target_store_id and level.product_id = recipe_item.component_product_id and level.variant_id is not distinct from recipe_item.component_variant_id for update;
-    if component_level.id is null or component_level.quantity < component_quantity then raise exception 'One production component has insufficient stock.' using errcode = '23514'; end if;
-    total_cost := total_cost + component_quantity * component_level.average_cost_minor;
-    perform private.apply_inventory_change_v2(target_organization_id, target_store_id, component_level.product_id, component_level.variant_id, -component_quantity, 'PRODUCTION', actor_id, 'Consumed by production', 'production_run', run_id, component_level.average_cost_minor);
-  end loop;
-  output_unit_cost := round(total_cost / target_quantity)::bigint;
-  perform private.apply_inventory_change_v2(target_organization_id, target_store_id, target_product_id, null, target_quantity, 'PRODUCTION', actor_id, 'Produced composite stock', 'production_run', run_id, output_unit_cost);
-  perform private.write_audit_log(target_organization_id, 'PRODUCTION_COMPLETED', 'inventory.manage', actor_id, null, target_store_id, null, null, null, target_note, jsonb_build_object('production_run_id', run_id, 'product_id', target_product_id, 'quantity', target_quantity, 'unit_cost_minor', output_unit_cost));
-  return run_id;
+  raise exception 'Posted production evidence is immutable. Record a new production or correcting stock transaction instead.'
+    using errcode = '55000';
 end;
 $$;
 
 
-ALTER FUNCTION "private"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text") OWNER TO "postgres";
+ALTER FUNCTION "private"."prevent_production_evidence_mutation"() OWNER TO "postgres";
 
 --
--- Name: produce_composite("uuid", "uuid", "uuid", numeric, "text", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
+-- Name: protect_composite_inventory_mode(); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
-CREATE OR REPLACE FUNCTION "private"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "private"."protect_composite_inventory_mode"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-declare
-  actor_id uuid;
-  run_id uuid;
-  existing_run public.production_runs%rowtype;
-  component record;
-  component_level public.inventory_levels%rowtype;
-  output_level public.inventory_levels%rowtype;
-  component_quantity numeric(14,3);
-  total_cost numeric := 0;
-  output_unit_cost bigint;
-  components_cost_known boolean := true;
-  normalized_note text;
 begin
-  if (select auth.uid()) is null
-    or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
-    raise exception 'Inventory permission is required.' using errcode = '42501';
-  end if;
-
-  if target_operation_id is null then
-    raise exception 'An operation ID is required for production.' using errcode = '23514';
-  end if;
-
-  if target_quantity is null or target_quantity <= 0 or target_quantity <> round(target_quantity, 3) then
-    raise exception 'Production quantity must be positive and use at most three decimals.' using errcode = '23514';
-  end if;
-
-  actor_id := private.inventory_actor(target_organization_id, target_store_id);
-  if actor_id is null then
-    raise exception 'An assigned employee is required for this store.' using errcode = '42501';
-  end if;
-
-  if not exists (
-    select 1
-    from public.products product
-    where product.id = target_product_id
-      and product.organization_id = target_organization_id
-      and product.is_composite
-      and product.track_inventory
-      and product.status = 'active'
-  ) then
-    raise exception 'Choose an active composite inventory product.' using errcode = '23514';
-  end if;
-
-  if not exists (
-    select 1
-    from public.product_components recipe
-    where recipe.organization_id = target_organization_id
-      and recipe.product_id = target_product_id
-  ) then
-    raise exception 'This composite product needs at least one component recipe item.' using errcode = '23514';
-  end if;
-
-  normalized_note := nullif(btrim(target_note), '');
-  select * into existing_run
-  from public.production_runs production_run
-  where production_run.organization_id = target_organization_id
-    and production_run.operation_id = target_operation_id;
-
-  if found then
-    if existing_run.store_id is distinct from target_store_id
-      or existing_run.product_id is distinct from target_product_id
-      or existing_run.quantity_produced is distinct from target_quantity
-      or existing_run.note is distinct from normalized_note then
-      raise exception 'This operation ID was already used for a different production run.' using errcode = '23514';
-    end if;
-    return existing_run.id;
-  end if;
-
-  perform 1
-  from public.inventory_levels level
-  where level.organization_id = target_organization_id
-    and level.store_id = target_store_id
+  if (new.composite_inventory_mode is distinct from old.composite_inventory_mode
+      or new.is_composite is distinct from old.is_composite)
     and (
-      level.product_id = target_product_id
+      exists (
+        select 1
+        from public.inventory_movements movement
+        where movement.organization_id = old.organization_id
+          and movement.product_id = old.id
+      )
       or exists (
         select 1
-        from public.product_components recipe
-        where recipe.organization_id = target_organization_id
-          and recipe.product_id = target_product_id
-          and recipe.component_product_id = level.product_id
-          and recipe.component_variant_id is not distinct from level.variant_id
+        from public.production_runs production_run
+        where production_run.organization_id = old.organization_id
+          and production_run.product_id = old.id
       )
-    )
-  order by level.product_id, level.variant_id
-  for update;
-
-  select * into output_level
-  from public.inventory_levels level
-  where level.organization_id = target_organization_id
-    and level.store_id = target_store_id
-    and level.product_id = target_product_id
-    and level.variant_id is null
-  for update;
-
-  if output_level.id is null then
-    raise exception 'The composite output stock projection is not initialized.' using errcode = '23514';
+    ) then
+    raise exception 'Composite stock mode cannot change after inventory history begins.'
+      using errcode = '55000';
   end if;
-
-  insert into public.production_runs (
-    organization_id, store_id, product_id, quantity_produced, produced_by_employee_id, note, operation_id
-  ) values (
-    target_organization_id, target_store_id, target_product_id, target_quantity,
-    actor_id, normalized_note, target_operation_id
-  ) on conflict (organization_id, operation_id) where operation_id is not null do nothing
-  returning id into run_id;
-
-  if run_id is null then
-    select * into existing_run
-    from public.production_runs production_run
-    where production_run.organization_id = target_organization_id
-      and production_run.operation_id = target_operation_id;
-    if existing_run.store_id is distinct from target_store_id
-      or existing_run.product_id is distinct from target_product_id
-      or existing_run.quantity_produced is distinct from target_quantity
-      or existing_run.note is distinct from normalized_note then
-      raise exception 'This operation ID was already used for a different production run.' using errcode = '23514';
-    end if;
-    return existing_run.id;
-  end if;
-
-  for component in
-    select *
-    from public.product_components item
-    where item.organization_id = target_organization_id
-      and item.product_id = target_product_id
-    order by item.component_product_id, item.component_variant_id
-  loop
-    component_quantity := component.quantity_per_composite * target_quantity;
-    select * into component_level
-    from public.inventory_levels level
-    where level.organization_id = target_organization_id
-      and level.store_id = target_store_id
-      and level.product_id = component.component_product_id
-      and level.variant_id is not distinct from component.component_variant_id
-    for update;
-
-    if component_level.id is null or component_level.quantity < component_quantity then
-      raise exception 'One production component has insufficient stock.' using errcode = '23514';
-    end if;
-
-    total_cost := total_cost + component_quantity * component_level.average_cost_minor;
-    components_cost_known := components_cost_known and component_level.cost_is_known;
-    perform private.apply_inventory_change_v2(
-      target_organization_id, target_store_id, component_level.product_id, component_level.variant_id,
-      -component_quantity, 'PRODUCTION', actor_id, 'Consumed by production', 'production_run',
-      run_id, component_level.average_cost_minor
-    );
-  end loop;
-
-  output_unit_cost := round(total_cost / target_quantity)::bigint;
-  update public.production_runs
-  set cost_is_known = components_cost_known
-  where id = run_id
-    and organization_id = target_organization_id;
-
-  perform private.apply_inventory_change_v2(
-    target_organization_id, target_store_id, target_product_id, null, target_quantity,
-    'PRODUCTION', actor_id, 'Produced composite stock', 'production_run', run_id, output_unit_cost
-  );
-
-  perform private.write_audit_log(
-    target_organization_id, 'PRODUCTION_COMPLETED', 'inventory.manage', actor_id, null,
-    target_store_id, null, null, null, target_note,
-    jsonb_build_object(
-      'production_run_id', run_id,
-      'product_id', target_product_id,
-      'quantity', target_quantity,
-      'unit_cost_minor', output_unit_cost,
-      'cost_is_known', components_cost_known,
-      'operation_id', target_operation_id
-    )
-  );
-  return run_id;
+  return new;
 end;
 $$;
 
 
-ALTER FUNCTION "private"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "private"."protect_composite_inventory_mode"() OWNER TO "postgres";
+
+--
+-- Name: protect_product_unit_identity(); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."protect_product_unit_identity"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if tg_op = 'DELETE' then
+    if old.is_base then
+      raise exception 'The base unit cannot be deleted.' using errcode = '23514';
+    end if;
+    return old;
+  end if;
+
+  if tg_op = 'INSERT' and new.is_base then
+    if new.factor_to_base <> 1
+       or new.unit_code is distinct from (
+         select product.unit from public.products product
+         where product.id = new.product_id
+           and product.organization_id = new.organization_id
+       ) then
+      raise exception 'A base unit must match the product stock unit with factor 1.' using errcode = '23514';
+    end if;
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    if new.organization_id is distinct from old.organization_id
+       or new.product_id is distinct from old.product_id
+       or new.is_base is distinct from old.is_base then
+      raise exception 'A product unit cannot change product, organization, or base identity.' using errcode = '23514';
+    end if;
+    if old.is_base and (
+      new.unit_code is distinct from old.unit_code
+      or new.factor_to_base is distinct from old.factor_to_base
+    ) then
+      raise exception 'The base unit code and conversion factor are immutable.' using errcode = '23514';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."protect_product_unit_identity"() OWNER TO "postgres";
 
 --
 -- Name: provision_customer_display_session("uuid", "uuid", "text", "text"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -10739,6 +11716,131 @@ $_$;
 ALTER FUNCTION "private"."reallocate_open_ticket_lines"("target_organization_id" "uuid", "target_source_ticket_id" "uuid", "target_destination_ticket_id" "uuid", "target_lines" "jsonb", "target_preserve_empty_source" boolean, "target_replace_destination" boolean) OWNER TO "postgres";
 
 --
+-- Name: receive_inventory_transfer("uuid", "uuid", "jsonb", "text", "uuid", boolean); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_legacy_in_transit" boolean) RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare transfer public.stock_transfers%rowtype;
+begin
+  select * into transfer from public.stock_transfers where organization_id = target_organization_id and id = target_stock_transfer_id;
+  if transfer.id is null then raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514'; end if;
+  if transfer.stock_request_id is not null then raise exception 'Receive replenishment transfers from the stock request workflow so shortages stay traceable.' using errcode = '23514'; end if;
+  if (select auth.uid()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive')) then
+    raise exception 'Transfer receive permission is required.' using errcode = '42501';
+  end if;
+  return private.receive_inventory_transfer_core(target_organization_id, target_stock_transfer_id, target_lines, target_note, target_operation_id, false);
+end;
+$$;
+
+
+ALTER FUNCTION "private"."receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_legacy_in_transit" boolean) OWNER TO "postgres";
+
+--
+-- Name: receive_inventory_transfer_core("uuid", "uuid", "jsonb", "text", "uuid", boolean); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."receive_inventory_transfer_core"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_request_transfer" boolean) RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_id uuid; command_payload jsonb; existing_operation private.stock_transfer_operations%rowtype;
+  existing_receipt public.stock_transfer_receipts%rowtype; from_status text; has_shortage boolean;
+  line jsonb; normalized_lines jsonb; normalized_note text := nullif(btrim(target_note), '');
+  receipt_id uuid; receipt_number bigint; received_now numeric(14,3); remaining numeric(14,3);
+  short_now numeric(14,3); to_status text; total_remaining numeric(14,3);
+  transfer public.stock_transfers%rowtype; transfer_line public.stock_transfer_lines%rowtype;
+begin
+  if target_operation_id is null then raise exception 'A stable transfer-receipt operation ID is required.' using errcode = '23514'; end if;
+  if target_note is not null and char_length(btrim(target_note)) > 500 then raise exception 'The transfer receipt note is too long.' using errcode = '23514'; end if;
+  normalized_lines := private.normalize_inventory_transfer_receipt_lines(target_lines);
+  command_payload := jsonb_build_object('stock_transfer_id', target_stock_transfer_id, 'note', normalized_note, 'lines', normalized_lines);
+  select * into transfer from public.stock_transfers item where item.organization_id = target_organization_id and item.id = target_stock_transfer_id;
+  if transfer.id is null or (transfer.stock_request_id is not null) <> allow_request_transfer then
+    raise exception 'Choose a transfer in the expected workflow.' using errcode = '23514';
+  end if;
+  actor_id := private.inventory_actor(target_organization_id, transfer.destination_store_id);
+  if actor_id is null then raise exception 'An active employee assigned to the destination store is required.' using errcode = '42501'; end if;
+  perform pg_advisory_xact_lock(hashtextextended(target_organization_id::text || ':' || target_operation_id::text, 0));
+  select * into existing_operation from private.stock_transfer_operations operation
+   where operation.organization_id = target_organization_id and operation.operation_id = target_operation_id for update;
+  if found then
+    if existing_operation.command = 'receive' and existing_operation.normalized_payload = command_payload then return existing_operation.result_id; end if;
+    raise exception 'This operation ID is already assigned to a different transfer command.' using errcode = '23505';
+  end if;
+  select * into existing_receipt from public.stock_transfer_receipts receipt
+   where receipt.organization_id = target_organization_id and receipt.operation_id = target_operation_id for update;
+  if found then
+    if existing_receipt.stock_transfer_id = transfer.id and existing_receipt.destination_store_id = transfer.destination_store_id
+      and existing_receipt.received_by_employee_id = actor_id and existing_receipt.note is not distinct from normalized_note
+      and existing_receipt.operation_payload = normalized_lines then return existing_receipt.id; end if;
+    raise exception 'This operation ID is already assigned to a different transfer receipt.' using errcode = '23505';
+  end if;
+  select * into transfer from public.stock_transfers item
+   where item.organization_id = target_organization_id and item.id = target_stock_transfer_id for update;
+  if transfer.status not in ('dispatched', 'partially_received') then raise exception 'This transfer is not available for receiving.' using errcode = '23514'; end if;
+  from_status := transfer.status;
+  receipt_number := nextval('private.tindio_stock_transfer_receipt_number_sequence'::regclass);
+  insert into public.stock_transfer_receipts (organization_id, receipt_number, operation_id, operation_payload,
+    stock_transfer_id, destination_store_id, received_by_employee_id, note)
+  values (target_organization_id, receipt_number, target_operation_id, normalized_lines,
+    transfer.id, transfer.destination_store_id, actor_id, normalized_note) returning id into receipt_id;
+  for line in select value from jsonb_array_elements(normalized_lines) order by value ->> 'stock_transfer_line_id'
+  loop
+    select * into transfer_line from public.stock_transfer_lines item
+     where item.id = (line ->> 'stock_transfer_line_id')::uuid and item.stock_transfer_id = transfer.id
+       and item.organization_id = target_organization_id
+       and ((allow_request_transfer and item.stock_request_line_id is not null) or (not allow_request_transfer and item.stock_request_line_id is null)) for update;
+    if transfer_line.id is null then raise exception 'A receipt line does not belong to this transfer workflow.' using errcode = '23514'; end if;
+    received_now := coalesce(line ->> 'received_quantity', line ->> 'quantity')::numeric(14,3);
+    short_now := coalesce(line ->> 'short_quantity', '0')::numeric(14,3);
+    remaining := transfer_line.quantity - transfer_line.received_quantity - transfer_line.short_quantity;
+    if received_now + short_now > remaining then raise exception 'Received and short quantities cannot exceed the remaining dispatched quantity.' using errcode = '23514'; end if;
+    if received_now > 0 then
+      insert into public.stock_transfer_receipt_lines (organization_id, stock_transfer_receipt_id, stock_transfer_line_id, quantity_received)
+      values (target_organization_id, receipt_id, transfer_line.id, received_now);
+      perform private.apply_inventory_change_v2(target_organization_id, transfer.destination_store_id,
+        transfer_line.product_id, transfer_line.variant_id, received_now, 'TRANSFER_IN', actor_id,
+        format('Transfer TR-%s receipt %s', lpad(transfer.transfer_number::text, 6, '0'), lpad(receipt_number::text, 6, '0')),
+        'stock_transfer_receipt', receipt_id, transfer_line.unit_cost_minor);
+    end if;
+    update public.stock_transfer_lines set received_quantity = received_quantity + received_now,
+      short_quantity = short_quantity + short_now where id = transfer_line.id;
+  end loop;
+  select coalesce(sum(quantity - received_quantity - short_quantity), 0) into total_remaining
+    from public.stock_transfer_lines where stock_transfer_id = transfer.id;
+  select exists(select 1 from public.stock_transfer_lines where stock_transfer_id = transfer.id and short_quantity > 0) into has_shortage;
+  to_status := case when total_remaining = 0 then 'received' else 'partially_received' end;
+  update public.stock_transfers set status = to_status, received_by_employee_id = actor_id, received_at = now(),
+    completed_at = case when total_remaining = 0 then now() else completed_at end where id = transfer.id;
+  insert into private.stock_transfer_operations (organization_id, stock_transfer_id, operation_id, command,
+    normalized_payload, from_status, to_status, actor_employee_id, result_id, note)
+  values (target_organization_id, transfer.id, target_operation_id, 'receive', command_payload,
+    from_status, to_status, actor_id, receipt_id, normalized_note);
+  perform private.write_audit_log(target_organization_id,
+    case when total_remaining = 0 then 'STOCK_TRANSFER_RECEIVED' else 'STOCK_TRANSFER_PARTIALLY_RECEIVED' end,
+    'inventory.transfer.receive', actor_id, null, transfer.destination_store_id, null, null, null, normalized_note,
+    jsonb_build_object('stock_transfer_id', transfer.id, 'transfer_number', transfer.transfer_number,
+      'receipt_id', receipt_id, 'receipt_number', receipt_number, 'operation_id', target_operation_id,
+      'remaining_quantity', total_remaining, 'has_discrepancy', has_shortage, 'receipt_lines', normalized_lines));
+  return receipt_id;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."receive_inventory_transfer_core"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_request_transfer" boolean) OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "receive_inventory_transfer_core"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_request_transfer" boolean); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."receive_inventory_transfer_core"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_request_transfer" boolean) IS 'Shared locked canonical physical receipt core for direct and request adapters; never exposed to API roles.';
+
+
+--
 -- Name: receive_purchase_order("uuid", "uuid", "jsonb", "text", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -11001,295 +12103,72 @@ ALTER FUNCTION "private"."receive_purchase_order"("target_organization_id" "uuid
 CREATE OR REPLACE FUNCTION "private"."receive_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
-    AS $_$
+    AS $$
 declare
-  request_row public.stock_requests%rowtype;
-  transfer_row public.stock_transfers%rowtype;
-  existing_receipt public.stock_transfer_receipts%rowtype;
-  actor_id uuid;
-  receipt_id uuid;
-  receipt_number bigint;
-  line jsonb;
-  transfer_line public.stock_transfer_lines%rowtype;
-  request_line public.stock_request_lines%rowtype;
-  received_now numeric(14,3);
-  short_now numeric(14,3);
-  remaining numeric(14,3);
-  total_remaining numeric(14,3);
-  has_shortage boolean;
-  normalized_note text;
-  requested_payload jsonb;
+  request_row public.stock_requests%rowtype; transfer_row public.stock_transfers%rowtype;
+  existing_receipt public.stock_transfer_receipts%rowtype; transfer_line public.stock_transfer_lines%rowtype;
+  request_line public.stock_request_lines%rowtype; actor_id uuid; receipt_id uuid; line jsonb;
+  received_now numeric(14,3); short_now numeric(14,3); total_remaining numeric(14,3); has_shortage boolean;
+  normalized_note text := nullif(btrim(target_note), ''); normalized_lines jsonb;
 begin
-  if (select auth.uid()) is null
-     or (
-       not (select private.has_permission(target_organization_id, 'inventory.manage'))
-       and not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive'))
-     ) then
-    raise exception 'Inventory permission is required.' using errcode = '42501';
+  if (select auth.uid()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive')) then
+    raise exception 'Transfer receive permission is required.' using errcode = '42501';
   end if;
-
-  if target_operation_id is null then
-    raise exception 'A stable transfer-receipt operation ID is required.' using errcode = '23514';
-  end if;
-
-  if target_lines is null
-     or jsonb_typeof(target_lines) <> 'array'
-     or jsonb_array_length(target_lines) not between 1 and 100
-     or (target_note is not null and char_length(btrim(target_note)) > 500) then
-    raise exception 'A receipt needs one to 100 lines and valid notes.' using errcode = '23514';
-  end if;
-
-  if exists (
-    select 1
-    from jsonb_array_elements(target_lines) receipt(value)
-    where jsonb_typeof(receipt.value) <> 'object'
-      or coalesce(receipt.value ->> 'stock_transfer_line_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-      or coalesce(receipt.value ->> 'received_quantity', '') !~ '^\d+(\.\d{1,3})?$'
-      or coalesce(receipt.value ->> 'short_quantity', '') !~ '^\d+(\.\d{1,3})?$'
-      or ((receipt.value ->> 'received_quantity')::numeric + (receipt.value ->> 'short_quantity')::numeric) <= 0
-      or ((receipt.value ->> 'short_quantity')::numeric > 0 and char_length(btrim(coalesce(receipt.value ->> 'discrepancy_note', ''))) not between 2 and 500)
-  )
-  or (select count(*) from jsonb_array_elements(target_lines)) <> (
-    select count(distinct value ->> 'stock_transfer_line_id') from jsonb_array_elements(target_lines)
-  ) then
-    raise exception 'Receipt lines, quantities, and discrepancy notes are invalid.' using errcode = '23514';
-  end if;
-
-  select coalesce(
-    jsonb_agg(
-      jsonb_build_object(
-        'stock_transfer_line_id', normalized.stock_transfer_line_id,
-        'received_quantity', normalized.received_quantity,
-        'short_quantity', normalized.short_quantity,
-        'discrepancy_note', normalized.discrepancy_note
-      )
-      order by normalized.stock_transfer_line_id
-    ),
-    '[]'::jsonb
-  )
-  into requested_payload
-  from (
-    select
-      lower(btrim(value ->> 'stock_transfer_line_id')) as stock_transfer_line_id,
-      ((value ->> 'received_quantity')::numeric(14,3))::text as received_quantity,
-      ((value ->> 'short_quantity')::numeric(14,3))::text as short_quantity,
-      nullif(btrim(coalesce(value ->> 'discrepancy_note', '')), '') as discrepancy_note
-    from jsonb_array_elements(target_lines)
-  ) normalized;
-
-  normalized_note := nullif(btrim(target_note), '');
-  select *
-  into request_row
-  from public.stock_requests request_item
-  where request_item.id = target_stock_request_id
-    and request_item.organization_id = target_organization_id
-  for update;
-
-  if request_row.id is null then
-    raise exception 'Choose a stock request in this organization.' using errcode = '23514';
-  end if;
-
+  if target_operation_id is null then raise exception 'A stable transfer-receipt operation ID is required.' using errcode = '23514'; end if;
+  normalized_lines := private.normalize_inventory_transfer_receipt_lines(target_lines);
+  select * into request_row from public.stock_requests item
+   where item.id = target_stock_request_id and item.organization_id = target_organization_id for update;
+  if request_row.id is null then raise exception 'Choose a stock request in this organization.' using errcode = '23514'; end if;
   actor_id := private.inventory_actor(target_organization_id, request_row.requesting_store_id);
-  if actor_id is null then
-    raise exception 'An assigned employee is required for the requesting store.' using errcode = '42501';
-  end if;
-
-  select *
-  into transfer_row
-  from public.stock_transfers transfer
-  where transfer.organization_id = target_organization_id
-    and transfer.stock_request_id = request_row.id
-  for update;
-
-  if transfer_row.id is null then
-    raise exception 'The dispatched stock transfer is unavailable.' using errcode = '23514';
-  end if;
-
-  select *
-  into existing_receipt
-  from public.stock_transfer_receipts receipt
-  where receipt.organization_id = target_organization_id
-    and receipt.operation_id = target_operation_id
-  for update;
-
+  if actor_id is null then raise exception 'An assigned employee is required for the requesting store.' using errcode = '42501'; end if;
+  select * into transfer_row from public.stock_transfers transfer
+   where transfer.organization_id = target_organization_id and transfer.stock_request_id = request_row.id for update;
+  if transfer_row.id is null then raise exception 'The dispatched stock transfer is unavailable.' using errcode = '23514'; end if;
+  select * into existing_receipt from public.stock_transfer_receipts receipt
+   where receipt.organization_id = target_organization_id and receipt.operation_id = target_operation_id for update;
   if found then
-    if existing_receipt.stock_transfer_id = transfer_row.id
-       and existing_receipt.destination_store_id = request_row.requesting_store_id
-       and existing_receipt.received_by_employee_id = actor_id
-       and existing_receipt.note is not distinct from normalized_note
-       and existing_receipt.operation_payload = requested_payload then
-      return request_row.id;
-    end if;
-
+    if existing_receipt.stock_transfer_id = transfer_row.id and existing_receipt.destination_store_id = request_row.requesting_store_id
+      and existing_receipt.received_by_employee_id = actor_id and existing_receipt.note is not distinct from normalized_note
+      and existing_receipt.operation_payload = normalized_lines then return request_row.id; end if;
     raise exception 'This operation ID is already assigned to a different transfer receipt.' using errcode = '23505';
   end if;
-
-  if request_row.status not in ('dispatched', 'partially_received')
-     or transfer_row.status not in ('in_transit', 'partially_received') then
+  if request_row.status not in ('dispatched', 'partially_received') or transfer_row.status not in ('dispatched', 'partially_received') then
     raise exception 'This request is not available for receiving.' using errcode = '23514';
   end if;
-
-  receipt_number := nextval('private.tindio_stock_transfer_receipt_number_sequence'::regclass);
-  insert into public.stock_transfer_receipts (
-    organization_id,
-    receipt_number,
-    operation_id,
-    operation_payload,
-    stock_transfer_id,
-    destination_store_id,
-    received_by_employee_id,
-    note
-  )
-  values (
-    target_organization_id,
-    receipt_number,
-    target_operation_id,
-    requested_payload,
-    transfer_row.id,
-    request_row.requesting_store_id,
-    actor_id,
-    normalized_note
-  )
-  returning id into receipt_id;
-
+  receipt_id := private.receive_inventory_transfer_core(target_organization_id, transfer_row.id, target_lines, target_note, target_operation_id, true);
   for line in select value from jsonb_array_elements(target_lines)
   loop
-    select *
-    into transfer_line
-    from public.stock_transfer_lines item
-    where item.id = (line ->> 'stock_transfer_line_id')::uuid
-      and item.stock_transfer_id = transfer_row.id
-      and item.organization_id = target_organization_id
-      and item.stock_request_line_id is not null
-    for update;
-
-    if transfer_line.id is null then
-      raise exception 'A receipt line does not belong to this stock request.' using errcode = '23514';
-    end if;
-
-    select *
-    into request_line
-    from public.stock_request_lines item
-    where item.id = transfer_line.stock_request_line_id
-      and item.stock_request_id = request_row.id
-      and item.organization_id = target_organization_id
-    for update;
-
-    received_now := (line ->> 'received_quantity')::numeric(14,3);
-    short_now := (line ->> 'short_quantity')::numeric(14,3);
-    remaining := transfer_line.quantity - transfer_line.received_quantity - transfer_line.short_quantity;
-
-    if received_now + short_now > remaining then
-      raise exception 'Received and short quantities cannot exceed the remaining dispatched quantity.' using errcode = '23514';
-    end if;
-
-    if received_now > 0 then
-      insert into public.stock_transfer_receipt_lines (
-        organization_id,
-        stock_transfer_receipt_id,
-        stock_transfer_line_id,
-        quantity_received
-      )
-      values (target_organization_id, receipt_id, transfer_line.id, received_now);
-
-      perform private.apply_inventory_change_v2(
-        target_organization_id,
-        request_row.requesting_store_id,
-        transfer_line.product_id,
-        transfer_line.variant_id,
-        received_now,
-        'TRANSFER_IN',
-        actor_id,
-        format('Transfer TR-%s receipt %s', lpad(transfer_row.transfer_number::text, 6, '0'), lpad(receipt_number::text, 6, '0')),
-        'stock_transfer_receipt',
-        receipt_id,
-        transfer_line.unit_cost_minor
-      );
-    end if;
-
-    update public.stock_transfer_lines
-    set received_quantity = received_quantity + received_now,
-        short_quantity = short_quantity + short_now
-    where id = transfer_line.id;
-
-    update public.stock_request_lines
-    set received_quantity = received_quantity + received_now,
-        short_quantity = short_quantity + short_now
-    where id = request_line.id;
-
+    select * into transfer_line from public.stock_transfer_lines item where item.id = (line ->> 'stock_transfer_line_id')::uuid
+      and item.stock_transfer_id = transfer_row.id and item.organization_id = target_organization_id and item.stock_request_line_id is not null;
+    select * into request_line from public.stock_request_lines item where item.id = transfer_line.stock_request_line_id
+      and item.stock_request_id = request_row.id and item.organization_id = target_organization_id for update;
+    received_now := (line ->> 'received_quantity')::numeric(14,3); short_now := (line ->> 'short_quantity')::numeric(14,3);
+    update public.stock_request_lines set received_quantity = received_quantity + received_now,
+      short_quantity = short_quantity + short_now where id = request_line.id;
     if short_now > 0 then
-      insert into public.stock_request_discrepancies (
-        organization_id,
-        stock_request_id,
-        stock_request_line_id,
-        stock_transfer_line_id,
-        short_quantity,
-        note,
-        reported_by_employee_id
-      )
-      values (
-        target_organization_id,
-        request_row.id,
-        request_line.id,
-        transfer_line.id,
-        short_now,
-        btrim(line ->> 'discrepancy_note'),
-        actor_id
-      );
+      if char_length(btrim(coalesce(line ->> 'discrepancy_note', ''))) not between 2 and 500 then raise exception 'A shortage requires a discrepancy note.' using errcode = '23514'; end if;
+      insert into public.stock_request_discrepancies (organization_id, stock_request_id, stock_request_line_id,
+        stock_transfer_line_id, short_quantity, note, reported_by_employee_id)
+      values (target_organization_id, request_row.id, request_line.id, transfer_line.id, short_now,
+        btrim(line ->> 'discrepancy_note'), actor_id);
     end if;
   end loop;
-
-  select coalesce(sum(quantity - received_quantity - short_quantity), 0)
-  into total_remaining
-  from public.stock_transfer_lines
-  where stock_transfer_id = transfer_row.id;
-
-  select exists (
-    select 1
-    from public.stock_transfer_lines
-    where stock_transfer_id = transfer_row.id
-      and short_quantity > 0
-  )
-  into has_shortage;
-
-  update public.stock_transfers
-  set status = case when total_remaining = 0 then 'completed' else 'partially_received' end,
-      received_by_employee_id = actor_id,
-      received_at = now(),
-      completed_at = case when total_remaining = 0 then now() else completed_at end
-  where id = transfer_row.id;
-
-  update public.stock_requests
-  set status = case when total_remaining > 0 then 'partially_received' when has_shortage then 'received_with_discrepancy' else 'received' end,
-      received_by_employee_id = actor_id,
-      received_at = case when total_remaining = 0 then now() else received_at end
-  where id = request_row.id;
-
-  perform private.write_audit_log(
-    target_organization_id,
+  select coalesce(sum(quantity - received_quantity - short_quantity), 0) into total_remaining
+    from public.stock_transfer_lines where stock_transfer_id = transfer_row.id;
+  select exists(select 1 from public.stock_transfer_lines where stock_transfer_id = transfer_row.id and short_quantity > 0) into has_shortage;
+  update public.stock_requests set status = case when total_remaining > 0 then 'partially_received'
+      when has_shortage then 'received_with_discrepancy' else 'received' end,
+    received_by_employee_id = actor_id, received_at = case when total_remaining = 0 then now() else received_at end
+   where id = request_row.id;
+  perform private.write_audit_log(target_organization_id,
     case when total_remaining = 0 then 'STOCK_REQUEST_RECEIVED' else 'STOCK_REQUEST_PARTIALLY_RECEIVED' end,
-    'inventory.manage',
-    actor_id,
-    null,
-    request_row.requesting_store_id,
-    null,
-    null,
-    null,
-    normalized_note,
-    jsonb_build_object(
-      'stock_request_id', request_row.id,
-      'request_number', request_row.request_number,
-      'stock_transfer_id', transfer_row.id,
-      'transfer_number', transfer_row.transfer_number,
-      'receipt_id', receipt_id,
-      'receipt_number', receipt_number,
-      'remaining_quantity', total_remaining,
-      'has_discrepancy', has_shortage
-    )
-  );
+    'inventory.transfer.receive', actor_id, null, request_row.requesting_store_id, null, null, null, normalized_note,
+    jsonb_build_object('stock_request_id', request_row.id, 'request_number', request_row.request_number,
+      'stock_transfer_id', transfer_row.id, 'receipt_id', receipt_id, 'remaining_quantity', total_remaining,
+      'has_discrepancy', has_shortage));
   return request_row.id;
 end;
-$_$;
+$$;
 
 
 ALTER FUNCTION "private"."receive_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
@@ -11299,272 +12178,18 @@ ALTER FUNCTION "private"."receive_stock_request"("target_organization_id" "uuid"
 --
 
 CREATE OR REPLACE FUNCTION "private"."receive_stock_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
-    LANGUAGE "plpgsql" SECURITY DEFINER
+    LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO ''
-    AS $_$
-declare
-  transfer public.stock_transfers%rowtype;
-  existing_receipt public.stock_transfer_receipts%rowtype;
-  actor_id uuid;
-  receipt_id uuid;
-  receipt_number bigint;
-  line jsonb;
-  transfer_line public.stock_transfer_lines%rowtype;
-  received_now numeric(14,3);
-  short_now numeric(14,3);
-  remaining numeric(14,3);
-  total_remaining numeric(14,3);
-  has_shortage boolean;
-  normalized_note text;
-  requested_payload jsonb;
-  uses_legacy_line_shape boolean;
-begin
-  if (select auth.uid()) is null
-     or (
-       not (select private.has_permission(target_organization_id, 'inventory.manage'))
-       and not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive'))
-     ) then
-    raise exception 'Inventory permission is required.' using errcode = '42501';
-  end if;
-
-  if target_operation_id is null then
-    raise exception 'A stable transfer-receipt operation ID is required.' using errcode = '23514';
-  end if;
-
-  if target_lines is null
-     or jsonb_typeof(target_lines) <> 'array'
-     or jsonb_array_length(target_lines) not between 1 and 100
-     or (target_note is not null and char_length(btrim(target_note)) > 500) then
-    raise exception 'A transfer receipt needs one to 100 items and a valid note.' using errcode = '23514';
-  end if;
-
-  if exists (
-    select 1
-    from jsonb_array_elements(target_lines) receipt(value)
-    where jsonb_typeof(receipt.value) <> 'object'
-      or coalesce(receipt.value ->> 'stock_transfer_line_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-      or coalesce(receipt.value ->> 'received_quantity', receipt.value ->> 'quantity', '') !~ '^\d+(\.\d{1,3})?$'
-      or coalesce(receipt.value ->> 'short_quantity', '0') !~ '^\d+(\.\d{1,3})?$'
-      or ((coalesce(receipt.value ->> 'received_quantity', receipt.value ->> 'quantity'))::numeric
-        + (coalesce(receipt.value ->> 'short_quantity', '0'))::numeric) <= 0
-      or ((coalesce(receipt.value ->> 'short_quantity', '0'))::numeric > 0
-        and char_length(btrim(coalesce(receipt.value ->> 'discrepancy_note', ''))) not between 2 and 500)
-  )
-  or (select count(*) from jsonb_array_elements(target_lines)) <> (
-    select count(distinct value ->> 'stock_transfer_line_id') from jsonb_array_elements(target_lines)
-  ) then
-    raise exception 'Receipt lines, quantities, and discrepancy notes are invalid.' using errcode = '23514';
-  end if;
-
-  select bool_and(not (value ? 'received_quantity') and not (value ? 'short_quantity') and not (value ? 'discrepancy_note'))
-  into uses_legacy_line_shape
-  from jsonb_array_elements(target_lines);
-
-  if uses_legacy_line_shape then
-    select coalesce(
-      jsonb_agg(
-        jsonb_build_object(
-          'stock_transfer_line_id', normalized.stock_transfer_line_id,
-          'quantity', normalized.received_quantity
-        )
-        order by normalized.stock_transfer_line_id
-      ),
-      '[]'::jsonb
-    )
-    into requested_payload
-    from (
-      select
-        lower(btrim(value ->> 'stock_transfer_line_id')) as stock_transfer_line_id,
-        ((value ->> 'quantity')::numeric(14,3))::text as received_quantity
-      from jsonb_array_elements(target_lines)
-    ) normalized;
-  else
-    select coalesce(
-      jsonb_agg(
-        jsonb_build_object(
-          'stock_transfer_line_id', normalized.stock_transfer_line_id,
-          'received_quantity', normalized.received_quantity,
-          'short_quantity', normalized.short_quantity,
-          'discrepancy_note', normalized.discrepancy_note
-        )
-        order by normalized.stock_transfer_line_id
-      ),
-      '[]'::jsonb
-    )
-    into requested_payload
-    from (
-      select
-        lower(btrim(value ->> 'stock_transfer_line_id')) as stock_transfer_line_id,
-        ((coalesce(value ->> 'received_quantity', value ->> 'quantity'))::numeric(14,3))::text as received_quantity,
-        ((coalesce(value ->> 'short_quantity', '0'))::numeric(14,3))::text as short_quantity,
-        nullif(btrim(coalesce(value ->> 'discrepancy_note', '')), '') as discrepancy_note
-      from jsonb_array_elements(target_lines)
-    ) normalized;
-  end if;
-
-  normalized_note := nullif(btrim(target_note), '');
-  select *
-  into transfer
-  from public.stock_transfers item
-  where item.id = target_stock_transfer_id
-    and item.organization_id = target_organization_id
-  for update;
-
-  if transfer.id is null then
-    raise exception 'Choose a transfer in this organization.' using errcode = '23514';
-  end if;
-
-  if transfer.stock_request_id is not null then
-    raise exception 'Receive replenishment transfers from the stock request workflow so shortages stay traceable.' using errcode = '23514';
-  end if;
-
-  actor_id := private.inventory_actor(target_organization_id, transfer.destination_store_id);
-  if actor_id is null then
-    raise exception 'An assigned employee is required for the destination store.' using errcode = '42501';
-  end if;
-
-  select *
-  into existing_receipt
-  from public.stock_transfer_receipts receipt
-  where receipt.organization_id = target_organization_id
-    and receipt.operation_id = target_operation_id
-  for update;
-
-  if found then
-    if existing_receipt.stock_transfer_id = transfer.id
-       and existing_receipt.destination_store_id = transfer.destination_store_id
-       and existing_receipt.received_by_employee_id = actor_id
-       and existing_receipt.note is not distinct from normalized_note
-       and existing_receipt.operation_payload = requested_payload then
-      return existing_receipt.id;
-    end if;
-
-    raise exception 'This operation ID is already assigned to a different transfer receipt.' using errcode = '23505';
-  end if;
-
-  if transfer.status not in ('in_transit', 'partially_received') then
-    raise exception 'This transfer is not available for receiving.' using errcode = '23514';
-  end if;
-
-  receipt_number := nextval('private.tindio_stock_transfer_receipt_number_sequence'::regclass);
-  insert into public.stock_transfer_receipts (
-    organization_id,
-    receipt_number,
-    operation_id,
-    operation_payload,
-    stock_transfer_id,
-    destination_store_id,
-    received_by_employee_id,
-    note
-  )
-  values (
+    AS $$
+  select private.receive_inventory_transfer(
     target_organization_id,
-    receipt_number,
+    target_stock_transfer_id,
+    target_lines,
+    target_note,
     target_operation_id,
-    requested_payload,
-    transfer.id,
-    transfer.destination_store_id,
-    actor_id,
-    normalized_note
-  )
-  returning id into receipt_id;
-
-  for line in select value from jsonb_array_elements(target_lines)
-  loop
-    select *
-    into transfer_line
-    from public.stock_transfer_lines item
-    where item.id = (line ->> 'stock_transfer_line_id')::uuid
-      and item.stock_transfer_id = transfer.id
-      and item.organization_id = target_organization_id
-      and item.stock_request_line_id is null
-    for update;
-
-    if transfer_line.id is null then
-      raise exception 'A receipt line does not belong to this direct transfer.' using errcode = '23514';
-    end if;
-
-    received_now := (coalesce(line ->> 'received_quantity', line ->> 'quantity'))::numeric(14,3);
-    short_now := (coalesce(line ->> 'short_quantity', '0'))::numeric(14,3);
-    remaining := transfer_line.quantity - transfer_line.received_quantity - transfer_line.short_quantity;
-    if received_now + short_now > remaining then
-      raise exception 'Received and short quantities cannot exceed the remaining sent quantity.' using errcode = '23514';
-    end if;
-
-    if received_now > 0 then
-      insert into public.stock_transfer_receipt_lines (
-        organization_id,
-        stock_transfer_receipt_id,
-        stock_transfer_line_id,
-        quantity_received
-      )
-      values (target_organization_id, receipt_id, transfer_line.id, received_now);
-
-      perform private.apply_inventory_change_v2(
-        target_organization_id,
-        transfer.destination_store_id,
-        transfer_line.product_id,
-        transfer_line.variant_id,
-        received_now,
-        'TRANSFER_IN',
-        actor_id,
-        format('Transfer TR-%s receipt %s', lpad(transfer.transfer_number::text, 6, '0'), lpad(receipt_number::text, 6, '0')),
-        'stock_transfer_receipt',
-        receipt_id,
-        transfer_line.unit_cost_minor
-      );
-    end if;
-
-    update public.stock_transfer_lines
-    set received_quantity = received_quantity + received_now,
-        short_quantity = short_quantity + short_now
-    where id = transfer_line.id;
-  end loop;
-
-  select coalesce(sum(quantity - received_quantity - short_quantity), 0)
-  into total_remaining
-  from public.stock_transfer_lines
-  where stock_transfer_id = transfer.id;
-
-  select exists (
-    select 1
-    from public.stock_transfer_lines
-    where stock_transfer_id = transfer.id
-      and short_quantity > 0
-  )
-  into has_shortage;
-
-  update public.stock_transfers
-  set status = case when total_remaining = 0 then 'completed' else 'partially_received' end,
-      received_by_employee_id = actor_id,
-      received_at = now(),
-      completed_at = case when total_remaining = 0 then now() else completed_at end
-  where id = transfer.id;
-
-  perform private.write_audit_log(
-    target_organization_id,
-    case when total_remaining = 0 then 'STOCK_TRANSFER_RECEIVED' else 'STOCK_TRANSFER_PARTIALLY_RECEIVED' end,
-    'inventory.manage',
-    actor_id,
-    null,
-    transfer.destination_store_id,
-    null,
-    null,
-    null,
-    normalized_note,
-    jsonb_build_object(
-      'stock_transfer_id', transfer.id,
-      'transfer_number', transfer.transfer_number,
-      'receipt_id', receipt_id,
-      'receipt_number', receipt_number,
-      'remaining_quantity', total_remaining,
-      'has_discrepancy', has_shortage,
-      'receipt_lines', requested_payload
-    )
+    true
   );
-  return receipt_id;
-end;
-$_$;
+$$;
 
 
 ALTER FUNCTION "private"."receive_stock_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
@@ -11735,22 +12360,30 @@ CREATE OR REPLACE FUNCTION "private"."record_composite_component_movements"() RE
     AS $$
 declare
   component record;
-  current_quantity numeric(14, 3);
-  next_quantity numeric(14, 3);
+  component_level public.inventory_levels%rowtype;
+  component_delta numeric(14,3);
 begin
-  if tg_op <> 'INSERT' or new.movement_type <> 'SALE' or new.source_type <> 'sale'
+  if tg_op <> 'INSERT'
+    or new.movement_type <> 'SALE'
+    or new.source_type <> 'sale'
     or pg_trigger_depth() > 1
     or not exists (
-      select 1 from public.products parent
-      where parent.id = new.product_id and parent.organization_id = new.organization_id
+      select 1
+      from public.products parent
+      where parent.id = new.product_id
+        and parent.organization_id = new.organization_id
         and parent.is_composite
+        and parent.composite_inventory_mode = 'made_to_order'
     ) then
     return new;
   end if;
 
   for component in
-    select recipe.component_product_id, recipe.component_variant_id,
-      recipe.quantity_per_composite, product.name
+    select
+      recipe.component_product_id,
+      recipe.component_variant_id,
+      recipe.quantity_per_composite,
+      product.name
     from public.product_components recipe
     join public.products product
       on product.id = recipe.component_product_id
@@ -11758,37 +12391,39 @@ begin
     where recipe.organization_id = new.organization_id
       and recipe.product_id = new.product_id
       and product.track_inventory
+    order by recipe.component_product_id, recipe.component_variant_id
   loop
-    select level.quantity into current_quantity
+    component_delta := new.quantity_delta * component.quantity_per_composite;
+
+    select level.*
+    into component_level
     from public.inventory_levels level
-    where level.organization_id = new.organization_id and level.store_id = new.store_id
+    where level.organization_id = new.organization_id
+      and level.store_id = new.store_id
       and level.product_id = component.component_product_id
       and level.variant_id is not distinct from component.component_variant_id
     for update;
 
-    if current_quantity is null then
+    if component_level.id is null then
       raise exception 'The stock projection is not initialized for composite component %.', component.name
         using errcode = '23514';
     end if;
 
-    next_quantity := current_quantity + new.quantity_delta * component.quantity_per_composite;
-    update public.inventory_levels level set quantity = next_quantity, updated_at = now()
-    where level.organization_id = new.organization_id and level.store_id = new.store_id
-      and level.product_id = component.component_product_id
-      and level.variant_id is not distinct from component.component_variant_id;
-
-    insert into public.inventory_movements (
-      organization_id, store_id, product_id, variant_id, quantity_delta,
-      quantity_before, quantity_after, movement_type, actor_employee_id, reason,
-      source_type, source_id
-    ) values (
-      new.organization_id, new.store_id, component.component_product_id,
+    perform private.apply_inventory_change_v2(
+      new.organization_id,
+      new.store_id,
+      component.component_product_id,
       component.component_variant_id,
-      new.quantity_delta * component.quantity_per_composite,
-      current_quantity, next_quantity, 'SALE', new.actor_employee_id,
-      'Composite sale: ' || new.reason, 'composite_sale', new.source_id
+      component_delta,
+      'SALE',
+      new.actor_employee_id,
+      'Composite sale: ' || new.reason,
+      'composite_sale',
+      new.source_id,
+      component_level.average_cost_minor
     );
   end loop;
+
   return new;
 end;
 $$;
@@ -13131,38 +13766,6 @@ COMMENT ON FUNCTION "private"."resolve_negative_stock_policy"("target_organizati
 
 
 --
--- Name: return_to_supplier("uuid", "uuid", "uuid", "jsonb", "text"); Type: FUNCTION; Schema: private; Owner: postgres
---
-
-CREATE OR REPLACE FUNCTION "private"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text") RETURNS "uuid"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $_$
-declare actor_id uuid; return_id uuid; line jsonb; stock_level public.inventory_levels%rowtype; line_quantity numeric(14,3);
-begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
-  if target_lines is null or jsonb_typeof(target_lines) <> 'array' or jsonb_array_length(target_lines) not between 1 and 100 then raise exception 'A supplier return needs one to 100 items.' using errcode = '23514'; end if;
-  actor_id := private.inventory_actor(target_organization_id, target_store_id);
-  if actor_id is null then raise exception 'An assigned employee is required for this store.' using errcode = '42501'; end if;
-  if not exists (select 1 from public.suppliers supplier where supplier.id = target_supplier_id and supplier.organization_id = target_organization_id and supplier.is_active) then raise exception 'Choose an active supplier.' using errcode = '23514'; end if;
-  insert into public.supplier_returns (organization_id, supplier_id, store_id, returned_by_employee_id, note) values (target_organization_id, target_supplier_id, target_store_id, actor_id, nullif(btrim(target_note), '')) returning id into return_id;
-  for line in select value from jsonb_array_elements(target_lines) order by value->>'product_id', coalesce(value->>'variant_id','') loop
-    if coalesce(line->>'product_id','') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' or coalesce(line->>'quantity','') !~ '^\d+(\.\d{1,3})?$' or (line->>'quantity')::numeric <= 0 then raise exception 'Supplier-return lines must include valid items and quantities.' using errcode = '23514'; end if;
-    line_quantity := (line->>'quantity')::numeric(14,3);
-    select * into stock_level from public.inventory_levels level where level.organization_id = target_organization_id and level.store_id = target_store_id and level.product_id = (line->>'product_id')::uuid and level.variant_id is not distinct from nullif(line->>'variant_id','')::uuid for update;
-    if stock_level.id is null or stock_level.quantity < line_quantity then raise exception 'Stock is insufficient for this supplier return.' using errcode = '23514'; end if;
-    insert into public.supplier_return_lines (organization_id, supplier_return_id, product_id, variant_id, quantity, unit_cost_minor) values (target_organization_id, return_id, stock_level.product_id, stock_level.variant_id, line_quantity, stock_level.average_cost_minor);
-    perform private.apply_inventory_change_v2(target_organization_id, target_store_id, stock_level.product_id, stock_level.variant_id, -line_quantity, 'SUPPLIER_RETURN', actor_id, 'Returned to supplier', 'supplier_return', return_id, stock_level.average_cost_minor);
-  end loop;
-  perform private.write_audit_log(target_organization_id, 'SUPPLIER_RETURN_CREATED', 'inventory.manage', actor_id, null, target_store_id, null, null, null, target_note, jsonb_build_object('supplier_return_id', return_id, 'supplier_id', target_supplier_id));
-  return return_id;
-end;
-$_$;
-
-
-ALTER FUNCTION "private"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text") OWNER TO "postgres";
-
---
 -- Name: return_to_supplier("uuid", "uuid", "uuid", "jsonb", "text", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -13178,15 +13781,60 @@ declare
   stock_level public.inventory_levels%rowtype;
   line_quantity numeric(14,3);
   normalized_note text;
+  normalized_lines jsonb;
+  persisted_lines jsonb;
 begin
-  if (select auth.uid()) is null or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.return'))) then
-    raise exception 'Inventory permission is required.' using errcode = '42501';
+  if (select auth.uid()) is null
+     or (
+       not (select private.has_permission(target_organization_id, 'inventory.manage'))
+       and not (select private.has_inventory_capability(target_organization_id, 'purchasing.return'))
+     ) then
+    raise exception 'Supplier-return permission is required.' using errcode = '42501';
   end if;
   if target_operation_id is null then
     raise exception 'An operation ID is required for a supplier return.' using errcode = '23514';
   end if;
-  if target_lines is null or jsonb_typeof(target_lines) <> 'array' or jsonb_array_length(target_lines) not between 1 and 100 then
+  if target_lines is null
+     or jsonb_typeof(target_lines) <> 'array'
+     or jsonb_array_length(target_lines) not between 1 and 100 then
     raise exception 'A supplier return needs one to 100 items.' using errcode = '23514';
+  end if;
+  if exists (
+    select 1
+    from jsonb_array_elements(target_lines) requested(line)
+    where coalesce(requested.line->>'product_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+       or (
+         nullif(requested.line->>'variant_id', '') is not null
+         and requested.line->>'variant_id' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+       )
+       or coalesce(requested.line->>'quantity', '') !~ '^\d+(\.\d{1,3})?$'
+       or (requested.line->>'quantity')::numeric <= 0
+  ) then
+    raise exception 'Supplier-return lines must include valid items and quantities.' using errcode = '23514';
+  end if;
+
+  select jsonb_agg(
+    jsonb_build_object(
+      'product_id', (requested.line->>'product_id')::uuid,
+      'variant_id', nullif(requested.line->>'variant_id', '')::uuid,
+      'quantity', (requested.line->>'quantity')::numeric(14,3)
+    ) order by
+      (requested.line->>'product_id')::uuid,
+      nullif(requested.line->>'variant_id', '')::uuid nulls first
+  )
+  into normalized_lines
+  from jsonb_array_elements(target_lines) requested(line);
+
+  if jsonb_array_length(normalized_lines) <> (
+    select count(*)
+    from (
+      select distinct
+        requested.line->>'product_id',
+        coalesce(requested.line->>'variant_id', '')
+      from jsonb_array_elements(target_lines) requested(line)
+    ) unique_lines
+  ) then
+    raise exception 'Each item can appear only once in a supplier return.' using errcode = '23514';
   end if;
 
   actor_id := private.inventory_actor(target_organization_id, target_store_id);
@@ -13194,7 +13842,8 @@ begin
     raise exception 'An assigned employee is required for this store.' using errcode = '42501';
   end if;
   if not exists (
-    select 1 from public.suppliers supplier
+    select 1
+    from public.suppliers supplier
     where supplier.id = target_supplier_id
       and supplier.organization_id = target_organization_id
       and supplier.is_active
@@ -13203,16 +13852,29 @@ begin
   end if;
 
   normalized_note := nullif(btrim(target_note), '');
-  select * into existing_return
+  select supplier_return.* into existing_return
   from public.supplier_returns supplier_return
   where supplier_return.organization_id = target_organization_id
     and supplier_return.operation_id = target_operation_id;
 
   if found then
+    select jsonb_agg(
+      jsonb_build_object(
+        'product_id', return_line.product_id,
+        'variant_id', return_line.variant_id,
+        'quantity', return_line.quantity
+      ) order by return_line.product_id, return_line.variant_id nulls first
+    )
+    into persisted_lines
+    from public.supplier_return_lines return_line
+    where return_line.organization_id = target_organization_id
+      and return_line.supplier_return_id = existing_return.id;
+
     if existing_return.store_id is distinct from target_store_id
-      or existing_return.supplier_id is distinct from target_supplier_id
-      or existing_return.note is distinct from normalized_note then
-      raise exception 'This operation ID was already used for a different supplier return.' using errcode = '23514';
+       or existing_return.supplier_id is distinct from target_supplier_id
+       or existing_return.note is distinct from normalized_note
+       or persisted_lines is distinct from normalized_lines then
+      raise exception 'This operation ID is already assigned to a different supplier-return payload.' using errcode = '23505';
     end if;
     return existing_return.id;
   end if;
@@ -13220,36 +13882,14 @@ begin
   insert into public.supplier_returns (
     organization_id, supplier_id, store_id, returned_by_employee_id, note, operation_id
   ) values (
-    target_organization_id, target_supplier_id, target_store_id, actor_id, normalized_note, target_operation_id
-  ) on conflict (organization_id, operation_id) where operation_id is not null do nothing
-  returning id into return_id;
+    target_organization_id, target_supplier_id, target_store_id, actor_id,
+    normalized_note, target_operation_id
+  ) returning id into return_id;
 
-  if return_id is null then
-    select * into existing_return
-    from public.supplier_returns supplier_return
-    where supplier_return.organization_id = target_organization_id
-      and supplier_return.operation_id = target_operation_id;
-    if existing_return.store_id is distinct from target_store_id
-      or existing_return.supplier_id is distinct from target_supplier_id
-      or existing_return.note is distinct from normalized_note then
-      raise exception 'This operation ID was already used for a different supplier return.' using errcode = '23514';
-    end if;
-    return existing_return.id;
-  end if;
-
-  for line in
-    select value
-    from jsonb_array_elements(target_lines)
-    order by value->>'product_id', coalesce(value->>'variant_id', '')
+  for line in select value from jsonb_array_elements(normalized_lines)
   loop
-    if coalesce(line->>'product_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-      or coalesce(line->>'quantity', '') !~ '^\d+(\.\d{1,3})?$'
-      or (line->>'quantity')::numeric <= 0 then
-      raise exception 'Supplier-return lines must include valid items and quantities.' using errcode = '23514';
-    end if;
-
     line_quantity := (line->>'quantity')::numeric(14,3);
-    select * into stock_level
+    select level.* into stock_level
     from public.inventory_levels level
     where level.organization_id = target_organization_id
       and level.store_id = target_store_id
@@ -13275,9 +13915,14 @@ begin
   end loop;
 
   perform private.write_audit_log(
-    target_organization_id, 'SUPPLIER_RETURN_CREATED', 'inventory.manage', actor_id, null,
-    target_store_id, null, null, null, target_note,
-    jsonb_build_object('supplier_return_id', return_id, 'supplier_id', target_supplier_id, 'operation_id', target_operation_id)
+    target_organization_id, 'SUPPLIER_RETURN_CREATED', 'purchasing.return', actor_id,
+    null, target_store_id, null, null, null, normalized_note,
+    jsonb_build_object(
+      'supplier_return_id', return_id,
+      'supplier_id', target_supplier_id,
+      'operation_id', target_operation_id,
+      'lines', normalized_lines
+    )
   );
   return return_id;
 end;
@@ -13285,6 +13930,13 @@ $_$;
 
 
 ALTER FUNCTION "private"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") IS 'Private supplier-return mutation engine. Application roles must use the canonical public command.';
+
 
 --
 -- Name: reverse_loyalty_earnings_for_refund(); Type: FUNCTION; Schema: private; Owner: postgres
@@ -14155,94 +14807,6 @@ $$;
 ALTER FUNCTION "private"."set_catalog_product_store_availability"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_ids" "uuid"[]) OWNER TO "postgres";
 
 --
--- Name: set_catalog_product_store_configuration_v2("uuid", "uuid", "uuid", bigint, numeric, "text"); Type: FUNCTION; Schema: private; Owner: postgres
---
-
-CREATE OR REPLACE FUNCTION "private"."set_catalog_product_store_configuration_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric, "target_restock_policy" "text") RETURNS "void"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-declare
-  actor_employee_id uuid;
-begin
-  if (select auth.uid()) is null
-    or not (select private.has_permission(target_organization_id, 'products.manage')) then
-    raise exception 'Product management permission is required.' using errcode = '42501';
-  end if;
-
-  if not (select private.has_store_read_scope(target_organization_id, target_store_id)) then
-    raise exception 'Store access is required to configure this product.' using errcode = '42501';
-  end if;
-
-  if target_restock_policy not in ('restock', 'do_not_restock') then
-    raise exception 'Choose a valid restock intention.' using errcode = '22023';
-  end if;
-
-  if not exists (
-    select 1
-    from public.products product
-    where product.id = target_product_id
-      and product.organization_id = target_organization_id
-  ) or not exists (
-    select 1
-    from public.stores store_record
-    where store_record.id = target_store_id
-      and store_record.organization_id = target_organization_id
-      and store_record.is_active
-  ) then
-    raise exception 'Select an active store and product in this organization.' using errcode = '23503';
-  end if;
-
-  actor_employee_id := private.current_employee_id(target_organization_id);
-
-  insert into public.product_store_settings (
-    organization_id,
-    product_id,
-    store_id,
-    is_available,
-    price_override_minor,
-    low_stock_level,
-    restock_policy
-  ) values (
-    target_organization_id,
-    target_product_id,
-    target_store_id,
-    true,
-    target_price_override_minor,
-    target_low_stock_level,
-    target_restock_policy
-  )
-  on conflict (store_id, product_id) do update
-  set is_available = excluded.is_available,
-      price_override_minor = excluded.price_override_minor,
-      low_stock_level = excluded.low_stock_level,
-      restock_policy = excluded.restock_policy;
-
-  perform private.write_audit_log(
-    target_organization_id,
-    'PRODUCT_STORE_CONFIGURATION_UPDATED',
-    'products.manage',
-    actor_employee_id,
-    null,
-    target_store_id,
-    null,
-    null,
-    null,
-    null,
-    jsonb_build_object(
-      'product_id', target_product_id,
-      'price_override_minor', target_price_override_minor,
-      'low_stock_level', target_low_stock_level,
-      'restock_policy', target_restock_policy
-    )
-  );
-end;
-$$;
-
-
-ALTER FUNCTION "private"."set_catalog_product_store_configuration_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric, "target_restock_policy" "text") OWNER TO "postgres";
-
---
 -- Name: set_customer_display_state("uuid", "uuid", "jsonb"); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -14651,6 +15215,45 @@ COMMENT ON FUNCTION "private"."skip_duplicate_employee_store_assignment"() IS 'M
 
 
 --
+-- Name: snapshot_goods_receipt_line_truth(); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."snapshot_goods_receipt_line_truth"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  purchase_line public.purchase_order_lines%rowtype;
+  converted_quantity numeric(14,6);
+begin
+  select line.*
+  into purchase_line
+  from public.purchase_order_lines line
+  where line.id = new.purchase_order_line_id
+    and line.organization_id = new.organization_id;
+
+  if purchase_line.id is null then
+    raise exception 'A receipt line must reference a purchase-order line in the same organization.' using errcode = '23514';
+  end if;
+
+  converted_quantity := new.quantity_received * purchase_line.purchase_unit_factor_to_base;
+  if converted_quantity <> round(converted_quantity, 3) then
+    raise exception 'This received quantity cannot be expressed in the product base unit to three decimal places.' using errcode = '23514';
+  end if;
+
+  new.base_quantity_received := round(converted_quantity, 3);
+  new.purchase_unit_code_snapshot := purchase_line.purchase_unit_code_snapshot;
+  new.purchase_unit_factor_to_base := purchase_line.purchase_unit_factor_to_base;
+  new.purchase_unit_cost_minor := purchase_line.unit_cost_minor;
+  new.stock_unit_cost_minor := round(purchase_line.unit_cost_minor::numeric / purchase_line.purchase_unit_factor_to_base)::bigint;
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."snapshot_goods_receipt_line_truth"() OWNER TO "postgres";
+
+--
 -- Name: snapshot_sale_item_cost(); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -14753,6 +15356,89 @@ $$;
 ALTER FUNCTION "private"."submit_inventory_count_for_review"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") OWNER TO "postgres";
 
 --
+-- Name: submit_inventory_transfer("uuid", "uuid", "text", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_id uuid;
+  existing_operation private.stock_transfer_operations%rowtype;
+  normalized_note text;
+  operation_payload jsonb;
+  transfer public.stock_transfers%rowtype;
+begin
+  if target_operation_id is null then
+    raise exception 'A stable submit operation ID is required.' using errcode = '23514';
+  end if;
+  if target_note is not null and char_length(btrim(target_note)) > 500 then
+    raise exception 'The transfer note is too long.' using errcode = '23514';
+  end if;
+
+  select * into transfer
+  from public.stock_transfers item
+  where item.organization_id = target_organization_id
+    and item.id = target_stock_transfer_id;
+  if transfer.id is null or transfer.stock_request_id is not null then
+    raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514';
+  end if;
+  if (select auth.uid()) is null
+     or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.create')) then
+    raise exception 'Transfer creation permission is required.' using errcode = '42501';
+  end if;
+  actor_id := private.inventory_actor(target_organization_id, transfer.source_store_id);
+  if actor_id is null then
+    raise exception 'An active employee assigned to the source store is required.' using errcode = '42501';
+  end if;
+
+  normalized_note := nullif(btrim(target_note), '');
+  operation_payload := jsonb_build_object('stock_transfer_id', target_stock_transfer_id, 'note', normalized_note);
+  perform pg_advisory_xact_lock(hashtextextended(target_organization_id::text || ':' || target_operation_id::text, 0));
+
+  select * into existing_operation
+  from private.stock_transfer_operations operation
+  where operation.organization_id = target_organization_id
+    and operation.operation_id = target_operation_id
+  for update;
+  if found then
+    if existing_operation.command = 'submit' and existing_operation.normalized_payload = operation_payload then
+      return existing_operation.result_id;
+    end if;
+    raise exception 'This operation ID is already assigned to a different transfer command.' using errcode = '23505';
+  end if;
+
+  select * into transfer
+  from public.stock_transfers item
+  where item.organization_id = target_organization_id
+    and item.id = target_stock_transfer_id
+  for update;
+  if transfer.status <> 'draft' then
+    raise exception 'Only a draft transfer can be submitted.' using errcode = '23514';
+  end if;
+
+  update public.stock_transfers set status = 'submitted' where id = transfer.id;
+  insert into private.stock_transfer_operations (
+    organization_id, stock_transfer_id, operation_id, command, normalized_payload,
+    from_status, to_status, actor_employee_id, result_id, note
+  ) values (
+    target_organization_id, transfer.id, target_operation_id, 'submit', operation_payload,
+    'draft', 'submitted', actor_id, transfer.id, normalized_note
+  );
+  perform private.write_audit_log(
+    target_organization_id, 'STOCK_TRANSFER_SUBMITTED', 'inventory.transfer.create', actor_id,
+    null, transfer.source_store_id, null, null, null, normalized_note,
+    jsonb_build_object('stock_transfer_id', transfer.id, 'transfer_number', transfer.transfer_number, 'operation_id', target_operation_id)
+  );
+  return transfer.id;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
 -- Name: sync_auth_user_profile(); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -14775,6 +15461,29 @@ begin
     end,
     email = excluded.email,
     updated_at = now();
+
+  insert into private.identity_links (
+    provider,
+    provider_subject,
+    profile_id
+  )
+  values (
+    'supabase',
+    new.id::text,
+    new.id
+  )
+  on conflict (provider, provider_subject) do nothing;
+
+  if not exists (
+    select 1
+    from private.identity_links identity_link
+    where identity_link.provider = 'supabase'
+      and identity_link.provider_subject = new.id::text
+      and identity_link.profile_id = new.id
+  ) then
+    raise exception
+      'R3 identity synchronization failed: Supabase identity does not map to the expected TINDIO profile';
+  end if;
 
   return new;
 end;
@@ -15937,7 +16646,8 @@ begin
   if target_store_id is null or target_register_id is null
     or target_items is null or jsonb_typeof(target_items) <> 'array'
     or jsonb_array_length(target_items) not between 1 and 100 then
-    raise exception 'A store, register, and one or more cart items are required.' using errcode = '23514';
+    raise exception 'A store, register, and one or more cart items are required.'
+      using errcode = '23514';
   end if;
 
   select employee.id
@@ -15957,7 +16667,8 @@ begin
     and employee.status = 'active';
 
   if actor_employee_id is null then
-    raise exception 'An active assigned employee and register are required.' using errcode = '42501';
+    raise exception 'An active assigned employee and register are required.'
+      using errcode = '42501';
   end if;
 
   if not exists (
@@ -15969,26 +16680,33 @@ begin
       and shift.opened_by_employee_id = actor_employee_id
       and shift.status = 'open'
   ) then
-    raise exception 'Open your assigned register shift before charging a sale.' using errcode = '42501';
+    raise exception 'Open your assigned register shift before charging a sale.'
+      using errcode = '42501';
   end if;
 
-  for selected_line in select value from jsonb_array_elements(target_items)
+  for selected_line in
+    select value from jsonb_array_elements(target_items)
   loop
     if jsonb_typeof(selected_line.value) <> 'object'
       or jsonb_typeof(selected_line.value -> 'product_id') <> 'string'
-      or coalesce(selected_line.value ->> 'product_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      or coalesce(selected_line.value ->> 'product_id', '')
+        !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
       or (
         selected_line.value -> 'variant_id' is distinct from 'null'::jsonb
         and jsonb_typeof(selected_line.value -> 'variant_id') <> 'string'
       )
       or (
         nullif(selected_line.value ->> 'variant_id', '') is not null
-        and selected_line.value ->> 'variant_id' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+        and selected_line.value ->> 'variant_id'
+          !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
       )
       or jsonb_typeof(selected_line.value -> 'quantity') <> 'number'
-      or coalesce(selected_line.value ->> 'quantity', '') !~ '^(?:0|[1-9][0-9]{0,3})(?:[.][0-9]{1,3})?$'
+      or coalesce(selected_line.value ->> 'quantity', '')
+        !~ '^(?:0|[1-9][0-9]{0,3})(?:[.][0-9]{1,3})?$'
       or (selected_line.value ->> 'quantity')::numeric(14,3) <= 0 then
-      raise exception 'Each stock-check item must have valid references and a positive quantity.' using errcode = '23514';
+      raise exception
+        'Each stock-check item must have valid references and a positive quantity.'
+        using errcode = '23514';
     end if;
   end loop;
 
@@ -15999,21 +16717,21 @@ begin
 
   with requested_items as (
     select
-      (line.value ->> 'product_id')::uuid product_id,
-      nullif(line.value ->> 'variant_id', '')::uuid variant_id,
-      sum((line.value ->> 'quantity')::numeric(14,3)) cart_quantity
+      (line.value ->> 'product_id')::uuid as product_id,
+      nullif(line.value ->> 'variant_id', '')::uuid as variant_id,
+      sum((line.value ->> 'quantity')::numeric(14,3)) as cart_quantity
     from jsonb_array_elements(target_items) line(value)
     group by
       (line.value ->> 'product_id')::uuid,
       nullif(line.value ->> 'variant_id', '')::uuid
-  ), tracked_items as (
+  ),
+  direct_requirements as (
     select
-      requested.product_id,
-      requested.variant_id,
-      requested.cart_quantity,
-      product.name product_name,
-      variant.name variant_name,
-      coalesce(level.quantity, 0::numeric) available_quantity
+      requested.product_id as stock_product_id,
+      requested.variant_id as stock_variant_id,
+      requested.cart_quantity as required_quantity,
+      product.name as stock_product_name,
+      variant.name as stock_variant_name
     from requested_items requested
     join public.products product
       on product.id = requested.product_id
@@ -16030,31 +16748,110 @@ begin
      and variant.product_id = product.id
      and variant.organization_id = product.organization_id
      and variant.is_active
+    where (
+      requested.variant_id is null
+      and product.product_type = 'simple'
+    ) or (
+      requested.variant_id is not null
+      and product.product_type = 'variable'
+      and variant.id is not null
+    )
+  ),
+  finished_stock_requirements as (
+    select direct.*
+    from direct_requirements direct
+    join public.products product
+      on product.id = direct.stock_product_id
+     and product.organization_id = target_organization_id
+    where not (
+      direct.stock_variant_id is null
+      and product.is_composite
+      and product.composite_inventory_mode = 'made_to_order'
+    )
+  ),
+  made_to_order_requirements as (
+    select
+      recipe.component_product_id as stock_product_id,
+      recipe.component_variant_id as stock_variant_id,
+      round(requested.cart_quantity * recipe.quantity_per_composite, 3)
+        as required_quantity,
+      component_product.name as stock_product_name,
+      component_variant.name as stock_variant_name
+    from requested_items requested
+    join public.products parent
+      on parent.id = requested.product_id
+     and parent.organization_id = target_organization_id
+     and parent.status = 'active'
+     and parent.product_type = 'simple'
+     and parent.track_inventory
+     and parent.is_composite
+     and parent.composite_inventory_mode = 'made_to_order'
+    join public.product_store_settings setting
+      on setting.organization_id = parent.organization_id
+     and setting.product_id = parent.id
+     and setting.store_id = target_store_id
+     and setting.is_available
+    join public.product_components recipe
+      on recipe.organization_id = parent.organization_id
+     and recipe.product_id = parent.id
+    join public.products component_product
+      on component_product.id = recipe.component_product_id
+     and component_product.organization_id = recipe.organization_id
+     and component_product.track_inventory
+    left join public.product_variants component_variant
+      on component_variant.id = recipe.component_variant_id
+     and component_variant.product_id = recipe.component_product_id
+     and component_variant.organization_id = recipe.organization_id
+    where requested.variant_id is null
+  ),
+  raw_requirements as (
+    select * from finished_stock_requirements
+    union all
+    select * from made_to_order_requirements
+  ),
+  aggregated_requirements as (
+    select
+      requirement.stock_product_id,
+      requirement.stock_variant_id,
+      sum(requirement.required_quantity)::numeric(14,3) as required_quantity,
+      min(requirement.stock_product_name) as stock_product_name,
+      min(requirement.stock_variant_name) as stock_variant_name
+    from raw_requirements requirement
+    group by requirement.stock_product_id, requirement.stock_variant_id
+  ),
+  tracked_positions as (
+    select
+      requirement.*,
+      coalesce(level.quantity, 0::numeric) as available_quantity
+    from aggregated_requirements requirement
     left join public.inventory_levels level
-      on level.organization_id = product.organization_id
+      on level.organization_id = target_organization_id
      and level.store_id = target_store_id
-     and level.product_id = product.id
-     and level.variant_id is not distinct from requested.variant_id
-    where (requested.variant_id is null and product.product_type = 'simple')
-       or (requested.variant_id is not null and product.product_type = 'variable' and variant.id is not null)
+     and level.product_id = requirement.stock_product_id
+     and level.variant_id is not distinct from requirement.stock_variant_id
   )
   select coalesce(
     jsonb_agg(
       jsonb_build_object(
-        'product_id', tracked.product_id,
-        'variant_id', tracked.variant_id,
-        'product_name', tracked.product_name,
-        'variant_name', tracked.variant_name,
+        'product_id', tracked.stock_product_id,
+        'variant_id', tracked.stock_variant_id,
+        'product_name', tracked.stock_product_name,
+        'variant_name', tracked.stock_variant_name,
         'available_quantity', tracked.available_quantity,
-        'cart_quantity', tracked.cart_quantity,
-        'projected_quantity', tracked.available_quantity - tracked.cart_quantity
+        'cart_quantity', tracked.required_quantity,
+        'projected_quantity',
+          tracked.available_quantity - tracked.required_quantity
       )
-      order by lower(tracked.product_name), lower(coalesce(tracked.variant_name, ''))
-    ) filter (where tracked.available_quantity - tracked.cart_quantity < 0),
+      order by
+        lower(tracked.stock_product_name),
+        lower(coalesce(tracked.stock_variant_name, ''))
+    ) filter (
+      where tracked.available_quantity - tracked.required_quantity < 0
+    ),
     '[]'::jsonb
   )
   into affected_items
-  from tracked_items tracked;
+  from tracked_positions tracked;
 
   return jsonb_build_object(
     'policy', resolved_policy,
@@ -16066,6 +16863,13 @@ $_$;
 
 
 ALTER FUNCTION "private"."validate_pos_cart_stock"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_items" "jsonb") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "validate_pos_cart_stock"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_items" "jsonb"); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."validate_pos_cart_stock"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_items" "jsonb") IS 'POS stock preflight. Ordinary tracked items and stocked assemblies validate finished inventory; made_to_order composites validate aggregated tracked recipe-component requirements.';
+
 
 --
 -- Name: validate_product_component(); Type: FUNCTION; Schema: private; Owner: postgres
@@ -16805,6 +17609,20 @@ COMMENT ON FUNCTION "public"."adjust_inventory"("target_organization_id" "uuid",
 
 
 --
+-- Name: approve_inventory_transfer("uuid", "uuid", "text", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  select private.approve_inventory_transfer(target_organization_id, target_stock_transfer_id, target_note, target_operation_id);
+$$;
+
+
+ALTER FUNCTION "public"."approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
 -- Name: approve_manager_approval("uuid", "uuid", "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -17062,6 +17880,20 @@ CREATE OR REPLACE FUNCTION "public"."cancel_inventory_count"("target_organizatio
 ALTER FUNCTION "public"."cancel_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_note" "text") OWNER TO "postgres";
 
 --
+-- Name: cancel_inventory_transfer("uuid", "uuid", "text", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  select private.cancel_inventory_transfer(target_organization_id, target_stock_transfer_id, target_note, target_operation_id);
+$$;
+
+
+ALTER FUNCTION "public"."cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
 -- Name: cancel_open_ticket("uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -17077,15 +17909,11 @@ ALTER FUNCTION "public"."cancel_open_ticket"("uuid", "uuid") OWNER TO "postgres"
 -- Name: cancel_purchase_order("uuid", "uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE OR REPLACE FUNCTION "public"."cancel_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_note" "text") RETURNS "uuid"
-    LANGUAGE "sql"
+CREATE OR REPLACE FUNCTION "public"."cancel_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_note" "text" DEFAULT NULL::"text") RETURNS "uuid"
+    LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select private.cancel_purchase_order(
-    target_organization_id,
-    target_purchase_order_id,
-    target_note
-  );
+  select private.cancel_purchase_order(target_organization_id, target_purchase_order_id, target_note);
 $$;
 
 
@@ -17579,25 +18407,6 @@ COMMENT ON FUNCTION "public"."close_register_shift"("target_organization_id" "uu
 
 
 --
--- Name: complete_inventory_count("uuid", "uuid", "text", "jsonb"); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE OR REPLACE FUNCTION "public"."complete_inventory_count"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_lines" "jsonb") RETURNS "uuid"
-    LANGUAGE "sql"
-    SET "search_path" TO ''
-    AS $$ select private.complete_inventory_count(target_organization_id,target_store_id,target_note,target_lines); $$;
-
-
-ALTER FUNCTION "public"."complete_inventory_count"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_lines" "jsonb") OWNER TO "postgres";
-
---
--- Name: FUNCTION "complete_inventory_count"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_lines" "jsonb"); Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON FUNCTION "public"."complete_inventory_count"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_lines" "jsonb") IS 'CANDIDATE_FOR_REMOVAL: retained legacy one-step count API. Application roles use the draft, review, and post inventory-count lifecycle.';
-
-
---
 -- Name: complete_organization_export("uuid", integer, "jsonb"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -17682,6 +18491,63 @@ ALTER FUNCTION "public"."create_catalog_product_v2"("target_organization_id" "uu
 --
 
 COMMENT ON FUNCTION "public"."create_catalog_product_v2"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) IS 'Atomically creates a catalog product with image, variable-price, and fractional-quantity configuration.';
+
+
+--
+-- Name: create_catalog_product_v3("uuid", "uuid", "text", "text", "text", "text", "text", bigint, bigint, boolean, "text", "uuid"[], "jsonb", "text", boolean, boolean, "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."create_catalog_product_v3"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  new_product_id uuid;
+  normalized_mode text := coalesce(nullif(btrim(target_composite_inventory_mode), ''), 'made_to_order');
+begin
+  if normalized_mode not in ('made_to_order', 'stocked_assembly') then
+    raise exception 'Choose a supported composite inventory mode.' using errcode = '23514';
+  end if;
+
+  new_product_id := private.create_catalog_product_v2(
+    target_organization_id,
+    target_category_id,
+    target_name,
+    target_description,
+    target_product_type,
+    target_sku,
+    target_barcode,
+    target_price_minor,
+    target_cost_minor,
+    target_track_inventory,
+    target_unit,
+    target_store_ids,
+    target_variants,
+    target_image_url,
+    target_is_variable_price,
+    target_allow_fractional_quantity
+  );
+
+  update public.products
+  set composite_inventory_mode = case
+    when is_composite then normalized_mode
+    else 'made_to_order'
+  end
+  where id = new_product_id
+    and organization_id = target_organization_id;
+
+  return new_product_id;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."create_catalog_product_v3"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "create_catalog_product_v3"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."create_catalog_product_v3"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") IS 'Catalog creation with an explicit composite recipe-consumption mode.';
 
 
 --
@@ -17816,7 +18682,7 @@ ALTER FUNCTION "public"."create_direct_stock_transfer"("target_organization_id" 
 -- Name: FUNCTION "create_direct_stock_transfer"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
 --
 
-COMMENT ON FUNCTION "public"."create_direct_stock_transfer"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") IS 'Creates an immediately in-transit direct store transfer. It validates both store scopes, deducts only source stock, and is retry-safe by organization operation ID.';
+COMMENT ON FUNCTION "public"."create_direct_stock_transfer"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") IS 'Compatibility Send transfer API. It performs canonical create, submit, approve, and dispatch in one transaction and preserves historical operation-key replay.';
 
 
 --
@@ -17856,63 +18722,190 @@ $$;
 ALTER FUNCTION "public"."create_inventory_count_batch"("target_organization_id" "uuid", "target_name" "text", "target_note" "text", "target_store_ids" "uuid"[], "target_count_mode" "text", "target_sort_mode" "text", "target_include_zero_stock" boolean) OWNER TO "postgres";
 
 --
--- Name: create_inventory_count_draft("uuid", "uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: create_inventory_count_plan_v2("uuid", "uuid", "text", "text", "text", "jsonb", "text", boolean, "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE OR REPLACE FUNCTION "public"."create_inventory_count_draft"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text" DEFAULT NULL::"text") RETURNS "uuid"
-    LANGUAGE "sql"
-    SET "search_path" TO ''
-    AS $$ select private.create_inventory_count_draft(target_organization_id, target_store_id, target_note); $$;
-
-
-ALTER FUNCTION "public"."create_inventory_count_draft"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text") OWNER TO "postgres";
-
---
--- Name: create_inventory_count_plan("uuid", "uuid", "text", "text", "text", "uuid", "jsonb", "text", boolean); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE OR REPLACE FUNCTION "public"."create_inventory_count_plan"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_scope_reference_id" "uuid", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean) RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."create_inventory_count_plan_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean, "target_scope_reference_id" "uuid" DEFAULT NULL::"uuid") RETURNS "uuid"
     LANGUAGE "sql"
     SET "search_path" TO ''
     AS $$
   select private.create_inventory_count_plan(
-    target_organization_id, target_store_id, target_note, target_count_mode,
-    target_scope_type, target_scope_reference_id, target_selected_items,
-    target_sort_mode, target_include_zero_stock
+    target_organization_id,
+    target_store_id,
+    target_note,
+    target_count_mode,
+    target_scope_type,
+    target_scope_reference_id,
+    target_selected_items,
+    target_sort_mode,
+    target_include_zero_stock
   );
 $$;
 
 
-ALTER FUNCTION "public"."create_inventory_count_plan"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_scope_reference_id" "uuid", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean) OWNER TO "postgres";
+ALTER FUNCTION "public"."create_inventory_count_plan_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean, "target_scope_reference_id" "uuid") OWNER TO "postgres";
 
 --
--- Name: FUNCTION "create_inventory_count_plan"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_scope_reference_id" "uuid", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean); Type: COMMENT; Schema: public; Owner: postgres
+-- Name: FUNCTION "create_inventory_count_plan_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean, "target_scope_reference_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
 --
 
-COMMENT ON FUNCTION "public"."create_inventory_count_plan"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_scope_reference_id" "uuid", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean) IS 'Creates one store-scoped inventory count and snapshots its active tracked products in a deterministic order. Blind mode is presentation-enforced from persisted metadata; posting remains variance-based.';
+COMMENT ON FUNCTION "public"."create_inventory_count_plan_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean, "target_scope_reference_id" "uuid") IS 'Canonical public inventory count preparation API. Scope reference is optional for full-store and selected counts.';
 
 
 --
--- Name: create_purchase_order("uuid", "uuid", "uuid", "text", "date", "jsonb", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: create_inventory_transfer_draft("uuid", "uuid", "uuid", "jsonb", "text", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE OR REPLACE FUNCTION "public"."create_purchase_order"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_expected_at" "date", "target_lines" "jsonb", "target_operation_id" "uuid") RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
     LANGUAGE "sql"
     SET "search_path" TO ''
     AS $$
-  select private.create_purchase_order(
-    target_organization_id,
-    target_store_id,
-    target_supplier_id,
-    target_notes,
-    target_expected_at,
-    target_lines,
-    target_operation_id
+  select private.create_inventory_transfer_draft(
+    target_organization_id, target_source_store_id, target_destination_store_id,
+    target_lines, target_note, target_operation_id
   );
 $$;
 
 
-ALTER FUNCTION "public"."create_purchase_order"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_expected_at" "date", "target_lines" "jsonb", "target_operation_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "public"."create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: create_product_unit("uuid", "uuid", "text", "text", numeric, boolean, boolean, "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."create_product_unit"("target_organization_id" "uuid", "target_product_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  normalized_code text := lower(btrim(target_unit_code));
+  normalized_name text := btrim(target_unit_name);
+  payload jsonb;
+  unit_id uuid := gen_random_uuid();
+  replay_id uuid;
+  actor_employee_id uuid;
+begin
+  if (select auth.uid()) is null
+     or not (select private.has_permission(target_organization_id, 'products.manage')) then
+    raise exception 'Product management permission is required.' using errcode = '42501';
+  end if;
+  if not exists (
+    select 1 from public.products product
+    where product.id = target_product_id and product.organization_id = target_organization_id
+  ) then
+    raise exception 'The product could not be found.' using errcode = '23503';
+  end if;
+
+  payload := jsonb_build_object(
+    'product_id', target_product_id, 'unit_code', normalized_code,
+    'unit_name', normalized_name, 'factor_to_base', target_factor_to_base,
+    'is_sale_unit', target_is_sale_unit, 'is_purchase_unit', target_is_purchase_unit
+  );
+  replay_id := private.claim_product_unit_operation(
+    target_organization_id, target_operation_id, 'create', payload, unit_id
+  );
+  if replay_id is not null then return replay_id; end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(target_organization_id::text || ':' || target_product_id::text || ':product-unit:' || normalized_code, 0)
+  );
+  if exists (
+    select 1 from public.product_units unit
+    where unit.product_id = target_product_id and unit.unit_code = normalized_code
+  ) then
+    raise exception 'This unit code already exists for the product.' using errcode = '23505';
+  end if;
+
+  insert into public.product_units (
+    id, organization_id, product_id, unit_code, unit_name, factor_to_base,
+    is_base, is_sale_unit, is_purchase_unit
+  ) values (
+    unit_id, target_organization_id, target_product_id, normalized_code, normalized_name,
+    target_factor_to_base, false, coalesce(target_is_sale_unit, false), coalesce(target_is_purchase_unit, false)
+  );
+
+  actor_employee_id := private.current_employee_id(target_organization_id);
+  perform private.write_audit_log(
+    target_organization_id, 'PRODUCT_UNIT_CREATED', 'products.manage', actor_employee_id,
+    null, null, null, null, null, null,
+    jsonb_build_object('product_id', target_product_id, 'unit_id', unit_id,
+      'operation_id', target_operation_id, 'old_values', null, 'new_values', payload)
+  );
+  return unit_id;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."create_product_unit"("target_organization_id" "uuid", "target_product_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "create_product_unit"("target_organization_id" "uuid", "target_product_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."create_product_unit"("target_organization_id" "uuid", "target_product_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") IS 'Canonical, permission-gated, replay-safe creation of a non-base per-product unit.';
+
+
+--
+-- Name: create_purchase_order_v2("uuid", "uuid", "uuid", "text", "jsonb", "uuid", "date"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."create_purchase_order_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_lines" "jsonb", "target_operation_id" "uuid", "target_expected_at" "date" DEFAULT NULL::"date") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  order_id uuid;
+  was_existing boolean;
+  actor_id uuid;
+begin
+  if (select auth.uid()) is null
+     or not (
+       (select private.has_permission(target_organization_id, 'inventory.manage'))
+       or (select private.has_inventory_capability(target_organization_id, 'purchasing.po.create'))
+     )
+     or not (select private.has_permission(target_organization_id, 'products.view_cost')) then
+    raise exception 'Purchase-order creation and product-cost permission are required.' using errcode = '42501';
+  end if;
+  if target_operation_id is null then
+    raise exception 'A stable purchase-order operation ID is required.' using errcode = '23514';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(target_organization_id::text || ':purchase-order:' || target_operation_id::text, 0)
+  );
+  was_existing := exists (
+    select 1 from public.purchase_orders purchase_order
+    where purchase_order.organization_id = target_organization_id
+      and purchase_order.operation_id = target_operation_id
+  );
+
+  order_id := private.create_purchase_order(
+    target_organization_id, target_store_id, target_supplier_id, target_notes,
+    target_expected_at, target_lines, target_operation_id
+  );
+
+  if not was_existing then
+    actor_id := private.inventory_actor(target_organization_id, target_store_id);
+    perform private.write_audit_log(
+      target_organization_id, 'PURCHASE_ORDER_CREATED', 'purchasing.po.create', actor_id,
+      null, target_store_id, null, null, null, nullif(btrim(target_notes), ''),
+      jsonb_build_object('purchase_order_id', order_id, 'supplier_id', target_supplier_id,
+        'operation_id', target_operation_id)
+    );
+  end if;
+  return order_id;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."create_purchase_order_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_lines" "jsonb", "target_operation_id" "uuid", "target_expected_at" "date") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "create_purchase_order_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_lines" "jsonb", "target_operation_id" "uuid", "target_expected_at" "date"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."create_purchase_order_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_lines" "jsonb", "target_operation_id" "uuid", "target_expected_at" "date") IS 'Canonical replay-safe purchase order API. Omitted expected date requests supplier/default scheduling.';
+
 
 --
 -- Name: create_stock_request("uuid", "uuid", "uuid", "text", "jsonb", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -18065,6 +19058,27 @@ $$;
 ALTER FUNCTION "public"."create_supply_chain_warehouse"("target_organization_id" "uuid", "target_store_id" "uuid", "target_code" "text", "target_name" "text", "target_notes" "text") OWNER TO "postgres";
 
 --
+-- Name: current_profile_id(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."current_profile_id"() RETURNS "uuid"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  SELECT private.current_profile_id();
+$$;
+
+
+ALTER FUNCTION "public"."current_profile_id"() OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "current_profile_id"(); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."current_profile_id"() IS 'Returns the stable TINDIO profile UUID for the current authenticated identity.';
+
+
+--
 -- Name: decide_manager_approval("uuid", "uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -18120,6 +19134,65 @@ ALTER FUNCTION "public"."delete_employee_if_eligible"("target_organization_id" "
 --
 
 COMMENT ON FUNCTION "public"."delete_employee_if_eligible"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_confirmation_number" "text") IS 'Permanently deletes only employees with no historical foreign-key dependencies; role/store/PIN rows are credentials, not history.';
+
+
+--
+-- Name: delete_product_unit("uuid", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."delete_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_operation_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  current_unit public.product_units%rowtype;
+  payload jsonb := jsonb_build_object('unit_id', target_unit_id);
+  replay_id uuid;
+  old_values jsonb;
+  actor_employee_id uuid;
+begin
+  if (select auth.uid()) is null
+     or not (select private.has_permission(target_organization_id, 'products.manage')) then
+    raise exception 'Product management permission is required.' using errcode = '42501';
+  end if;
+  replay_id := private.claim_product_unit_operation(
+    target_organization_id, target_operation_id, 'delete', payload, target_unit_id
+  );
+  if replay_id is not null then return replay_id; end if;
+
+  select unit.* into current_unit
+  from public.product_units unit
+  where unit.id = target_unit_id and unit.organization_id = target_organization_id
+  for update;
+  if not found then raise exception 'The product unit could not be found.' using errcode = '23503'; end if;
+  if current_unit.is_base then raise exception 'The base unit cannot be deleted.' using errcode = '23514'; end if;
+
+  old_values := jsonb_build_object(
+    'unit_code', current_unit.unit_code, 'unit_name', current_unit.unit_name,
+    'factor_to_base', current_unit.factor_to_base, 'is_sale_unit', current_unit.is_sale_unit,
+    'is_purchase_unit', current_unit.is_purchase_unit
+  );
+  delete from public.product_units where id = target_unit_id;
+
+  actor_employee_id := private.current_employee_id(target_organization_id);
+  perform private.write_audit_log(
+    target_organization_id, 'PRODUCT_UNIT_DELETED', 'products.manage', actor_employee_id,
+    null, null, null, null, null, null,
+    jsonb_build_object('product_id', current_unit.product_id, 'unit_id', target_unit_id,
+      'operation_id', target_operation_id, 'old_values', old_values, 'new_values', null)
+  );
+  return target_unit_id;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."delete_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "delete_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_operation_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."delete_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_operation_id" "uuid") IS 'Canonical hard deletion of non-base unit configuration. Historical PO/receipt evidence remains in immutable snapshots.';
 
 
 --
@@ -18428,6 +19501,20 @@ COMMENT ON FUNCTION "public"."delete_unused_setup_record"("target_organization_i
 
 
 --
+-- Name: dispatch_inventory_transfer("uuid", "uuid", "text", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  select private.dispatch_inventory_transfer(target_organization_id, target_stock_transfer_id, target_note, target_operation_id);
+$$;
+
+
+ALTER FUNCTION "public"."dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
 -- Name: dispatch_stock_request("uuid", "uuid", "text", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -18445,6 +19532,139 @@ $$;
 
 
 ALTER FUNCTION "public"."dispatch_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: ensure_current_identity_profile("text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."ensure_current_identity_profile"("target_email" "text", "target_full_name" "text" DEFAULT ''::"text") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  provider_subject text;
+  resolved_profile_id uuid;
+begin
+  provider_subject :=
+    private.current_identity_subject();
+
+  if provider_subject is null
+    or btrim(provider_subject) = ''
+  then
+    raise exception
+      'An authenticated identity is required.'
+      using errcode = '42501';
+  end if;
+
+  begin
+    resolved_profile_id :=
+      provider_subject::uuid;
+  exception
+    when invalid_text_representation then
+      raise exception
+        'The current Supabase identity is not a UUID.'
+        using errcode = '42501';
+  end;
+
+  insert into public.profiles (
+    id,
+    full_name,
+    email
+  )
+  values (
+    resolved_profile_id,
+    left(
+      coalesce(
+        target_full_name,
+        ''
+      ),
+      160
+    ),
+    lower(
+      coalesce(
+        target_email,
+        ''
+      )
+    )
+  )
+  on conflict (id)
+  do update
+  set
+    full_name =
+      case
+        when btrim(
+          coalesce(
+            excluded.full_name,
+            ''
+          )
+        ) = ''
+        then public.profiles.full_name
+        else excluded.full_name
+      end,
+
+    email =
+      case
+        when btrim(
+          coalesce(
+            excluded.email,
+            ''
+          )
+        ) = ''
+        then public.profiles.email
+        else excluded.email
+      end,
+
+    updated_at = now();
+
+  insert into private.identity_links (
+    provider,
+    provider_subject,
+    profile_id
+  )
+  values (
+    'supabase',
+    provider_subject,
+    resolved_profile_id
+  )
+  on conflict (
+    provider,
+    provider_subject
+  )
+  do update
+  set
+    profile_id =
+      excluded.profile_id,
+    updated_at =
+      now();
+
+  if not exists (
+    select 1
+    from private.identity_links identity_link
+    where identity_link.provider =
+      'supabase'
+      and identity_link.provider_subject =
+        provider_subject
+      and identity_link.profile_id =
+        resolved_profile_id
+  ) then
+    raise exception
+      'TINDIO identity provisioning failed.'
+      using errcode = '42501';
+  end if;
+
+  return resolved_profile_id;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."ensure_current_identity_profile"("target_email" "text", "target_full_name" "text") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "ensure_current_identity_profile"("target_email" "text", "target_full_name" "text"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."ensure_current_identity_profile"("target_email" "text", "target_full_name" "text") IS 'Ensures the current externally authenticated Supabase subject has a permanent TINDIO profile and identity link. Used during the Neon database migration while Supabase Auth remains authoritative.';
+
 
 --
 -- Name: generate_catalog_identifiers("uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -19415,154 +20635,97 @@ CREATE OR REPLACE FUNCTION "public"."get_inventory_schema_contract"("target_orga
     SET "search_path" TO ''
     AS $$
 declare
+  resolved_profile_id uuid;
   missing_core text[] := array[]::text[];
   modules jsonb;
+  required_function text;
 begin
-  if (select auth.uid()) is null then
-    raise exception
-      using errcode = '42501',
-            message = 'Authentication required.';
+  -- Provider-neutral identity boundary.
+  resolved_profile_id := private.current_profile_id();
+
+  if resolved_profile_id is null then
+    raise exception using errcode = '42501', message = 'Authentication required.';
   end if;
 
   if not exists (
     select 1
     from public.organizations organization
-    join public.employees employee
-      on employee.organization_id = organization.id
+    join public.employees employee on employee.organization_id = organization.id
     where organization.id = target_organization_id
       and organization.status = 'active'
-      and employee.profile_id = (select auth.uid())
+      and employee.profile_id = resolved_profile_id
       and employee.status = 'active'
   ) then
-    raise exception
-      using errcode = '42501',
-            message = 'Organization access denied.';
+    raise exception using errcode = '42501', message = 'Organization access denied.';
   end if;
 
-  if pg_catalog.to_regclass(
-    'public.inventory_levels'
-  ) is null then
-    missing_core := array_append(
-      missing_core,
-      'inventory_levels'
-    );
+  if pg_catalog.to_regclass('public.inventory_levels') is null then
+    missing_core := array_append(missing_core, 'inventory_levels');
+  end if;
+  if pg_catalog.to_regclass('public.inventory_movements') is null then
+    missing_core := array_append(missing_core, 'inventory_movements');
+  end if;
+  if pg_catalog.to_regclass('public.products') is null then
+    missing_core := array_append(missing_core, 'products');
+  end if;
+  if pg_catalog.to_regclass('public.product_variants') is null then
+    missing_core := array_append(missing_core, 'product_variants');
+  end if;
+  if pg_catalog.to_regclass('public.product_store_settings') is null then
+    missing_core := array_append(missing_core, 'product_store_settings');
+  end if;
+  if pg_catalog.to_regclass('public.stores') is null then
+    missing_core := array_append(missing_core, 'stores');
   end if;
 
-  if pg_catalog.to_regclass(
-    'public.inventory_movements'
-  ) is null then
-    missing_core := array_append(
-      missing_core,
-      'inventory_movements'
-    );
-  end if;
+  foreach required_function in array array[
+    'private.apply_inventory_change_v2(uuid,uuid,uuid,uuid,numeric,text,uuid,text,text,uuid,bigint,text)',
+    'public.create_inventory_count_plan_v2(uuid,uuid,text,text,text,jsonb,text,boolean,uuid)',
+    'public.save_inventory_count_line_v2(uuid,uuid,uuid,numeric,uuid)',
+    'public.post_inventory_count(uuid,uuid,uuid)',
+    'public.create_purchase_order_v2(uuid,uuid,uuid,text,jsonb,uuid,date)',
+    'public.record_inventory_adjustment_v3(uuid,uuid,uuid,numeric,text,text,uuid,uuid,uuid)'
+  ] loop
+    if pg_catalog.to_regprocedure(required_function) is null then
+      missing_core := array_append(missing_core, required_function);
+    end if;
+  end loop;
 
-  if pg_catalog.to_regclass(
-    'public.products'
-  ) is null then
-    missing_core := array_append(
-      missing_core,
-      'products'
-    );
+  if pg_catalog.to_regprocedure('public.complete_inventory_count(uuid,uuid,text,jsonb)') is not null then
+    missing_core := array_append(missing_core, 'legacy_complete_inventory_count');
   end if;
-
-  if pg_catalog.to_regclass(
-    'public.product_variants'
-  ) is null then
-    missing_core := array_append(
-      missing_core,
-      'product_variants'
-    );
-  end if;
-
-  if pg_catalog.to_regclass(
-    'public.product_store_settings'
-  ) is null then
-    missing_core := array_append(
-      missing_core,
-      'product_store_settings'
-    );
-  end if;
-
-  if pg_catalog.to_regclass(
-    'public.stores'
-  ) is null then
-    missing_core := array_append(
-      missing_core,
-      'stores'
-    );
-  end if;
-
-  if not exists (
-    select 1
-    from pg_catalog.pg_proc procedure
-    join pg_catalog.pg_namespace namespace
-      on namespace.oid = procedure.pronamespace
-    where namespace.nspname = 'private'
-      and procedure.proname = 'apply_inventory_change_v2'
-  ) then
-    missing_core := array_append(
-      missing_core,
-      'apply_inventory_change_v2'
-    );
+  if pg_catalog.to_regprocedure('public.post_inventory_count(uuid,uuid)') is not null then
+    missing_core := array_append(missing_core, 'legacy_post_inventory_count');
   end if;
 
   modules := jsonb_build_object(
     'count_batches',
-      pg_catalog.to_regclass(
-        'public.inventory_count_batches'
-      ) is not null
-      and pg_catalog.to_regclass(
-        'public.inventory_count_batch_documents'
-      ) is not null,
-
+      pg_catalog.to_regclass('public.inventory_count_batches') is not null
+      and pg_catalog.to_regclass('public.inventory_count_batch_documents') is not null,
     'direct_transfers',
-      pg_catalog.to_regclass(
-        'public.stock_transfers'
-      ) is not null
-      and pg_catalog.to_regclass(
-        'public.stock_transfer_lines'
-      ) is not null
+      pg_catalog.to_regclass('public.stock_transfers') is not null
+      and pg_catalog.to_regclass('public.stock_transfer_lines') is not null
       and exists (
-        select 1
-        from pg_catalog.pg_proc procedure
-        join pg_catalog.pg_namespace namespace
-          on namespace.oid = procedure.pronamespace
+        select 1 from pg_catalog.pg_proc procedure
+        join pg_catalog.pg_namespace namespace on namespace.oid = procedure.pronamespace
         where namespace.nspname = 'public'
-          and procedure.proname =
-            'create_direct_stock_transfer'
+          and procedure.proname = 'create_direct_stock_transfer'
       ),
-
     'purchasing',
-      pg_catalog.to_regclass(
-        'public.purchase_orders'
-      ) is not null
-      and pg_catalog.to_regclass(
-        'public.purchase_order_lines'
-      ) is not null
-      and pg_catalog.to_regclass(
-        'public.suppliers'
-      ) is not null,
-
+      pg_catalog.to_regclass('public.purchase_orders') is not null
+      and pg_catalog.to_regclass('public.purchase_order_lines') is not null
+      and pg_catalog.to_regclass('public.suppliers') is not null
+      and pg_catalog.to_regprocedure('public.create_purchase_order_v2(uuid,uuid,uuid,text,jsonb,uuid,date)') is not null
+      and pg_catalog.to_regprocedure('public.receive_purchase_order(uuid,uuid,jsonb,text,uuid)') is not null,
     'valuation',
-      exists (
-        select 1
-        from pg_catalog.pg_proc procedure
-        join pg_catalog.pg_namespace namespace
-          on namespace.oid = procedure.pronamespace
-        where namespace.nspname = 'public'
-          and procedure.proname =
-            'get_inventory_valuation'
-      ),
-
+      pg_catalog.to_regprocedure('public.get_inventory_valuation(uuid)') is not null,
     'replenishment',
-      pg_catalog.to_regclass(
-        'public.inventory_replenishment_rules'
-      ) is not null
+      pg_catalog.to_regclass('public.inventory_replenishment_rules') is not null
+      and pg_catalog.to_regprocedure('public.upsert_inventory_replenishment_rule_v2(uuid,uuid,uuid,numeric,numeric,uuid,uuid)') is not null
   );
 
   return jsonb_build_object(
-    'contract_version', 1,
+    'contract_version', 3,
     'core_ready', cardinality(missing_core) = 0,
     'core_missing', to_jsonb(missing_core),
     'modules', modules
@@ -19672,7 +20835,19 @@ begin
       level.updated_at,
       coalesce(setting.is_available, false) as is_available,
       coalesce(setting.restock_policy, 'restock') as restock_policy,
-      case when can_manage_reorder then rule.reorder_point else null end as reorder_point,
+      case
+        when can_manage_reorder then
+          coalesce(
+            rule.reorder_point,
+            case
+              when level.variant_id is null
+                and product.product_type = 'simple'
+              then setting.low_stock_level
+              else null
+            end
+          )
+        else null
+      end as reorder_point,
       case when can_read_cost then level.average_cost_minor else null end as average_cost_minor
     from public.inventory_levels level
     join scoped_stores store on store.id = level.store_id
@@ -19712,7 +20887,14 @@ begin
       setting.updated_at,
       setting.is_available,
       setting.restock_policy,
-      case when can_manage_reorder then rule.reorder_point else null end as reorder_point,
+      case
+        when can_manage_reorder then
+          coalesce(
+            rule.reorder_point,
+            setting.low_stock_level
+          )
+        else null
+      end as reorder_point,
       null::bigint as average_cost_minor
     from public.product_store_settings setting
     join scoped_stores store on store.id = setting.store_id
@@ -19811,20 +20993,23 @@ begin
   ),
   metrics as materialized (
     select
-      count(*) filter (where stock_condition = 'negative') as negative_count,
-      count(*) filter (where stock_condition = 'low') as low_count,
-      count(*) filter (where stock_condition = 'in_stock') as in_stock_count,
-      count(*) filter (where stock_condition = 'out_of_stock') as out_of_stock_count,
-      count(distinct product_id) as active_product_count
-    from filter_base
+      count(*) filter (where metric_position.stock_condition = 'negative') as negative_count,
+      count(*) filter (where metric_position.stock_condition = 'low') as low_count,
+      count(*) filter (where metric_position.stock_condition = 'in_stock') as in_stock_count,
+      count(*) filter (where metric_position.stock_condition = 'out_of_stock') as out_of_stock_count,
+      count(distinct metric_position.product_id) as active_product_count
+    from filter_base metric_position
   ),
   filtered as materialized (
-    select *
-    from filter_base
+    select filter_position.*
+    from filter_base filter_position
     where normalized_status = 'all'
-      or (normalized_status = 'available' and is_available)
-      or (normalized_status = 'attention' and stock_condition in ('low', 'negative', 'out_of_stock'))
-      or stock_condition = normalized_status
+      or (normalized_status = 'available' and filter_position.is_available)
+      or (
+        normalized_status = 'attention'
+        and filter_position.stock_condition in ('low', 'negative', 'out_of_stock')
+      )
+      or filter_position.stock_condition = normalized_status
   ),
   paged as (
     select
@@ -19885,7 +21070,7 @@ ALTER FUNCTION "public"."get_inventory_stock_page"("target_organization_id" "uui
 -- Name: FUNCTION "get_inventory_stock_page"("target_organization_id" "uuid", "requested_store_id" "uuid", "requested_search" "text", "requested_category_id" "uuid", "requested_status" "text", "requested_restock_policy" "text", "requested_sort" "text", "requested_page" integer, "requested_page_size" integer); Type: COMMENT; Schema: public; Owner: postgres
 --
 
-COMMENT ON FUNCTION "public"."get_inventory_stock_page"("target_organization_id" "uuid", "requested_store_id" "uuid", "requested_search" "text", "requested_category_id" "uuid", "requested_status" "text", "requested_restock_policy" "text", "requested_sort" "text", "requested_page" integer, "requested_page_size" integer) IS 'Bounded Stock & Restock read model. It derives display-only zero positions from active product-store settings, preserves inventory_levels as the balance authority, and enforces inventory capability plus store scope in PostgreSQL.';
+COMMENT ON FUNCTION "public"."get_inventory_stock_page"("target_organization_id" "uuid", "requested_store_id" "uuid", "requested_search" "text", "requested_category_id" "uuid", "requested_status" "text", "requested_restock_policy" "text", "requested_sort" "text", "requested_page" integer, "requested_page_size" integer) IS 'Bounded Stock & Restock read model. Canonical replenishment-rule reorder points drive low-stock state, with legacy product_store_settings.low_stock_level used only as read compatibility for simple non-variant positions when no canonical rule exists. Variant positions never inherit the legacy product/store threshold.';
 
 
 --
@@ -20364,88 +21549,31 @@ CREATE OR REPLACE FUNCTION "public"."get_pos_incoming_stock_transfers"("target_o
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select
-    transfer.id as transfer_id,
-    transfer.transfer_number,
-    transfer.stock_request_id,
-    transfer.source_store_id,
-    source_store.name as source_store_name,
-    transfer.destination_store_id,
-    destination_store.name as destination_store_name,
-    transfer.status,
-    transfer.note,
-    coalesce(
-      jsonb_agg(
-        jsonb_build_object(
-          'id', transfer_line.id,
-          'label', product.name || coalesce(' / ' || variant.name, ''),
-          'unit', product.unit,
-          'quantity', transfer_line.quantity,
-          'received_quantity', transfer_line.received_quantity,
-          'short_quantity', transfer_line.short_quantity
-        )
-        order by product.name, variant.name nulls first
-      ) filter (
-        where transfer_line.quantity > transfer_line.received_quantity + transfer_line.short_quantity
-      ),
-      '[]'::jsonb
-    ) as lines
+  select transfer.id, transfer.transfer_number, transfer.stock_request_id, transfer.source_store_id, source_store.name,
+    transfer.destination_store_id, destination_store.name, transfer.status, transfer.note,
+    coalesce(jsonb_agg(jsonb_build_object('id', transfer_line.id,
+      'label', product.name || coalesce(' / ' || variant.name, ''), 'unit', product.unit,
+      'quantity', transfer_line.quantity, 'received_quantity', transfer_line.received_quantity,
+      'short_quantity', transfer_line.short_quantity) order by product.name, variant.name nulls first)
+      filter (where transfer_line.quantity > transfer_line.received_quantity + transfer_line.short_quantity), '[]'::jsonb)
   from public.stock_transfers transfer
-  join public.stores source_store
-    on source_store.id = transfer.source_store_id
-   and source_store.organization_id = transfer.organization_id
-  join public.stores destination_store
-    on destination_store.id = transfer.destination_store_id
-   and destination_store.organization_id = transfer.organization_id
-  join public.stock_transfer_lines transfer_line
-    on transfer_line.stock_transfer_id = transfer.id
-   and transfer_line.organization_id = transfer.organization_id
-  join public.products product
-    on product.id = transfer_line.product_id
-   and product.organization_id = transfer_line.organization_id
-  left join public.product_variants variant
-    on variant.id = transfer_line.variant_id
-   and variant.product_id = transfer_line.product_id
-   and variant.organization_id = transfer_line.organization_id
+  join public.stores source_store on source_store.id = transfer.source_store_id and source_store.organization_id = transfer.organization_id
+  join public.stores destination_store on destination_store.id = transfer.destination_store_id and destination_store.organization_id = transfer.organization_id
+  join public.stock_transfer_lines transfer_line on transfer_line.stock_transfer_id = transfer.id and transfer_line.organization_id = transfer.organization_id
+  join public.products product on product.id = transfer_line.product_id and product.organization_id = transfer_line.organization_id
+  left join public.product_variants variant on variant.id = transfer_line.variant_id and variant.product_id = transfer_line.product_id
+    and variant.organization_id = transfer_line.organization_id
   where (select auth.uid()) is not null
-    and exists (
-      select 1
-      from public.organizations organization
-      where organization.id = target_organization_id
-        and organization.status = 'active'
-    )
-    and (select private.has_inventory_capability(
-      target_organization_id,
-      'inventory.transfer.receive'
-    ))
-    and exists (
-      select 1
-      from public.organization_features feature
-      where feature.organization_id = target_organization_id
-        and feature.feature_key in ('inventory', 'transfers')
-        and feature.is_enabled
-      group by feature.organization_id
-      having count(*) = 2
-    )
+    and exists (select 1 from public.organizations organization where organization.id = target_organization_id and organization.status = 'active')
+    and (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive'))
+    and exists (select 1 from public.organization_features feature where feature.organization_id = target_organization_id
+      and feature.feature_key in ('inventory', 'transfers') and feature.is_enabled group by feature.organization_id having count(*) = 2)
     and transfer.organization_id = target_organization_id
-    and transfer.status in ('in_transit', 'partially_received')
-    and (select private.has_store_read_scope(
-      target_organization_id,
-      transfer.destination_store_id
-    ))
-  group by
-    transfer.id,
-    transfer.transfer_number,
-    transfer.stock_request_id,
-    transfer.source_store_id,
-    source_store.name,
-    transfer.destination_store_id,
-    destination_store.name,
-    transfer.status,
-    transfer.note
-  having bool_or(
-    transfer_line.quantity > transfer_line.received_quantity + transfer_line.short_quantity
-  )
+    and transfer.status in ('dispatched', 'partially_received')
+    and (select private.has_store_read_scope(target_organization_id, transfer.destination_store_id))
+  group by transfer.id, transfer.transfer_number, transfer.stock_request_id, transfer.source_store_id, source_store.name,
+    transfer.destination_store_id, destination_store.name, transfer.status, transfer.note
+  having bool_or(transfer_line.quantity > transfer_line.received_quantity + transfer_line.short_quantity)
   order by transfer.transfer_number desc;
 $$;
 
@@ -20456,7 +21584,7 @@ ALTER FUNCTION "public"."get_pos_incoming_stock_transfers"("target_organization_
 -- Name: FUNCTION "get_pos_incoming_stock_transfers"("target_organization_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
 --
 
-COMMENT ON FUNCTION "public"."get_pos_incoming_stock_transfers"("target_organization_id" "uuid") IS 'Returns authoritative, destination-store-scoped incoming transfer documents for authorized POS receivers. The receipt RPC remains the only stock mutation path.';
+COMMENT ON FUNCTION "public"."get_pos_incoming_stock_transfers"("target_organization_id" "uuid") IS 'Returns destination-scoped canonical dispatched and partially received physical transfers for authorized POS receivers.';
 
 
 --
@@ -21872,28 +23000,22 @@ COMMENT ON FUNCTION "public"."get_shift_cash_summary"("target_organization_id" "
 
 
 --
--- Name: import_catalog_products_v2("uuid", "uuid"[], "jsonb"); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: import_catalog_products_v3("uuid", "uuid"[], "jsonb"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE OR REPLACE FUNCTION "public"."import_catalog_products_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") RETURNS integer
-    LANGUAGE "sql"
+CREATE OR REPLACE FUNCTION "public"."import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") RETURNS integer
+    LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO ''
-    AS $$
-  select private.import_catalog_products_v2(
-    target_organization_id,
-    target_store_ids,
-    target_rows
-  );
-$$;
+    AS $$ select private.import_catalog_products_v3(target_organization_id,target_store_ids,target_rows); $$;
 
 
-ALTER FUNCTION "public"."import_catalog_products_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") OWNER TO "postgres";
+ALTER FUNCTION "public"."import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") OWNER TO "postgres";
 
 --
--- Name: FUNCTION "import_catalog_products_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb"); Type: COMMENT; Schema: public; Owner: postgres
+-- Name: FUNCTION "import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb"); Type: COMMENT; Schema: public; Owner: postgres
 --
 
-COMMENT ON FUNCTION "public"."import_catalog_products_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") IS 'Atomically imports up to 500 validated simple catalog products. Any invalid row rolls back the full batch.';
+COMMENT ON FUNCTION "public"."import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") IS 'Atomic catalog import without low_stock_level application writes or automatic replenishment documents.';
 
 
 --
@@ -22521,18 +23643,6 @@ COMMENT ON FUNCTION "public"."open_register_shift"("target_organization_id" "uui
 
 
 --
--- Name: post_inventory_count("uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE OR REPLACE FUNCTION "public"."post_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") RETURNS "void"
-    LANGUAGE "sql"
-    SET "search_path" TO ''
-    AS $$ select private.post_inventory_count(target_organization_id, target_inventory_count_id); $$;
-
-
-ALTER FUNCTION "public"."post_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") OWNER TO "postgres";
-
---
 -- Name: post_inventory_count("uuid", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -22565,34 +23675,354 @@ $$;
 ALTER FUNCTION "public"."prepare_organization_export"("target_organization_id" "uuid") OWNER TO "postgres";
 
 --
--- Name: produce_composite("uuid", "uuid", "uuid", numeric, "text"); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE OR REPLACE FUNCTION "public"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text") RETURNS "uuid"
-    LANGUAGE "sql"
-    SET "search_path" TO ''
-    AS $$
-  select private.produce_composite(target_organization_id, target_store_id, target_product_id, target_quantity, target_note);
-$$;
-
-
-ALTER FUNCTION "public"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text") OWNER TO "postgres";
-
---
 -- Name: produce_composite("uuid", "uuid", "uuid", numeric, "text", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
 CREATE OR REPLACE FUNCTION "public"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
-    LANGUAGE "sql"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select private.produce_composite(
-    target_organization_id, target_store_id, target_product_id, target_quantity, target_note, target_operation_id
+declare
+  actor_id uuid;
+  run_id uuid := gen_random_uuid();
+  existing_run public.production_runs%rowtype;
+  output_level public.inventory_levels%rowtype;
+  component_level public.inventory_levels%rowtype;
+  component record;
+  normalized_note text := nullif(btrim(target_note), '');
+  normalized_payload jsonb;
+  recipe_snapshot jsonb;
+  cost_snapshot jsonb := '[]'::jsonb;
+  component_quantity numeric(14,3);
+  total_cost numeric := 0;
+  output_unit_cost bigint;
+  components_cost_known boolean := true;
+begin
+  if (select auth.uid()) is null
+    or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
+    raise exception 'Inventory permission is required.' using errcode = '42501';
+  end if;
+
+  if target_operation_id is null then
+    raise exception 'A stable production operation ID is required.' using errcode = '23514';
+  end if;
+
+  if target_quantity is null
+    or target_quantity <= 0
+    or target_quantity <> round(target_quantity, 3) then
+    raise exception 'Production quantity must be positive and use at most three decimals.' using errcode = '23514';
+  end if;
+
+  normalized_payload := jsonb_build_object(
+    'store_id', target_store_id,
+    'product_id', target_product_id,
+    'quantity', target_quantity,
+    'note', normalized_note,
+    'composite_inventory_mode', 'stocked_assembly'
   );
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      target_organization_id::text || ':composite-production:' || target_operation_id::text,
+      0
+    )
+  );
+
+  select production_run.*
+  into existing_run
+  from public.production_runs production_run
+  where production_run.organization_id = target_organization_id
+    and production_run.operation_id = target_operation_id;
+
+  if found then
+    if existing_run.normalized_payload is distinct from normalized_payload then
+      raise exception 'This operation ID is already assigned to a different production payload.'
+        using errcode = '23505';
+    end if;
+    return existing_run.id;
+  end if;
+
+  actor_id := private.inventory_actor(target_organization_id, target_store_id);
+  if actor_id is null then
+    raise exception 'An assigned employee is required for this store.' using errcode = '42501';
+  end if;
+
+  if not exists (
+    select 1
+    from public.products product
+    where product.id = target_product_id
+      and product.organization_id = target_organization_id
+      and product.is_composite
+      and product.composite_inventory_mode = 'stocked_assembly'
+      and product.track_inventory
+      and product.status = 'active'
+  ) then
+    raise exception 'Choose an active stocked-assembly composite product.'
+      using errcode = '23514';
+  end if;
+
+  if exists (
+    select 1
+    from public.product_components recipe
+    join public.products component_product
+      on component_product.id = recipe.component_product_id
+     and component_product.organization_id = recipe.organization_id
+    where recipe.organization_id = target_organization_id
+      and recipe.product_id = target_product_id
+      and not component_product.track_inventory
+  ) then
+    raise exception 'Stocked assembly recipe components must track inventory.'
+      using errcode = '23514';
+  end if;
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'component_product_id', recipe.component_product_id,
+        'component_variant_id', recipe.component_variant_id,
+        'quantity_per_composite', recipe.quantity_per_composite,
+        'unit_snapshot', component_product.unit
+      )
+      order by recipe.component_product_id, recipe.component_variant_id
+    ),
+    '[]'::jsonb
+  )
+  into recipe_snapshot
+  from public.product_components recipe
+  join public.products component_product
+    on component_product.id = recipe.component_product_id
+   and component_product.organization_id = recipe.organization_id
+   and component_product.track_inventory
+  where recipe.organization_id = target_organization_id
+    and recipe.product_id = target_product_id;
+
+  if jsonb_array_length(recipe_snapshot) = 0 then
+    raise exception 'This stocked assembly needs at least one tracked recipe component.'
+      using errcode = '23514';
+  end if;
+
+  -- Lock every participating stock projection in deterministic identity order.
+  perform 1
+  from public.inventory_levels level
+  where level.organization_id = target_organization_id
+    and level.store_id = target_store_id
+    and (
+      (level.product_id = target_product_id and level.variant_id is null)
+      or exists (
+        select 1
+        from jsonb_to_recordset(recipe_snapshot) as recipe(
+          component_product_id uuid,
+          component_variant_id uuid,
+          quantity_per_composite numeric,
+          unit_snapshot text
+        )
+        where recipe.component_product_id = level.product_id
+          and recipe.component_variant_id is not distinct from level.variant_id
+      )
+    )
+  order by level.product_id, level.variant_id nulls first
+  for update;
+
+  select level.*
+  into output_level
+  from public.inventory_levels level
+  where level.organization_id = target_organization_id
+    and level.store_id = target_store_id
+    and level.product_id = target_product_id
+    and level.variant_id is null;
+
+  if output_level.id is null then
+    raise exception 'The composite output stock projection is not initialized.'
+      using errcode = '23514';
+  end if;
+
+  for component in
+    select *
+    from jsonb_to_recordset(recipe_snapshot) as recipe(
+      component_product_id uuid,
+      component_variant_id uuid,
+      quantity_per_composite numeric,
+      unit_snapshot text
+    )
+    order by component_product_id, component_variant_id
+  loop
+    component_quantity := round(component.quantity_per_composite * target_quantity, 3);
+
+    select level.*
+    into component_level
+    from public.inventory_levels level
+    where level.organization_id = target_organization_id
+      and level.store_id = target_store_id
+      and level.product_id = component.component_product_id
+      and level.variant_id is not distinct from component.component_variant_id;
+
+    if component_level.id is null then
+      raise exception 'One production component has no initialized stock projection.'
+        using errcode = '23514';
+    end if;
+
+    if component_level.quantity < component_quantity then
+      raise exception 'One production component has insufficient stock.'
+        using errcode = '23514';
+    end if;
+
+    total_cost := total_cost + component_quantity * component_level.average_cost_minor;
+    components_cost_known := components_cost_known and component_level.cost_is_known;
+
+    cost_snapshot := cost_snapshot || jsonb_build_array(
+      jsonb_build_object(
+        'component_product_id', component.component_product_id,
+        'component_variant_id', component.component_variant_id,
+        'quantity_per_composite', component.quantity_per_composite,
+        'quantity_consumed', component_quantity,
+        'unit_snapshot', component.unit_snapshot,
+        'unit_cost_minor', component_level.average_cost_minor,
+        'cost_is_known', component_level.cost_is_known,
+        'total_cost_minor', round(component_quantity * component_level.average_cost_minor)::bigint
+      )
+    );
+  end loop;
+
+  output_unit_cost := round(total_cost / target_quantity)::bigint;
+
+  insert into public.production_runs (
+    id,
+    organization_id,
+    store_id,
+    product_id,
+    quantity_produced,
+    produced_by_employee_id,
+    note,
+    operation_id,
+    cost_is_known,
+    normalized_payload,
+    composite_inventory_mode_snapshot
+  ) values (
+    run_id,
+    target_organization_id,
+    target_store_id,
+    target_product_id,
+    target_quantity,
+    actor_id,
+    normalized_note,
+    target_operation_id,
+    components_cost_known,
+    normalized_payload,
+    'stocked_assembly'
+  );
+
+  insert into public.production_run_components (
+    organization_id,
+    production_run_id,
+    component_product_id,
+    component_variant_id,
+    quantity_per_composite_snapshot,
+    quantity_consumed,
+    unit_snapshot,
+    unit_cost_minor,
+    cost_is_known,
+    total_cost_minor
+  )
+  select
+    target_organization_id,
+    run_id,
+    snapshot_component.component_product_id,
+    snapshot_component.component_variant_id,
+    snapshot_component.quantity_per_composite,
+    snapshot_component.quantity_consumed,
+    snapshot_component.unit_snapshot,
+    snapshot_component.unit_cost_minor,
+    snapshot_component.cost_is_known,
+    snapshot_component.total_cost_minor
+  from jsonb_to_recordset(cost_snapshot) as snapshot_component(
+    component_product_id uuid,
+    component_variant_id uuid,
+    quantity_per_composite numeric,
+    quantity_consumed numeric,
+    unit_snapshot text,
+    unit_cost_minor bigint,
+    cost_is_known boolean,
+    total_cost_minor bigint
+  );
+
+  for component in
+    select *
+    from jsonb_to_recordset(cost_snapshot) as recipe(
+      component_product_id uuid,
+      component_variant_id uuid,
+      quantity_per_composite numeric,
+      quantity_consumed numeric,
+      unit_snapshot text,
+      unit_cost_minor bigint,
+      cost_is_known boolean,
+      total_cost_minor bigint
+    )
+    order by component_product_id, component_variant_id
+  loop
+    perform private.apply_inventory_change_v2(
+      target_organization_id,
+      target_store_id,
+      component.component_product_id,
+      component.component_variant_id,
+      -component.quantity_consumed,
+      'PRODUCTION',
+      actor_id,
+      'Consumed by production',
+      'production_run',
+      run_id,
+      component.unit_cost_minor
+    );
+  end loop;
+
+  perform private.apply_inventory_change_v2(
+    target_organization_id,
+    target_store_id,
+    target_product_id,
+    null,
+    target_quantity,
+    'PRODUCTION',
+    actor_id,
+    'Produced composite stock',
+    'production_run',
+    run_id,
+    output_unit_cost
+  );
+
+  perform private.write_audit_log(
+    target_organization_id,
+    'PRODUCTION_COMPLETED',
+    'inventory.manage',
+    actor_id,
+    null,
+    target_store_id,
+    null,
+    null,
+    null,
+    target_note,
+    jsonb_build_object(
+      'production_run_id', run_id,
+      'product_id', target_product_id,
+      'quantity', target_quantity,
+      'unit_cost_minor', output_unit_cost,
+      'cost_is_known', components_cost_known,
+      'operation_id', target_operation_id,
+      'composite_inventory_mode', 'stocked_assembly'
+    )
+  );
+
+  return run_id;
+end;
 $$;
 
 
 ALTER FUNCTION "public"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text", "target_operation_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text", "target_operation_id" "uuid") IS 'Canonical replay-safe stocked-assembly production command. It snapshots recipe/cost evidence, consumes components once, and posts finished output atomically.';
+
 
 --
 -- Name: provision_customer_display_session("uuid", "uuid", "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -22681,20 +24111,41 @@ $$;
 ALTER FUNCTION "public"."queue_receipt_delivery"("target_organization_id" "uuid", "target_receipt_id" "uuid", "target_delivery_channel" "text", "target_recipient" "text", "target_idempotency_key" "uuid") OWNER TO "postgres";
 
 --
+-- Name: receive_inventory_transfer("uuid", "uuid", "jsonb", "text", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  select private.receive_inventory_transfer(
+    target_organization_id, target_stock_transfer_id, target_lines,
+    target_note, target_operation_id, false
+  );
+$$;
+
+
+ALTER FUNCTION "public"."receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
 -- Name: receive_purchase_order("uuid", "uuid", "jsonb", "text", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
 CREATE OR REPLACE FUNCTION "public"."receive_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
-    LANGUAGE "sql"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select private.receive_purchase_order(
-    target_organization_id,
-    target_purchase_order_id,
-    target_lines,
-    target_note,
-    target_operation_id
+begin
+  if target_operation_id is null then
+    raise exception 'A stable goods-receipt operation ID is required.' using errcode = '23514';
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(target_organization_id::text || ':goods-receipt:' || target_operation_id::text, 0)
   );
+  return private.receive_purchase_order(
+    target_organization_id, target_purchase_order_id, target_lines, target_note, target_operation_id
+  );
+end;
 $$;
 
 
@@ -22744,7 +24195,7 @@ ALTER FUNCTION "public"."receive_stock_transfer"("target_organization_id" "uuid"
 -- Name: FUNCTION "receive_stock_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
 --
 
-COMMENT ON FUNCTION "public"."receive_stock_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") IS 'Receives direct transfers only. Quantities and shortages are bounded by the remaining sent stock and destination ledger entries are created only for received quantity.';
+COMMENT ON FUNCTION "public"."receive_stock_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") IS 'Compatibility direct receipt API backed by the canonical receipt engine while preserving historical receipt replay.';
 
 
 --
@@ -22791,30 +24242,6 @@ $$;
 ALTER FUNCTION "public"."record_cash_movement"("target_organization_id" "uuid", "target_shift_id" "uuid", "target_movement_type" "text", "target_amount_minor" bigint, "target_reason" "text", "target_idempotency_key" "uuid", "target_approval_request_id" "uuid") OWNER TO "postgres";
 
 --
--- Name: record_inventory_adjustment("uuid", "uuid", "uuid", "uuid", numeric, "text", "text", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE OR REPLACE FUNCTION "public"."record_inventory_adjustment"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid" DEFAULT NULL::"uuid") RETURNS "uuid"
-    LANGUAGE "sql"
-    SET "search_path" TO ''
-    AS $$
-  select private.record_inventory_adjustment(
-    target_organization_id,
-    target_store_id,
-    target_product_id,
-    target_variant_id,
-    target_quantity_delta,
-    target_reason_code,
-    target_note,
-    target_operation_id,
-    target_approval_request_id
-  );
-$$;
-
-
-ALTER FUNCTION "public"."record_inventory_adjustment"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid") OWNER TO "postgres";
-
---
 -- Name: record_inventory_adjustment_v2("uuid", "uuid", "uuid", "uuid", numeric, "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -22833,6 +24260,37 @@ ALTER FUNCTION "public"."record_inventory_adjustment_v2"("target_organization_id
 --
 
 COMMENT ON FUNCTION "public"."record_inventory_adjustment_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text") IS 'CANDIDATE_FOR_REMOVAL: superseded by public.record_inventory_adjustment; execute is revoked from normal application roles.';
+
+
+--
+-- Name: record_inventory_adjustment_v3("uuid", "uuid", "uuid", numeric, "text", "text", "uuid", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."record_inventory_adjustment_v3"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid" DEFAULT NULL::"uuid", "target_variant_id" "uuid" DEFAULT NULL::"uuid") RETURNS "uuid"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  select private.record_inventory_adjustment(
+    target_organization_id,
+    target_store_id,
+    target_product_id,
+    target_variant_id,
+    target_quantity_delta,
+    target_reason_code,
+    target_note,
+    target_operation_id,
+    target_approval_request_id
+  );
+$$;
+
+
+ALTER FUNCTION "public"."record_inventory_adjustment_v3"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid", "target_variant_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "record_inventory_adjustment_v3"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid", "target_variant_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."record_inventory_adjustment_v3"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid", "target_variant_id" "uuid") IS 'Canonical controlled replay-safe inventory adjustment API for opening stock and signed manual corrections, with optional approval and variant.';
 
 
 --
@@ -23398,34 +24856,39 @@ COMMENT ON FUNCTION "public"."restore_tindio_payment_preset"("target_organizatio
 
 
 --
--- Name: return_to_supplier("uuid", "uuid", "uuid", "jsonb", "text"); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE OR REPLACE FUNCTION "public"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text") RETURNS "uuid"
-    LANGUAGE "sql"
-    SET "search_path" TO ''
-    AS $$
-  select private.return_to_supplier(target_organization_id, target_store_id, target_supplier_id, target_lines, target_note);
-$$;
-
-
-ALTER FUNCTION "public"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text") OWNER TO "postgres";
-
---
 -- Name: return_to_supplier("uuid", "uuid", "uuid", "jsonb", "text", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
 CREATE OR REPLACE FUNCTION "public"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
-    LANGUAGE "sql"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select private.return_to_supplier(
-    target_organization_id, target_store_id, target_supplier_id, target_lines, target_note, target_operation_id
+begin
+  if target_operation_id is null then
+    raise exception 'An operation ID is required for a supplier return.' using errcode = '23514';
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      target_organization_id::text || ':supplier-return:' || target_operation_id::text,
+      0
+    )
   );
+  return private.return_to_supplier(
+    target_organization_id, target_store_id, target_supplier_id,
+    target_lines, target_note, target_operation_id
+  );
+end;
 $$;
 
 
 ALTER FUNCTION "public"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") IS 'Canonical serialized supplier-return command. Exact replay compares the immutable normalized header and complete line payload.';
+
 
 --
 -- Name: revoke_loyalty_card("uuid", "uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -23642,16 +25105,31 @@ $_$;
 ALTER FUNCTION "public"."rotate_loyalty_card_qr"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_verification_token" "text", "target_reason" "text") OWNER TO "postgres";
 
 --
--- Name: save_inventory_count_line("uuid", "uuid", "uuid", "uuid", numeric); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: save_inventory_count_line_v2("uuid", "uuid", "uuid", numeric, "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE OR REPLACE FUNCTION "public"."save_inventory_count_line"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_counted_quantity" numeric) RETURNS "void"
+CREATE OR REPLACE FUNCTION "public"."save_inventory_count_line_v2"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_counted_quantity" numeric, "target_variant_id" "uuid" DEFAULT NULL::"uuid") RETURNS "void"
     LANGUAGE "sql"
     SET "search_path" TO ''
-    AS $$ select private.save_inventory_count_line(target_organization_id, target_inventory_count_id, target_product_id, target_variant_id, target_counted_quantity); $$;
+    AS $$
+  select private.save_inventory_count_line(
+    target_organization_id,
+    target_inventory_count_id,
+    target_product_id,
+    target_variant_id,
+    target_counted_quantity
+  );
+$$;
 
 
-ALTER FUNCTION "public"."save_inventory_count_line"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_counted_quantity" numeric) OWNER TO "postgres";
+ALTER FUNCTION "public"."save_inventory_count_line_v2"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_counted_quantity" numeric, "target_variant_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "save_inventory_count_line_v2"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_counted_quantity" numeric, "target_variant_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."save_inventory_count_line_v2"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_counted_quantity" numeric, "target_variant_id" "uuid") IS 'Canonical physical-count save API. Variant is optional for simple products and validated for variable products.';
+
 
 --
 -- Name: save_open_ticket("uuid", "uuid", "uuid", "uuid", "uuid", "uuid", "text", "text", "jsonb"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -24091,81 +25569,53 @@ COMMENT ON FUNCTION "public"."set_catalog_product_store_availability"("target_or
 
 
 --
--- Name: set_catalog_product_store_configuration("uuid", "uuid", "uuid", bigint, numeric); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: set_catalog_product_store_configuration_v3("uuid", "uuid", "uuid", bigint, "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE OR REPLACE FUNCTION "public"."set_catalog_product_store_configuration"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric) RETURNS "void"
-    LANGUAGE "plpgsql"
+CREATE OR REPLACE FUNCTION "public"."set_catalog_product_store_configuration_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_restock_policy" "text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
+declare actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
-    or not (select private.has_permission(target_organization_id, 'products.manage')) then
+  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
-
   if not (select private.has_store_read_scope(target_organization_id, target_store_id)) then
     raise exception 'Store access is required to configure this product.' using errcode = '42501';
   end if;
-
-  insert into public.product_store_settings (
-    organization_id,
-    product_id,
-    store_id,
-    is_available,
-    price_override_minor,
-    low_stock_level
-  ) values (
-    target_organization_id,
-    target_product_id,
-    target_store_id,
-    true,
-    target_price_override_minor,
-    target_low_stock_level
-  )
-  on conflict (store_id, product_id) do update
-  set is_available = excluded.is_available,
-      price_override_minor = excluded.price_override_minor,
-      low_stock_level = excluded.low_stock_level;
+  if target_price_override_minor is not null and target_price_override_minor < 0 then
+    raise exception 'Price override must be non-negative.' using errcode = '22023';
+  end if;
+  if target_restock_policy not in ('restock', 'do_not_restock') then
+    raise exception 'Choose a valid restock intention.' using errcode = '22023';
+  end if;
+  if not exists (select 1 from public.products p where p.id=target_product_id and p.organization_id=target_organization_id)
+    or not exists (select 1 from public.stores s where s.id=target_store_id and s.organization_id=target_organization_id and s.is_active) then
+    raise exception 'Select an active store and product in this organization.' using errcode = '23503';
+  end if;
+  actor_employee_id := private.current_employee_id(target_organization_id);
+  insert into public.product_store_settings
+    (organization_id,product_id,store_id,is_available,price_override_minor,restock_policy)
+  values (target_organization_id,target_product_id,target_store_id,true,target_price_override_minor,target_restock_policy)
+  on conflict (store_id,product_id) do update
+  set is_available=excluded.is_available, price_override_minor=excluded.price_override_minor,
+      restock_policy=excluded.restock_policy;
+  perform private.write_audit_log(target_organization_id,'PRODUCT_STORE_CONFIGURATION_UPDATED','products.manage',
+    actor_employee_id,null,target_store_id,null,null,null,null,
+    jsonb_build_object('product_id',target_product_id,'price_override_minor',target_price_override_minor,
+      'restock_policy',target_restock_policy,'low_stock_authority','canonical replenishment rule'));
 end;
 $$;
 
 
-ALTER FUNCTION "public"."set_catalog_product_store_configuration"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric) OWNER TO "postgres";
+ALTER FUNCTION "public"."set_catalog_product_store_configuration_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_restock_policy" "text") OWNER TO "postgres";
 
 --
--- Name: FUNCTION "set_catalog_product_store_configuration"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric); Type: COMMENT; Schema: public; Owner: postgres
+-- Name: FUNCTION "set_catalog_product_store_configuration_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_restock_policy" "text"); Type: COMMENT; Schema: public; Owner: postgres
 --
 
-COMMENT ON FUNCTION "public"."set_catalog_product_store_configuration"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric) IS 'Persists authorized product store availability, price override, and low-stock settings without widening identifier-column updates. Requires products.manage and authorized store scope.';
-
-
---
--- Name: set_catalog_product_store_configuration_v2("uuid", "uuid", "uuid", bigint, numeric, "text"); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE OR REPLACE FUNCTION "public"."set_catalog_product_store_configuration_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric, "target_restock_policy" "text") RETURNS "void"
-    LANGUAGE "sql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-  select private.set_catalog_product_store_configuration_v2(
-    target_organization_id,
-    target_product_id,
-    target_store_id,
-    target_price_override_minor,
-    target_low_stock_level,
-    target_restock_policy
-  );
-$$;
-
-
-ALTER FUNCTION "public"."set_catalog_product_store_configuration_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric, "target_restock_policy" "text") OWNER TO "postgres";
-
---
--- Name: FUNCTION "set_catalog_product_store_configuration_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric, "target_restock_policy" "text"); Type: COMMENT; Schema: public; Owner: postgres
---
-
-COMMENT ON FUNCTION "public"."set_catalog_product_store_configuration_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric, "target_restock_policy" "text") IS 'Persists authorized product store price, low-stock, and restock intention settings with an audit record.';
+COMMENT ON FUNCTION "public"."set_catalog_product_store_configuration_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_restock_policy" "text") IS 'Updates price and restock intention without low_stock_level application writes or stock effects.';
 
 
 --
@@ -24592,6 +26042,20 @@ CREATE OR REPLACE FUNCTION "public"."submit_inventory_count_for_review"("target_
 ALTER FUNCTION "public"."submit_inventory_count_for_review"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") OWNER TO "postgres";
 
 --
+-- Name: submit_inventory_transfer("uuid", "uuid", "text", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") RETURNS "uuid"
+    LANGUAGE "sql"
+    SET "search_path" TO ''
+    AS $$
+  select private.submit_inventory_transfer(target_organization_id, target_stock_transfer_id, target_note, target_operation_id);
+$$;
+
+
+ALTER FUNCTION "public"."submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
 -- Name: transfer_stock("uuid", "uuid", "uuid", "jsonb", "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -24689,6 +26153,68 @@ ALTER FUNCTION "public"."update_catalog_product_v2"("target_organization_id" "uu
 --
 
 COMMENT ON FUNCTION "public"."update_catalog_product_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) IS 'Secure catalog-product edit boundary. Requires products.manage and products.view_cost when cost changes.';
+
+
+--
+-- Name: update_catalog_product_v3("uuid", "uuid", "text", "text", "uuid", "text", "text", bigint, bigint, boolean, "text", "text", boolean, boolean, "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."update_catalog_product_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  result_product_type text;
+  product_is_composite boolean;
+  normalized_mode text := coalesce(nullif(btrim(target_composite_inventory_mode), ''), 'made_to_order');
+begin
+  if normalized_mode not in ('made_to_order', 'stocked_assembly') then
+    raise exception 'Choose a supported composite inventory mode.' using errcode = '23514';
+  end if;
+
+  result_product_type := private.update_catalog_product_v2(
+    target_organization_id,
+    target_product_id,
+    target_name,
+    target_description,
+    target_category_id,
+    target_sku,
+    target_barcode,
+    target_price_minor,
+    target_cost_minor,
+    target_track_inventory,
+    target_unit,
+    target_image_url,
+    target_is_variable_price,
+    target_allow_fractional_quantity
+  );
+
+  select product.is_composite
+  into product_is_composite
+  from public.products product
+  where product.id = target_product_id
+    and product.organization_id = target_organization_id;
+
+  update public.products
+  set composite_inventory_mode = case
+    when product_is_composite then normalized_mode
+    else 'made_to_order'
+  end
+  where id = target_product_id
+    and organization_id = target_organization_id;
+
+  return result_product_type;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."update_catalog_product_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "update_catalog_product_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."update_catalog_product_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") IS 'Catalog update with an explicit composite recipe-consumption mode.';
 
 
 --
@@ -25075,6 +26601,84 @@ COMMENT ON FUNCTION "public"."update_payment_method_configuration"("target_organ
 
 
 --
+-- Name: update_product_unit("uuid", "uuid", "text", "text", numeric, boolean, boolean, "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."update_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  current_unit public.product_units%rowtype;
+  normalized_code text := lower(btrim(target_unit_code));
+  normalized_name text := btrim(target_unit_name);
+  payload jsonb;
+  replay_id uuid;
+  old_values jsonb;
+  actor_employee_id uuid;
+begin
+  if (select auth.uid()) is null
+     or not (select private.has_permission(target_organization_id, 'products.manage')) then
+    raise exception 'Product management permission is required.' using errcode = '42501';
+  end if;
+
+  payload := jsonb_build_object(
+    'unit_id', target_unit_id, 'unit_code', normalized_code, 'unit_name', normalized_name,
+    'factor_to_base', target_factor_to_base, 'is_sale_unit', target_is_sale_unit,
+    'is_purchase_unit', target_is_purchase_unit
+  );
+  replay_id := private.claim_product_unit_operation(
+    target_organization_id, target_operation_id, 'update', payload, target_unit_id
+  );
+  if replay_id is not null then return replay_id; end if;
+
+  select unit.* into current_unit
+  from public.product_units unit
+  where unit.id = target_unit_id and unit.organization_id = target_organization_id
+  for update;
+  if not found then raise exception 'The product unit could not be found.' using errcode = '23503'; end if;
+
+  old_values := jsonb_build_object(
+    'unit_code', current_unit.unit_code, 'unit_name', current_unit.unit_name,
+    'factor_to_base', current_unit.factor_to_base, 'is_sale_unit', current_unit.is_sale_unit,
+    'is_purchase_unit', current_unit.is_purchase_unit
+  );
+  if current_unit.is_base and (
+    normalized_code is distinct from current_unit.unit_code
+    or target_factor_to_base is distinct from current_unit.factor_to_base
+  ) then
+    raise exception 'The base unit code and conversion factor are immutable.' using errcode = '23514';
+  end if;
+
+  update public.product_units
+  set unit_code = normalized_code, unit_name = normalized_name,
+      factor_to_base = target_factor_to_base,
+      is_sale_unit = coalesce(target_is_sale_unit, false),
+      is_purchase_unit = coalesce(target_is_purchase_unit, false)
+  where id = target_unit_id;
+
+  actor_employee_id := private.current_employee_id(target_organization_id);
+  perform private.write_audit_log(
+    target_organization_id, 'PRODUCT_UNIT_UPDATED', 'products.manage', actor_employee_id,
+    null, null, null, null, null, null,
+    jsonb_build_object('product_id', current_unit.product_id, 'unit_id', target_unit_id,
+      'operation_id', target_operation_id, 'old_values', old_values, 'new_values', payload - 'unit_id')
+  );
+  return target_unit_id;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."update_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "update_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."update_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") IS 'Canonical, audited update. Base code/factor remain immutable; transaction snapshots are never rewritten.';
+
+
+--
 -- Name: update_receipt_delivery_status("uuid", "text", "text", "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -25353,18 +26957,33 @@ $$;
 ALTER FUNCTION "public"."update_supplier_lead_time"("target_organization_id" "uuid", "target_supplier_id" "uuid", "target_lead_time_days" integer) OWNER TO "postgres";
 
 --
--- Name: upsert_inventory_replenishment_rule("uuid", "uuid", "uuid", "uuid", "uuid", numeric, numeric); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: upsert_inventory_replenishment_rule_v2("uuid", "uuid", "uuid", numeric, numeric, "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE OR REPLACE FUNCTION "public"."upsert_inventory_replenishment_rule"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric) RETURNS "uuid"
-    LANGUAGE "sql"
+CREATE OR REPLACE FUNCTION "public"."upsert_inventory_replenishment_rule_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric, "target_variant_id" "uuid" DEFAULT NULL::"uuid", "target_preferred_warehouse_id" "uuid" DEFAULT NULL::"uuid") RETURNS "uuid"
+    LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select private.upsert_inventory_replenishment_rule(target_organization_id, target_store_id, target_product_id, target_variant_id, target_preferred_warehouse_id, target_reorder_point, target_target_stock);
+  select private.upsert_inventory_replenishment_rule(
+    target_organization_id,
+    target_store_id,
+    target_product_id,
+    target_variant_id,
+    target_preferred_warehouse_id,
+    target_reorder_point,
+    target_target_stock
+  );
 $$;
 
 
-ALTER FUNCTION "public"."upsert_inventory_replenishment_rule"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric) OWNER TO "postgres";
+ALTER FUNCTION "public"."upsert_inventory_replenishment_rule_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric, "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid") OWNER TO "postgres";
+
+--
+-- Name: FUNCTION "upsert_inventory_replenishment_rule_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric, "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."upsert_inventory_replenishment_rule_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric, "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid") IS 'Canonical replenishment-rule command. Product variant and preferred warehouse are optional trailing inputs.';
+
 
 --
 -- Name: validate_pos_cart_stock("uuid", "uuid", "uuid", "jsonb"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -25507,6 +27126,23 @@ CREATE TABLE IF NOT EXISTS "private"."employee_pin_credentials" (
 ALTER TABLE "private"."employee_pin_credentials" OWNER TO "postgres";
 
 --
+-- Name: identity_links; Type: TABLE; Schema: private; Owner: postgres
+--
+
+CREATE TABLE IF NOT EXISTS "private"."identity_links" (
+    "provider" "text" NOT NULL,
+    "provider_subject" "text" NOT NULL,
+    "profile_id" "uuid" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "identity_links_provider_length" CHECK ((("char_length"("btrim"("provider")) >= 1) AND ("char_length"("btrim"("provider")) <= 80))),
+    CONSTRAINT "identity_links_provider_subject_length" CHECK ((("char_length"("btrim"("provider_subject")) >= 1) AND ("char_length"("btrim"("provider_subject")) <= 512)))
+);
+
+
+ALTER TABLE "private"."identity_links" OWNER TO "postgres";
+
+--
 -- Name: inventory_adjustment_number_sequence; Type: SEQUENCE; Schema: private; Owner: postgres
 --
 
@@ -25619,6 +27255,78 @@ CREATE TABLE IF NOT EXISTS "private"."pos_device_credentials" (
 
 
 ALTER TABLE "private"."pos_device_credentials" OWNER TO "postgres";
+
+--
+-- Name: product_unit_operations; Type: TABLE; Schema: private; Owner: postgres
+--
+
+CREATE TABLE IF NOT EXISTS "private"."product_unit_operations" (
+    "organization_id" "uuid" NOT NULL,
+    "operation_id" "uuid" NOT NULL,
+    "command" "text" NOT NULL,
+    "normalized_payload" "jsonb" NOT NULL,
+    "result_unit_id" "uuid" NOT NULL,
+    "actor_profile_id" "uuid" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "product_unit_operations_command_check" CHECK (("command" = ANY (ARRAY['create'::"text", 'update'::"text", 'delete'::"text"])))
+);
+
+
+ALTER TABLE "private"."product_unit_operations" OWNER TO "postgres";
+
+--
+-- Name: TABLE "product_unit_operations"; Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON TABLE "private"."product_unit_operations" IS 'Private replay registry for canonical product-unit administration commands.';
+
+
+--
+-- Name: stock_transfer_operations; Type: TABLE; Schema: private; Owner: postgres
+--
+
+CREATE TABLE IF NOT EXISTS "private"."stock_transfer_operations" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "organization_id" "uuid" NOT NULL,
+    "stock_transfer_id" "uuid" NOT NULL,
+    "operation_id" "uuid" NOT NULL,
+    "command" "text" NOT NULL,
+    "normalized_payload" "jsonb" NOT NULL,
+    "from_status" "text",
+    "to_status" "text" NOT NULL,
+    "actor_employee_id" "uuid" NOT NULL,
+    "result_id" "uuid" NOT NULL,
+    "note" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "stock_transfer_operations_command_values" CHECK (("command" = ANY (ARRAY['create'::"text", 'submit'::"text", 'approve'::"text", 'dispatch'::"text", 'receive'::"text", 'cancel'::"text"]))),
+    CONSTRAINT "stock_transfer_operations_from_status_values" CHECK ((("from_status" IS NULL) OR ("from_status" = ANY (ARRAY['draft'::"text", 'submitted'::"text", 'approved'::"text", 'dispatched'::"text", 'partially_received'::"text", 'received'::"text", 'cancelled'::"text", 'in_transit'::"text", 'completed'::"text"])))),
+    CONSTRAINT "stock_transfer_operations_note_length" CHECK ((("note" IS NULL) OR ("char_length"("note") <= 500))),
+    CONSTRAINT "stock_transfer_operations_to_status_values" CHECK (("to_status" = ANY (ARRAY['draft'::"text", 'submitted'::"text", 'approved'::"text", 'dispatched'::"text", 'partially_received'::"text", 'received'::"text", 'cancelled'::"text"])))
+);
+
+
+ALTER TABLE "private"."stock_transfer_operations" OWNER TO "postgres";
+
+--
+-- Name: TABLE "stock_transfer_operations"; Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON TABLE "private"."stock_transfer_operations" IS 'Immutable idempotency and custody evidence for canonical stock-transfer lifecycle commands. It is not exposed through the Data API.';
+
+
+--
+-- Name: COLUMN "stock_transfer_operations"."normalized_payload"; Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON COLUMN "private"."stock_transfer_operations"."normalized_payload" IS 'Stable command payload used to distinguish exact replay from operation-key reuse.';
+
+
+--
+-- Name: COLUMN "stock_transfer_operations"."result_id"; Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON COLUMN "private"."stock_transfer_operations"."result_id" IS 'The original transfer ID for lifecycle commands or receipt ID for receive commands.';
+
 
 --
 -- Name: tindio_goods_receipt_number_sequence; Type: SEQUENCE; Schema: private; Owner: postgres
@@ -26187,11 +27895,47 @@ CREATE TABLE IF NOT EXISTS "public"."goods_receipt_lines" (
     "goods_receipt_id" "uuid" NOT NULL,
     "purchase_order_line_id" "uuid" NOT NULL,
     "quantity_received" numeric(14,3) NOT NULL,
+    "base_quantity_received" numeric(14,3) NOT NULL,
+    "purchase_unit_code_snapshot" "text" NOT NULL,
+    "purchase_unit_factor_to_base" numeric(14,3) NOT NULL,
+    "purchase_unit_cost_minor" bigint NOT NULL,
+    "stock_unit_cost_minor" bigint NOT NULL,
+    CONSTRAINT "goods_receipt_lines_base_quantity_positive" CHECK ((("base_quantity_received" > (0)::numeric) AND ("base_quantity_received" = "round"("base_quantity_received", 3)))),
+    CONSTRAINT "goods_receipt_lines_costs_nonnegative" CHECK ((("purchase_unit_cost_minor" >= 0) AND ("stock_unit_cost_minor" >= 0))),
+    CONSTRAINT "goods_receipt_lines_purchase_factor_positive" CHECK ((("purchase_unit_factor_to_base" > (0)::numeric) AND ("purchase_unit_factor_to_base" = "round"("purchase_unit_factor_to_base", 3)))),
     CONSTRAINT "goods_receipt_lines_quantity_positive" CHECK (("quantity_received" > (0)::numeric))
 );
 
 
 ALTER TABLE "public"."goods_receipt_lines" OWNER TO "postgres";
+
+--
+-- Name: COLUMN "goods_receipt_lines"."base_quantity_received"; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN "public"."goods_receipt_lines"."base_quantity_received" IS 'Immutable stock/base-unit quantity posted by this receipt line.';
+
+
+--
+-- Name: COLUMN "goods_receipt_lines"."purchase_unit_factor_to_base"; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN "public"."goods_receipt_lines"."purchase_unit_factor_to_base" IS 'Immutable purchase-unit conversion factor used by this receipt.';
+
+
+--
+-- Name: COLUMN "goods_receipt_lines"."purchase_unit_cost_minor"; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN "public"."goods_receipt_lines"."purchase_unit_cost_minor" IS 'Immutable cost per received purchase unit from the purchase-order line.';
+
+
+--
+-- Name: COLUMN "goods_receipt_lines"."stock_unit_cost_minor"; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN "public"."goods_receipt_lines"."stock_unit_cost_minor" IS 'Immutable rounded cost per stock/base unit supplied to the inventory ledger.';
+
 
 --
 -- Name: goods_receipts; Type: TABLE; Schema: public; Owner: postgres
@@ -26407,7 +28151,7 @@ CREATE TABLE IF NOT EXISTS "public"."inventory_counts" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "organization_id" "uuid" NOT NULL,
     "store_id" "uuid" NOT NULL,
-    "status" "text" DEFAULT 'open'::"text" NOT NULL,
+    "status" "text" DEFAULT 'draft'::"text" NOT NULL,
     "note" "text",
     "started_by_employee_id" "uuid" NOT NULL,
     "completed_by_employee_id" "uuid",
@@ -27353,6 +29097,13 @@ COMMENT ON COLUMN "public"."product_store_settings"."price_override_minor" IS 'O
 
 
 --
+-- Name: COLUMN "product_store_settings"."low_stock_level"; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN "public"."product_store_settings"."low_stock_level" IS 'Legacy compatibility fallback only. New low-stock configuration is inventory_replenishment_rules.reorder_point.';
+
+
+--
 -- Name: COLUMN "product_store_settings"."restock_policy"; Type: COMMENT; Schema: public; Owner: postgres
 --
 
@@ -27429,6 +29180,31 @@ COMMENT ON TABLE "public"."product_variants" IS 'Saleable variants with independ
 
 
 --
+-- Name: production_run_components; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE IF NOT EXISTS "public"."production_run_components" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "organization_id" "uuid" NOT NULL,
+    "production_run_id" "uuid" NOT NULL,
+    "component_product_id" "uuid" NOT NULL,
+    "component_variant_id" "uuid",
+    "quantity_per_composite_snapshot" numeric(14,3) NOT NULL,
+    "quantity_consumed" numeric(14,3) NOT NULL,
+    "unit_snapshot" "text" NOT NULL,
+    "unit_cost_minor" bigint NOT NULL,
+    "cost_is_known" boolean NOT NULL,
+    "total_cost_minor" bigint NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "production_run_components_cost_nonnegative" CHECK ((("unit_cost_minor" >= 0) AND ("total_cost_minor" >= 0))),
+    CONSTRAINT "production_run_components_quantities_positive" CHECK ((("quantity_per_composite_snapshot" > (0)::numeric) AND ("quantity_consumed" > (0)::numeric))),
+    CONSTRAINT "production_run_components_quantity_precision" CHECK ((("quantity_per_composite_snapshot" = "round"("quantity_per_composite_snapshot", 3)) AND ("quantity_consumed" = "round"("quantity_consumed", 3))))
+);
+
+
+ALTER TABLE "public"."production_run_components" OWNER TO "postgres";
+
+--
 -- Name: production_runs; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -27443,6 +29219,9 @@ CREATE TABLE IF NOT EXISTS "public"."production_runs" (
     "produced_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "operation_id" "uuid",
     "cost_is_known" boolean DEFAULT false NOT NULL,
+    "normalized_payload" "jsonb" NOT NULL,
+    "composite_inventory_mode_snapshot" "text" DEFAULT 'stocked_assembly'::"text" NOT NULL,
+    CONSTRAINT "production_runs_composite_mode_snapshot_values" CHECK (("composite_inventory_mode_snapshot" = 'stocked_assembly'::"text")),
     CONSTRAINT "production_runs_note_length" CHECK ((("note" IS NULL) OR ("char_length"("note") <= 500))),
     CONSTRAINT "production_runs_quantity_positive" CHECK (("quantity_produced" > (0)::numeric))
 );
@@ -27481,7 +29260,10 @@ CREATE TABLE IF NOT EXISTS "public"."products" (
     "is_variable_price" boolean DEFAULT false NOT NULL,
     "allow_fractional_quantity" boolean DEFAULT false NOT NULL,
     "is_composite" boolean DEFAULT false NOT NULL,
+    "composite_inventory_mode" "text" DEFAULT 'made_to_order'::"text" NOT NULL,
     CONSTRAINT "products_barcode_format" CHECK ((("barcode" IS NULL) OR (("barcode" = TRIM(BOTH FROM "barcode")) AND ("barcode" ~ '^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$'::"text")))),
+    CONSTRAINT "products_composite_inventory_mode_consistency" CHECK (("is_composite" OR ("composite_inventory_mode" = 'made_to_order'::"text"))),
+    CONSTRAINT "products_composite_inventory_mode_values" CHECK (("composite_inventory_mode" = ANY (ARRAY['made_to_order'::"text", 'stocked_assembly'::"text"]))),
     CONSTRAINT "products_composite_type_consistency" CHECK (((NOT "is_composite") OR ("product_type" = 'simple'::"text"))),
     CONSTRAINT "products_cost_nonnegative" CHECK (("cost_minor" >= 0)),
     CONSTRAINT "products_description_length" CHECK ((("description" IS NULL) OR ("char_length"("description") <= 2000))),
@@ -27518,6 +29300,13 @@ COMMENT ON COLUMN "public"."products"."cost_minor" IS 'Acquisition cost. Not dir
 --
 
 COMMENT ON COLUMN "public"."products"."is_composite" IS 'Uses the simple checkout contract and emits component ledger movements when sold.';
+
+
+--
+-- Name: COLUMN "products"."composite_inventory_mode"; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN "public"."products"."composite_inventory_mode" IS 'Composite stock authority. made_to_order consumes recipe components on sale; stocked_assembly consumes components only through production and sells finished stock.';
 
 
 --
@@ -27571,14 +29360,14 @@ ALTER TABLE "public"."purchase_order_lines" OWNER TO "postgres";
 -- Name: COLUMN "purchase_order_lines"."purchase_unit_code_snapshot"; Type: COMMENT; Schema: public; Owner: postgres
 --
 
-COMMENT ON COLUMN "public"."purchase_order_lines"."purchase_unit_code_snapshot" IS 'Configured product purchase-unit code captured when the order was created.';
+COMMENT ON COLUMN "public"."purchase_order_lines"."purchase_unit_code_snapshot" IS 'Immutable purchase-unit code snapshot required for operational purchase-order and receiving reads.';
 
 
 --
 -- Name: COLUMN "purchase_order_lines"."purchase_unit_factor_to_base"; Type: COMMENT; Schema: public; Owner: postgres
 --
 
-COMMENT ON COLUMN "public"."purchase_order_lines"."purchase_unit_factor_to_base" IS 'Exact conversion from ordered/received purchase units into the immutable inventory base unit.';
+COMMENT ON COLUMN "public"."purchase_order_lines"."purchase_unit_factor_to_base" IS 'Immutable purchase-unit conversion snapshot required for operational receiving quantity conversion; not a cost field.';
 
 
 --
@@ -28418,8 +30207,8 @@ CREATE TABLE IF NOT EXISTS "public"."stock_transfers" (
     "operation_id" "uuid" NOT NULL,
     CONSTRAINT "stock_transfers_different_stores" CHECK (("source_store_id" <> "destination_store_id")),
     CONSTRAINT "stock_transfers_note_length" CHECK ((("note" IS NULL) OR ("char_length"("note") <= 500))),
-    CONSTRAINT "stock_transfers_received_state" CHECK (((("status" = ANY (ARRAY['partially_received'::"text", 'completed'::"text"])) AND ("received_by_employee_id" IS NOT NULL) AND ("received_at" IS NOT NULL)) OR ("status" = 'in_transit'::"text") OR (("status" = 'completed'::"text") AND ("received_by_employee_id" IS NULL) AND ("received_at" IS NULL)))),
-    CONSTRAINT "stock_transfers_status_values" CHECK (("status" = ANY (ARRAY['in_transit'::"text", 'partially_received'::"text", 'completed'::"text"])))
+    CONSTRAINT "stock_transfers_received_state" CHECK (((("status" = ANY (ARRAY['partially_received'::"text", 'received'::"text"])) AND ("received_by_employee_id" IS NOT NULL) AND ("received_at" IS NOT NULL)) OR (("status" = ANY (ARRAY['draft'::"text", 'submitted'::"text", 'approved'::"text", 'dispatched'::"text", 'cancelled'::"text"])) AND ("received_by_employee_id" IS NULL) AND ("received_at" IS NULL)))),
+    CONSTRAINT "stock_transfers_status_values" CHECK (("status" = ANY (ARRAY['draft'::"text", 'submitted'::"text", 'approved'::"text", 'dispatched'::"text", 'partially_received'::"text", 'received'::"text", 'cancelled'::"text"])))
 );
 
 
@@ -28665,6 +30454,22 @@ ALTER TABLE ONLY "private"."employee_pin_credentials"
 
 
 --
+-- Name: identity_links identity_links_pkey; Type: CONSTRAINT; Schema: private; Owner: postgres
+--
+
+ALTER TABLE ONLY "private"."identity_links"
+    ADD CONSTRAINT "identity_links_pkey" PRIMARY KEY ("provider", "provider_subject");
+
+
+--
+-- Name: identity_links identity_links_provider_profile_unique; Type: CONSTRAINT; Schema: private; Owner: postgres
+--
+
+ALTER TABLE ONLY "private"."identity_links"
+    ADD CONSTRAINT "identity_links_provider_profile_unique" UNIQUE ("provider", "profile_id");
+
+
+--
 -- Name: organization_data_governance organization_data_governance_pkey; Type: CONSTRAINT; Schema: private; Owner: postgres
 --
 
@@ -28686,6 +30491,30 @@ ALTER TABLE ONLY "private"."organization_recovery_drills"
 
 ALTER TABLE ONLY "private"."pos_device_credentials"
     ADD CONSTRAINT "pos_device_credentials_pkey" PRIMARY KEY ("device_id");
+
+
+--
+-- Name: product_unit_operations product_unit_operations_pkey; Type: CONSTRAINT; Schema: private; Owner: postgres
+--
+
+ALTER TABLE ONLY "private"."product_unit_operations"
+    ADD CONSTRAINT "product_unit_operations_pkey" PRIMARY KEY ("organization_id", "operation_id");
+
+
+--
+-- Name: stock_transfer_operations stock_transfer_operations_organization_operation_unique; Type: CONSTRAINT; Schema: private; Owner: postgres
+--
+
+ALTER TABLE ONLY "private"."stock_transfer_operations"
+    ADD CONSTRAINT "stock_transfer_operations_organization_operation_unique" UNIQUE ("organization_id", "operation_id");
+
+
+--
+-- Name: stock_transfer_operations stock_transfer_operations_pkey; Type: CONSTRAINT; Schema: private; Owner: postgres
+--
+
+ALTER TABLE ONLY "private"."stock_transfer_operations"
+    ADD CONSTRAINT "stock_transfer_operations_pkey" PRIMARY KEY ("id");
 
 
 --
@@ -29585,6 +31414,22 @@ ALTER TABLE ONLY "public"."product_variants"
 
 
 --
+-- Name: production_run_components production_run_components_identity_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."production_run_components"
+    ADD CONSTRAINT "production_run_components_identity_unique" UNIQUE NULLS NOT DISTINCT ("production_run_id", "component_product_id", "component_variant_id");
+
+
+--
+-- Name: production_run_components production_run_components_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."production_run_components"
+    ADD CONSTRAINT "production_run_components_pkey" PRIMARY KEY ("id");
+
+
+--
 -- Name: production_runs production_runs_id_organization_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -30313,10 +32158,31 @@ ALTER TABLE ONLY "public"."time_clock_entries"
 
 
 --
+-- Name: identity_links_profile_id_idx; Type: INDEX; Schema: private; Owner: postgres
+--
+
+CREATE INDEX "identity_links_profile_id_idx" ON "private"."identity_links" USING "btree" ("profile_id");
+
+
+--
 -- Name: organization_recovery_drills_organization_created_idx; Type: INDEX; Schema: private; Owner: postgres
 --
 
 CREATE INDEX "organization_recovery_drills_organization_created_idx" ON "private"."organization_recovery_drills" USING "btree" ("organization_id", "created_at" DESC);
+
+
+--
+-- Name: stock_transfer_operations_actor_created_idx; Type: INDEX; Schema: private; Owner: postgres
+--
+
+CREATE INDEX "stock_transfer_operations_actor_created_idx" ON "private"."stock_transfer_operations" USING "btree" ("organization_id", "actor_employee_id", "created_at" DESC);
+
+
+--
+-- Name: stock_transfer_operations_transfer_created_idx; Type: INDEX; Schema: private; Owner: postgres
+--
+
+CREATE INDEX "stock_transfer_operations_transfer_created_idx" ON "private"."stock_transfer_operations" USING "btree" ("organization_id", "stock_transfer_id", "created_at", "id");
 
 
 --
@@ -31118,6 +32984,13 @@ CREATE UNIQUE INDEX "product_variants_product_name_unique_idx" ON "public"."prod
 
 
 --
+-- Name: production_run_components_run_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "production_run_components_run_idx" ON "public"."production_run_components" USING "btree" ("organization_id", "production_run_id");
+
+
+--
 -- Name: production_runs_organization_operation_id_unique; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -31664,6 +33537,13 @@ CREATE INDEX "time_clock_entries_store_started_idx" ON "public"."time_clock_entr
 
 
 --
+-- Name: identity_links identity_links_set_updated_at; Type: TRIGGER; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "identity_links_set_updated_at" BEFORE UPDATE ON "private"."identity_links" FOR EACH ROW EXECUTE FUNCTION "private"."set_updated_at"();
+
+
+--
 -- Name: organization_recovery_drills organization_recovery_drills_immutable; Type: TRIGGER; Schema: private; Owner: postgres
 --
 
@@ -31790,6 +33670,27 @@ COMMENT ON TRIGGER "enforce_open_ticket_capabilities" ON "public"."open_tickets"
 
 
 --
+-- Name: goods_receipt_lines goods_receipt_lines_guard_immutable; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "goods_receipt_lines_guard_immutable" BEFORE DELETE OR UPDATE ON "public"."goods_receipt_lines" FOR EACH ROW EXECUTE FUNCTION "private"."guard_purchasing_evidence_immutability"();
+
+
+--
+-- Name: goods_receipt_lines goods_receipt_lines_snapshot_truth; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "goods_receipt_lines_snapshot_truth" BEFORE INSERT ON "public"."goods_receipt_lines" FOR EACH ROW EXECUTE FUNCTION "private"."snapshot_goods_receipt_line_truth"();
+
+
+--
+-- Name: goods_receipts goods_receipts_guard_immutable; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "goods_receipts_guard_immutable" BEFORE DELETE OR UPDATE ON "public"."goods_receipts" FOR EACH ROW EXECUTE FUNCTION "private"."guard_purchasing_evidence_immutability"();
+
+
+--
 -- Name: roles grant_cashier_ticket_capability; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -31832,10 +33733,31 @@ CREATE OR REPLACE TRIGGER "inventory_adjustments_append_only" BEFORE DELETE OR U
 
 
 --
+-- Name: inventory_count_lines inventory_count_lines_audit_physical_quantity; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "inventory_count_lines_audit_physical_quantity" AFTER INSERT OR UPDATE OF "counted_quantity" ON "public"."inventory_count_lines" FOR EACH ROW EXECUTE FUNCTION "private"."audit_inventory_count_line_saved"();
+
+
+--
+-- Name: inventory_count_lines inventory_count_lines_guard_terminal_document; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "inventory_count_lines_guard_terminal_document" BEFORE INSERT OR DELETE OR UPDATE ON "public"."inventory_count_lines" FOR EACH ROW EXECUTE FUNCTION "private"."guard_inventory_count_line_lifecycle"();
+
+
+--
 -- Name: inventory_count_lines inventory_count_lines_validate_unique; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
 CREATE OR REPLACE TRIGGER "inventory_count_lines_validate_unique" BEFORE INSERT ON "public"."inventory_count_lines" FOR EACH ROW EXECUTE FUNCTION "private"."validate_inventory_count_line"();
+
+
+--
+-- Name: inventory_counts inventory_counts_guard_canonical_lifecycle; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "inventory_counts_guard_canonical_lifecycle" BEFORE INSERT OR DELETE OR UPDATE ON "public"."inventory_counts" FOR EACH ROW EXECUTE FUNCTION "private"."guard_inventory_count_lifecycle"();
 
 
 --
@@ -32616,6 +34538,13 @@ CREATE OR REPLACE TRIGGER "product_components_validate" BEFORE INSERT OR UPDATE 
 
 
 --
+-- Name: product_store_settings product_store_settings_guard_legacy_low_stock_level; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "product_store_settings_guard_legacy_low_stock_level" BEFORE INSERT OR UPDATE OF "low_stock_level" ON "public"."product_store_settings" FOR EACH ROW EXECUTE FUNCTION "private"."guard_legacy_low_stock_level"();
+
+
+--
 -- Name: product_store_settings product_store_settings_initialize_inventory; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -32627,6 +34556,13 @@ CREATE OR REPLACE TRIGGER "product_store_settings_initialize_inventory" AFTER IN
 --
 
 CREATE OR REPLACE TRIGGER "product_store_settings_set_updated_at" BEFORE UPDATE ON "public"."product_store_settings" FOR EACH ROW EXECUTE FUNCTION "private"."set_updated_at"();
+
+
+--
+-- Name: product_units product_units_protect_identity; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "product_units_protect_identity" BEFORE INSERT OR DELETE OR UPDATE ON "public"."product_units" FOR EACH ROW EXECUTE FUNCTION "private"."protect_product_unit_identity"();
 
 
 --
@@ -32651,6 +34587,20 @@ CREATE OR REPLACE TRIGGER "product_variants_set_updated_at" BEFORE UPDATE ON "pu
 
 
 --
+-- Name: production_run_components production_run_components_guard_immutable; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "production_run_components_guard_immutable" BEFORE DELETE OR UPDATE ON "public"."production_run_components" FOR EACH ROW EXECUTE FUNCTION "private"."prevent_production_evidence_mutation"();
+
+
+--
+-- Name: production_runs production_runs_guard_immutable; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "production_runs_guard_immutable" BEFORE DELETE OR UPDATE ON "public"."production_runs" FOR EACH ROW EXECUTE FUNCTION "private"."prevent_production_evidence_mutation"();
+
+
+--
 -- Name: products products_ensure_identifier_unique; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -32662,6 +34612,13 @@ CREATE OR REPLACE TRIGGER "products_ensure_identifier_unique" BEFORE INSERT OR U
 --
 
 CREATE OR REPLACE TRIGGER "products_initialize_base_unit" AFTER INSERT ON "public"."products" FOR EACH ROW EXECUTE FUNCTION "private"."initialize_product_base_unit"();
+
+
+--
+-- Name: products products_protect_composite_inventory_mode; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "products_protect_composite_inventory_mode" BEFORE UPDATE OF "composite_inventory_mode", "is_composite" ON "public"."products" FOR EACH ROW EXECUTE FUNCTION "private"."protect_composite_inventory_mode"();
 
 
 --
@@ -32679,6 +34636,13 @@ CREATE OR REPLACE TRIGGER "profiles_set_updated_at" BEFORE UPDATE ON "public"."p
 
 
 --
+-- Name: purchase_order_lines purchase_order_lines_guard_terminal; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "purchase_order_lines_guard_terminal" BEFORE DELETE OR UPDATE ON "public"."purchase_order_lines" FOR EACH ROW EXECUTE FUNCTION "private"."guard_purchasing_evidence_immutability"();
+
+
+--
 -- Name: purchase_order_lines purchase_order_lines_validate_inventory; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -32690,6 +34654,13 @@ CREATE OR REPLACE TRIGGER "purchase_order_lines_validate_inventory" BEFORE INSER
 --
 
 CREATE OR REPLACE TRIGGER "purchase_orders_default_expected_at_from_supplier" BEFORE INSERT ON "public"."purchase_orders" FOR EACH ROW EXECUTE FUNCTION "private"."default_purchase_order_expected_at_from_supplier"();
+
+
+--
+-- Name: purchase_orders purchase_orders_guard_terminal; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "purchase_orders_guard_terminal" BEFORE DELETE OR UPDATE ON "public"."purchase_orders" FOR EACH ROW EXECUTE FUNCTION "private"."guard_purchasing_evidence_immutability"();
 
 
 --
@@ -32861,6 +34832,20 @@ CREATE OR REPLACE TRIGGER "stores_set_updated_at" BEFORE UPDATE ON "public"."sto
 
 
 --
+-- Name: supplier_return_lines supplier_return_lines_guard_immutable; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "supplier_return_lines_guard_immutable" BEFORE DELETE OR UPDATE ON "public"."supplier_return_lines" FOR EACH ROW EXECUTE FUNCTION "private"."guard_supplier_return_evidence"();
+
+
+--
+-- Name: supplier_returns supplier_returns_guard_immutable; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "supplier_returns_guard_immutable" BEFORE DELETE OR UPDATE ON "public"."supplier_returns" FOR EACH ROW EXECUTE FUNCTION "private"."guard_supplier_return_evidence"();
+
+
+--
 -- Name: suppliers suppliers_set_updated_at; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -32912,6 +34897,14 @@ ALTER TABLE ONLY "private"."employee_pin_credentials"
 
 
 --
+-- Name: identity_links identity_links_profile_id_fkey; Type: FK CONSTRAINT; Schema: private; Owner: postgres
+--
+
+ALTER TABLE ONLY "private"."identity_links"
+    ADD CONSTRAINT "identity_links_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
+
+--
 -- Name: organization_data_governance organization_data_governance_organization_id_fkey; Type: FK CONSTRAINT; Schema: private; Owner: postgres
 --
 
@@ -32941,6 +34934,38 @@ ALTER TABLE ONLY "private"."organization_recovery_drills"
 
 ALTER TABLE ONLY "private"."pos_device_credentials"
     ADD CONSTRAINT "pos_device_credentials_device_id_fkey" FOREIGN KEY ("device_id") REFERENCES "public"."pos_devices"("id") ON DELETE CASCADE;
+
+
+--
+-- Name: product_unit_operations product_unit_operations_organization_id_fkey; Type: FK CONSTRAINT; Schema: private; Owner: postgres
+--
+
+ALTER TABLE ONLY "private"."product_unit_operations"
+    ADD CONSTRAINT "product_unit_operations_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE RESTRICT;
+
+
+--
+-- Name: stock_transfer_operations stock_transfer_operations_actor_organization_fkey; Type: FK CONSTRAINT; Schema: private; Owner: postgres
+--
+
+ALTER TABLE ONLY "private"."stock_transfer_operations"
+    ADD CONSTRAINT "stock_transfer_operations_actor_organization_fkey" FOREIGN KEY ("actor_employee_id", "organization_id") REFERENCES "public"."employees"("id", "organization_id") ON DELETE RESTRICT;
+
+
+--
+-- Name: stock_transfer_operations stock_transfer_operations_organization_fkey; Type: FK CONSTRAINT; Schema: private; Owner: postgres
+--
+
+ALTER TABLE ONLY "private"."stock_transfer_operations"
+    ADD CONSTRAINT "stock_transfer_operations_organization_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE RESTRICT;
+
+
+--
+-- Name: stock_transfer_operations stock_transfer_operations_transfer_organization_fkey; Type: FK CONSTRAINT; Schema: private; Owner: postgres
+--
+
+ALTER TABLE ONLY "private"."stock_transfer_operations"
+    ADD CONSTRAINT "stock_transfer_operations_transfer_organization_fkey" FOREIGN KEY ("stock_transfer_id", "organization_id") REFERENCES "public"."stock_transfers"("id", "organization_id") ON DELETE RESTRICT;
 
 
 --
@@ -33216,11 +35241,11 @@ ALTER TABLE ONLY "public"."discounts"
 
 
 --
--- Name: employee_invitations employee_invitations_accepted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: employee_invitations employee_invitations_accepted_by_profile_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY "public"."employee_invitations"
-    ADD CONSTRAINT "employee_invitations_accepted_by_fkey" FOREIGN KEY ("accepted_by") REFERENCES "auth"."users"("id") ON DELETE RESTRICT;
+    ADD CONSTRAINT "employee_invitations_accepted_by_profile_fkey" FOREIGN KEY ("accepted_by") REFERENCES "public"."profiles"("id") ON DELETE RESTRICT;
 
 
 --
@@ -34112,11 +36137,11 @@ ALTER TABLE ONLY "public"."organizations"
 
 
 --
--- Name: organizations organizations_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: organizations organizations_created_by_profile_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY "public"."organizations"
-    ADD CONSTRAINT "organizations_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "auth"."users"("id") ON DELETE RESTRICT;
+    ADD CONSTRAINT "organizations_created_by_profile_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."profiles"("id") ON DELETE RESTRICT;
 
 
 --
@@ -34328,6 +36353,38 @@ ALTER TABLE ONLY "public"."product_variants"
 
 
 --
+-- Name: production_run_components production_run_components_organization_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."production_run_components"
+    ADD CONSTRAINT "production_run_components_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE RESTRICT;
+
+
+--
+-- Name: production_run_components production_run_components_product_organization_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."production_run_components"
+    ADD CONSTRAINT "production_run_components_product_organization_fkey" FOREIGN KEY ("component_product_id", "organization_id") REFERENCES "public"."products"("id", "organization_id") ON DELETE RESTRICT;
+
+
+--
+-- Name: production_run_components production_run_components_run_organization_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."production_run_components"
+    ADD CONSTRAINT "production_run_components_run_organization_fkey" FOREIGN KEY ("production_run_id", "organization_id") REFERENCES "public"."production_runs"("id", "organization_id") ON DELETE RESTRICT;
+
+
+--
+-- Name: production_run_components production_run_components_variant_product_organization_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."production_run_components"
+    ADD CONSTRAINT "production_run_components_variant_product_organization_fkey" FOREIGN KEY ("component_variant_id", "component_product_id", "organization_id") REFERENCES "public"."product_variants"("id", "product_id", "organization_id") ON DELETE RESTRICT;
+
+
+--
 -- Name: production_runs production_runs_employee_organization_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -34373,14 +36430,6 @@ ALTER TABLE ONLY "public"."products"
 
 ALTER TABLE ONLY "public"."products"
     ADD CONSTRAINT "products_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE RESTRICT;
-
-
---
--- Name: profiles profiles_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY "public"."profiles"
-    ADD CONSTRAINT "profiles_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 --
@@ -35818,7 +37867,14 @@ ALTER TABLE "public"."inventory_levels" ENABLE ROW LEVEL SECURITY;
 -- Name: inventory_levels inventory_levels_select_authorized_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "inventory_levels_select_authorized_scope" ON "public"."inventory_levels" FOR SELECT TO "authenticated" USING (((( SELECT "private"."has_permission"("inventory_levels"."organization_id", 'inventory.view'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("inventory_levels"."organization_id", 'inventory.count'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("inventory_levels"."organization_id", 'inventory.manage'::"text") AS "has_permission") OR ( SELECT "private"."has_any_inventory_capability"("inventory_levels"."organization_id", ARRAY['purchasing.po.create'::"text", 'purchasing.receive'::"text", 'purchasing.return'::"text"]) AS "has_any_inventory_capability")) AND ( SELECT "private"."has_store_read_scope"("inventory_levels"."organization_id", "inventory_levels"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "inventory_levels_select_authorized_scope" ON "public"."inventory_levels" FOR SELECT TO "authenticated" USING (((( SELECT "private"."has_permission"("inventory_levels"."organization_id", 'inventory.view'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("inventory_levels"."organization_id", 'inventory.manage'::"text") AS "has_permission") OR ( SELECT "private"."has_any_inventory_capability"("inventory_levels"."organization_id", ARRAY['inventory.adjust.create'::"text", 'inventory.adjust.post'::"text", 'inventory.count.create'::"text", 'inventory.count.finalize'::"text", 'inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text", 'purchasing.po.create'::"text", 'purchasing.receive'::"text", 'purchasing.return'::"text"]) AS "has_any_inventory_capability") OR (( SELECT "private"."has_permission"("inventory_levels"."organization_id", 'products.view_cost'::"text") AS "has_permission") AND ( SELECT "private"."has_inventory_capability"("inventory_levels"."organization_id", 'inventory.valuation.view'::"text") AS "has_inventory_capability"))) AND ( SELECT "private"."has_store_read_scope"("inventory_levels"."organization_id", "inventory_levels"."store_id") AS "has_store_read_scope")));
+
+
+--
+-- Name: POLICY "inventory_levels_select_authorized_scope" ON "inventory_levels"; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON POLICY "inventory_levels_select_authorized_scope" ON "public"."inventory_levels" IS 'Store-scoped operational stock projection read access aligned with TINDIO granular inventory workflow capabilities.';
 
 
 --
@@ -36329,6 +38385,21 @@ CREATE POLICY "product_variants_select_member" ON "public"."product_variants" FO
 --
 
 CREATE POLICY "product_variants_update_authorized" ON "public"."product_variants" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("product_variants"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("product_variants"."organization_id", 'products.manage'::"text") AS "has_permission"));
+
+
+--
+-- Name: production_run_components; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."production_run_components" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: production_run_components production_run_components_select_authorized_scope; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "production_run_components_select_authorized_scope" ON "public"."production_run_components" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("production_run_components"."organization_id", 'inventory.manage'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
+   FROM "public"."production_runs" "production_run"
+  WHERE (("production_run"."id" = "production_run_components"."production_run_id") AND ("production_run"."organization_id" = "production_run_components"."organization_id") AND ( SELECT "private"."has_store_read_scope"("production_run"."organization_id", "production_run"."store_id") AS "has_store_read_scope"))))));
 
 
 --
@@ -37096,6 +39167,14 @@ REVOKE ALL ON FUNCTION "private"."approval_operation_permission"("target_operati
 
 
 --
+-- Name: FUNCTION "approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+
+
+--
 -- Name: FUNCTION "approve_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_approver_employee_number" "text", "target_pin" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
@@ -37151,6 +39230,13 @@ REVOKE ALL ON FUNCTION "private"."assign_open_shift_to_sale"() FROM PUBLIC;
 --
 
 REVOKE ALL ON FUNCTION "private"."audit_cash_movement"() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION "audit_inventory_count_line_saved"(); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."audit_inventory_count_line_saved"() FROM PUBLIC;
 
 
 --
@@ -37258,6 +39344,14 @@ GRANT ALL ON FUNCTION "private"."cancel_inventory_count"("target_organization_id
 
 
 --
+-- Name: FUNCTION "cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+
+
+--
 -- Name: FUNCTION "cancel_open_ticket"("target_organization_id" "uuid", "target_ticket_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
@@ -37269,7 +39363,6 @@ REVOKE ALL ON FUNCTION "private"."cancel_open_ticket"("target_organization_id" "
 --
 
 REVOKE ALL ON FUNCTION "private"."cancel_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_note" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."cancel_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_note" "text") TO "authenticated";
 
 
 --
@@ -37341,6 +39434,13 @@ REVOKE ALL ON FUNCTION "private"."checkout_sale_v1"("target_organization_id" "uu
 
 
 --
+-- Name: FUNCTION "claim_product_unit_operation"("target_organization_id" "uuid", "target_operation_id" "uuid", "target_command" "text", "target_payload" "jsonb", "target_result_unit_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."claim_product_unit_operation"("target_organization_id" "uuid", "target_operation_id" "uuid", "target_command" "text", "target_payload" "jsonb", "target_result_unit_id" "uuid") FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION "clock_in_employee"("target_organization_id" "uuid", "target_store_id" "uuid", "target_clock_in_note" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
@@ -37389,6 +39489,13 @@ REVOKE ALL ON FUNCTION "private"."complete_inventory_count"("target_organization
 --
 
 REVOKE ALL ON FUNCTION "private"."complete_organization_export"("target_export_session_id" "uuid", "target_record_count" integer, "target_manifest" "jsonb") FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION "consume_made_to_order_composite_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_actor_employee_id" "uuid", "target_sale_id" "uuid", "target_reason" "text"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."consume_made_to_order_composite_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_actor_employee_id" "uuid", "target_sale_id" "uuid", "target_reason" "text") FROM PUBLIC;
 
 
 --
@@ -37443,7 +39550,6 @@ GRANT ALL ON FUNCTION "private"."create_inventory_count_batch"("target_organizat
 --
 
 REVOKE ALL ON FUNCTION "private"."create_inventory_count_draft"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."create_inventory_count_draft"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text") TO "authenticated";
 
 
 --
@@ -37455,11 +39561,18 @@ GRANT ALL ON FUNCTION "private"."create_inventory_count_plan"("target_organizati
 
 
 --
+-- Name: FUNCTION "create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+
+
+--
 -- Name: FUNCTION "create_purchase_order"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_expected_at" "date", "target_lines" "jsonb", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."create_purchase_order"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_expected_at" "date", "target_lines" "jsonb", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."create_purchase_order"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_expected_at" "date", "target_lines" "jsonb", "target_operation_id" "uuid") TO "authenticated";
 
 
 --
@@ -37495,10 +39608,24 @@ GRANT ALL ON FUNCTION "private"."current_employee_id"("target_organization_id" "
 
 
 --
+-- Name: FUNCTION "current_identity_subject"(); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."current_identity_subject"() FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION "current_organization_member_employee_id"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."current_organization_member_employee_id"("target_organization_id" "uuid") FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION "current_profile_id"(); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."current_profile_id"() FROM PUBLIC;
 
 
 --
@@ -37550,6 +39677,21 @@ GRANT ALL ON FUNCTION "private"."delete_catalog_product_if_eligible"("target_org
 
 REVOKE ALL ON FUNCTION "private"."delete_employee_if_eligible"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_confirmation_number" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."delete_employee_if_eligible"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_confirmation_number" "text") TO "authenticated";
+
+
+--
+-- Name: FUNCTION "dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+
+
+--
+-- Name: FUNCTION "dispatch_inventory_transfer_core"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid", "allow_request_transfer" boolean); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."dispatch_inventory_transfer_core"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid", "allow_request_transfer" boolean) FROM PUBLIC;
 
 
 --
@@ -37763,6 +39905,27 @@ REVOKE ALL ON FUNCTION "private"."guard_employee_lifecycle_transition"() FROM PU
 
 
 --
+-- Name: FUNCTION "guard_inventory_count_lifecycle"(); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."guard_inventory_count_lifecycle"() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION "guard_inventory_count_line_lifecycle"(); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."guard_inventory_count_line_lifecycle"() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION "guard_legacy_low_stock_level"(); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."guard_legacy_low_stock_level"() FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION "guard_offline_checkout_total"(); Type: ACL; Schema: private; Owner: postgres
 --
 
@@ -37774,6 +39937,20 @@ REVOKE ALL ON FUNCTION "private"."guard_offline_checkout_total"() FROM PUBLIC;
 --
 
 REVOKE ALL ON FUNCTION "private"."guard_offline_payment_total_marker"() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION "guard_purchasing_evidence_immutability"(); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."guard_purchasing_evidence_immutability"() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION "guard_supplier_return_evidence"(); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."guard_supplier_return_evidence"() FROM PUBLIC;
 
 
 --
@@ -37918,11 +40095,10 @@ GRANT ALL ON FUNCTION "private"."has_store_read_scope"("target_organization_id" 
 
 
 --
--- Name: FUNCTION "import_catalog_products_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb"); Type: ACL; Schema: private; Owner: postgres
+-- Name: FUNCTION "import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb"); Type: ACL; Schema: private; Owner: postgres
 --
 
-REVOKE ALL ON FUNCTION "private"."import_catalog_products_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."import_catalog_products_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") TO "authenticated";
+REVOKE ALL ON FUNCTION "private"."import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") FROM PUBLIC;
 
 
 --
@@ -38000,6 +40176,20 @@ REVOKE ALL ON FUNCTION "private"."inventory_organization_actor"("target_organiza
 
 
 --
+-- Name: FUNCTION "inventory_transfer_child_operation_id"("target_parent_operation_id" "uuid", "target_command" "text"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."inventory_transfer_child_operation_id"("target_parent_operation_id" "uuid", "target_command" "text") FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION "is_made_to_order_composite"("target_organization_id" "uuid", "target_product_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."is_made_to_order_composite"("target_organization_id" "uuid", "target_product_id" "uuid") FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION "is_organization_creator"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
@@ -38037,6 +40227,27 @@ REVOKE ALL ON FUNCTION "private"."manage_organization_lifecycle"("target_organiz
 
 
 --
+-- Name: FUNCTION "migrate_legacy_stock_transfer_statuses"(); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."migrate_legacy_stock_transfer_statuses"() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION "normalize_inventory_transfer_lines"("target_lines" "jsonb"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."normalize_inventory_transfer_lines"("target_lines" "jsonb") FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION "normalize_inventory_transfer_receipt_lines"("target_lines" "jsonb"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."normalize_inventory_transfer_receipt_lines"("target_lines" "jsonb") FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION "normalize_open_ticket_cart"("target_cart" "jsonb"); Type: ACL; Schema: private; Owner: postgres
 --
 
@@ -38062,7 +40273,6 @@ REVOKE ALL ON FUNCTION "private"."post_inventory_adjustment"("target_organizatio
 --
 
 REVOKE ALL ON FUNCTION "private"."post_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."post_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") TO "authenticated";
 
 
 --
@@ -38109,18 +40319,24 @@ REVOKE ALL ON FUNCTION "private"."prevent_organization_recovery_drill_mutation"(
 
 
 --
--- Name: FUNCTION "produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text"); Type: ACL; Schema: private; Owner: postgres
+-- Name: FUNCTION "prevent_production_evidence_mutation"(); Type: ACL; Schema: private; Owner: postgres
 --
 
-REVOKE ALL ON FUNCTION "private"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text") FROM PUBLIC;
+REVOKE ALL ON FUNCTION "private"."prevent_production_evidence_mutation"() FROM PUBLIC;
 
 
 --
--- Name: FUNCTION "produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
+-- Name: FUNCTION "protect_composite_inventory_mode"(); Type: ACL; Schema: private; Owner: postgres
 --
 
-REVOKE ALL ON FUNCTION "private"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+REVOKE ALL ON FUNCTION "private"."protect_composite_inventory_mode"() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION "protect_product_unit_identity"(); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."protect_product_unit_identity"() FROM PUBLIC;
 
 
 --
@@ -38146,11 +40362,25 @@ REVOKE ALL ON FUNCTION "private"."reallocate_open_ticket_lines"("target_organiza
 
 
 --
+-- Name: FUNCTION "receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_legacy_in_transit" boolean); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_legacy_in_transit" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_legacy_in_transit" boolean) TO "authenticated";
+
+
+--
+-- Name: FUNCTION "receive_inventory_transfer_core"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_request_transfer" boolean); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."receive_inventory_transfer_core"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_request_transfer" boolean) FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION "receive_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."receive_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."receive_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
 
 
 --
@@ -38307,18 +40537,10 @@ REVOKE ALL ON FUNCTION "private"."resolve_negative_stock_policy"("target_organiz
 
 
 --
--- Name: FUNCTION "return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text"); Type: ACL; Schema: private; Owner: postgres
---
-
-REVOKE ALL ON FUNCTION "private"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text") FROM PUBLIC;
-
-
---
 -- Name: FUNCTION "return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
 
 
 --
@@ -38429,13 +40651,6 @@ GRANT ALL ON FUNCTION "private"."set_catalog_product_store_availability"("target
 
 
 --
--- Name: FUNCTION "set_catalog_product_store_configuration_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric, "target_restock_policy" "text"); Type: ACL; Schema: private; Owner: postgres
---
-
-REVOKE ALL ON FUNCTION "private"."set_catalog_product_store_configuration_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric, "target_restock_policy" "text") FROM PUBLIC;
-
-
---
 -- Name: FUNCTION "set_customer_display_state"("target_organization_id" "uuid", "target_session_id" "uuid", "target_state" "jsonb"); Type: ACL; Schema: private; Owner: postgres
 --
 
@@ -38503,6 +40718,13 @@ REVOKE ALL ON FUNCTION "private"."skip_duplicate_employee_store_assignment"() FR
 
 
 --
+-- Name: FUNCTION "snapshot_goods_receipt_line_truth"(); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."snapshot_goods_receipt_line_truth"() FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION "snapshot_sale_item_cost"(); Type: ACL; Schema: private; Owner: postgres
 --
 
@@ -38523,6 +40745,14 @@ GRANT ALL ON FUNCTION "private"."start_stock_request_picking"("target_organizati
 
 REVOKE ALL ON FUNCTION "private"."submit_inventory_count_for_review"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."submit_inventory_count_for_review"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") TO "authenticated";
+
+
+--
+-- Name: FUNCTION "submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
 
 
 --
@@ -38665,7 +40895,6 @@ GRANT ALL ON FUNCTION "private"."update_supplier_lead_time"("target_organization
 --
 
 REVOKE ALL ON FUNCTION "private"."upsert_inventory_replenishment_rule"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."upsert_inventory_replenishment_rule"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric) TO "authenticated";
 
 
 --
@@ -38784,6 +41013,14 @@ REVOKE ALL ON FUNCTION "public"."adjust_inventory"("target_organization_id" "uui
 
 
 --
+-- Name: FUNCTION "approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+
+
+--
 -- Name: FUNCTION "approve_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_approver_employee_number" "text", "target_pin" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -38821,6 +41058,14 @@ GRANT ALL ON FUNCTION "public"."bootstrap_organization_v2"("organization_name" "
 
 REVOKE ALL ON FUNCTION "public"."cancel_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_note" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."cancel_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_note" "text") TO "authenticated";
+
+
+--
+-- Name: FUNCTION "cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
 
 
 --
@@ -38934,13 +41179,6 @@ GRANT ALL ON FUNCTION "public"."close_register_shift"("target_organization_id" "
 
 
 --
--- Name: FUNCTION "complete_inventory_count"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_lines" "jsonb"); Type: ACL; Schema: public; Owner: postgres
---
-
-REVOKE ALL ON FUNCTION "public"."complete_inventory_count"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_lines" "jsonb") FROM PUBLIC;
-
-
---
 -- Name: FUNCTION "complete_organization_export"("target_export_session_id" "uuid", "target_record_count" integer, "target_manifest" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -38962,6 +41200,14 @@ GRANT ALL ON FUNCTION "public"."create_catalog_product"("target_organization_id"
 
 REVOKE ALL ON FUNCTION "public"."create_catalog_product_v2"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."create_catalog_product_v2"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) TO "authenticated";
+
+
+--
+-- Name: FUNCTION "create_catalog_product_v3"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."create_catalog_product_v3"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_catalog_product_v3"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") TO "authenticated";
 
 
 --
@@ -39005,27 +41251,35 @@ GRANT ALL ON FUNCTION "public"."create_inventory_count_batch"("target_organizati
 
 
 --
--- Name: FUNCTION "create_inventory_count_draft"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text"); Type: ACL; Schema: public; Owner: postgres
+-- Name: FUNCTION "create_inventory_count_plan_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean, "target_scope_reference_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-REVOKE ALL ON FUNCTION "public"."create_inventory_count_draft"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_inventory_count_draft"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text") TO "authenticated";
-
-
---
--- Name: FUNCTION "create_inventory_count_plan"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_scope_reference_id" "uuid", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean); Type: ACL; Schema: public; Owner: postgres
---
-
-REVOKE ALL ON FUNCTION "public"."create_inventory_count_plan"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_scope_reference_id" "uuid", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_inventory_count_plan"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_scope_reference_id" "uuid", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."create_inventory_count_plan_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean, "target_scope_reference_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_inventory_count_plan_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean, "target_scope_reference_id" "uuid") TO "authenticated";
 
 
 --
--- Name: FUNCTION "create_purchase_order"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_expected_at" "date", "target_lines" "jsonb", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+-- Name: FUNCTION "create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-REVOKE ALL ON FUNCTION "public"."create_purchase_order"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_expected_at" "date", "target_lines" "jsonb", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_purchase_order"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_expected_at" "date", "target_lines" "jsonb", "target_operation_id" "uuid") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+
+
+--
+-- Name: FUNCTION "create_product_unit"("target_organization_id" "uuid", "target_product_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."create_product_unit"("target_organization_id" "uuid", "target_product_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_product_unit"("target_organization_id" "uuid", "target_product_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") TO "authenticated";
+
+
+--
+-- Name: FUNCTION "create_purchase_order_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_lines" "jsonb", "target_operation_id" "uuid", "target_expected_at" "date"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."create_purchase_order_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_lines" "jsonb", "target_operation_id" "uuid", "target_expected_at" "date") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."create_purchase_order_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_lines" "jsonb", "target_operation_id" "uuid", "target_expected_at" "date") TO "authenticated";
 
 
 --
@@ -39061,6 +41315,14 @@ GRANT ALL ON FUNCTION "public"."create_supply_chain_warehouse"("target_organizat
 
 
 --
+-- Name: FUNCTION "current_profile_id"(); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."current_profile_id"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."current_profile_id"() TO "authenticated";
+
+
+--
 -- Name: FUNCTION "decide_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_decision" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -39085,6 +41347,14 @@ GRANT ALL ON FUNCTION "public"."delete_employee_if_eligible"("target_organizatio
 
 
 --
+-- Name: FUNCTION "delete_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."delete_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_operation_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."delete_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_operation_id" "uuid") TO "authenticated";
+
+
+--
 -- Name: FUNCTION "delete_unused_setup_record"("target_organization_id" "uuid", "target_record_type" "text", "target_record_id" "uuid", "target_confirmation_name" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -39093,11 +41363,27 @@ GRANT ALL ON FUNCTION "public"."delete_unused_setup_record"("target_organization
 
 
 --
+-- Name: FUNCTION "dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+
+
+--
 -- Name: FUNCTION "dispatch_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."dispatch_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."dispatch_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+
+
+--
+-- Name: FUNCTION "ensure_current_identity_profile"("target_email" "text", "target_full_name" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."ensure_current_identity_profile"("target_email" "text", "target_full_name" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."ensure_current_identity_profile"("target_email" "text", "target_full_name" "text") TO "authenticated";
 
 
 --
@@ -39486,11 +41772,11 @@ GRANT ALL ON FUNCTION "public"."get_shift_cash_summary"("target_organization_id"
 
 
 --
--- Name: FUNCTION "import_catalog_products_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb"); Type: ACL; Schema: public; Owner: postgres
+-- Name: FUNCTION "import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
-REVOKE ALL ON FUNCTION "public"."import_catalog_products_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."import_catalog_products_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") TO "authenticated";
 
 
 --
@@ -39581,14 +41867,6 @@ GRANT ALL ON FUNCTION "public"."open_register_shift"("target_organization_id" "u
 
 
 --
--- Name: FUNCTION "post_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
---
-
-REVOKE ALL ON FUNCTION "public"."post_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."post_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") TO "authenticated";
-
-
---
 -- Name: FUNCTION "post_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -39602,13 +41880,6 @@ GRANT ALL ON FUNCTION "public"."post_inventory_count"("target_organization_id" "
 
 REVOKE ALL ON FUNCTION "public"."prepare_organization_export"("target_organization_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."prepare_organization_export"("target_organization_id" "uuid") TO "authenticated";
-
-
---
--- Name: FUNCTION "produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text"); Type: ACL; Schema: public; Owner: postgres
---
-
-REVOKE ALL ON FUNCTION "public"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text") FROM PUBLIC;
 
 
 --
@@ -39633,6 +41904,14 @@ GRANT ALL ON FUNCTION "public"."provision_customer_display_session"("target_orga
 
 REVOKE ALL ON FUNCTION "public"."queue_receipt_delivery"("target_organization_id" "uuid", "target_receipt_id" "uuid", "target_delivery_channel" "text", "target_recipient" "text", "target_idempotency_key" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."queue_receipt_delivery"("target_organization_id" "uuid", "target_receipt_id" "uuid", "target_delivery_channel" "text", "target_recipient" "text", "target_idempotency_key" "uuid") TO "authenticated";
+
+
+--
+-- Name: FUNCTION "receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
 
 
 --
@@ -39668,18 +41947,18 @@ GRANT ALL ON FUNCTION "public"."record_cash_movement"("target_organization_id" "
 
 
 --
--- Name: FUNCTION "record_inventory_adjustment"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
---
-
-REVOKE ALL ON FUNCTION "public"."record_inventory_adjustment"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."record_inventory_adjustment"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid") TO "authenticated";
-
-
---
 -- Name: FUNCTION "record_inventory_adjustment_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."record_inventory_adjustment_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text") FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION "record_inventory_adjustment_v3"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid", "target_variant_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."record_inventory_adjustment_v3"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid", "target_variant_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."record_inventory_adjustment_v3"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid", "target_variant_id" "uuid") TO "authenticated";
 
 
 --
@@ -39739,13 +42018,6 @@ GRANT ALL ON FUNCTION "public"."restore_tindio_payment_preset"("target_organizat
 
 
 --
--- Name: FUNCTION "return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text"); Type: ACL; Schema: public; Owner: postgres
---
-
-REVOKE ALL ON FUNCTION "public"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text") FROM PUBLIC;
-
-
---
 -- Name: FUNCTION "return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -39778,11 +42050,11 @@ GRANT ALL ON FUNCTION "public"."rotate_loyalty_card_qr"("target_organization_id"
 
 
 --
--- Name: FUNCTION "save_inventory_count_line"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_counted_quantity" numeric); Type: ACL; Schema: public; Owner: postgres
+-- Name: FUNCTION "save_inventory_count_line_v2"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_counted_quantity" numeric, "target_variant_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-REVOKE ALL ON FUNCTION "public"."save_inventory_count_line"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_counted_quantity" numeric) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."save_inventory_count_line"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_counted_quantity" numeric) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."save_inventory_count_line_v2"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_counted_quantity" numeric, "target_variant_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."save_inventory_count_line_v2"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_counted_quantity" numeric, "target_variant_id" "uuid") TO "authenticated";
 
 
 --
@@ -39842,19 +42114,11 @@ GRANT ALL ON FUNCTION "public"."set_catalog_product_store_availability"("target_
 
 
 --
--- Name: FUNCTION "set_catalog_product_store_configuration"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric); Type: ACL; Schema: public; Owner: postgres
+-- Name: FUNCTION "set_catalog_product_store_configuration_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_restock_policy" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
-REVOKE ALL ON FUNCTION "public"."set_catalog_product_store_configuration"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."set_catalog_product_store_configuration"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric) TO "authenticated";
-
-
---
--- Name: FUNCTION "set_catalog_product_store_configuration_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric, "target_restock_policy" "text"); Type: ACL; Schema: public; Owner: postgres
---
-
-REVOKE ALL ON FUNCTION "public"."set_catalog_product_store_configuration_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric, "target_restock_policy" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."set_catalog_product_store_configuration_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_low_stock_level" numeric, "target_restock_policy" "text") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."set_catalog_product_store_configuration_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_restock_policy" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."set_catalog_product_store_configuration_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_restock_policy" "text") TO "authenticated";
 
 
 --
@@ -39945,6 +42209,14 @@ GRANT ALL ON FUNCTION "public"."submit_inventory_count_for_review"("target_organ
 
 
 --
+-- Name: FUNCTION "submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+
+
+--
 -- Name: FUNCTION "transfer_stock"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -39973,6 +42245,14 @@ GRANT ALL ON FUNCTION "public"."update_business_profile_features"("target_organi
 
 REVOKE ALL ON FUNCTION "public"."update_catalog_product_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."update_catalog_product_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) TO "authenticated";
+
+
+--
+-- Name: FUNCTION "update_catalog_product_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."update_catalog_product_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."update_catalog_product_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") TO "authenticated";
 
 
 --
@@ -40048,6 +42328,14 @@ GRANT ALL ON FUNCTION "public"."update_payment_method_configuration"("target_org
 
 
 --
+-- Name: FUNCTION "update_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."update_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."update_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") TO "authenticated";
+
+
+--
 -- Name: FUNCTION "update_receipt_delivery_status"("target_delivery_request_id" "uuid", "target_status" "text", "target_provider_message_id" "text", "target_failure_reason" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -40088,11 +42376,11 @@ GRANT ALL ON FUNCTION "public"."update_supplier_lead_time"("target_organization_
 
 
 --
--- Name: FUNCTION "upsert_inventory_replenishment_rule"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric); Type: ACL; Schema: public; Owner: postgres
+-- Name: FUNCTION "upsert_inventory_replenishment_rule_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric, "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
-REVOKE ALL ON FUNCTION "public"."upsert_inventory_replenishment_rule"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."upsert_inventory_replenishment_rule"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."upsert_inventory_replenishment_rule_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric, "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."upsert_inventory_replenishment_rule_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric, "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid") TO "authenticated";
 
 
 --
@@ -40819,14 +43107,14 @@ GRANT SELECT("price_override_minor"),INSERT("price_override_minor"),UPDATE("pric
 -- Name: COLUMN "product_store_settings"."low_stock_level"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("low_stock_level"),INSERT("low_stock_level"),UPDATE("low_stock_level") ON TABLE "public"."product_store_settings" TO "authenticated";
+GRANT SELECT("low_stock_level") ON TABLE "public"."product_store_settings" TO "authenticated";
 
 
 --
 -- Name: TABLE "product_units"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE "public"."product_units" TO "authenticated";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."product_units" TO "authenticated";
 
 
 --
@@ -40911,6 +43199,69 @@ GRANT SELECT("created_at") ON TABLE "public"."product_variants" TO "authenticate
 --
 
 GRANT SELECT("updated_at") ON TABLE "public"."product_variants" TO "authenticated";
+
+
+--
+-- Name: COLUMN "production_run_components"."id"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT("id") ON TABLE "public"."production_run_components" TO "authenticated";
+
+
+--
+-- Name: COLUMN "production_run_components"."organization_id"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT("organization_id") ON TABLE "public"."production_run_components" TO "authenticated";
+
+
+--
+-- Name: COLUMN "production_run_components"."production_run_id"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT("production_run_id") ON TABLE "public"."production_run_components" TO "authenticated";
+
+
+--
+-- Name: COLUMN "production_run_components"."component_product_id"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT("component_product_id") ON TABLE "public"."production_run_components" TO "authenticated";
+
+
+--
+-- Name: COLUMN "production_run_components"."component_variant_id"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT("component_variant_id") ON TABLE "public"."production_run_components" TO "authenticated";
+
+
+--
+-- Name: COLUMN "production_run_components"."quantity_per_composite_snapshot"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT("quantity_per_composite_snapshot") ON TABLE "public"."production_run_components" TO "authenticated";
+
+
+--
+-- Name: COLUMN "production_run_components"."quantity_consumed"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT("quantity_consumed") ON TABLE "public"."production_run_components" TO "authenticated";
+
+
+--
+-- Name: COLUMN "production_run_components"."unit_snapshot"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT("unit_snapshot") ON TABLE "public"."production_run_components" TO "authenticated";
+
+
+--
+-- Name: COLUMN "production_run_components"."created_at"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT("created_at") ON TABLE "public"."production_run_components" TO "authenticated";
 
 
 --
@@ -41047,6 +43398,13 @@ GRANT SELECT("is_composite"),UPDATE("is_composite") ON TABLE "public"."products"
 
 
 --
+-- Name: COLUMN "products"."composite_inventory_mode"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT("composite_inventory_mode") ON TABLE "public"."products" TO "authenticated";
+
+
+--
 -- Name: TABLE "profiles"; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -41143,6 +43501,20 @@ GRANT SELECT("ordered_quantity") ON TABLE "public"."purchase_order_lines" TO "au
 --
 
 GRANT SELECT("received_quantity") ON TABLE "public"."purchase_order_lines" TO "authenticated";
+
+
+--
+-- Name: COLUMN "purchase_order_lines"."purchase_unit_code_snapshot"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT("purchase_unit_code_snapshot") ON TABLE "public"."purchase_order_lines" TO "authenticated";
+
+
+--
+-- Name: COLUMN "purchase_order_lines"."purchase_unit_factor_to_base"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT("purchase_unit_factor_to_base") ON TABLE "public"."purchase_order_lines" TO "authenticated";
 
 
 --
@@ -41606,5 +43978,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT REFERENCES
 -- PostgreSQL database dump complete
 --
 
--- \unrestrict HxqQunYeCe6o9vZC3YP1O3i9lTrohO2QcuyQzNFxZ3K7wKIuAwifBdhrCnjthAm
+-- \unrestrict jq1B1nOOlzi9a1e5NF8ApzgvLNTpIjj7YaZqq1V692gaczQIAsVWeuu92N6R6iH
 

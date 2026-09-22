@@ -198,6 +198,22 @@ async function main() {
     );
   }
 
+  console.log(
+    "Verifying source database connectivity from Docker PostgreSQL utilities...",
+  );
+
+  const sourceConnectivity =
+    runSql(
+      source,
+      "select 1;",
+    );
+
+  assert.equal(
+    sourceConnectivity,
+    "1",
+    "Docker PostgreSQL utilities cannot reach the source database.",
+  );
+
   const existing =
     runSql(
       target,

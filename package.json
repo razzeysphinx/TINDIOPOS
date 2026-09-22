@@ -113,6 +113,7 @@
     "test:phase-04-browser-db-boundary": "node --test scripts/phase-04-browser-database-boundary-check.mjs",
     "test:phase-04-neon-baseline": "node --test scripts/phase-04-neon-baseline-check.mjs",
     "test:phase-04-extension-dependencies": "node --test scripts/phase-04-extension-dependency-check.mjs",
+    "test:phase-04-docker-source-connectivity": "node scripts/phase-04-docker-source-connectivity-check.mjs",
     "test:phase-04-supabase-jwks": "node scripts/phase-04-supabase-jwks-check.mjs",
     "certify:phase-04:neon-rehearsal": "node scripts/phase-04-neon-migrate.mjs",
     "migrate:phase-04:neon-cutover": "node scripts/phase-04-neon-migrate.mjs --cutover",

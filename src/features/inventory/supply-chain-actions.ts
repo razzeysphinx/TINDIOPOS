@@ -7,7 +7,6 @@ import {
   createStockRequestSchema,
   createWarehouseSchema,
   dispatchStockRequestSchema,
-  receiveStockRequestSchema,
   requestIdentifierSchema,
   updateSupplierLeadTimeSchema,
   upsertReplenishmentRuleSchema,
@@ -20,6 +19,7 @@ import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { postgresCodeMessage } from "@/lib/server/db-errors";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
+import { receivePosStockRequest } from "@/features/inventory/pos-transfer-service";
 
 export type SupplyChainActionResult<T = undefined> =
   | { ok: true; message: string; data?: T }
@@ -210,27 +210,8 @@ export async function dispatchStockRequestAction(input: unknown): Promise<Supply
 }
 
 export async function receiveStockRequestAction(input: unknown): Promise<SupplyChainActionResult<{ stockRequestId: string }>> {
-  const { context, error: permissionError } = await requireTransferCapabilities(
-    ["inventory.transfer.receive"],
-    "You do not have permission to receive stock transfers.",
-  );
-  if (permissionError) return { ok: false, message: permissionError };
-  const parsed = receiveStockRequestSchema.safeParse(input);
-  if (!parsed.success) return validationError();
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("receive_stock_request", {
-    target_organization_id: context.organization.id,
-    target_stock_request_id: parsed.data.stockRequestId,
-    target_note: parsed.data.note,
-    target_operation_id: parsed.data.operationId,
-    target_lines: parsed.data.lines.map((line) => ({
-      stock_transfer_line_id: line.stockTransferLineId,
-      received_quantity: line.receivedQuantity,
-      short_quantity: line.shortQuantity,
-      discrepancy_note: line.discrepancyNote,
-    })) as Json,
-  });
-  if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not record this receipt.") };
-  refreshSupplyChain();
-  return { ok: true, message: "Receipt recorded. Only the received quantity was added to stock.", data: { stockRequestId: data } };
+  const context = await requireBusinessContext();
+  const result = await receivePosStockRequest({ context, input });
+  if (result.ok) refreshSupplyChain();
+  return result;
 }

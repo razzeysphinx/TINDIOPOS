@@ -14,7 +14,6 @@ import {
   inventoryCountTransitionSchema,
   importInventoryCountLinesSchema,
   produceCompositeSchema,
-  receiveStockTransferSchema,
   receivePurchaseOrderSchema,
   recordInventoryAdjustmentSchema,
   saveInventoryCountLineSchema,
@@ -35,6 +34,7 @@ import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { postgresCodeMessage, validationFailure } from "@/lib/server/db-errors";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
+import { receivePosStockTransfer } from "@/features/inventory/pos-transfer-service";
 
 export type AdvancedInventoryActionResult<T = undefined> =
   | { ok: true; message: string; data?: T }
@@ -642,31 +642,10 @@ export async function recordInventoryAdjustmentAction(
 export async function receiveStockTransferAction(
   input: unknown,
 ): Promise<AdvancedInventoryActionResult<{ receiptId: string }>> {
-  const { context, error: permissionError } = await requireInventoryCapabilities(
-    ["inventory.transfer.receive"],
-    "You do not have permission to receive stock transfers.",
-  );
-  if (permissionError) return { ok: false, message: permissionError };
-  if (!context.features.transfers) return { ok: false, message: "Stock transfers are disabled for this business." };
-  const parsed = receiveStockTransferSchema.safeParse(input);
-  if (!parsed.success) return validationError();
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("receive_stock_transfer", {
-    target_organization_id: context.organization.id,
-    target_stock_transfer_id: parsed.data.stockTransferId,
-    target_note: parsed.data.note,
-    target_operation_id: parsed.data.operationId,
-    target_lines: parsed.data.lines.map((line) => ({
-      stock_transfer_line_id: line.stockTransferLineId,
-      received_quantity: line.receivedQuantity,
-      short_quantity: line.shortQuantity,
-      discrepancy_note: line.discrepancyNote || null,
-    })) as Json,
-  });
-  if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not receive this transfer.") };
-  revalidatePath("/back-office/inventory");
-  return { ok: true, message: "Transfer receipt posted and destination stock updated.", data: { receiptId: data } };
+  const context = await requireBusinessContext();
+  const result = await receivePosStockTransfer({ context, input });
+  if (result.ok) revalidatePath("/back-office/inventory");
+  return result;
 }
 
 export async function returnToSupplierAction(

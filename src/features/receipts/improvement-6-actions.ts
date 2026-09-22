@@ -3,12 +3,12 @@
 import { revalidatePath } from "next/cache";
 
 import {
-  receiptDeliverySchema,
   receiptSettingsSchema,
   saleExchangeSchema,
 } from "@/features/receipts/improvement-6-schema";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
+import { queueReceiptDelivery } from "@/features/receipts/service";
 
 export type ReceiptImprovementActionResult =
   | { ok: true; message: string }
@@ -79,42 +79,13 @@ export async function queueReceiptDeliveryAction(
   input: unknown,
 ): Promise<ReceiptImprovementActionResult> {
   const context = await requireBusinessContext();
-  if (!hasPermission(context, "receipts.reprint")) {
-    return { ok: false, message: "You do not have permission to queue a digital receipt." };
-  }
-
-  const parsed = receiptDeliverySchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Enter a valid recipient email address." };
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("queue_receipt_delivery", {
-    target_organization_id: context.organization.id,
-    target_receipt_id: parsed.data.receiptId,
-    target_delivery_channel: "EMAIL",
-    target_recipient: parsed.data.recipient,
-    target_idempotency_key: parsed.data.idempotencyKey,
-  });
-  const result = data?.[0];
-
-  if (error || !result) {
-    return {
-      ok: false,
-      message: receiptDatabaseMessage(
-        error?.code,
-        error?.message,
-        "TINDIO could not queue this digital receipt.",
-      ),
-    };
-  }
+  const result = await queueReceiptDelivery({ context, input });
+  if (!result.ok) return result;
 
   revalidatePath("/back-office/receipts");
-  revalidatePath(`/back-office/receipts/${parsed.data.receiptId}`);
-  return {
-    ok: true,
-    message: result.was_replayed
-      ? "This digital receipt request was already queued."
-      : "Digital receipt request queued securely.",
-  };
+  const receiptId = (input as { receiptId?: unknown }).receiptId;
+  if (typeof receiptId === "string") revalidatePath(`/back-office/receipts/${receiptId}`);
+  return result;
 }
 
 export async function linkSaleExchangeAction(

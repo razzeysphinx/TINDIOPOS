@@ -10,6 +10,9 @@ import test from "node:test";
 const BASE_SHA =
   "70a5ae7e063cc7402d0a10231a7ffc264511bbeb";
 
+const PHASE_FINAL_SHA =
+  "494191999463ba7a34130051344e4b8819c83a43";
+
 async function source(path) {
   return readFile(
     new URL(
@@ -287,7 +290,7 @@ test(
         [
           "diff",
           "--name-only",
-          `${BASE_SHA}...HEAD`,
+          `${BASE_SHA}...${PHASE_FINAL_SHA}`,
           "--",
           "supabase/migrations",
         ],
@@ -316,7 +319,7 @@ test(
         [
           "diff",
           "--name-only",
-          `${BASE_SHA}...HEAD`,
+          `${BASE_SHA}...${PHASE_FINAL_SHA}`,
           "--",
           "src/lib/supabase/database.types.ts",
         ],

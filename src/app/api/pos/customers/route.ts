@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 
+import {
+  posCustomerSearchQuerySchema as querySchema,
+  type PosCustomerSearchResponse,
+} from "@/contracts/pos-v1";
 import { hasPermission } from "@/lib/auth/dal";
 import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
 import { createBusinessContextClient } from "@/lib/supabase/context-client";
-
-const querySchema = z.object({
-  q: z.string().trim().max(100).optional(),
-  store: z.uuid(),
-});
 
 export async function GET(request: Request) {
   const context = await getPosApiBusinessContext(request);
@@ -61,15 +59,30 @@ export async function GET(request: Request) {
     );
   }
 
-  return NextResponse.json({
-    customers: (data ?? []).map((customer) => ({
-      id: customer.customer_id,
-      customerNumber: customer.customer_number,
-      loyaltyCardCode: customer.loyalty_card_code,
-      fullName: customer.full_name,
-      phone: customer.phone,
-      email: customer.email,
-      loyaltyPoints: customer.loyalty_points,
-    })),
-  });
+  const response:
+    PosCustomerSearchResponse = {
+      customers:
+        (data ?? []).map(
+          (customer) => ({
+            id:
+              customer.customer_id,
+            customerNumber:
+              customer.customer_number,
+            loyaltyCardCode:
+              customer.loyalty_card_code,
+            fullName:
+              customer.full_name,
+            phone:
+              customer.phone,
+            email:
+              customer.email,
+            loyaltyPoints:
+              customer.loyalty_points,
+          }),
+        ),
+    };
+
+  return NextResponse.json(
+    response,
+  );
 }

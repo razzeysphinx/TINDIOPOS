@@ -1,6 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import "server-only";
 
+import type {
+  PosReceiptDetail,
+  PosReceiptSummary,
+  PosWorkspaceContract,
+} from "@/contracts/pos-v1";
 import type { PosCustomerDisplaySession } from "@/features/customer-display/customer-display-types";
 import type { TimeClockEntry } from "@/features/time-clock/time-clock-types";
 import { isReceivableTransferState } from "@/features/inventory/inventory-transfer-reader-contract";
@@ -25,79 +30,13 @@ import type {
   PosTicketTemplate,
 } from "@/features/pos/pos-types";
 
-export type PosPageData = {
-  stores: Array<{ id: string; name: string }>;
-  categories: Array<{ id: string; name: string; color: string | null }>;
-  registers: PosRegister[];
-  paymentMethods: PosPaymentMethod[];
-  loyaltyProgram: PosLoyaltyProgram | null;
-  discounts: PosDiscount[];
-  taxRates: PosTaxRate[];
-  diningOptions: PosDiningOption[];
-  ticketTemplates: PosTicketTemplate[];
-  customerDisplaySessions: PosCustomerDisplaySession[];
-  timeClockEntry: TimeClockEntry | null;
-  activeShift: PosActiveShift | null;
-  initialItems: PosCatalogItem[];
-  initialFavoriteItems: PosCatalogItem[];
-  initialRecentItems: PosCatalogItem[];
-  openTickets: PosOpenTicket[];
-  ticketAssignees: PosTicketAssignee[];
-  canReceiveIncomingTransfers: boolean;
-  incomingTransfers: PosIncomingTransfer[];
-};
+export type PosPageData =
+  PosWorkspaceContract;
 
-export type PosReceiptSummary = {
-  receipt_id: string;
-  sale_id: string;
-  receipt_number: number;
-  issued_at: string;
-  store_id: string;
-  register_id: string;
-  store_name: string;
-  register_name: string;
-  cashier_name: string;
-  total_minor: number;
-  currency_code: string;
-  refund_total_minor: number;
-  refund_count: number;
-  has_refundable_quantity: boolean;
-  payment_methods: Array<{
-    name: string;
-    type: "CASH" | "CARD" | "E_WALLET" | "BANK_TRANSFER" | "VOUCHER" | "OTHER";
-  }>;
-};
-
-export type PosReceiptDetail = {
-  receipt: { id: string; number: number; issuedAt: string; layout: Json | null };
-  customerEmail: string | null;
-  sale: {
-    id: string;
-    storeId: string;
-    registerId: string;
-    currencyCode: string;
-    organizationName: string;
-    storeName: string;
-    registerName: string;
-    cashierName: string;
-    subtotalMinor: number;
-    discountMinor: number;
-    taxMinor: number;
-    totalMinor: number;
-  };
-  items: Array<{ id: string; name: string; sku: string | null; quantity: number; unit: string; unitPriceMinor: number; lineTotalMinor: number }>;
-  payments: Array<{ id: string; name: string; type: "CASH" | "CARD" | "E_WALLET" | "BANK_TRANSFER" | "VOUCHER" | "OTHER"; amountMinor: number; tenderedMinor: number | null; changeMinor: number | null; referenceNumber: string | null }>;
-  refunds: Array<{
-    id: string;
-    number: number;
-    totalMinor: number;
-    completedAt: string;
-    reason: string;
-    paymentName: string | null;
-    paymentReference: string | null;
-    items: Array<{ id: string; saleItemId: string; name: string; quantity: number; unit: string; lineTotalMinor: number }>;
-  }>;
-};
+export type {
+  PosReceiptDetail,
+  PosReceiptSummary,
+} from "@/contracts/pos-v1";
 
 type PosReceiptRpc = {
   rpc: (name: string, args: Record<string, unknown>) => Promise<{

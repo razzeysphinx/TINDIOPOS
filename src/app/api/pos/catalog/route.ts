@@ -1,21 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 
+import {
+  posCatalogQuerySchema as catalogRequestSchema,
+  type PosCatalogResponse,
+} from "@/contracts/pos-v1";
 import { hasPermission } from "@/lib/auth/dal";
 import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
 import { createBusinessContextClient } from "@/lib/supabase/context-client";
-import type { PosCatalogResponse } from "@/features/pos/pos-types";
 import { mapPosCatalogItems } from "@/features/pos/data";
-
-const catalogRequestSchema = z.object({
-  store: z.string().uuid(),
-  query: z.string().trim().max(100).optional().default(""),
-  category: z.string().uuid().optional(),
-  offset: z.coerce.number().int().min(0).max(10_000).optional().default(0),
-  limit: z.coerce.number().int().min(1).max(24).optional().default(24),
-});
 
 export async function GET(request: NextRequest) {
   const context = await getPosApiBusinessContext(request);

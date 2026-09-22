@@ -1,3 +1,6 @@
+import type {
+  PosBootstrapResponse,
+} from "@/contracts/pos-v1";
 import { loadPosWorkspace } from "@/features/pos/data";
 import { getPosCapabilities } from "@/features/pos/pos-capabilities";
 import { posApiJson } from "@/features/pos/pos-api-response";
@@ -22,7 +25,8 @@ export async function GET(request: Request) {
     permissions: context.permissions,
   });
 
-  return posApiJson({
+  const response:
+    PosBootstrapResponse = {
     organization: {
       id: context.organization.id,
       name: context.organization.name,
@@ -51,5 +55,7 @@ export async function GET(request: Request) {
     capabilities,
     offlineScope: `${context.organization.id}:${context.user.id}`,
     workspace,
-  });
+  };
+
+  return posApiJson(response);
 }

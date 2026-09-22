@@ -1,14 +1,11 @@
-import { z } from "zod";
-
+import {
+  posReceiptSearchQuerySchema as querySchema,
+  type PosReceiptListResponse,
+} from "@/contracts/pos-v1";
 import { loadPosReceiptHistory } from "@/features/pos/data";
 import { posApiJson } from "@/features/pos/pos-api-response";
 import { hasPermission } from "@/lib/auth/dal";
 import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
-
-const querySchema = z.object({
-  q: z.string().trim().max(100).optional().default(""),
-  before: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
-});
 
 export async function GET(request: Request) {
   const context = await getPosApiBusinessContext(request);
@@ -23,5 +20,12 @@ export async function GET(request: Request) {
     beforeReceiptNumber: parsed.data.before,
     query: parsed.data.q,
   });
-  return posApiJson({ receipts, hasMore: receipts.length === 25 });
+  const response:
+    PosReceiptListResponse = {
+      receipts,
+      hasMore:
+        receipts.length === 25,
+    };
+
+  return posApiJson(response);
 }

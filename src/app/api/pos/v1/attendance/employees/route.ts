@@ -1,11 +1,10 @@
-import { z } from "zod";
-
+import {
+  posUuidSchema as storeSchema,
+} from "@/contracts/pos-v1";
 import { posApiJson } from "@/features/pos/pos-api-response";
 import { loadAttendanceEmployees } from "@/features/time-clock/data";
 import { hasPermission } from "@/lib/auth/dal";
 import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
-
-const storeSchema = z.uuid();
 
 export async function GET(request: Request) {
   const context = await getPosApiBusinessContext(request);

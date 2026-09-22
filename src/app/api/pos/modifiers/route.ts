@@ -1,13 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 
+import {
+  posModifierQuerySchema as schema,
+  type PosModifierResponse,
+} from "@/contracts/pos-v1";
 import { hasPermission } from "@/lib/auth/dal";
 import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
 import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
-const schema = z.object({ product: z.string().uuid(), store: z.string().uuid() });
 export async function GET(request: NextRequest) {
   const context = await getPosApiBusinessContext(request);
   if (!context) return NextResponse.json({ error: "Sign in is required." }, { status: 401 });
@@ -22,5 +24,35 @@ export async function GET(request: NextRequest) {
     target_product_id: parsed.data.product,
   });
   if (error) return NextResponse.json({ error: "Modifiers could not be loaded." }, { status: 500 });
-  return NextResponse.json({ groups: (data ?? []).map((group: any) => ({ id: group.group_id, name: group.group_name, minSelections: group.min_selections, maxSelections: group.max_selections, options: (group.options ?? []).map((option: any) => ({ id: option.id, name: option.name, priceMinor: option.price_minor })) })) });
+  const response:
+    PosModifierResponse = {
+      groups:
+        (data ?? []).map(
+          (group: any) => ({
+            id:
+              group.group_id,
+            name:
+              group.group_name,
+            minSelections:
+              group.min_selections,
+            maxSelections:
+              group.max_selections,
+            options:
+              (group.options ?? []).map(
+                (option: any) => ({
+                  id:
+                    option.id,
+                  name:
+                    option.name,
+                  priceMinor:
+                    option.price_minor,
+                }),
+              ),
+          }),
+        ),
+    };
+
+  return NextResponse.json(
+    response,
+  );
 }

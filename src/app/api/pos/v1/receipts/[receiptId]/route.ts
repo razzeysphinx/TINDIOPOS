@@ -1,11 +1,10 @@
-import { z } from "zod";
-
+import {
+  posUuidSchema as receiptIdSchema,
+} from "@/contracts/pos-v1";
 import { loadPosReceiptDetail } from "@/features/pos/data";
 import { posApiJson } from "@/features/pos/pos-api-response";
 import { hasPermission } from "@/lib/auth/dal";
 import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
-
-const receiptIdSchema = z.uuid();
 
 export async function GET(
   request: Request,

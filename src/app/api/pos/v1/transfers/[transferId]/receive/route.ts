@@ -1,10 +1,9 @@
-import { z } from "zod";
-
+import {
+  posUuidSchema as idSchema,
+} from "@/contracts/pos-v1";
 import { receivePosStockTransfer } from "@/features/inventory/pos-transfer-service";
 import { posApiJson, readPosApiJson } from "@/features/pos/pos-api-response";
 import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
-
-const idSchema = z.uuid();
 
 export async function POST(request: Request, { params }: { params: Promise<{ transferId: string }> }) {
   const context = await getPosApiBusinessContext(request);

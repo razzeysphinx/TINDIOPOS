@@ -109,6 +109,7 @@
     "test:mobile-source-of-truth": "node --test scripts/mobile-program-source-of-truth-check.mjs",
     "test:phase-01-pos-api-contract": "node --test scripts/phase-01-pos-api-contract-check.mjs",
     "test:phase-02-mobile-auth-contract": "node --test scripts/phase-02-mobile-auth-contract-check.mjs",
+    "test:phase-03-shared-contracts": "node --test scripts/phase-03-shared-contracts-check.mjs",
     "certify:phase-02:bearer-auth": "node scripts/phase-02-bearer-auth-e2e.mjs",
     "typecheck": "tsc --noEmit --incremental false"
   },

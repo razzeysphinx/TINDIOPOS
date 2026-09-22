@@ -10,7 +10,7 @@ import {
 } from "@/features/approvals/approval-schema";
 import type { ApprovalActionResult, ApprovalPreparationResult, ApprovalStatusResult } from "@/features/approvals/approval-types";
 import type { BusinessContext } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 import type { Json } from "@/lib/supabase/database.types";
 
 export function approvalDatabaseMessage(
@@ -38,7 +38,7 @@ export async function approveManagerApproval(
     return { ok: false, message: "Enter a valid manager employee number and 6–12 digit PIN." };
   }
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("approve_manager_approval", {
     target_organization_id: context.organization.id,
     target_approval_request_id: parsed.data.approvalRequestId,
@@ -70,7 +70,7 @@ export async function requestManagerApproval(
   const parsed = requestManagerApprovalSchema.safeParse(input);
   if (!parsed.success) return { ok: false, decision: "DENIED", message: "Check the operation details and reason." };
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("request_manager_approval", {
     target_organization_id: context.organization.id,
     target_operation_code: parsed.data.operationCode,
@@ -96,7 +96,7 @@ export async function loadManagerApprovalStatus(
 ): Promise<ApprovalStatusResult> {
   const parsed = approveManagerApprovalSchema.pick({ approvalRequestId: true }).safeParse(input);
   if (!parsed.success) return { ok: false, message: "This approval request is invalid." };
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase
     .from("approval_requests")
     .select("status, expires_at")
@@ -119,7 +119,7 @@ export async function decideManagerApproval(
   const parsed = decideManagerApprovalSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Choose whether to approve or reject this request." };
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const database = supabase as unknown as {
     rpc: (name: string, args: Record<string, unknown>) => Promise<{
       data: Array<{ decision: string }> | null;
@@ -159,7 +159,7 @@ export async function setEmployeePin(
     return { ok: false, message: "Use a 6–12 digit PIN." };
   }
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { error } = await supabase.rpc("set_employee_pin", {
     target_organization_id: context.organization.id,
     target_employee_id: parsed.data.employeeId,
@@ -185,7 +185,7 @@ export async function updateApprovalRule(
     return { ok: false, message: "Check the rule and threshold amount." };
   }
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { error } = await supabase.rpc("update_approval_rule", {
     target_organization_id: context.organization.id,
     target_operation_code: parsed.data.operationCode,

@@ -21,7 +21,7 @@ import type { CustomerActionResult, LoyaltyCardCredential } from "@/features/cus
 import type { PosCustomer } from "@/features/pos/pos-types";
 import type { BusinessContext } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 function customerDatabaseMessage(message: string | undefined) {
   if (message?.includes("customers_")) return "Check the customer details and try again.";
@@ -38,7 +38,7 @@ export async function createCustomer({
   const parsed = createCustomerSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Check the customer details and try again." };
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase
     .from("customers")
     .insert({
@@ -80,7 +80,7 @@ export async function importCustomersCsv({
 }): Promise<CustomerActionResult<{ importedCount: number }>> {
   const parsed = importCustomersCsvSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Check the customer CSV rows and try again." };
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("import_customers_csv", {
     target_organization_id: context.organization.id,
     target_rows: parsed.data.rows.map((row) => ({
@@ -108,7 +108,7 @@ export async function createCustomerSegment({
   const parsed = createCustomerSegmentSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Check the segment details and try again." };
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { error } = await supabase.rpc("create_customer_segment", {
     target_organization_id: context.organization.id,
     target_name: parsed.data.name,
@@ -130,7 +130,7 @@ export async function updateCustomerSegment({
   const parsed = updateCustomerSegmentSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Check the segment details and try again." };
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase
     .from("customer_segments")
     .update({
@@ -156,7 +156,7 @@ export async function updateCustomerProfile({
   const parsed = updateCustomerProfileSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Check the customer profile and try again." };
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { error } = await supabase.rpc("update_customer_profile", {
     target_organization_id: context.organization.id,
     target_customer_id: parsed.data.customerId,
@@ -185,7 +185,7 @@ export async function adjustCustomerLoyaltyPoints({
   const parsed = loyaltyAdjustmentSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Check the point adjustment and reason." };
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { error } = await supabase.rpc("adjust_customer_loyalty_points", {
     target_organization_id: context.organization.id,
     target_customer_id: parsed.data.customerId,
@@ -209,7 +209,7 @@ export async function issueLoyaltyCard({
   if (!parsed.success) return { ok: false, message: "Check the QR loyalty-card details and try again." };
 
   const verificationToken = createLoyaltyCardVerificationToken();
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("issue_loyalty_card", {
     target_organization_id: context.organization.id,
     target_customer_id: parsed.data.customerId,
@@ -241,7 +241,7 @@ export async function rotateLoyaltyCardQr({
   if (!parsed.success) return { ok: false, message: "Check the QR rotation reason and try again." };
 
   const verificationToken = createLoyaltyCardVerificationToken();
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("rotate_loyalty_card_qr", {
     target_organization_id: context.organization.id,
     target_loyalty_card_id: parsed.data.cardId,
@@ -268,7 +268,7 @@ export async function revokeLoyaltyCard({
   const parsed = revokeLoyaltyCardSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Enter a valid revocation reason." };
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { error } = await supabase.rpc("revoke_loyalty_card", {
     target_organization_id: context.organization.id,
     target_loyalty_card_id: parsed.data.cardId,
@@ -288,7 +288,7 @@ export async function addLoyaltyCardStamp({
   const parsed = loyaltyCardStampSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Link a valid completed sale or enter a manual-stamp reason." };
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("add_loyalty_card_stamp", {
     target_organization_id: context.organization.id,
     target_loyalty_card_id: parsed.data.cardId,
@@ -315,7 +315,7 @@ export async function claimLoyaltyCardReward({
   const parsed = claimLoyaltyCardRewardSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Enter a claim reason and try again." };
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("claim_loyalty_card_reward", {
     target_organization_id: context.organization.id,
     target_loyalty_card_id: parsed.data.cardId,
@@ -337,7 +337,7 @@ export async function updateCustomerStatus({
   const parsed = updateCustomerStatusSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Choose a valid customer status." };
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { error } = await supabase
     .from("customers")
     .update({ status: parsed.data.status })
@@ -362,7 +362,7 @@ export async function updateLoyaltyProgram({
   const parsed = updateLoyaltyProgramSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Check the loyalty settings and try again." };
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { error } = await supabase
     .from("loyalty_programs")
     .update({

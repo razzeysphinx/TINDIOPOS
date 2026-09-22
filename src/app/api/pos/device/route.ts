@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { posDeviceValidationSchema } from "@/features/devices/device-schema";
 import { hasPermission } from "@/lib/auth/dal";
 import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 const headers = { "Cache-Control": "private, no-store" };
 
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const database = await createClient() as unknown as {
+    const database = await createBusinessContextClient(context) as unknown as {
       rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: Array<Record<string, unknown>> | null; error: { code?: string; message?: string } | null }>;
     };
     const { data, error } = await database.rpc("validate_pos_device", {

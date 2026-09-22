@@ -8,7 +8,7 @@ import {
   openShiftSubmissionSchema,
 } from "@/features/shifts/shift-schema";
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 export type ShiftActionResult =
   | {
@@ -67,7 +67,7 @@ export async function openShift({
     return { ok: false, message: "Choose an assigned register and enter a valid opening cash amount." };
   }
 
-  const supabase = await createClient({ headers: posDeviceRequestHeaders(parsed.data.device) });
+  const supabase = await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(parsed.data.device) });
   const { data, error } = await supabase.rpc("open_register_shift", {
     target_organization_id: context.organization.id,
     target_store_id: parsed.data.storeId,
@@ -112,7 +112,7 @@ export async function closeShift({
     return { ok: false, message: "Enter the counted cash as a valid non-negative amount." };
   }
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("close_register_shift", {
     target_organization_id: context.organization.id,
     target_shift_id: parsed.data.shiftId,
@@ -155,7 +155,7 @@ export async function recordCashMovement({
     return { ok: false, message: "You do not have permission for this cash movement." };
   }
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("record_cash_movement", {
     target_organization_id: context.organization.id,
     target_shift_id: parsed.data.shiftId,

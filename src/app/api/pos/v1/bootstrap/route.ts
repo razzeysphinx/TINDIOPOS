@@ -36,6 +36,18 @@ export async function GET(request: Request) {
       employeeNumber: context.employee.employee_number,
       name: context.profile.full_name || context.profile.email || context.employee.employee_number,
     },
+    availableOrganizations:
+      context.availableOrganizations.map(
+        ({
+          id,
+          name,
+          status,
+        }) => ({
+          id,
+          name,
+          status,
+        }),
+      ),
     capabilities,
     offlineScope: `${context.organization.id}:${context.user.id}`,
     workspace,

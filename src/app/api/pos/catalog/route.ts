@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { hasPermission } from "@/lib/auth/dal";
 import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 import type { PosCatalogResponse } from "@/features/pos/pos-types";
 import { mapPosCatalogItems } from "@/features/pos/data";
 
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "The requested store is unavailable." }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data: activeShift, error: shiftError } = await supabase
     .from("shifts")
     .select("id")

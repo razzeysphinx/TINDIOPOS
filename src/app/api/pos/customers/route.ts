@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { hasPermission } from "@/lib/auth/dal";
 import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 const querySchema = z.object({
   q: z.string().trim().max(100).optional(),
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Choose an assigned store." }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data: activeShift, error: shiftError } = await supabase
     .from("shifts")
     .select("id")

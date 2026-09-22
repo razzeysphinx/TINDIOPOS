@@ -3,7 +3,7 @@ import "server-only";
 import { clockInSchema, clockOutSchema } from "@/features/time-clock/time-clock-schema";
 import type { TimeClockActionResult } from "@/features/time-clock/time-clock-types";
 import type { BusinessContext } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 function timeClockDatabaseMessage(
   code: string | undefined,
@@ -28,7 +28,7 @@ export async function clockInEmployee({
     return { ok: false, message: "Choose one of your assigned stores before clocking in." };
   }
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("clock_in_employee_with_pin", {
     target_employee_id: parsed.data.employeeId,
     target_organization_id: context.organization.id,
@@ -80,7 +80,7 @@ export async function clockOutEmployee({
     return { ok: false, message: "Choose an employee and enter their 6–12 digit PIN." };
   }
 
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("clock_out_employee_with_pin", {
     target_employee_id: parsed.data.employeeId,
     target_organization_id: context.organization.id,

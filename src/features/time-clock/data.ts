@@ -10,7 +10,7 @@ import type {
   TimeClockWorkspace,
 } from "@/features/time-clock/time-clock-types";
 import type { BusinessContext } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
+import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 function mapCurrentEntry(
   data: Array<{
@@ -37,7 +37,7 @@ export async function loadAttendanceEmployees(
   context: BusinessContext,
   storeId: string,
 ): Promise<AttendanceEmployee[]> {
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase.rpc("get_attendance_employees", {
     target_organization_id: context.organization.id,
     target_store_id: storeId,
@@ -64,7 +64,7 @@ export async function loadAttendanceEmployees(
 export async function loadTimeClockWorkspace(
   context: BusinessContext,
 ): Promise<TimeClockWorkspace> {
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   const [storesResult, entryResult] = await Promise.all([
     supabase
       .from("stores")
@@ -95,7 +95,7 @@ export async function loadTimeAttendanceWorkspace(
   context: BusinessContext,
   filters: { storeId?: string | null; employeeId?: string | null; start?: string | null; end?: string | null },
 ): Promise<TimeAttendanceWorkspace> {
-  const supabase = await createClient();
+  const supabase = await createBusinessContextClient(context);
   let entriesQuery = supabase
     .from("time_clock_entries")
     .select("id, employee_id, store_id, clocked_in_at, clocked_out_at, clock_in_verification_method, clock_out_verification_method")

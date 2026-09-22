@@ -63,11 +63,23 @@ test("the POS exposes the required sync states while manual controls remain supp
 });
 
 test("the server checkout and telemetry paths preserve authoritative context and binding", () => {
-  assert.match(offlineRoute, /getPosApiBusinessContext\(request\)/);
-  assert.match(offlineRoute, /completeCheckout\(context, input, \{ guardOfflineTotal: true \}\)/);
+  assert.match(
+    offlineRoute,
+    /getPosApiBusinessContext\(\s*request\s*,?\s*\)/,
+    "offline checkout resolves the authenticated POS API business context",
+  );
+  assert.match(
+    offlineRoute,
+    /completeCheckout\(\s*context\s*,\s*input\s*,\s*\{\s*guardOfflineTotal:\s*true\s*,?\s*\}\s*,?\s*\)/,
+    "offline checkout keeps the authoritative total guard enabled",
+  );
   assert.match(offlineRoute, /record_offline_sync_event/);
   assert.match(offlineRoute, /context\.organization\.id/);
-  assert.match(offlineRoute, /Cache-Control": "private, no-store/);
+  assert.match(
+    offlineRoute,
+    /"Cache-Control"\s*:\s*"private, no-store"/,
+    "offline checkout responses remain private and non-cacheable",
+  );
   assert.match(offlineMigration, /security definer/);
   assert.match(offlineMigration, /set search_path = ''/);
   assert.match(offlineMigration, /shift\.store_id = target_store_id/);

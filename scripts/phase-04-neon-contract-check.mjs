@@ -20,6 +20,7 @@ const [
   dataFetch,
   serverClient,
   migration,
+  extensions,
   identityProvider,
   authActions,
   authCallback,
@@ -33,6 +34,9 @@ const [
     source("src/lib/database/neon-data-api-fetch.ts"),
     source("src/lib/supabase/server.ts"),
     source("supabase/migrations/20260922180000_neon_portability_foundation.sql"),
+    source(
+      "database/provider/neon/00_extensions.sql",
+    ),
     source("database/provider/neon/01_identity.sql"),
     source("src/features/auth/actions.ts"),
     source("src/app/auth/callback/route.ts"),
@@ -45,6 +49,21 @@ const packageJson =
   JSON.parse(
     packageText,
   );
+
+test(
+  "Neon migration bootstraps required PostgreSQL extensions before the TINDIO baseline",
+  () => {
+    assert.match(
+      extensions,
+      /create extension if not exists pgcrypto/i,
+    );
+
+    assert.match(
+      extensions,
+      /with schema extensions/i,
+    );
+  },
+);
 
 test(
   "Neon Data API is configured to verify existing Supabase Auth JWTs",

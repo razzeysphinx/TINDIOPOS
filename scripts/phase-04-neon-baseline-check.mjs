@@ -17,6 +17,7 @@ async function source(path) {
 const [
   baseline,
   roles,
+  extensions,
   identity,
   migration,
 ] =
@@ -26,6 +27,9 @@ const [
     ),
     source(
       "database/provider/neon/00_roles.sql",
+    ),
+    source(
+      "database/provider/neon/00_extensions.sql",
     ),
     source(
       "database/provider/neon/01_identity.sql",
@@ -201,6 +205,36 @@ test(
     assert.match(
       baseline,
       /\bCREATE\s+POLICY\b/i,
+    );
+  },
+);
+
+test(
+  "Neon provider recreates TINDIO pgcrypto extension surface",
+  () => {
+    assert.match(
+      extensions,
+      /create schema if not exists extensions/i,
+    );
+
+    assert.match(
+      extensions,
+      /create extension if not exists pgcrypto[\s\S]*with schema extensions/i,
+    );
+
+    assert.match(
+      extensions,
+      /extensions\.crypt\(text,text\)/i,
+    );
+
+    assert.match(
+      extensions,
+      /extensions\.gen_salt\(text,integer\)/i,
+    );
+
+    assert.match(
+      extensions,
+      /extensions\.digest\(text,text\)/i,
     );
   },
 );

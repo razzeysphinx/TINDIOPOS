@@ -10,6 +10,14 @@ async function source(relativePath) {
   return readFile(path.join(repositoryRoot, relativePath), "utf8");
 }
 
+async function inventoryCommandSource(relativePath) {
+  const [actions, service] = await Promise.all([
+    source(relativePath),
+    source("src/features/inventory/pos-transfer-service.ts"),
+  ]);
+  return `${actions}\n${service}`;
+}
+
 test("Phase 1 merges health and restock navigation without changing transfer workflows", async () => {
   const [inventoryPage, replenishmentPage, navigation] = await Promise.all([
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
@@ -69,8 +77,8 @@ test("Phase 7 calculates the restock gap from on-hand and confirmed inbound quan
 });
 
 test("direct transfer actions use the canonical transfer RPCs without client ledger writes", async () => {
-  const actions = await source("src/features/inventory/supply-chain-actions.ts");
-  const legacyActions = await source("src/features/inventory/advanced-inventory-actions.ts");
+  const actions = await inventoryCommandSource("src/features/inventory/supply-chain-actions.ts");
+  const legacyActions = await inventoryCommandSource("src/features/inventory/advanced-inventory-actions.ts");
 
   assert.match(actions, /requireSupplyChainManager\(\)/);
   assert.match(actions, /rpc\("create_stock_request"/);
@@ -85,9 +93,9 @@ test("direct transfer actions use the canonical transfer RPCs without client led
 });
 
 test("direct transfers are retry-safe while request receipts remain canonical", async () => {
-  const supplyChainActions = await source("src/features/inventory/supply-chain-actions.ts");
+  const supplyChainActions = await inventoryCommandSource("src/features/inventory/supply-chain-actions.ts");
   const supplyChainWorkflows = await source("src/features/inventory/supply-chain-workflows.tsx");
-  const legacyActions = await source("src/features/inventory/advanced-inventory-actions.ts");
+  const legacyActions = await inventoryCommandSource("src/features/inventory/advanced-inventory-actions.ts");
   const inventoryPage = await source("src/app/(back-office)/back-office/inventory/page.tsx");
   const migration = await source("supabase/migrations/20260906074121_transfer_lifecycle_operation_integrity.sql");
   const directTransferMigration = await source("supabase/migrations/20260910140907_direct_store_transfer_lifecycle.sql");

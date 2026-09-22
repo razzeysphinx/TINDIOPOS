@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { customerDisplayStateSchema } from "@/features/customer-display/customer-display-types";
-import { getBusinessContext, hasPermission } from "@/lib/auth/dal";
+import { hasPermission } from "@/lib/auth/dal";
+import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
 import { createClient } from "@/lib/supabase/server";
 
 const updateSchema = z.object({
@@ -11,7 +12,7 @@ const updateSchema = z.object({
 });
 
 export async function PUT(request: NextRequest) {
-  const context = await getBusinessContext();
+  const context = await getPosApiBusinessContext(request);
 
   if (!context) {
     return NextResponse.json({ error: "Sign in is required." }, { status: 401 });

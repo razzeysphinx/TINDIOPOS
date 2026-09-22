@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { completeCheckout } from "@/features/checkout/checkout-service";
-import { getBusinessContext } from "@/lib/auth/dal";
+import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
 
 const noStoreHeaders = { "Cache-Control": "private, no-store" };
 
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const context = await getBusinessContext();
+    const context = await getPosApiBusinessContext(request);
     if (!context) {
       return NextResponse.json(
         {

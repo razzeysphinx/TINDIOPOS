@@ -4,12 +4,14 @@ import { moneyInputToMinor } from "@/features/catalog/catalog-money";
 import {
   approveManagerApprovalSchema,
   decideManagerApprovalSchema,
+  requestManagerApprovalSchema,
   setEmployeePinSchema,
   updateApprovalRuleSchema,
 } from "@/features/approvals/approval-schema";
-import type { ApprovalActionResult } from "@/features/approvals/approval-types";
+import type { ApprovalActionResult, ApprovalPreparationResult, ApprovalStatusResult } from "@/features/approvals/approval-types";
 import type { BusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
+import type { Json } from "@/lib/supabase/database.types";
 
 export function approvalDatabaseMessage(
   code: string | undefined,
@@ -59,6 +61,55 @@ export async function approveManagerApproval(
   }
 
   return { ok: true, message: "Manager approval recorded. Complete the operation now." };
+}
+
+export async function requestManagerApproval(
+  context: BusinessContext,
+  input: unknown,
+): Promise<ApprovalPreparationResult> {
+  const parsed = requestManagerApprovalSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, decision: "DENIED", message: "Check the operation details and reason." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("request_manager_approval", {
+    target_organization_id: context.organization.id,
+    target_operation_code: parsed.data.operationCode,
+    target_reason: parsed.data.reason,
+    target_payload: parsed.data.payload as unknown as Json,
+  });
+  const result = data?.[0];
+  if (error || !result) {
+    return { ok: false, decision: "DENIED", message: approvalDatabaseMessage(error?.code, error?.message, "TINDIO could not evaluate the approval rule.") };
+  }
+  if (result.decision === "ALLOWED") {
+    return { ok: true, decision: "ALLOWED", message: result.message, data: { approvalRequestId: null, expiresAt: null } };
+  }
+  if (result.decision === "APPROVAL_REQUIRED" && result.approval_request_id && result.expires_at) {
+    return { ok: true, decision: "APPROVAL_REQUIRED", message: result.message, data: { approvalRequestId: result.approval_request_id, expiresAt: result.expires_at } };
+  }
+  return { ok: false, decision: "DENIED", message: result.message || "This operation is denied by the approval rule." };
+}
+
+export async function loadManagerApprovalStatus(
+  context: BusinessContext,
+  input: unknown,
+): Promise<ApprovalStatusResult> {
+  const parsed = approveManagerApprovalSchema.pick({ approvalRequestId: true }).safeParse(input);
+  if (!parsed.success) return { ok: false, message: "This approval request is invalid." };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("approval_requests")
+    .select("status, expires_at")
+    .eq("organization_id", context.organization.id)
+    .eq("id", parsed.data.approvalRequestId)
+    .maybeSingle();
+  if (error || !data) return { ok: false, message: "This approval request is no longer available." };
+  const status = data.status === "PENDING" && new Date(data.expires_at).getTime() <= Date.now() ? "EXPIRED" : data.status;
+  return {
+    ok: true,
+    status: status as "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED" | "CONSUMED" | "CANCELLED",
+    expiresAt: data.expires_at,
+  };
 }
 
 export async function decideManagerApproval(

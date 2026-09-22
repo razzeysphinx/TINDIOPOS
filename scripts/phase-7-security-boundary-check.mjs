@@ -63,9 +63,9 @@ const [
   source("../src/app/api/pos/checkout/route.ts"),
   source("../src/lib/auth/dal.ts"),
   source("../src/lib/server/back-office-store-scope.ts"),
-  source("../src/features/receipts/actions.ts"),
-  source("../src/features/shifts/actions.ts"),
-  source("../src/features/inventory/advanced-inventory-actions.ts"),
+  Promise.all([source("../src/features/receipts/actions.ts"), source("../src/features/receipts/service.ts")]).then((sources) => sources.join("\n")),
+  Promise.all([source("../src/features/shifts/actions.ts"), source("../src/features/shifts/service.ts")]).then((sources) => sources.join("\n")),
+  Promise.all([source("../src/features/inventory/advanced-inventory-actions.ts"), source("../src/features/inventory/pos-transfer-service.ts")]).then((sources) => sources.join("\n")),
   source("../src/features/catalog/actions.ts"),
   source("../src/features/catalog/service.ts"),
   source("../src/features/management/actions.ts"),
@@ -77,7 +77,7 @@ const [
   source("../src/app/(pos)/pos/page.tsx"),
   source("../src/features/pos/pos-capabilities.ts"),
   source("../src/features/pos/data.ts"),
-  source("../src/features/advanced-sales/ticket-actions.ts"),
+  Promise.all([source("../src/features/advanced-sales/ticket-actions.ts"), source("../src/features/advanced-sales/ticket-service.ts")]).then((sources) => sources.join("\n")),
   source("../src/features/pos/pos-terminal.tsx"),
   source("../src/features/pos/pos-operational-drawer.tsx"),
   source("../src/app/api/pos/catalog/route.ts"),
@@ -103,7 +103,7 @@ const [
 
 test("checkout keeps session-derived organization scope and capability-derived store validation on every entry point", () => {
   assert.match(checkoutAction, /requireBusinessContext\(\)/);
-  assert.match(checkoutRoute, /getBusinessContext\(\)/);
+  assert.match(checkoutRoute, /getPosApiBusinessContext\(request\)/);
   assert.match(checkoutRoute, /completeCheckout\(context, input\)/);
   assert.match(checkoutService, /context\.storeIds\.includes\(parsed\.storeId\)/);
   assert.match(checkoutService, /target_organization_id: context\.organization\.id/);
@@ -203,7 +203,7 @@ test("device validation rejects a caller-supplied organization that differs from
 });
 
 test("every authenticated export and offline API has its capability or service authorization boundary", () => {
-  assert.match(offlineCheckoutRoute, /getBusinessContext\(\)/);
+  assert.match(offlineCheckoutRoute, /getPosApiBusinessContext\(request\)/);
   assert.match(offlineCheckoutRoute, /completeCheckout\(context, input, \{ guardOfflineTotal: true \}\)/);
 
   for (const [name, content, capability] of [

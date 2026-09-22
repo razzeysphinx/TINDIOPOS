@@ -3,7 +3,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { hasPermission, getBusinessContext } from "@/lib/auth/dal";
+import { hasPermission } from "@/lib/auth/dal";
+import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
 import { createClient } from "@/lib/supabase/server";
 import type { PosCatalogResponse } from "@/features/pos/pos-types";
 import { mapPosCatalogItems } from "@/features/pos/data";
@@ -17,7 +18,7 @@ const catalogRequestSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const context = await getBusinessContext();
+  const context = await getPosApiBusinessContext(request);
 
   if (!context) {
     return NextResponse.json({ error: "Sign in is required." }, { status: 401 });

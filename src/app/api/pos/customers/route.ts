@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getBusinessContext, hasPermission } from "@/lib/auth/dal";
+import { hasPermission } from "@/lib/auth/dal";
+import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
 import { createClient } from "@/lib/supabase/server";
 
 const querySchema = z.object({
@@ -10,7 +11,7 @@ const querySchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const context = await getBusinessContext();
+  const context = await getPosApiBusinessContext(request);
   if (!context || !hasPermission(context, "pos.access") || !hasPermission(context, "sales.create")) {
     return NextResponse.json({ error: "POS access is not permitted." }, { status: 403 });
   }

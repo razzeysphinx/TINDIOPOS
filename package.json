@@ -110,6 +110,13 @@
     "test:phase-01-pos-api-contract": "node --test scripts/phase-01-pos-api-contract-check.mjs",
     "test:phase-02-mobile-auth-contract": "node --test scripts/phase-02-mobile-auth-contract-check.mjs",
     "test:phase-03-shared-contracts": "node --test scripts/phase-03-shared-contracts-check.mjs",
+    "test:phase-04-browser-db-boundary": "node --test scripts/phase-04-browser-database-boundary-check.mjs",
+    "test:phase-04-neon-baseline": "node --test scripts/phase-04-neon-baseline-check.mjs",
+    "test:phase-04-supabase-jwks": "node scripts/phase-04-supabase-jwks-check.mjs",
+    "certify:phase-04:neon-rehearsal": "node scripts/phase-04-neon-migrate.mjs",
+    "migrate:phase-04:neon-cutover": "node scripts/phase-04-neon-migrate.mjs --cutover",
+    "certify:phase-04:neon-api": "node scripts/phase-04-neon-api-certification.mjs",
+    "test:phase-04-neon-contract": "node --test scripts/phase-04-neon-contract-check.mjs",
     "certify:phase-02:bearer-auth": "node scripts/phase-02-bearer-auth-e2e.mjs",
     "typecheck": "tsc --noEmit --incremental false"
   },

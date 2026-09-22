@@ -116,6 +116,165 @@ function normalizeBaselineBootstrap(sql) {
   ].join("\n");
 }
 
+function normalizeSourceOwnership(sql) {
+  const ownerStatementPattern =
+    /^ALTER\b[^\r\n;]*\bOWNER\s+TO\s+(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*);\s*$/gim;
+
+  const sessionAuthorizationPattern =
+    /^SET\s+SESSION\s+AUTHORIZATION\b[^\r\n;]*;\s*$/gim;
+
+  const ownerStatementCount =
+    countMatches(
+      sql,
+      ownerStatementPattern,
+    );
+
+  const sessionAuthorizationCount =
+    countMatches(
+      sql,
+      sessionAuthorizationPattern,
+    );
+
+  let normalized =
+    sql
+      .replace(
+        ownerStatementPattern,
+        "",
+      )
+      .replace(
+        sessionAuthorizationPattern,
+        "",
+      )
+      .replace(
+        /\n{3,}/g,
+        "\n\n",
+      );
+
+  if (
+    /\bOWNER\s+TO\b/i
+      .test(
+        normalized,
+      )
+  ) {
+    throw new Error(
+      "Canonical baseline still contains an executable OWNER TO statement after ownership normalization.",
+    );
+  }
+
+  if (
+    /\bSET\s+SESSION\s+AUTHORIZATION\b/i
+      .test(
+        normalized,
+      )
+  ) {
+    throw new Error(
+      "Canonical baseline still contains source session-authorization metadata.",
+    );
+  }
+
+  console.log(
+    `Removed source ownership metadata: ${ownerStatementCount} OWNER statement(s), ${sessionAuthorizationCount} session-authorization statement(s).`,
+  );
+
+  return normalized;
+}
+
+function normalizeProviderAdministrativePrivileges(sql) {
+  const providerDefaultPrivilegePattern =
+    /^[ \t]*ALTER\s+DEFAULT\s+PRIVILEGES\b[^;]*\bFOR\s+(?:ROLE|USER)\s+"?(?:postgres|supabase_admin)"?\b[^;]*;[ \t]*$/gim;
+
+  const providerDirectAclPattern =
+    /^[ \t]*(?:GRANT|REVOKE)\b[^;]*\b(?:TO|FROM)\s+"?(?:postgres|supabase_admin)"?\b[^;]*;[ \t]*$/gim;
+
+  const providerGrantorPattern =
+    /^[ \t]*(?:GRANT|REVOKE)\b[^;]*\bGRANTED\s+BY\s+"?(?:postgres|supabase_admin)"?\b[^;]*;[ \t]*$/gim;
+
+  const defaultPrivilegeCount =
+    countMatches(
+      sql,
+      providerDefaultPrivilegePattern,
+    );
+
+  const directAclCount =
+    countMatches(
+      sql,
+      providerDirectAclPattern,
+    );
+
+  const providerGrantorCount =
+    countMatches(
+      sql,
+      providerGrantorPattern,
+    );
+
+  const normalized =
+    sql
+      .replace(
+        providerDefaultPrivilegePattern,
+        "",
+      )
+      .replace(
+        providerDirectAclPattern,
+        "",
+      )
+      .replace(
+        providerGrantorPattern,
+        "",
+      )
+      .replace(
+        /\n{3,}/g,
+        "\n\n",
+      );
+
+  const remainingProviderDefaultPrivilege =
+    /^[ \t]*ALTER\s+DEFAULT\s+PRIVILEGES\b[^;]*\bFOR\s+(?:ROLE|USER)\s+"?(?:postgres|supabase_admin)"?\b[^;]*;/im;
+
+  const remainingProviderDirectAcl =
+    /^[ \t]*(?:GRANT|REVOKE)\b[^;]*\b(?:TO|FROM)\s+"?(?:postgres|supabase_admin)"?\b[^;]*;/im;
+
+  const remainingProviderGrantor =
+    /^[ \t]*(?:GRANT|REVOKE)\b[^;]*\bGRANTED\s+BY\s+"?(?:postgres|supabase_admin)"?\b[^;]*;/im;
+
+  if (
+    remainingProviderDefaultPrivilege
+      .test(
+        normalized,
+      )
+  ) {
+    throw new Error(
+      "Canonical baseline still contains executable provider-specific default privileges.",
+    );
+  }
+
+  if (
+    remainingProviderDirectAcl
+      .test(
+        normalized,
+      )
+  ) {
+    throw new Error(
+      "Canonical baseline still contains a direct ACL targeting postgres/supabase_admin.",
+    );
+  }
+
+  if (
+    remainingProviderGrantor
+      .test(
+        normalized,
+      )
+  ) {
+    throw new Error(
+      "Canonical baseline still contains a provider-specific GRANTED BY clause.",
+    );
+  }
+
+  console.log(
+    `Removed provider administrative ACL metadata: ${defaultPrivilegeCount} default-privilege statement(s), ${directAclCount} direct ACL statement(s), ${providerGrantorCount} provider-grantor statement(s).`,
+  );
+
+  return normalized;
+}
+
 async function main() {
   console.log("TINDIO canonical database baseline capture");
   console.log("=========================================");
@@ -149,10 +308,25 @@ async function main() {
   if (!sql.trim()) throw new Error("Baseline dump is empty.");
 
   // Normalize line endings so the generated baseline is stable across Windows
-  // and Unix worktrees. The only semantic normalization performed here is the
-  // explicit private-schema bootstrap when the dump contains private objects
-  // but omits CREATE SCHEMA private.
-  sql = normalizeBaselineBootstrap(sql.replace(/\r\n/g, "\n"));
+  // and Unix worktrees. Make the canonical schema self-contained and
+  // provider-neutral by:
+  //
+  // 1. restoring the TINDIO-owned private-schema bootstrap when Supabase's dump
+  //    omits it; and
+  // 2. removing source-cluster ownership/session-authorization metadata.
+  //
+  // Application grants, RLS, RBAC, functions, and business schema remain intact.
+  sql =
+    normalizeProviderAdministrativePrivileges(
+      normalizeSourceOwnership(
+        normalizeBaselineBootstrap(
+          sql.replace(
+            /\r\n/g,
+            "\n",
+          ),
+        ),
+      ),
+    );
   await writeFile(baselinePath, sql, "utf8");
 
   const forbiddenManagedObjects = [

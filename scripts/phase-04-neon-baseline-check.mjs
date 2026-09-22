@@ -149,3 +149,58 @@ test(
     );
   },
 );
+
+test(
+  "canonical baseline contains no source provider ownership or administrative ACL metadata",
+  () => {
+    assert.doesNotMatch(
+      baseline,
+      /\bOWNER\s+TO\b/i,
+    );
+
+    assert.doesNotMatch(
+      baseline,
+      /\bSET\s+SESSION\s+AUTHORIZATION\b/i,
+    );
+
+    assert.doesNotMatch(
+      baseline,
+      /^[ \t]*ALTER\s+DEFAULT\s+PRIVILEGES\b[^;]*\bFOR\s+(?:ROLE|USER)\s+"?(?:postgres|supabase_admin)"?\b[^;]*;/im,
+    );
+
+    assert.doesNotMatch(
+      baseline,
+      /^[ \t]*(?:GRANT|REVOKE)\b[^;]*\b(?:TO|FROM)\s+"?(?:postgres|supabase_admin)"?\b[^;]*;/im,
+    );
+
+    assert.doesNotMatch(
+      baseline,
+      /^[ \t]*(?:GRANT|REVOKE)\b[^;]*\bGRANTED\s+BY\s+"?(?:postgres|supabase_admin)"?\b[^;]*;/im,
+    );
+  },
+);
+
+test(
+  "canonical baseline preserves TINDIO application authorization",
+  () => {
+    assert.match(
+      baseline,
+      /\bTO\s+"?authenticated"?\b/i,
+    );
+
+    assert.match(
+      baseline,
+      /\bTO\s+"?service_role"?\b/i,
+    );
+
+    assert.match(
+      baseline,
+      /\bROW\s+LEVEL\s+SECURITY\b/i,
+    );
+
+    assert.match(
+      baseline,
+      /\bCREATE\s+POLICY\b/i,
+    );
+  },
+);

@@ -184,8 +184,14 @@ test("no migration can reintroduce hidden inventory capability routing", async (
 test("transfer reads and mutations require both capability and the existing store scope", async () => {
   const [migration, advancedActions, supplyActions] = await Promise.all([
     source("supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql"),
-    source("src/features/inventory/advanced-inventory-actions.ts"),
-    source("src/features/inventory/supply-chain-actions.ts"),
+    Promise.all([
+      source("src/features/inventory/advanced-inventory-actions.ts"),
+      source("src/features/inventory/pos-transfer-service.ts"),
+    ]).then((sources) => sources.join("\n")),
+    Promise.all([
+      source("src/features/inventory/supply-chain-actions.ts"),
+      source("src/features/inventory/pos-transfer-service.ts"),
+    ]).then((sources) => sources.join("\n")),
   ]);
 
   assert.match(migration, /private\.has_stock_transfer_read_scope/);

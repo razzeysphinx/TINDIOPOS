@@ -63,7 +63,7 @@ test("the POS exposes the required sync states while manual controls remain supp
 });
 
 test("the server checkout and telemetry paths preserve authoritative context and binding", () => {
-  assert.match(offlineRoute, /getBusinessContext\(\)/);
+  assert.match(offlineRoute, /getPosApiBusinessContext\(request\)/);
   assert.match(offlineRoute, /completeCheckout\(context, input, \{ guardOfflineTotal: true \}\)/);
   assert.match(offlineRoute, /record_offline_sync_event/);
   assert.match(offlineRoute, /context\.organization\.id/);

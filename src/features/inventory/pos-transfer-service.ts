@@ -12,7 +12,15 @@ export type PosTransferResult<T> =
   | { ok: true; message: string; data?: T }
   | { ok: false; message: string; fieldErrors?: Record<string, string[]> };
 
-const TRANSFER_DB_MESSAGES: Record<string, string> = {
+const DIRECT_TRANSFER_DB_MESSAGES: Record<string, string> = {
+  "23505": "This supplier or inventory document already exists.",
+  "23503": "Choose records that belong to this organization.",
+  "23514": "The inventory details violate a business rule. Check available stock and quantities.",
+  "22023": "The inventory details violate a business rule. Check available stock and quantities.",
+  "42501": "You do not have permission to make this inventory change.",
+};
+
+const REQUEST_TRANSFER_DB_MESSAGES: Record<string, string> = {
   "23505": "This warehouse, rule, or document already exists.",
   "23503": "Choose records that belong to this organization.",
   "23514": "The replenishment details violate a stock or workflow rule.",
@@ -20,8 +28,12 @@ const TRANSFER_DB_MESSAGES: Record<string, string> = {
   "42501": "You do not have permission or a store assignment for this replenishment operation.",
 };
 
-function databaseMessage(code: string | undefined, fallback: string) {
-  return postgresCodeMessage(code, fallback, TRANSFER_DB_MESSAGES);
+function directTransferDatabaseMessage(code: string | undefined, fallback: string) {
+  return postgresCodeMessage(code, fallback, DIRECT_TRANSFER_DB_MESSAGES);
+}
+
+function requestTransferDatabaseMessage(code: string | undefined, fallback: string) {
+  return postgresCodeMessage(code, fallback, REQUEST_TRANSFER_DB_MESSAGES);
 }
 
 function canReceive(context: BusinessContext) {
@@ -51,7 +63,7 @@ export async function receivePosStockTransfer({ context, input }: { context: Bus
       discrepancy_note: line.discrepancyNote || null,
     })) as Json,
   });
-  if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not receive this transfer.") };
+  if (error || !data) return { ok: false, message: directTransferDatabaseMessage(error?.code, "TINDIO could not receive this transfer.") };
   return { ok: true, message: "Transfer receipt posted and destination stock updated.", data: { receiptId: data } };
 }
 
@@ -74,6 +86,6 @@ export async function receivePosStockRequest({ context, input }: { context: Busi
       discrepancy_note: line.discrepancyNote,
     })) as Json,
   });
-  if (error || !data) return { ok: false, message: databaseMessage(error?.code, "TINDIO could not record this receipt.") };
+  if (error || !data) return { ok: false, message: requestTransferDatabaseMessage(error?.code, "TINDIO could not record this receipt.") };
   return { ok: true, message: "Receipt recorded. Only the received quantity was added to stock.", data: { stockRequestId: data } };
 }

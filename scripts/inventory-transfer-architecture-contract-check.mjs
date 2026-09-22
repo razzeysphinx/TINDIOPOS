@@ -48,11 +48,11 @@ const [
 
     source(
       "../src/features/inventory/supply-chain-actions.ts",
-    ),
+    ).then(async (actions) => `${actions}\n${await source("../src/features/inventory/pos-transfer-service.ts")}`),
 
     source(
       "../src/features/inventory/advanced-inventory-actions.ts",
-    ),
+    ).then(async (actions) => `${actions}\n${await source("../src/features/inventory/pos-transfer-service.ts")}`),
 
     source(
       "../src/features/inventory/inventory-transfer-workspace.tsx",

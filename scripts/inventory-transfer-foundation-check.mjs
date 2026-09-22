@@ -23,8 +23,14 @@ const [
   source("../supabase/migrations/20260917070409_phase_05_direct_transfer_contract_repair.sql"),
   source("../supabase/migrations/20260917073801_canonical_request_transfer_migration.sql"),
   source("../supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql"),
-  source("../src/features/inventory/advanced-inventory-actions.ts"),
-  source("../src/features/inventory/supply-chain-actions.ts"),
+  Promise.all([
+    source("../src/features/inventory/advanced-inventory-actions.ts"),
+    source("../src/features/inventory/pos-transfer-service.ts"),
+  ]).then((sources) => sources.join("\n")),
+  Promise.all([
+    source("../src/features/inventory/supply-chain-actions.ts"),
+    source("../src/features/inventory/pos-transfer-service.ts"),
+  ]).then((sources) => sources.join("\n")),
   source("../src/features/pos/data.ts"),
   source("../src/features/pos/pos-types.ts"),
   source("../src/features/pos/pos-incoming-transfer-inbox.tsx"),

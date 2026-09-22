@@ -4,7 +4,7 @@ import { checkoutSubmissionSchema } from "@/features/checkout/checkout-schema";
 import { completeCheckout } from "@/features/checkout/checkout-service";
 import type { CheckoutSaleActionResult } from "@/features/checkout/checkout-types";
 import { posDeviceRequestHeaders } from "@/features/devices/device-schema";
-import { getBusinessContext } from "@/lib/auth/dal";
+import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
 import { createClient } from "@/lib/supabase/server";
 
 async function recordServerObservedOutcome(
@@ -44,7 +44,7 @@ async function recordServerObservedOutcome(
 }
 
 export async function POST(request: Request) {
-  const context = await getBusinessContext();
+  const context = await getPosApiBusinessContext(request);
   if (!context) {
     return NextResponse.json(
       { ok: false, message: "Sign in is required before queued sales can sync." },

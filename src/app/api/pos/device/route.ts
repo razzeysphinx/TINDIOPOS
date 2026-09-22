@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { posDeviceValidationSchema } from "@/features/devices/device-schema";
-import { getBusinessContext, hasPermission } from "@/lib/auth/dal";
+import { hasPermission } from "@/lib/auth/dal";
+import { getPosApiBusinessContext } from "@/lib/auth/pos-api-context";
 import { createClient } from "@/lib/supabase/server";
 
 const headers = { "Cache-Control": "private, no-store" };
 
 export async function POST(request: Request) {
-  const context = await getBusinessContext();
+  const context = await getPosApiBusinessContext(request);
   if (!context) {
     return NextResponse.json({ ok: false, message: "Sign in is required to use this POS device." }, { status: 401, headers });
   }

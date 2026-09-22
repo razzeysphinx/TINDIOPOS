@@ -20,6 +20,16 @@ import {
   hasPurchasingResponsibility,
 } from "@/lib/auth/inventory-capabilities";
 
+export type BusinessRequestAuth =
+  | {
+      transport: "cookie";
+      authorizationHeader: null;
+    }
+  | {
+      transport: "bearer";
+      authorizationHeader: string;
+    };
+
 export type VerifiedUser = {
   id: string;
   subject: string;
@@ -27,6 +37,7 @@ export type VerifiedUser = {
 };
 
 export type BusinessContext = {
+  requestAuth: BusinessRequestAuth;
   user: VerifiedUser;
   profile: Pick<TableRow<"profiles">, "full_name" | "email">;
   employee: Pick<
@@ -62,16 +73,23 @@ export type BusinessContext = {
   storeIds: string[];
 };
 
-export const getVerifiedUser = cache(async (): Promise<VerifiedUser | null> => {
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getClaims();
+export async function resolveVerifiedUser(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  accessToken?: string,
+): Promise<VerifiedUser | null> {
+  const { data, error } = accessToken
+    ? await supabase.auth.getClaims(accessToken)
+    : await supabase.auth.getClaims();
 
   if (error || !data?.claims) {
     return null;
   }
 
   const claims = data.claims as Record<string, unknown>;
-  const subject = typeof claims.sub === "string" && claims.sub.length > 0 ? claims.sub : null;
+  const subject =
+    typeof claims.sub === "string" && claims.sub.length > 0
+      ? claims.sub
+      : null;
 
   if (!subject) return null;
 
@@ -84,7 +102,369 @@ export const getVerifiedUser = cache(async (): Promise<VerifiedUser | null> => {
     subject,
     email: typeof claims.email === "string" ? claims.email : null,
   };
-});
+}
+
+export const getVerifiedUser = cache(
+  async (): Promise<VerifiedUser | null> => {
+    const supabase = await createClient();
+    return resolveVerifiedUser(supabase);
+  },
+);
+
+export async function loadBusinessContext({
+  requestAuth,
+  requestedOrganizationId,
+  strictRequestedOrganization = false,
+  supabase,
+  user,
+}: {
+  requestAuth: BusinessRequestAuth;
+  requestedOrganizationId?: string | null;
+  strictRequestedOrganization?: boolean;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  user: VerifiedUser;
+}): Promise<BusinessContext | null> {
+  const membershipsResult = await supabase
+    .from("employees")
+    .select("id, employee_number, job_title, organization_id, status")
+    .eq("profile_id", user.id)
+    .eq("status", "active")
+    .order("created_at", { ascending: true });
+
+  if (membershipsResult.error) {
+    throw new Error(
+      `Unable to resolve business membership: ${membershipsResult.error.message}`,
+    );
+  }
+
+  if (!membershipsResult.data || membershipsResult.data.length === 0) {
+    return null;
+  }
+
+  const membershipIds = membershipsResult.data.map(
+    (membership) => membership.organization_id,
+  );
+
+  const { data: organizations, error: organizationsError } = await supabase
+    .from("organizations")
+    .select(
+      "id, name, currency_code, timezone, status, suspended_at, suspension_reason, archive_requested_at, archived_at, business_type, device_management_enabled",
+    )
+    .in("id", membershipIds);
+
+  if (organizationsError) {
+    throw new Error(
+      `Unable to load organization memberships: ${organizationsError.message}`,
+    );
+  }
+
+  const organizationById = new Map(
+    (organizations ?? []).map((organization) => [
+      organization.id,
+      organization,
+    ]),
+  );
+
+  const availableOrganizations = membershipsResult.data
+    .map((membership) =>
+      organizationById.get(membership.organization_id),
+    )
+    .filter((organization) => organization !== undefined)
+    .map((organization) => ({
+      id: organization.id,
+      name: organization.name,
+      status: organization.status as
+        | "active"
+        | "suspended"
+        | "archived",
+    }));
+
+  if (availableOrganizations.length === 0) {
+    return null;
+  }
+
+  const requestedOrganization = requestedOrganizationId
+    ? availableOrganizations.find(
+        (organization) =>
+          organization.id === requestedOrganizationId,
+      )
+    : undefined;
+
+  if (
+    strictRequestedOrganization
+    && requestedOrganizationId
+    && !requestedOrganization
+  ) {
+    return null;
+  }
+
+  const selectedOrganization =
+    requestedOrganization
+    ?? availableOrganizations.find(
+      (organization) => organization.status === "active",
+    )
+    ?? availableOrganizations[0];
+
+  const employee = membershipsResult.data.find(
+    (membership) =>
+      membership.organization_id === selectedOrganization.id,
+  );
+
+  const organizationResult =
+    organizationById.get(selectedOrganization.id);
+
+  if (!employee || !organizationResult) {
+    throw new Error(
+      "Unable to resolve the selected organization membership.",
+    );
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("full_name, email")
+    .eq("id", user.id)
+    .single();
+
+  if (profileError || !profile) {
+    throw new Error(
+      `Unable to load profile: ${profileError?.message ?? "Not found"}`,
+    );
+  }
+
+  const organization =
+    organizationResult as typeof organizationResult & {
+      device_management_enabled: boolean;
+    };
+
+  if (organization.status !== "active") {
+    const { data: readinessData, error: readinessError } =
+      await supabase.rpc(
+        "get_organization_readiness_access",
+        {
+          target_organization_id: organization.id,
+        },
+      );
+
+    if (readinessError || !readinessData) {
+      throw new Error(
+        `Unable to resolve organization lifecycle access: ${readinessError?.message ?? "Not found"}`,
+      );
+    }
+
+    const tenantReadiness = readinessData as {
+      can_export?: boolean;
+      can_manage_lifecycle?: boolean;
+      can_view_recovery?: boolean;
+      can_manage_recovery?: boolean;
+    };
+
+    return {
+      requestAuth,
+      user,
+      profile,
+      employee,
+      organization: {
+        ...organization,
+        business_type: isBusinessType(
+          organization.business_type,
+        )
+          ? organization.business_type
+          : "retail",
+      },
+      availableOrganizations,
+      tenantReadiness: {
+        canExport: Boolean(tenantReadiness.can_export),
+        canManageLifecycle: Boolean(
+          tenantReadiness.can_manage_lifecycle,
+        ),
+        canViewRecovery: Boolean(
+          tenantReadiness.can_view_recovery,
+        ),
+        canManageRecovery: Boolean(
+          tenantReadiness.can_manage_recovery,
+        ),
+      },
+      features: createFeatureSettings([]),
+      roleNames: [],
+      permissions: [],
+      storeIds: [],
+    };
+  }
+
+  const [
+    roleLinksResult,
+    storeLinksResult,
+    featuresResult,
+  ] = await Promise.all([
+    supabase
+      .from("employee_roles")
+      .select("role_id")
+      .eq("organization_id", employee.organization_id)
+      .eq("employee_id", employee.id),
+
+    supabase
+      .from("employee_stores")
+      .select("store_id")
+      .eq("organization_id", employee.organization_id)
+      .eq("employee_id", employee.id),
+
+    supabase
+      .from("organization_features")
+      .select("feature_key, is_enabled")
+      .eq("organization_id", employee.organization_id),
+  ]);
+
+  if (roleLinksResult.error) {
+    throw new Error(
+      `Unable to load roles: ${roleLinksResult.error.message}`,
+    );
+  }
+
+  if (storeLinksResult.error) {
+    throw new Error(
+      `Unable to load store assignments: ${storeLinksResult.error.message}`,
+    );
+  }
+
+  if (featuresResult.error) {
+    throw new Error(
+      `Unable to load business features: ${featuresResult.error.message}`,
+    );
+  }
+
+  const roleIds =
+    roleLinksResult.data.map((link) => link.role_id);
+
+  let roleNames: string[] = [];
+  let permissions: string[] = [];
+
+  if (roleIds.length > 0) {
+    const [
+      rolesResult,
+      permissionsResult,
+    ] = await Promise.all([
+      supabase
+        .from("roles")
+        .select("name")
+        .in("id", roleIds),
+
+      supabase
+        .from("role_permissions")
+        .select("permission_code")
+        .eq("organization_id", employee.organization_id)
+        .in("role_id", roleIds),
+    ]);
+
+    if (rolesResult.error || permissionsResult.error) {
+      throw new Error(
+        `Unable to resolve permissions: ${rolesResult.error?.message ?? permissionsResult.error?.message}`,
+      );
+    }
+
+    roleNames =
+      rolesResult.data
+        .map((role) => role.name)
+        .sort();
+
+    permissions = [
+      ...new Set(
+        permissionsResult.data.map(
+          (permission) => permission.permission_code,
+        ),
+      ),
+    ].sort();
+  }
+
+  let storeIds = [
+    ...new Set(
+      storeLinksResult.data.map(
+        (link) => link.store_id,
+      ),
+    ),
+  ];
+
+  if (
+    hasOrganizationWideStoreScope({
+      permissions,
+    })
+  ) {
+    const {
+      data: organizationStores,
+      error: organizationStoresError,
+    } = await supabase
+      .from("stores")
+      .select("id")
+      .eq("organization_id", employee.organization_id);
+
+    if (organizationStoresError) {
+      throw new Error(
+        `Unable to load organization-wide store scope: ${organizationStoresError.message}`,
+      );
+    }
+
+    storeIds = [
+      ...new Set(
+        (organizationStores ?? []).map(
+          (store) => store.id,
+        ),
+      ),
+    ];
+  }
+
+  return {
+    requestAuth,
+    user,
+    profile,
+    employee,
+    organization: {
+      ...organization,
+      business_type: isBusinessType(
+        organization.business_type,
+      )
+        ? organization.business_type
+        : "retail",
+    },
+    availableOrganizations,
+    tenantReadiness: {
+      canExport:
+        permissions.includes("organization.export"),
+
+      canManageLifecycle: [
+        "organization.archive",
+        "organization.lifecycle",
+      ].every(
+        (permission) =>
+          permissions.includes(permission),
+      ),
+
+      canViewRecovery:
+        permissions.some(
+          (permission) =>
+            permission === "recovery.view"
+            || permission === "recovery.manage",
+        ),
+
+      canManageRecovery:
+        permissions.includes("recovery.manage"),
+    },
+
+    features:
+      createFeatureSettings(
+        (featuresResult.data ?? []).map(
+          (feature) => ({
+            featureKey:
+              feature.feature_key as FeatureKey,
+            isEnabled:
+              feature.is_enabled,
+          }),
+        ),
+      ),
+
+    roleNames,
+    permissions,
+    storeIds,
+  };
+}
 
 export const getBusinessContext = cache(
   async (): Promise<BusinessContext | null> => {
@@ -94,236 +474,27 @@ export const getBusinessContext = cache(
       return null;
     }
 
-    const supabase = await createClient();
-    const [cookieStore, membershipsResult] = await Promise.all([
+    const [
+      supabase,
+      cookieStore,
+    ] = await Promise.all([
+      createClient(),
       cookies(),
-      supabase
-        .from("employees")
-        .select("id, employee_number, job_title, organization_id, status")
-        .eq("profile_id", user.id)
-        .eq("status", "active")
-        .order("created_at", { ascending: true }),
     ]);
 
-    if (membershipsResult.error) {
-      throw new Error(`Unable to resolve business membership: ${membershipsResult.error.message}`);
-    }
-
-    if (!membershipsResult.data || membershipsResult.data.length === 0) {
-      return null;
-    }
-
-    const membershipIds = membershipsResult.data.map((membership) => membership.organization_id);
-    const { data: organizations, error: organizationsError } = await supabase
-      .from("organizations")
-      .select(
-        "id, name, currency_code, timezone, status, suspended_at, suspension_reason, archive_requested_at, archived_at, business_type, device_management_enabled",
-      )
-      .in("id", membershipIds);
-
-    if (organizationsError) {
-      throw new Error(`Unable to load organization memberships: ${organizationsError.message}`);
-    }
-
-    const organizationById = new Map((organizations ?? []).map((organization) => [organization.id, organization]));
-    const availableOrganizations = membershipsResult.data
-      .map((membership) => organizationById.get(membership.organization_id))
-      .filter((organization) => organization !== undefined)
-      .map((organization) => ({
-        id: organization.id,
-        name: organization.name,
-        status: organization.status as "active" | "suspended" | "archived",
-      }));
-
-    if (availableOrganizations.length === 0) {
-      return null;
-    }
-
-    const requestedOrganizationId = cookieStore.get("tindio-active-organization")?.value;
-    const selectedOrganization = availableOrganizations.find(
-      (organization) => organization.id === requestedOrganizationId,
-    ) ?? availableOrganizations.find((organization) => organization.status === "active") ?? availableOrganizations[0];
-    const employee = membershipsResult.data.find(
-      (membership) => membership.organization_id === selectedOrganization.id,
-    );
-    const organizationResult = organizationById.get(selectedOrganization.id);
-
-    if (!employee || !organizationResult) {
-      throw new Error("Unable to resolve the selected organization membership.");
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("full_name, email")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !profile) {
-      throw new Error(`Unable to load profile: ${profileError?.message ?? "Not found"}`);
-    }
-
-    const organization = organizationResult as typeof organizationResult & {
-      device_management_enabled: boolean;
-    };
-
-    // A suspended/archived tenant must not be allowed to load normal Back
-    // Office data. We still return its minimal lifecycle information so the
-    // member can switch businesses and an owner can resume it.
-    if (organization.status !== "active") {
-      const { data: readinessData, error: readinessError } = await supabase.rpc(
-        "get_organization_readiness_access",
-        { target_organization_id: organization.id },
-      );
-
-      if (readinessError || !readinessData) {
-        throw new Error(
-          `Unable to resolve organization lifecycle access: ${readinessError?.message ?? "Not found"}`,
-        );
-      }
-
-      const tenantReadiness = readinessData as {
-        can_export?: boolean;
-        can_manage_lifecycle?: boolean;
-        can_view_recovery?: boolean;
-        can_manage_recovery?: boolean;
-      };
-
-      return {
-        user,
-        profile,
-        employee,
-        organization: {
-          ...organization,
-          business_type: isBusinessType(organization.business_type)
-            ? organization.business_type
-            : "retail",
-        },
-        availableOrganizations,
-        tenantReadiness: {
-          canExport: Boolean(tenantReadiness.can_export),
-          canManageLifecycle: Boolean(tenantReadiness.can_manage_lifecycle),
-          canViewRecovery: Boolean(tenantReadiness.can_view_recovery),
-          canManageRecovery: Boolean(tenantReadiness.can_manage_recovery),
-        },
-        features: createFeatureSettings([]),
-        roleNames: [],
-        permissions: [],
-        storeIds: [],
-      };
-    }
-
-    const [roleLinksResult, storeLinksResult, featuresResult] =
-      await Promise.all([
-        supabase
-          .from("employee_roles")
-          .select("role_id")
-          .eq("organization_id", employee.organization_id)
-          .eq("employee_id", employee.id),
-        supabase
-          .from("employee_stores")
-          .select("store_id")
-          .eq("organization_id", employee.organization_id)
-          .eq("employee_id", employee.id),
-        supabase
-          .from("organization_features")
-          .select("feature_key, is_enabled")
-          .eq("organization_id", employee.organization_id),
-      ]);
-
-    if (roleLinksResult.error) {
-      throw new Error(`Unable to load roles: ${roleLinksResult.error.message}`);
-    }
-
-    if (storeLinksResult.error) {
-      throw new Error(
-        `Unable to load store assignments: ${storeLinksResult.error.message}`,
-      );
-    }
-
-    if (featuresResult.error) {
-      throw new Error(`Unable to load business features: ${featuresResult.error.message}`);
-    }
-
-    const roleIds = roleLinksResult.data.map((link) => link.role_id);
-    let roleNames: string[] = [];
-    let permissions: string[] = [];
-
-    if (roleIds.length > 0) {
-      const [rolesResult, permissionsResult] = await Promise.all([
-        supabase.from("roles").select("name").in("id", roleIds),
-        supabase
-          .from("role_permissions")
-          .select("permission_code")
-          .eq("organization_id", employee.organization_id)
-          .in("role_id", roleIds),
-      ]);
-
-      if (rolesResult.error || permissionsResult.error) {
-        throw new Error(
-          `Unable to resolve permissions: ${rolesResult.error?.message ?? permissionsResult.error?.message}`,
-        );
-      }
-
-      roleNames = rolesResult.data.map((role) => role.name).sort();
-      permissions = [
-        ...new Set(
-          permissionsResult.data.map((permission) => permission.permission_code),
-        ),
-      ].sort();
-    }
-
-    // `stores.manage` is the capability-defined organization-wide store
-    // scope used by the database RLS policies. Keep the application context
-    // in step with that authority rather than making organization managers
-    // depend on redundant employee-store rows. Scoped roles continue to
-    // receive only their explicit employee-store assignments.
-    let storeIds = [...new Set(storeLinksResult.data.map((link) => link.store_id))];
-    if (hasOrganizationWideStoreScope({ permissions })) {
-      const { data: organizationStores, error: organizationStoresError } = await supabase
-        .from("stores")
-        .select("id")
-        .eq("organization_id", employee.organization_id);
-
-      if (organizationStoresError) {
-        throw new Error(
-          `Unable to load organization-wide store scope: ${organizationStoresError.message}`,
-        );
-      }
-
-      storeIds = [...new Set((organizationStores ?? []).map((store) => store.id))];
-    }
-
-    return {
+    return loadBusinessContext({
+      supabase,
       user,
-      profile,
-      employee,
-      organization: {
-        ...organization,
-        business_type: isBusinessType(organization.business_type)
-          ? organization.business_type
-          : "retail",
+      requestedOrganizationId:
+        cookieStore.get(
+          "tindio-active-organization",
+        )?.value,
+      strictRequestedOrganization: false,
+      requestAuth: {
+        transport: "cookie",
+        authorizationHeader: null,
       },
-      availableOrganizations,
-      tenantReadiness: {
-        canExport: permissions.includes("organization.export"),
-        canManageLifecycle: ["organization.archive", "organization.lifecycle"].every(
-          (permission) => permissions.includes(permission),
-        ),
-        canViewRecovery: permissions.some(
-          (permission) => permission === "recovery.view" || permission === "recovery.manage",
-        ),
-        canManageRecovery: permissions.includes("recovery.manage"),
-      },
-      features: createFeatureSettings(
-        (featuresResult.data ?? []).map((feature) => ({
-          featureKey: feature.feature_key as FeatureKey,
-          isEnabled: feature.is_enabled,
-        })),
-      ),
-      roleNames,
-      permissions,
-      storeIds,
-    };
+    });
   },
 );
 

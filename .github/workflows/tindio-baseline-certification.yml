@@ -1,0 +1,110 @@
+name: TINDIO Baseline Certification
+
+on:
+  push:
+    branches:
+      - TINDIO-PREPRODUCTION
+      - "mobile/**"
+      - "migration/**"
+  pull_request:
+    branches:
+      - TINDIO-PREPRODUCTION
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tindio-baseline-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    name: certify
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Prove Docker runtime
+        run: |
+          docker version
+          docker info
+
+      - name: Start isolated local Supabase
+        run: pnpm exec supabase start
+
+      - name: Bind application environment to local Supabase only
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          STATUS="$(pnpm exec supabase status --output json)"
+
+          API_URL="$(printf '%s' "$STATUS" | jq -r '.API_URL')"
+          PUBLISHABLE_KEY="$(printf '%s' "$STATUS" | jq -r '.PUBLISHABLE_KEY // .ANON_KEY')"
+
+          test -n "$API_URL"
+          test "$API_URL" != "null"
+          test -n "$PUBLISHABLE_KEY"
+          test "$PUBLISHABLE_KEY" != "null"
+
+          case "$API_URL" in
+            http://127.0.0.1:*|http://localhost:*)
+              ;;
+            *)
+              echo "Refusing non-local Supabase URL"
+              exit 1
+              ;;
+          esac
+
+          echo "NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY" >> "$GITHUB_ENV"
+
+      - name: Run authoritative TINDIO certification
+        run: pnpm certify
+
+      - name: Run migration rehearsal on default branch and pull requests
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/TINDIO-PREPRODUCTION'
+        run: node scripts/phase-14-migration-rehearsal.mjs
+
+      - name: Run isolated restore drill on default branch and pull requests
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/TINDIO-PREPRODUCTION'
+        run: node scripts/phase-14-local-restore-drill.mjs
+
+      - name: Verify protected generated/database tree stayed clean
+        shell: bash
+        run: |
+          test -z "$(git status --porcelain --untracked-files=all -- \
+            supabase/migrations \
+            src/lib/supabase/database.types.ts)"
+
+      - name: Final whitespace validation
+        run: git diff --check
+
+      - name: Stop isolated local Supabase
+        if: always()
+        run: pnpm exec supabase stop --no-backup || true

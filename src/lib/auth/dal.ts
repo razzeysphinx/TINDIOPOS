@@ -77,11 +77,33 @@ export async function resolveVerifiedUser(
   supabase: Awaited<ReturnType<typeof createClient>>,
   accessToken?: string,
 ): Promise<VerifiedUser | null> {
-  const { data, error } = accessToken
-    ? await supabase.auth.getClaims(accessToken)
-    : await supabase.auth.getClaims();
+  let claimsResult:
+    | Awaited<
+        ReturnType<
+          typeof supabase.auth.getClaims
+        >
+      >
+    | null = null;
 
-  if (error || !data?.claims) {
+  try {
+    claimsResult = accessToken
+      ? await supabase.auth.getClaims(
+          accessToken,
+        )
+      : await supabase.auth.getClaims();
+  } catch {
+    return null;
+  }
+
+  const {
+    data,
+    error,
+  } = claimsResult;
+
+  if (
+    error
+    || !data?.claims
+  ) {
     return null;
   }
 

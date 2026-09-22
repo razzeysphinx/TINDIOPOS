@@ -279,7 +279,7 @@ select
     extensions,
   );
 
-  const pgcryptoEvidence =
+  const extensionEvidence =
     JSON.parse(
       runSql(
         target,
@@ -303,6 +303,19 @@ select jsonb_build_object(
           'extensions'
     ),
 
+  'pg_trgm_installed',
+    exists (
+      select 1
+      from pg_catalog.pg_extension extension_record
+      join pg_catalog.pg_namespace namespace_record
+        on namespace_record.oid =
+          extension_record.extnamespace
+      where extension_record.extname =
+        'pg_trgm'
+        and namespace_record.nspname =
+          'extensions'
+    ),
+
   'crypt',
     to_regprocedure(
       'extensions.crypt(text,text)'
@@ -316,39 +329,63 @@ select jsonb_build_object(
   'digest',
     to_regprocedure(
       'extensions.digest(text,text)'
-    ) is not null
+    ) is not null,
+
+  'gin_trgm_ops',
+    exists (
+      select 1
+      from pg_catalog.pg_opclass opclass
+      join pg_catalog.pg_namespace namespace_record
+        on namespace_record.oid =
+          opclass.opcnamespace
+      join pg_catalog.pg_am access_method
+        on access_method.oid =
+          opclass.opcmethod
+      where namespace_record.nspname =
+        'extensions'
+        and opclass.opcname =
+          'gin_trgm_ops'
+        and access_method.amname =
+          'gin'
+    ),
+
+  'gist_trgm_ops',
+    exists (
+      select 1
+      from pg_catalog.pg_opclass opclass
+      join pg_catalog.pg_namespace namespace_record
+        on namespace_record.oid =
+          opclass.opcnamespace
+      join pg_catalog.pg_am access_method
+        on access_method.oid =
+          opclass.opcmethod
+      where namespace_record.nspname =
+        'extensions'
+        and opclass.opcname =
+          'gist_trgm_ops'
+        and access_method.amname =
+          'gist'
+    )
 )::text;
 `,
       ),
     );
 
-  assert.equal(
-    pgcryptoEvidence
-      .schema_exists,
-    true,
-  );
-
-  assert.equal(
-    pgcryptoEvidence
-      .pgcrypto_installed,
-    true,
-  );
-
-  assert.equal(
-    pgcryptoEvidence.crypt,
-    true,
-  );
-
-  assert.equal(
-    pgcryptoEvidence
-      .gen_salt,
-    true,
-  );
-
-  assert.equal(
-    pgcryptoEvidence.digest,
-    true,
-  );
+  for (
+    const [
+      key,
+      value,
+    ]
+    of Object.entries(
+      extensionEvidence,
+    )
+  ) {
+    assert.equal(
+      value,
+      true,
+      `Neon extension bootstrap check failed: ${key}`,
+    );
+  }
 
   console.log(
     "Installing canonical TINDIO baseline...",

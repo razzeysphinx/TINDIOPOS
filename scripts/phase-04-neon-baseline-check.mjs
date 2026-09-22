@@ -224,6 +224,11 @@ test(
 
     assert.match(
       extensions,
+      /create extension if not exists pg_trgm[\s\S]*with schema extensions/i,
+    );
+
+    assert.match(
+      extensions,
       /extensions\.crypt\(text,text\)/i,
     );
 
@@ -235,6 +240,11 @@ test(
     assert.match(
       extensions,
       /extensions\.digest\(text,text\)/i,
+    );
+
+    assert.match(
+      extensions,
+      /gin_trgm_ops/i,
     );
   },
 );

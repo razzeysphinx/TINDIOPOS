@@ -60,6 +60,11 @@ test(
 
     assert.match(
       extensions,
+      /create extension if not exists pg_trgm/i,
+    );
+
+    assert.match(
+      extensions,
       /with schema extensions/i,
     );
   },

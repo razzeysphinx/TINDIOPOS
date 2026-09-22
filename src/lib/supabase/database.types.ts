@@ -3592,10 +3592,90 @@ export type Database = {
           },
         ]
       }
+      production_run_components: {
+        Row: {
+          component_product_id: string
+          component_variant_id: string | null
+          cost_is_known: boolean
+          created_at: string
+          id: string
+          organization_id: string
+          production_run_id: string
+          quantity_consumed: number
+          quantity_per_composite_snapshot: number
+          total_cost_minor: number
+          unit_cost_minor: number
+          unit_snapshot: string
+        }
+        Insert: {
+          component_product_id: string
+          component_variant_id?: string | null
+          cost_is_known: boolean
+          created_at?: string
+          id?: string
+          organization_id: string
+          production_run_id: string
+          quantity_consumed: number
+          quantity_per_composite_snapshot: number
+          total_cost_minor: number
+          unit_cost_minor: number
+          unit_snapshot: string
+        }
+        Update: {
+          component_product_id?: string
+          component_variant_id?: string | null
+          cost_is_known?: boolean
+          created_at?: string
+          id?: string
+          organization_id?: string
+          production_run_id?: string
+          quantity_consumed?: number
+          quantity_per_composite_snapshot?: number
+          total_cost_minor?: number
+          unit_cost_minor?: number
+          unit_snapshot?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_run_components_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_run_components_product_organization_fkey"
+            columns: ["component_product_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "production_run_components_run_organization_fkey"
+            columns: ["production_run_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "production_runs"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "production_run_components_variant_product_organization_fkey"
+            columns: [
+              "component_variant_id",
+              "component_product_id",
+              "organization_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id", "product_id", "organization_id"]
+          },
+        ]
+      }
       production_runs: {
         Row: {
+          composite_inventory_mode_snapshot: string
           cost_is_known: boolean
           id: string
+          normalized_payload: Json
           note: string | null
           operation_id: string | null
           organization_id: string
@@ -3606,8 +3686,10 @@ export type Database = {
           store_id: string
         }
         Insert: {
+          composite_inventory_mode_snapshot?: string
           cost_is_known?: boolean
           id?: string
+          normalized_payload: Json
           note?: string | null
           operation_id?: string | null
           organization_id: string
@@ -3618,8 +3700,10 @@ export type Database = {
           store_id: string
         }
         Update: {
+          composite_inventory_mode_snapshot?: string
           cost_is_known?: boolean
           id?: string
+          normalized_payload?: Json
           note?: string | null
           operation_id?: string | null
           organization_id?: string
@@ -3665,6 +3749,7 @@ export type Database = {
           allow_fractional_quantity: boolean
           barcode: string | null
           category_id: string | null
+          composite_inventory_mode: string
           cost_minor: number
           created_at: string
           description: string | null
@@ -3686,6 +3771,7 @@ export type Database = {
           allow_fractional_quantity?: boolean
           barcode?: string | null
           category_id?: string | null
+          composite_inventory_mode?: string
           cost_minor?: number
           created_at?: string
           description?: string | null
@@ -3707,6 +3793,7 @@ export type Database = {
           allow_fractional_quantity?: boolean
           barcode?: string | null
           category_id?: string | null
+          composite_inventory_mode?: string
           cost_minor?: number
           created_at?: string
           description?: string | null
@@ -6540,6 +6627,28 @@ export type Database = {
         }
         Returns: string
       }
+      create_catalog_product_v3: {
+        Args: {
+          target_allow_fractional_quantity: boolean
+          target_barcode: string
+          target_category_id: string
+          target_composite_inventory_mode: string
+          target_cost_minor: number
+          target_description: string
+          target_image_url: string
+          target_is_variable_price: boolean
+          target_name: string
+          target_organization_id: string
+          target_price_minor: number
+          target_product_type: string
+          target_sku: string
+          target_store_ids: string[]
+          target_track_inventory: boolean
+          target_unit: string
+          target_variants: Json
+        }
+        Returns: string
+      }
       create_custom_role: {
         Args: {
           permission_codes: string[]
@@ -7259,7 +7368,7 @@ export type Database = {
           status: string
         }[]
       }
-      import_catalog_products_v2: {
+      import_catalog_products_v3: {
         Args: {
           target_organization_id: string
           target_rows: Json
@@ -7386,28 +7495,17 @@ export type Database = {
         Args: { target_organization_id: string }
         Returns: Json
       }
-      produce_composite:
-        | {
-            Args: {
-              target_note: string
-              target_organization_id: string
-              target_product_id: string
-              target_quantity: number
-              target_store_id: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              target_note: string
-              target_operation_id: string
-              target_organization_id: string
-              target_product_id: string
-              target_quantity: number
-              target_store_id: string
-            }
-            Returns: string
-          }
+      produce_composite: {
+        Args: {
+          target_note: string
+          target_operation_id: string
+          target_organization_id: string
+          target_product_id: string
+          target_quantity: number
+          target_store_id: string
+        }
+        Returns: string
+      }
       provision_customer_display_session: {
         Args: {
           target_access_token_hash: string
@@ -7605,28 +7703,17 @@ export type Database = {
         }
         Returns: string
       }
-      return_to_supplier:
-        | {
-            Args: {
-              target_lines: Json
-              target_note: string
-              target_organization_id: string
-              target_store_id: string
-              target_supplier_id: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              target_lines: Json
-              target_note: string
-              target_operation_id: string
-              target_organization_id: string
-              target_store_id: string
-              target_supplier_id: string
-            }
-            Returns: string
-          }
+      return_to_supplier: {
+        Args: {
+          target_lines: Json
+          target_note: string
+          target_operation_id: string
+          target_organization_id: string
+          target_store_id: string
+          target_supplier_id: string
+        }
+        Returns: string
+      }
       revoke_loyalty_card: {
         Args: {
           target_loyalty_card_id: string
@@ -7759,19 +7846,8 @@ export type Database = {
         }
         Returns: number
       }
-      set_catalog_product_store_configuration: {
+      set_catalog_product_store_configuration_v3: {
         Args: {
-          target_low_stock_level: number
-          target_organization_id: string
-          target_price_override_minor: number
-          target_product_id: string
-          target_store_id: string
-        }
-        Returns: undefined
-      }
-      set_catalog_product_store_configuration_v2: {
-        Args: {
-          target_low_stock_level: number
           target_organization_id: string
           target_price_override_minor: number
           target_product_id: string
@@ -7919,6 +7995,26 @@ export type Database = {
           target_allow_fractional_quantity: boolean
           target_barcode: string
           target_category_id: string
+          target_cost_minor: number
+          target_description: string
+          target_image_url: string
+          target_is_variable_price: boolean
+          target_name: string
+          target_organization_id: string
+          target_price_minor: number
+          target_product_id: string
+          target_sku: string
+          target_track_inventory: boolean
+          target_unit: string
+        }
+        Returns: string
+      }
+      update_catalog_product_v3: {
+        Args: {
+          target_allow_fractional_quantity: boolean
+          target_barcode: string
+          target_category_id: string
+          target_composite_inventory_mode: string
           target_cost_minor: number
           target_description: string
           target_image_url: string

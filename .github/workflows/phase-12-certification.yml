@@ -1,0 +1,80 @@
+name: Phase 12 Certification
+
+on:
+  push:
+    branches:
+      - recovery/phase-12-composite-production-88240c9
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase-12-certification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    name: Static + local DB + composite concurrency
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout exact branch commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prove Docker runtime
+        run: |
+          docker version
+          docker info
+
+      - name: Start isolated local Supabase
+        run: pnpm exec supabase start
+
+      - name: Bind application environment to local Supabase only
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="$(pnpm exec supabase status --output json)"
+          API_URL="$(printf '%s' "$STATUS" | jq -r '.API_URL')"
+          PUBLISHABLE_KEY="$(printf '%s' "$STATUS" | jq -r '.PUBLISHABLE_KEY // .ANON_KEY')"
+          test -n "$API_URL"
+          test "$API_URL" != "null"
+          test -n "$PUBLISHABLE_KEY"
+          test "$PUBLISHABLE_KEY" != "null"
+          case "$API_URL" in
+            http://127.0.0.1:*|http://localhost:*) ;;
+            *) echo "Refusing non-local Supabase URL"; exit 1 ;;
+          esac
+          echo "NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY" >> "$GITHUB_ENV"
+
+      - name: Run authoritative repository certification
+        run: pnpm certify
+
+      - name: Run Phase 12 composite production concurrency certification
+        run: node scripts/composite-production-concurrency-certification.mjs
+
+      - name: Confirm clean migration tree after certification
+        run: git status --porcelain --untracked-files=all -- supabase/migrations
+
+      - name: Final whitespace check
+        run: git diff --check

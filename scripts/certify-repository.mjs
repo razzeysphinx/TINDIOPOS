@@ -62,6 +62,14 @@ const REQUIRED_CONTROLLER_TESTS = new Set([
   "test:phase-09-controller-contract",
   "test:product-units-conversion",
   "test:phase-10-controller-contract",
+  "test:supplier-returns",
+  "test:phase-11-controller-contract",
+  "test:composite-production",
+  "test:phase-12-controller-contract",
+  "test:inventory-replenishment-settings",
+  "test:phase-13-controller-contract",
+  "test:phase-14-final-recovery",
+  "test:phase-14-controller-contract",
 ]);
 
 const VALID_MODES =
@@ -936,6 +944,30 @@ async function runDatabaseCertification() {
     args: [
       "scripts/product-unit-concurrency-certification.mjs",
     ],
+  });
+
+  runStep({
+    name:
+      "Canonical supplier-return concurrency evidence",
+    command: "node",
+    args: [
+      "scripts/supplier-return-concurrency-certification.mjs",
+    ],
+  });
+
+  runStep({
+    name:
+      "Canonical composite-production concurrency evidence",
+    command: "node",
+    args: [
+      "scripts/composite-production-concurrency-certification.mjs",
+    ],
+  });
+
+  runStep({
+    name: "Canonical replenishment-settings concurrency evidence",
+    command: "node",
+    args: ["scripts/inventory-replenishment-settings-concurrency-certification.mjs"],
   });
 
   await verifyGeneratedTypesStable();

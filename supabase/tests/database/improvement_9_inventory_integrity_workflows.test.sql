@@ -42,8 +42,8 @@ select ok(to_regprocedure('public.produce_composite(uuid,uuid,uuid,numeric,text,
 select ok(to_regprocedure('public.get_inventory_valuation(uuid)') is not null, 'inventory valuation routine exists');
 select ok(not has_function_privilege('anon', 'public.ship_stock_transfer(uuid,uuid,uuid,jsonb,text)', 'execute'), 'anonymous callers cannot ship transfers');
 select ok(not has_function_privilege('authenticated', 'public.ship_stock_transfer(uuid,uuid,uuid,jsonb,text)', 'execute'), 'authenticated callers cannot bypass request approval with immediate shipment');
-select ok(not has_function_privilege('authenticated', 'public.return_to_supplier(uuid,uuid,uuid,jsonb,text)', 'execute'), 'authenticated callers cannot post supplier returns through the non-idempotent legacy overload');
-select ok(not has_function_privilege('authenticated', 'public.produce_composite(uuid,uuid,uuid,numeric,text)', 'execute'), 'authenticated callers cannot post production through the non-idempotent legacy overload');
+select ok(to_regprocedure('public.return_to_supplier(uuid,uuid,uuid,jsonb,text)') is null, 'non-idempotent legacy supplier-return overload is removed');
+select ok(to_regprocedure('public.produce_composite(uuid,uuid,uuid,numeric,text)') is null, 'non-idempotent legacy production overload is removed');
 select ok(not has_table_privilege('authenticated', 'public.inventory_policies', 'insert'), 'authenticated callers cannot insert stock policies directly');
 select ok(
   exists (
@@ -273,10 +273,11 @@ set component_product_id = public.create_catalog_product(
   organization_id, null, 'Production Component', 'Component', 'simple', 'PRODUCTION-COMPONENT', '480000099002', 1500, 500, true, 'each', array[store_id], '[]'::jsonb
 );
 update inventory_integrity_context
-set composite_product_id = public.create_catalog_product(
-  organization_id, null, 'Produced Bundle', 'Composite output', 'simple', 'PRODUCED-BUNDLE', '480000099003', 3000, 0, true, 'each', array[store_id], '[]'::jsonb
+set composite_product_id = public.create_catalog_product_v3(
+  organization_id, null, 'Produced Bundle', 'Composite output', 'composite',
+  'PRODUCED-BUNDLE', '480000099003', 3000, 0, true, 'each',
+  array[store_id], '[]'::jsonb, '', false, false, 'stocked_assembly'
 );
-update public.products set is_composite = true where id = (select composite_product_id from inventory_integrity_context);
 insert into public.product_components (organization_id, product_id, component_product_id, component_variant_id, quantity_per_composite)
 select organization_id, composite_product_id, component_product_id, null, 2 from inventory_integrity_context;
 select lives_ok(

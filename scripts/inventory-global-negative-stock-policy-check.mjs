@@ -5,13 +5,14 @@ import test from "node:test";
 const root = new URL("..", import.meta.url);
 const source = (path) => readFile(new URL(path, root), "utf8");
 
-const [migration, rpcGrantMigration, actions, workspace, page, preflightTest] = await Promise.all([
+const [migration, rpcGrantMigration, actions, workspace, page, preflightTest, madeToOrderCheckoutMigration] = await Promise.all([
   source("supabase/migrations/20260905153055_inventory_global_negative_stock_policy.sql"),
   source("supabase/migrations/20260905154220_inventory_global_negative_stock_policy_rpc_grants.sql"),
   source("src/features/inventory/advanced-inventory-actions.ts"),
   source("src/features/inventory/inventory-integrity-workflows.tsx"),
   source("src/app/(back-office)/back-office/inventory/page.tsx"),
   source("supabase/tests/database/pos_negative_stock_preflight.test.sql"),
+  source("supabase/migrations/20260921190000_made_to_order_composite_checkout_stock.sql"),
 ]);
 
 test("one organization default is combined with optional per-store overrides", () => {
@@ -63,4 +64,12 @@ test("database regression coverage proves inheritance, override priority, remova
   assert.match(preflightTest, /a store override wins over the organization default/);
   assert.match(preflightTest, /removing the override immediately returns the store to its inherited policy/);
   assert.match(preflightTest, /authoritative audit trail/);
+});
+
+test("made-to-order preflight and post-sale warning use recipe components", () => {
+  assert.match(madeToOrderCheckoutMigration, /private\.resolve_negative_stock_policy/);
+  assert.match(madeToOrderCheckoutMigration, /made_to_order_requirements/);
+  assert.match(madeToOrderCheckoutMigration, /create or replace function private\.get_checkout_stock_warning/);
+  assert.match(madeToOrderCheckoutMigration, /made_to_order_positions/);
+  assert.match(madeToOrderCheckoutMigration, /component_product\.track_inventory/);
 });

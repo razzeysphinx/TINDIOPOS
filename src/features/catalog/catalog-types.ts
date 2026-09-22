@@ -29,6 +29,7 @@ export type CatalogProductRow = {
   is_variable_price: boolean;
   allow_fractional_quantity: boolean;
   is_composite: boolean;
+  composite_inventory_mode: "made_to_order" | "stocked_assembly";
   status: string;
   created_at: string;
 };
@@ -66,6 +67,13 @@ export type CatalogInventoryLevelRow = {
   quantity: number;
 };
 
+export type CatalogReplenishmentRuleRow = {
+  product_id: string;
+  variant_id: string | null;
+  store_id: string;
+  reorder_point: number;
+};
+
 export type CatalogProductUnitRow = {
   id: string;
   product_id: string;
@@ -93,6 +101,7 @@ export type CatalogWorkspace = {
   settings: CatalogStoreSettingRow[];
   costs: CatalogCostEntry[];
   inventoryLevels: CatalogInventoryLevelRow[];
+  replenishmentRules: CatalogReplenishmentRuleRow[];
   units: CatalogProductUnitRow[];
   components: CatalogProductComponentRow[];
 };

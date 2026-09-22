@@ -1,0 +1,21 @@
+{
+  "phase": "11",
+  "requiredPaths": ["supabase/migrations/20260918035302_canonical_supplier_returns.sql", "supabase/tests/database/canonical_supplier_returns.test.sql", "scripts/supplier-returns-check.mjs", "scripts/supplier-return-concurrency-certification.mjs"],
+  "requiredText": [
+    { "path": "supabase/migrations/20260918035302_canonical_supplier_returns.sql", "text": "pg_catalog.pg_advisory_xact_lock" },
+    { "path": "supabase/migrations/20260918035302_canonical_supplier_returns.sql", "text": "persisted_lines is distinct from normalized_lines" },
+    { "path": "supabase/migrations/20260918035302_canonical_supplier_returns.sql", "text": "supplier_returns_guard_immutable" },
+    { "path": "supabase/migrations/20260918035302_canonical_supplier_returns.sql", "text": "supplier_return_lines_guard_immutable" },
+    { "path": "supabase/migrations/20260918035302_canonical_supplier_returns.sql", "text": "stock_level.average_cost_minor" },
+    { "path": "supabase/migrations/20260918035302_canonical_supplier_returns.sql", "text": "revoke all on function private.return_to_supplier" },
+    { "path": "scripts/supplier-return-concurrency-certification.mjs", "text": "Scenario A" },
+    { "path": "scripts/supplier-return-concurrency-certification.mjs", "text": "Scenario B" },
+    { "path": "scripts/supplier-return-concurrency-certification.mjs", "text": "Scenario C" },
+    { "path": "src/features/inventory/inventory-integrity-workflows.tsx", "text": "supplier-return:post" }
+  ],
+  "forbiddenText": [
+    { "path": "src/features/inventory/advanced-inventory-actions.ts", "text": "schema(\"private\")" },
+    { "path": "supabase/migrations/20260918035302_canonical_supplier_returns.sql", "text": "update public.purchase_order_lines" },
+    { "path": "supabase/migrations/20260918035302_canonical_supplier_returns.sql", "text": "update public.goods_receipt_lines" }
+  ]
+}

@@ -21,7 +21,6 @@ export const catalogCsvHeaders = [
   "variable_price",
   "allow_fractional_quantity",
   "store_price",
-  "low_stock_level",
 ] as const;
 
 export type CatalogCsvPreviewRow = {
@@ -39,7 +38,6 @@ export type CatalogCsvPreviewRow = {
   isVariablePrice: boolean;
   allowFractionalQuantity: boolean;
   priceOverride: string;
-  lowStockLevel: string;
 };
 
 export type CatalogCsvParseResult =
@@ -98,13 +96,15 @@ export function parseCatalogCsv(text: string): CatalogCsvParseResult {
     const unit = cell(record, positions, "unit") || "each";
     const imageUrl = cell(record, positions, "image_url");
     const priceOverride = cell(record, positions, "store_price");
-    const lowStockLevel = cell(record, positions, "low_stock_level");
+    if (positions.has("low_stock_level")) {
+      errors.push("low_stock_level is retired. Configure reorder point and target stock in Stock & Restock.");
+      return;
+    }
 
     if (!name) errors.push(`Row ${rowNumber}: name is required.`);
     if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(price)) errors.push(`Row ${rowNumber}: price must be a non-negative amount with up to 2 decimals.`);
     if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(cost)) errors.push(`Row ${rowNumber}: cost must be a non-negative amount with up to 2 decimals.`);
     if (priceOverride && !/^\d{1,8}(?:\.\d{1,2})?$/.test(priceOverride)) errors.push(`Row ${rowNumber}: store_price must use up to 2 decimals.`);
-    if (lowStockLevel && !/^\d{1,8}(?:\.\d{1,3})?$/.test(lowStockLevel)) errors.push(`Row ${rowNumber}: low_stock_level must use up to 3 decimals.`);
     if (imageUrl && !/^https?:\/\//i.test(imageUrl)) errors.push(`Row ${rowNumber}: image_url must begin with http:// or https://.`);
     if (trackInventory.error) errors.push(trackInventory.error);
     if (variablePrice.error) errors.push(variablePrice.error);
@@ -115,7 +115,6 @@ export function parseCatalogCsv(text: string): CatalogCsvParseResult {
       !/^\d{1,8}(?:\.\d{1,2})?$/.test(price) ||
       !/^\d{1,8}(?:\.\d{1,2})?$/.test(cost) ||
       (priceOverride && !/^\d{1,8}(?:\.\d{1,2})?$/.test(priceOverride)) ||
-      (lowStockLevel && !/^\d{1,8}(?:\.\d{1,3})?$/.test(lowStockLevel)) ||
       (imageUrl && !/^https?:\/\//i.test(imageUrl)) ||
       "error" in trackInventory ||
       "error" in variablePrice ||
@@ -137,7 +136,6 @@ export function parseCatalogCsv(text: string): CatalogCsvParseResult {
       isVariablePrice: variablePrice.value,
       allowFractionalQuantity: fractionalQuantity.value,
       priceOverride,
-      lowStockLevel,
     });
   });
 
@@ -161,7 +159,6 @@ export function catalogCsvTemplate() {
     "no",
     "no",
     "",
-    "10",
   ];
   const encode = (value: string) => csvCell(value);
   return [catalogCsvHeaders, example].map((row) => row.map(encode).join(",")).join("\r\n");

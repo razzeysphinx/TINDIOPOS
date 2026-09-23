@@ -57,6 +57,37 @@ const password =
     "TINDIO_PHASE_04_TEST_PASSWORD",
   );
 
+const protectionBypass =
+  process.env
+    .VERCEL_AUTOMATION_BYPASS_SECRET
+    ?.trim()
+  || null;
+
+function protectedHeaders(
+  headers,
+) {
+  const result =
+    new Headers(
+      headers,
+    );
+
+  if (
+    protectionBypass
+  ) {
+    result.set(
+      "x-vercel-protection-bypass",
+      protectionBypass,
+    );
+
+    result.set(
+      "x-vercel-set-bypass-cookie",
+      "true",
+    );
+  }
+
+  return result;
+}
+
 const auth =
   createClient(
     supabaseUrl,
@@ -106,7 +137,14 @@ const request = async (
       pathname,
       deploymentUrl,
     ),
-    init,
+    {
+      ...init,
+
+      headers:
+        protectedHeaders(
+          init.headers,
+        ),
+    },
   );
 
 const loginPage =
@@ -119,6 +157,19 @@ assert.ok(
   `Deployed login page returned HTTP ${loginPage.status}.`,
 );
 
+const loginContentType =
+  loginPage.headers
+    .get(
+      "content-type",
+    )
+  ?? "";
+
+assert.match(
+  loginContentType,
+  /text\/html/i,
+  "Deployed login page did not return application HTML.",
+);
+
 const bootstrap =
   await request(
     "/api/pos/v1/bootstrap",
@@ -129,6 +180,19 @@ const bootstrap =
       },
     },
   );
+
+const bootstrapContentType =
+  bootstrap.headers
+    .get(
+      "content-type",
+    )
+  ?? "";
+
+assert.match(
+  bootstrapContentType,
+  /application\/json/i,
+  "Deployed bootstrap returned non-JSON content. If this is a protected Vercel Preview, configure VERCEL_AUTOMATION_BYPASS_SECRET.",
+);
 
 assert.equal(
   bootstrap.status,
@@ -187,18 +251,47 @@ const browser =
   await chromium.launch();
 
 try {
-  const page =
-    await browser.newPage();
+  const browserHeaders =
+    protectionBypass
+      ? {
+          "x-vercel-protection-bypass":
+            protectionBypass,
 
-  await page.goto(
-    new URL(
-      "/login",
-      deploymentUrl,
-    ).toString(),
-    {
-      waitUntil:
-        "networkidle",
-    },
+          "x-vercel-set-bypass-cookie":
+            "true",
+        }
+      : {};
+
+  const context =
+    await browser
+      .newContext({
+        extraHTTPHeaders:
+          browserHeaders,
+      });
+
+  const page =
+    await context.newPage();
+
+  const response =
+    await page.goto(
+      new URL(
+        "/login",
+        deploymentUrl,
+      ).toString(),
+      {
+        waitUntil:
+          "networkidle",
+      },
+    );
+
+  assert.ok(
+    response,
+    "Deployed login navigation returned no response.",
+  );
+
+  assert.ok(
+    response.ok(),
+    `Deployed browser login page returned HTTP ${response.status()}.`,
   );
 
   await page
@@ -250,12 +343,20 @@ try {
       ),
     "Deployed cookie-based login did not leave the login page.",
   );
+
+  await context.close();
 } finally {
   await browser.close();
 
   await auth.auth
     .signOut();
 }
+
+console.log(
+  protectionBypass
+    ? "Vercel Preview protection bypass: ACTIVE"
+    : "Vercel Preview protection bypass: NOT REQUIRED",
+);
 
 console.log(
   "PHASE 04 DEPLOYED CERTIFICATION: PASS",

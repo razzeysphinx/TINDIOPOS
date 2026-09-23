@@ -279,6 +279,13 @@ try {
           "/api/pos/v1/bootstrap",
           deploymentUrl,
         ).toString(),
+        {
+          headers:
+            Object.fromEntries(
+              protectedHeaders()
+                .entries(),
+            ),
+        },
       );
 
   assert.equal(

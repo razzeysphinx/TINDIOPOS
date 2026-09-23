@@ -221,6 +221,8 @@ try {
       {
         timeout:
           30_000,
+        waitUntil:
+          "commit",
       },
     ),
 
@@ -381,7 +383,7 @@ const token =
 const directIdentity =
   await fetch(
     new URL(
-      "/rpc/current_profile_id",
+      "rpc/current_profile_id",
       neonDataApiUrl.endsWith("/")
         ? neonDataApiUrl
         : `${neonDataApiUrl}/`,

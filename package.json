@@ -119,6 +119,7 @@
     "certify:phase-04:neon-rehearsal": "node scripts/phase-04-neon-migrate.mjs",
     "migrate:phase-04:neon-cutover": "node scripts/phase-04-neon-migrate.mjs --cutover",
     "certify:phase-04:neon-api": "node scripts/phase-04-neon-api-certification.mjs",
+    "certify:phase-04:deployed": "node scripts/phase-04-deployed-certification.mjs",
     "test:phase-04-neon-contract": "node --test scripts/phase-04-neon-contract-check.mjs",
     "certify:phase-02:bearer-auth": "node scripts/phase-02-bearer-auth-e2e.mjs",
     "typecheck": "tsc --noEmit --incremental false"

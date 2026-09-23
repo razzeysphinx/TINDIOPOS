@@ -74,18 +74,44 @@ function protectedHeaders(
   if (
     protectionBypass
   ) {
+    /*
+     * Node fetch requests do not need Vercel's bypass-cookie redirect.
+     *
+     * Sending x-vercel-set-bypass-cookie here can cause a redirect loop
+     * because this process does not maintain a browser cookie jar.
+     *
+     * The direct protection-bypass header is sufficient for API requests.
+     */
     result.set(
       "x-vercel-protection-bypass",
       protectionBypass,
     );
-
-    result.set(
-      "x-vercel-set-bypass-cookie",
-      "true",
-    );
   }
 
   return result;
+}
+
+if (
+  protectionBypass
+) {
+  const apiBypassHeaders =
+    protectedHeaders();
+
+  assert.equal(
+    apiBypassHeaders.get(
+      "x-vercel-protection-bypass",
+    ),
+    protectionBypass,
+    "API bypass header is missing.",
+  );
+
+  assert.equal(
+    apiBypassHeaders.has(
+      "x-vercel-set-bypass-cookie",
+    ),
+    false,
+    "Node fetch must not request Vercel bypass-cookie redirects.",
+  );
 }
 
 const auth =

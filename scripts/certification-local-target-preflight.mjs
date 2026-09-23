@@ -15,12 +15,14 @@ const ENV_FILES = [
 ];
 
 /*
- * These values describe the Supabase application target.
+ * Phase 04 separates hosted authentication from the destructive local
+ * database certification target.
  *
- * During LOCAL certification, a configured value in this group must be
- * local. They are part of TINDIO's current Supabase runtime surface.
+ * These may legitimately point to hosted Supabase Auth/Realtime.
+ * They are application/provider configuration, not the target used by
+ * `supabase db reset --local`.
  */
-const BLOCKING_LOCAL_TARGETS = [
+const APPLICATION_AUTH_TARGETS = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "SUPABASE_URL",
 ];
@@ -277,8 +279,6 @@ function overallClassification(
   return "LOCAL";
 }
 
-let blocked = false;
-
 console.log(
   "TINDIO DATABASE CERTIFICATION PREFLIGHT",
 );
@@ -290,16 +290,16 @@ console.log(
 console.log("");
 
 console.log(
-  "LOCAL CERTIFICATION TARGETS",
+  "APPLICATION AUTH / REALTIME TARGETS",
 );
 
 console.log(
-  "---------------------------",
+  "-----------------------------------",
 );
 
 for (
   const variable
-  of BLOCKING_LOCAL_TARGETS
+  of APPLICATION_AUTH_TARGETS
 ) {
   const status =
     overallClassification(
@@ -308,16 +308,16 @@ for (
       ),
     );
 
-  console.log(
-    `${variable}: ${status}`,
-  );
-
-  if (
+  const suffix =
     status === "REMOTE"
-    || status === "AMBIGUOUS"
-  ) {
-    blocked = true;
-  }
+      ? " (HOSTED AUTH ALLOWED; NOT A DESTRUCTIVE DB TARGET)"
+      : status === "LOCAL"
+        ? " (LOCAL DEVELOPMENT AUTH)"
+        : "";
+
+  console.log(
+    `${variable}: ${status}${suffix}`,
+  );
 }
 
 console.log("");
@@ -375,22 +375,10 @@ console.log(
 
 console.log("");
 
-if (blocked) {
-  console.error(
-    "DATABASE CERTIFICATION BLOCKED:",
-  );
-
-  console.error(
-    "the configured Supabase application target is remote or ambiguous.",
-  );
-
-  console.error(
-    "No destructive database certification command was executed.",
-  );
-
-  process.exit(1);
-}
+console.log(
+  "PASS — environment configuration does not select the destructive database target.",
+);
 
 console.log(
-  "PASS â€” local certification target is safe.",
+  "Authoritative local database safety is enforced separately by explicit Supabase --local commands plus validated local API_URL/DB_URL from `supabase status`.",
 );

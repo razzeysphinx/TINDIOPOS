@@ -169,6 +169,15 @@ const env = {
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
     publishableKey,
 
+  // Phase 14 is the canonical LOCAL browser certification.
+  //
+  // The developer machine may be configured for the Phase 04 Neon runtime
+  // through .env.local. Explicit process environment must win over Next.js
+  // dotenv loading so the fixture cannot authenticate against local Supabase
+  // while resolving business identity against Neon.
+  TINDIO_DATABASE_PROVIDER:
+    "supabase",
+
   TINDIO_E2E_SUPABASE_URL:
     apiUrl,
 
@@ -180,6 +189,10 @@ const env = {
 
 console.log(
   "Phase 14 browser target: LOCAL ONLY",
+);
+
+console.log(
+  "Phase 14 database provider: LOCAL SUPABASE",
 );
 
 console.log(

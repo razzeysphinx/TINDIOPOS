@@ -47,6 +47,28 @@ const DATABASE_TYPES_PATH =
 const MANUAL_INTEGRATION_TESTS =
   new Set([
     "test:tenant-load",
+
+    // Phase 04 hosted-provider verification.
+    //
+    // This is a real integration test, but it requires the live hosted
+    // Supabase Auth environment. It is run explicitly during Phase 04
+    // deployment/certification and must not make deterministic local/CI
+    // repository certification depend on external provider credentials.
+    "test:phase-04-supabase-jwks",
+  ]);
+
+/*
+ * These tests are fully automated, but require the canonical local database
+ * to have completed its clean migration replay first.
+ *
+ * They are NOT manual tests and must still run during `pnpm certify`.
+ *
+ * Keeping them out of the static package-test loop prevents browser/runtime
+ * certification from executing against a stale local Supabase schema.
+ */
+const LOCAL_DATABASE_INTEGRATION_TESTS =
+  new Set([
+    "test:phase-14-browser",
   ]);
 
 const REQUIRED_CONTROLLER_TESTS = new Set([
@@ -270,6 +292,33 @@ function validateTestCatalogue(
     );
   }
 
+  for (
+    const testName
+    of LOCAL_DATABASE_INTEGRATION_TESTS
+  ) {
+    if (
+      !Object.hasOwn(
+        scripts,
+        testName,
+      )
+    ) {
+      fail(
+        `Missing local database integration test script: ${testName}`,
+      );
+    }
+
+    if (
+      MANUAL_INTEGRATION_TESTS
+        .has(
+          testName,
+        )
+    ) {
+      fail(
+        `${testName} cannot be both manual and local-database automated.`,
+      );
+    }
+  }
+
   const databaseControlPattern =
     /\b(?:supabase\s+(?:db|test|start|stop|status)|psql|pg_dump|pg_restore)\b/i;
 
@@ -314,10 +363,19 @@ function validateTestCatalogue(
           .has(name),
     );
 
+  const localDatabaseIntegrationTests =
+    allTests.filter(
+      ([name]) =>
+        LOCAL_DATABASE_INTEGRATION_TESTS
+          .has(name),
+    );
+
   const automatedTests =
     allTests.filter(
       ([name]) =>
         !MANUAL_INTEGRATION_TESTS
+          .has(name)
+        && !LOCAL_DATABASE_INTEGRATION_TESTS
           .has(name),
     );
 
@@ -325,6 +383,7 @@ function validateTestCatalogue(
     allTests,
     automatedTests,
     manualTests,
+    localDatabaseIntegrationTests,
   };
 }
 
@@ -592,6 +651,7 @@ async function runStaticCertification() {
     allTests,
     automatedTests,
     manualTests,
+    localDatabaseIntegrationTests,
   } =
     validateTestCatalogue(
       packageJson,
@@ -609,6 +669,10 @@ async function runStaticCertification() {
     `Manual integration package tests: ${manualTests.length}`,
   );
 
+  console.log(
+    `Local database integration package tests: ${localDatabaseIntegrationTests.length}`,
+  );
+
   if (
     manualTests.length > 0
   ) {
@@ -621,6 +685,26 @@ async function runStaticCertification() {
     for (
       const [testName]
       of manualTests
+    ) {
+      console.log(
+        `- ${testName}`,
+      );
+    }
+  }
+
+  if (
+    localDatabaseIntegrationTests
+      .length > 0
+  ) {
+    console.log("");
+
+    console.log(
+      "Deferred until clean local database replay:",
+    );
+
+    for (
+      const [testName]
+      of localDatabaseIntegrationTests
     ) {
       console.log(
         `- ${testName}`,
@@ -689,7 +773,7 @@ async function runStaticCertification() {
   console.log("");
 
   console.log(
-    `Package test catalogue: PASS (${automatedTests.length}/${automatedTests.length} automated; ${manualTests.length} manual deferred)`,
+    `Package test catalogue: PASS (${automatedTests.length}/${automatedTests.length} static automated; ${localDatabaseIntegrationTests.length} local database integration deferred; ${manualTests.length} manual deferred)`,
   );
 
   const foundationChecks = [
@@ -826,6 +910,16 @@ async function runDatabaseCertification() {
   console.log(
     "===================================",
   );
+
+  const packageJson =
+    await readPackage();
+
+  const {
+    localDatabaseIntegrationTests,
+  } =
+    validateTestCatalogue(
+      packageJson,
+    );
 
   runStep({
     name:
@@ -983,6 +1077,24 @@ async function runDatabaseCertification() {
       "--check",
     ],
   });
+
+  for (
+    const [testName]
+    of localDatabaseIntegrationTests
+  ) {
+    runStep({
+      name:
+        `Local database integration ${testName}`,
+
+      command:
+        "pnpm",
+
+      args: [
+        "run",
+        testName,
+      ],
+    });
+  }
 
   console.log("");
 

@@ -48,6 +48,35 @@ Supabase Auth requests remain on Supabase.
 
 Browser business-table access is prohibited.
 
+### Final Phase 04 source topology
+
+The original TINDIO business database source was the local Supabase CLI/Docker PostgreSQL instance.
+
+There was no hosted Supabase business database to cut over from.
+
+The final Phase 04 topology is:
+
+- Neon PostgreSQL — authoritative TINDIO business database
+- Neon Data API — server database API surface
+- Hosted Supabase — Auth + Realtime
+- Local Supabase Docker — development/certification environment
+
+The earlier remote-Supabase cutover prerequisite was retired because it described an environment that never existed.
+
+Hosted Supabase JWKS verification is an explicit external integration certification and is intentionally excluded from unattended local/CI package-test execution.
+
+### Canonical certification after provider separation
+
+Phase 04 separates hosted authentication from local destructive database certification.
+
+- `NEXT_PUBLIC_SUPABASE_URL` may point to hosted Supabase Auth.
+- Local destructive certification never derives its database target from that URL.
+- Database reset/test commands use explicit `--local`.
+- The certification engine validates the actual Supabase CLI `API_URL` and `DB_URL` as local before destructive operations.
+- Phase 14 Playwright remains automated, but runs as a local-database integration test only after clean local migration replay.
+- Phase 14 explicitly forces local Supabase Auth + local Supabase database mode.
+- Hosted Supabase JWKS verification remains an explicit external integration certification.
+
 ## Rollback
 
 Supabase database remains intact through Phase 05.

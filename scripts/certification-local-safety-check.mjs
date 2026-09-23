@@ -245,7 +245,7 @@ test(
 );
 
 test(
-  "environment preflight blocks a remote Supabase application target",
+  "environment preflight permits hosted Supabase Auth because destructive DB targeting is separately local-only",
   async () => {
     const temporaryRoot =
       await mkdtemp(
@@ -277,14 +277,21 @@ test(
           },
         );
 
-      assert.notEqual(
+      assert.equal(
         result.status,
         0,
+        result.stderr
+          || result.stdout,
       );
 
       assert.match(
-        result.stderr,
-        /DATABASE CERTIFICATION BLOCKED/,
+        result.stdout,
+        /NEXT_PUBLIC_SUPABASE_URL: REMOTE \(HOSTED AUTH ALLOWED; NOT A DESTRUCTIVE DB TARGET\)/,
+      );
+
+      assert.match(
+        result.stdout,
+        /Authoritative local database safety is enforced separately/,
       );
 
       assert.doesNotMatch(

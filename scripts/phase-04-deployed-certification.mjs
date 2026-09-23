@@ -260,6 +260,14 @@ try {
     "The Phase 04 certification account has no completed TINDIO business membership. Complete normal onboarding before bearer POS certification.",
   );
 
+  assert.ok(
+    !signedInUrl.pathname
+      .startsWith(
+        "/workspace/no-access",
+      ),
+    "The Phase 04 owner certification account resolved its business context but no authorized workspace. Owner RBAC/store scope must remain usable after Neon cutover.",
+  );
+
   console.log(
     "Deployed TINDIO login + identity provisioning: PASS",
   );

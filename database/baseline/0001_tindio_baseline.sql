@@ -9,7 +9,7 @@ revoke all on schema private from public;
 -- PostgreSQL database dump
 --
 
--- \restrict VhNSLApmHgvYmqBhbTB3v7PpMOtdC5TDRhIlfYMkbUEhi5QQ9PWn00zy0boEeXy
+-- \restrict mqL9jxPOMwNPGpdodmePZtwgwr3Dz990eXXoqyFOoFNktVSH7gemc4AuwN8GZ2B
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -3760,57 +3760,96 @@ CREATE OR REPLACE FUNCTION "private"."clock_in_employee"("target_organization_id
 declare
   actor_employee_id uuid;
   existing_entry public.time_clock_entries%rowtype;
-  normalized_note text := nullif(trim(coalesce(target_clock_in_note, '')), '');
+  normalized_note text :=
+    nullif(
+      trim(
+        coalesce(
+          target_clock_in_note,
+          ''
+        )
+      ),
+      ''
+    );
 begin
-  if target_organization_id is null or target_store_id is null then
-    raise exception 'Choose an assigned store before clocking in.' using errcode = '23514';
+  if target_organization_id is null
+    or target_store_id is null
+  then
+    raise exception
+      'Choose an assigned store before clocking in.'
+      using errcode = '23514';
   end if;
 
-  if normalized_note is not null and char_length(normalized_note) not between 2 and 500 then
-    raise exception 'A clock-in note must contain between 2 and 500 characters.' using errcode = '23514';
+  if normalized_note is not null
+    and char_length(normalized_note)
+      not between 2 and 500
+  then
+    raise exception
+      'A clock-in note must contain between 2 and 500 characters.'
+      using errcode = '23514';
   end if;
 
   select employee.id
   into actor_employee_id
   from public.employees employee
   join public.employee_stores employee_store
-    on employee_store.employee_id = employee.id
-   and employee_store.organization_id = employee.organization_id
-   and employee_store.store_id = target_store_id
+    on employee_store.employee_id =
+      employee.id
+   and employee_store.organization_id =
+      employee.organization_id
+   and employee_store.store_id =
+      target_store_id
   join public.stores store
-    on store.id = employee_store.store_id
-   and store.organization_id = employee_store.organization_id
+    on store.id =
+      employee_store.store_id
+   and store.organization_id =
+      employee_store.organization_id
    and store.is_active
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active'
-  for key share of employee, store;
+  where employee.organization_id =
+      target_organization_id
+    and employee.profile_id =
+      (
+        select public.current_profile_id()
+      )
+    and employee.status =
+      'active'
+  for key share
+  of employee, store;
 
-  if actor_employee_id is null then
-    raise exception 'An active employee assignment for this store is required.' using errcode = '42501';
+  if actor_employee_id is null
+  then
+    raise exception
+      'An active employee assignment for this store is required.'
+      using errcode = '42501';
   end if;
 
   select entry.*
   into existing_entry
   from public.time_clock_entries entry
-  where entry.organization_id = target_organization_id
-    and entry.employee_id = actor_employee_id
+  where entry.organization_id =
+      target_organization_id
+    and entry.employee_id =
+      actor_employee_id
     and entry.clocked_out_at is null
   for update;
 
-  if existing_entry.id is not null then
-    if existing_entry.store_id = target_store_id then
+  if existing_entry.id is not null
+  then
+    if existing_entry.store_id =
+      target_store_id
+    then
       return query
       select
         existing_entry.id,
         existing_entry.store_id,
         existing_entry.clocked_in_at,
         existing_entry.clocked_out_at,
-        true;
+        true as was_replayed;
+
       return;
     end if;
 
-    raise exception 'Clock out from your current store before clocking in elsewhere.'
+    raise exception
+      'Clock out from your current store before clocking in elsewhere.'
       using errcode = '23505';
   end if;
 
@@ -3819,17 +3858,30 @@ begin
     organization_id,
     employee_id,
     store_id,
-    clock_in_note
+    clock_in_note,
+    clocked_in_by_employee_id
   )
   values (
     target_organization_id,
     actor_employee_id,
     target_store_id,
-    normalized_note
+    normalized_note,
+    actor_employee_id
   )
-  returning entry.id, entry.store_id, entry.clocked_in_at, entry.clocked_out_at, false;
+  returning
+    entry.id,
+    entry.store_id,
+    entry.clocked_in_at,
+    entry.clocked_out_at,
+    false as was_replayed;
 end;
 $$;
+
+--
+-- Name: FUNCTION "clock_in_employee"("target_organization_id" "uuid", "target_store_id" "uuid", "target_clock_in_note" "text"); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."clock_in_employee"("target_organization_id" "uuid", "target_store_id" "uuid", "target_clock_in_note" "text") IS 'Provider-neutral self-service clock-in runtime. Resolves the permanent TINDIO profile through public.current_profile_id while preserving assigned-store, replay, and concurrency behavior.';
 
 --
 -- Name: clock_in_employee_with_pin("uuid", "uuid", "uuid", "text", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -3959,43 +4011,84 @@ CREATE OR REPLACE FUNCTION "private"."clock_out_employee"("target_organization_i
     AS $$
 declare
   actor_employee_id uuid;
-  normalized_note text := nullif(trim(coalesce(target_clock_out_note, '')), '');
+  normalized_note text :=
+    nullif(
+      trim(
+        coalesce(
+          target_clock_out_note,
+          ''
+        )
+      ),
+      ''
+    );
 begin
-  if target_organization_id is null then
-    raise exception 'An organization is required to clock out.' using errcode = '23514';
+  if target_organization_id is null
+  then
+    raise exception
+      'An organization is required to clock out.'
+      using errcode = '23514';
   end if;
 
-  if normalized_note is not null and char_length(normalized_note) not between 2 and 500 then
-    raise exception 'A clock-out note must contain between 2 and 500 characters.' using errcode = '23514';
+  if normalized_note is not null
+    and char_length(normalized_note)
+      not between 2 and 500
+  then
+    raise exception
+      'A clock-out note must contain between 2 and 500 characters.'
+      using errcode = '23514';
   end if;
 
   select employee.id
   into actor_employee_id
   from public.employees employee
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active'
+  where employee.organization_id =
+      target_organization_id
+    and employee.profile_id =
+      (
+        select public.current_profile_id()
+      )
+    and employee.status =
+      'active'
   for key share;
 
-  if actor_employee_id is null then
-    raise exception 'An active employee is required to clock out.' using errcode = '42501';
+  if actor_employee_id is null
+  then
+    raise exception
+      'An active employee is required to clock out.'
+      using errcode = '42501';
   end if;
 
   return query
   update public.time_clock_entries entry
   set
     clocked_out_at = now(),
-    clock_out_note = normalized_note
-  where entry.organization_id = target_organization_id
-    and entry.employee_id = actor_employee_id
+    clock_out_note = normalized_note,
+    clocked_out_by_employee_id = actor_employee_id
+  where entry.organization_id =
+      target_organization_id
+    and entry.employee_id =
+      actor_employee_id
     and entry.clocked_out_at is null
-  returning entry.id, entry.store_id, entry.clocked_in_at, entry.clocked_out_at;
+  returning
+    entry.id,
+    entry.store_id,
+    entry.clocked_in_at,
+    entry.clocked_out_at;
 
-  if not found then
-    raise exception 'There is no open time-clock entry to close.' using errcode = 'P0002';
+  if not found
+  then
+    raise exception
+      'There is no open time-clock entry to close.'
+      using errcode = 'P0002';
   end if;
 end;
 $$;
+
+--
+-- Name: FUNCTION "clock_out_employee"("target_organization_id" "uuid", "target_clock_out_note" "text"); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."clock_out_employee"("target_organization_id" "uuid", "target_clock_out_note" "text") IS 'Provider-neutral self-service clock-out runtime. Resolves the permanent TINDIO profile through public.current_profile_id while preserving existing close semantics.';
 
 --
 -- Name: clock_out_employee_with_pin("uuid", "uuid", "text", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -6965,29 +7058,51 @@ CREATE OR REPLACE FUNCTION "private"."get_current_time_clock_entry"("target_orga
 declare
   actor_employee_id uuid;
 begin
-  if target_organization_id is null then
-    raise exception 'An organization is required for the time clock.' using errcode = '23514';
+  if target_organization_id is null
+  then
+    raise exception
+      'An organization is required for the time clock.'
+      using errcode = '23514';
   end if;
 
   select employee.id
   into actor_employee_id
   from public.employees employee
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active';
+  where employee.organization_id =
+      target_organization_id
+    and employee.profile_id =
+      (
+        select public.current_profile_id()
+      )
+    and employee.status =
+      'active';
 
-  if actor_employee_id is null then
-    raise exception 'An active employee is required for the time clock.' using errcode = '42501';
+  if actor_employee_id is null
+  then
+    raise exception
+      'An active employee is required for the time clock.'
+      using errcode = '42501';
   end if;
 
   return query
-  select entry.id, entry.store_id, entry.clocked_in_at
+  select
+    entry.id,
+    entry.store_id,
+    entry.clocked_in_at
   from public.time_clock_entries entry
-  where entry.organization_id = target_organization_id
-    and entry.employee_id = actor_employee_id
+  where entry.organization_id =
+      target_organization_id
+    and entry.employee_id =
+      actor_employee_id
     and entry.clocked_out_at is null;
 end;
 $$;
+
+--
+-- Name: FUNCTION "get_current_time_clock_entry"("target_organization_id" "uuid"); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."get_current_time_clock_entry"("target_organization_id" "uuid") IS 'Provider-neutral current time-clock lookup for the authenticated permanent TINDIO profile.';
 
 --
 -- Name: get_customer_display_management_sessions("uuid"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -18550,14 +18665,14 @@ CREATE OR REPLACE FUNCTION "public"."ensure_current_identity_profile"("target_em
     SET "search_path" TO ''
     AS $$
 declare
-  provider_subject text;
+  current_provider_subject text;
   resolved_profile_id uuid;
 begin
-  provider_subject :=
+  current_provider_subject :=
     private.current_identity_subject();
 
-  if provider_subject is null
-    or btrim(provider_subject) = ''
+  if current_provider_subject is null
+    or btrim(current_provider_subject) = ''
   then
     raise exception
       'An authenticated identity is required.'
@@ -18566,7 +18681,7 @@ begin
 
   begin
     resolved_profile_id :=
-      provider_subject::uuid;
+      current_provider_subject::uuid;
   exception
     when invalid_text_representation then
       raise exception
@@ -18581,47 +18696,24 @@ begin
   )
   values (
     resolved_profile_id,
-    left(
-      coalesce(
-        target_full_name,
-        ''
-      ),
-      160
-    ),
-    lower(
-      coalesce(
-        target_email,
-        ''
-      )
-    )
+    left(coalesce(target_full_name, ''), 160),
+    lower(coalesce(target_email, ''))
   )
   on conflict (id)
   do update
   set
     full_name =
       case
-        when btrim(
-          coalesce(
-            excluded.full_name,
-            ''
-          )
-        ) = ''
+        when btrim(coalesce(excluded.full_name, '')) = ''
         then public.profiles.full_name
         else excluded.full_name
       end,
-
     email =
       case
-        when btrim(
-          coalesce(
-            excluded.email,
-            ''
-          )
-        ) = ''
+        when btrim(coalesce(excluded.email, '')) = ''
         then public.profiles.email
         else excluded.email
       end,
-
     updated_at = now();
 
   insert into private.identity_links (
@@ -18631,29 +18723,21 @@ begin
   )
   values (
     'supabase',
-    provider_subject,
+    current_provider_subject,
     resolved_profile_id
   )
-  on conflict (
-    provider,
-    provider_subject
-  )
+  on conflict on constraint identity_links_pkey
   do update
   set
-    profile_id =
-      excluded.profile_id,
-    updated_at =
-      now();
+    profile_id = excluded.profile_id,
+    updated_at = now();
 
   if not exists (
     select 1
     from private.identity_links identity_link
-    where identity_link.provider =
-      'supabase'
-      and identity_link.provider_subject =
-        provider_subject
-      and identity_link.profile_id =
-        resolved_profile_id
+    where identity_link.provider = 'supabase'
+      and identity_link.provider_subject = current_provider_subject
+      and identity_link.profile_id = resolved_profile_id
   ) then
     raise exception
       'TINDIO identity provisioning failed.'
@@ -36442,6 +36526,7 @@ REVOKE ALL ON FUNCTION "private"."claim_product_unit_operation"("target_organiza
 --
 
 REVOKE ALL ON FUNCTION "private"."clock_in_employee"("target_organization_id" "uuid", "target_store_id" "uuid", "target_clock_in_note" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."clock_in_employee"("target_organization_id" "uuid", "target_store_id" "uuid", "target_clock_in_note" "text") TO "authenticated";
 
 --
 -- Name: FUNCTION "clock_in_employee_with_pin"("target_organization_id" "uuid", "target_store_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -36455,6 +36540,7 @@ GRANT ALL ON FUNCTION "private"."clock_in_employee_with_pin"("target_organizatio
 --
 
 REVOKE ALL ON FUNCTION "private"."clock_out_employee"("target_organization_id" "uuid", "target_clock_out_note" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."clock_out_employee"("target_organization_id" "uuid", "target_clock_out_note" "text") TO "authenticated";
 
 --
 -- Name: FUNCTION "clock_out_employee_with_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -36740,6 +36826,7 @@ REVOKE ALL ON FUNCTION "private"."get_checkout_stock_warning"("target_organizati
 --
 
 REVOKE ALL ON FUNCTION "private"."get_current_time_clock_entry"("target_organization_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."get_current_time_clock_entry"("target_organization_id" "uuid") TO "authenticated";
 
 --
 -- Name: FUNCTION "get_customer_display_management_sessions"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -40357,5 +40444,5 @@ GRANT SELECT ON TABLE "public"."time_clock_entries" TO "authenticated";
 -- PostgreSQL database dump complete
 --
 
--- \unrestrict VhNSLApmHgvYmqBhbTB3v7PpMOtdC5TDRhIlfYMkbUEhi5QQ9PWn00zy0boEeXy
+-- \unrestrict mqL9jxPOMwNPGpdodmePZtwgwr3Dz990eXXoqyFOoFNktVSH7gemc4AuwN8GZ2B
 

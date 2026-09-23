@@ -239,6 +239,7 @@ test(
         "test:phase-04-browser-db-boundary",
         "test:phase-04-neon-baseline",
         "test:phase-04-supabase-jwks",
+        "test:provider-neutral-time-clock-runtime",
         "certify:phase-04:neon-rehearsal",
         "migrate:phase-04:neon-cutover",
         "certify:phase-04:neon-api",

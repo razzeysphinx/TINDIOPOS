@@ -211,31 +211,21 @@ try {
       password,
     );
 
-  await Promise.all([
-    page.waitForURL(
-      (url) =>
-        !url.pathname
-          .startsWith(
-            "/login",
-          ),
+  await page
+    .getByRole(
+      "button",
       {
-        timeout:
-          30_000,
-        waitUntil:
-          "commit",
+        name:
+          "Sign in",
       },
-    ),
+    )
+    .click();
 
-    page
-      .getByRole(
-        "button",
-        {
-          name:
-            "Sign in",
-        },
-      )
-      .click(),
-  ]);
+  await page.waitForFunction(
+    () => !window.location.pathname.startsWith("/login"),
+    undefined,
+    { timeout: 30_000 },
+  );
 
   await page.waitForLoadState(
     "networkidle",

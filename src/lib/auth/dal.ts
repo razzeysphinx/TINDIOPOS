@@ -23,7 +23,7 @@ import {
 export type BusinessRequestAuth =
   | {
       transport: "cookie";
-      authorizationHeader: null;
+      authorizationHeader: string;
     }
   | {
       transport: "bearer";
@@ -490,19 +490,52 @@ export async function loadBusinessContext({
 
 export const getBusinessContext = cache(
   async (): Promise<BusinessContext | null> => {
-    const user = await getVerifiedUser();
+    const cookieClient =
+      await createClient();
+
+    const {
+      data: sessionData,
+      error: sessionError,
+    } =
+      await cookieClient.auth
+        .getSession();
+
+    const accessToken =
+      sessionData
+        .session
+        ?.access_token
+        ?.trim();
+
+    if (
+      sessionError
+      || !accessToken
+    ) {
+      return null;
+    }
+
+    const authorizationHeader =
+      `Bearer ${accessToken}`;
+
+    const supabase =
+      await createClient({
+        headers: {
+          Authorization:
+            authorizationHeader,
+        },
+      });
+
+    const user =
+      await resolveVerifiedUser(
+        supabase,
+        accessToken,
+      );
 
     if (!user) {
       return null;
     }
 
-    const [
-      supabase,
-      cookieStore,
-    ] = await Promise.all([
-      createClient(),
-      cookies(),
-    ]);
+    const cookieStore =
+      await cookies();
 
     return loadBusinessContext({
       supabase,
@@ -513,8 +546,10 @@ export const getBusinessContext = cache(
         )?.value,
       strictRequestedOrganization: false,
       requestAuth: {
-        transport: "cookie",
-        authorizationHeader: null,
+        transport:
+          "cookie",
+
+        authorizationHeader,
       },
     });
   },

@@ -29,7 +29,9 @@ export async function createBusinessContextClient(
 
   if (
     context.requestAuth.transport
-    === "bearer"
+      === "bearer"
+    || context.requestAuth.transport
+      === "cookie"
   ) {
     headers.Authorization =
       context.requestAuth

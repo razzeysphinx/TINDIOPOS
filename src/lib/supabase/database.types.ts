@@ -858,6 +858,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "employee_invitations_accepted_by_profile_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "employee_invitations_inviter_organization_fkey"
             columns: ["invited_by", "organization_id"]
             isOneToOne: false
@@ -3013,6 +3020,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "employees"
             referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "organizations_created_by_profile_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -6855,6 +6869,10 @@ export type Database = {
           target_organization_id: string
           target_stock_request_id: string
         }
+        Returns: string
+      }
+      ensure_current_identity_profile: {
+        Args: { target_email: string; target_full_name?: string }
         Returns: string
       }
       generate_catalog_identifiers: {

@@ -10,6 +10,9 @@ import test from "node:test";
 const BASE_SHA =
   "698f9838577e1e98f93f6f4ddaf08eee9bcf8012";
 
+const PHASE_FINAL_SHA =
+  "a0c0665b6822eccfe9527d774a6d4e5c546feb96";
+
 async function source(path) {
   return readFile(
     new URL(
@@ -316,7 +319,7 @@ test(
           [
             "diff",
             "--name-only",
-            `${BASE_SHA}...HEAD`,
+            `${BASE_SHA}...${PHASE_FINAL_SHA}`,
             "--",
             target,
           ],

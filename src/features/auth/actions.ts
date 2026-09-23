@@ -3,6 +3,9 @@
 import { redirect } from "next/navigation";
 
 import { signInSchema, signUpSchema } from "@/features/auth/auth-schema";
+import {
+  ensureCurrentIdentityProfile,
+} from "@/lib/auth/identity-provisioning";
 import { getSafeRedirectPath } from "@/lib/auth/safe-redirect";
 import { getPublicEnvironment } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
@@ -35,6 +38,36 @@ export async function signInAction(
 
   if (error) {
     return { ok: false, message: "Email or password is incorrect." };
+  }
+
+  const provisioning =
+    await ensureCurrentIdentityProfile(
+      supabase,
+      {
+        email:
+          data.user.email,
+
+        fullName:
+          typeof data.user
+            .user_metadata
+            ?.full_name
+            === "string"
+            ? data.user
+                .user_metadata
+                .full_name
+            : "",
+      },
+    );
+
+  if (!provisioning.ok) {
+    await supabase.auth
+      .signOut();
+
+    return {
+      ok: false,
+      message:
+        provisioning.message,
+    };
   }
 
   const next = getSafeRedirectPath(requestedNext, "/workspace");
@@ -167,6 +200,39 @@ export async function signUpAction(
       message:
         "TINDIO could not start account confirmation. If this email already has an account, sign in instead; otherwise use the exact email from the invitation and try again.",
     };
+  }
+
+  if (data.session) {
+    const provisioning =
+      await ensureCurrentIdentityProfile(
+        supabase,
+        {
+          email:
+            data.user.email,
+
+          fullName:
+            typeof data.user
+              .user_metadata
+              ?.full_name
+              === "string"
+              ? data.user
+                  .user_metadata
+                  .full_name
+              : parsed.data
+                  .fullName,
+        },
+      );
+
+    if (!provisioning.ok) {
+      await supabase.auth
+        .signOut();
+
+      return {
+        ok: false,
+        message:
+          provisioning.message,
+      };
+    }
   }
 
   if (!data.session) {

@@ -272,6 +272,52 @@ try {
     "Deployed TINDIO login + identity provisioning: PASS",
   );
 
+  const cookieBootstrap =
+    await context.request
+      .get(
+        new URL(
+          "/api/pos/v1/bootstrap",
+          deploymentUrl,
+        ).toString(),
+      );
+
+  assert.equal(
+    cookieBootstrap.status(),
+    200,
+    `Deployed cookie POS bootstrap returned HTTP ${cookieBootstrap.status()}.`,
+  );
+
+  const cookieBootstrapBody =
+    await cookieBootstrap
+      .json();
+
+  assert.ok(
+    cookieBootstrapBody
+    && typeof cookieBootstrapBody
+      === "object",
+    "Deployed cookie POS bootstrap returned an invalid body.",
+  );
+
+  assert.ok(
+    typeof cookieBootstrapBody
+      ?.organization
+      ?.id
+      === "string",
+    "Deployed cookie POS bootstrap did not return an organization.",
+  );
+
+  assert.ok(
+    typeof cookieBootstrapBody
+      ?.employee
+      ?.id
+      === "string",
+    "Deployed cookie POS bootstrap did not return an employee.",
+  );
+
+  console.log(
+    "Deployed cookie POS bootstrap: PASS",
+  );
+
   await context.close();
 } finally {
   await browser.close();

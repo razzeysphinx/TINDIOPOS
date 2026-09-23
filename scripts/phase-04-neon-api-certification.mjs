@@ -126,8 +126,19 @@ const directIdentity =
 if (
   !directIdentity.ok
 ) {
+  const payload =
+    await directIdentity
+      .json()
+      .catch(() => null);
+
+  const detail =
+    typeof payload?.message
+      === "string"
+      ? `: ${payload.message}`
+      : "";
+
   fail(
-    `Neon Data API identity RPC failed with HTTP ${directIdentity.status}.`,
+    `Neon Data API identity RPC failed with HTTP ${directIdentity.status}${detail}.`,
   );
 }
 

@@ -47,6 +47,11 @@ const publishableKey =
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
   );
 
+const neonDataApiUrl =
+  required(
+    "NEON_DATA_API_URL",
+  );
+
 const email =
   required(
     "TINDIO_PHASE_04_TEST_EMAIL",
@@ -74,14 +79,6 @@ function protectedHeaders(
   if (
     protectionBypass
   ) {
-    /*
-     * Node fetch requests do not need Vercel's bypass-cookie redirect.
-     *
-     * Sending x-vercel-set-bypass-cookie here can cause a redirect loop
-     * because this process does not maintain a browser cookie jar.
-     *
-     * The direct protection-bypass header is sufficient for API requests.
-     */
     result.set(
       "x-vercel-protection-bypass",
       protectionBypass,
@@ -114,46 +111,6 @@ if (
   );
 }
 
-const auth =
-  createClient(
-    supabaseUrl,
-    publishableKey,
-    {
-      auth: {
-        persistSession:
-          false,
-
-        autoRefreshToken:
-          false,
-      },
-    },
-  );
-
-const {
-  data,
-  error,
-} =
-  await auth.auth
-    .signInWithPassword({
-      email,
-      password,
-    });
-
-assert.equal(
-  error,
-  null,
-  `Hosted Supabase login failed: ${error?.message ?? "unknown error"}`,
-);
-
-assert.ok(
-  data.session,
-  "Hosted Supabase did not return an authenticated session.",
-);
-
-const token =
-  data.session
-    .access_token;
-
 const request = async (
   pathname,
   init = {},
@@ -173,106 +130,19 @@ const request = async (
     },
   );
 
-const loginPage =
-  await request(
-    "/login",
-  );
-
-assert.ok(
-  loginPage.ok,
-  `Deployed login page returned HTTP ${loginPage.status}.`,
-);
-
-const loginContentType =
-  loginPage.headers
-    .get(
-      "content-type",
-    )
-  ?? "";
-
-assert.match(
-  loginContentType,
-  /text\/html/i,
-  "Deployed login page did not return application HTML.",
-);
-
-const bootstrap =
-  await request(
-    "/api/pos/v1/bootstrap",
-    {
-      headers: {
-        Authorization:
-          `Bearer ${token}`,
-      },
-    },
-  );
-
-const bootstrapContentType =
-  bootstrap.headers
-    .get(
-      "content-type",
-    )
-  ?? "";
-
-assert.match(
-  bootstrapContentType,
-  /application\/json/i,
-  "Deployed bootstrap returned non-JSON content. If this is a protected Vercel Preview, configure VERCEL_AUTOMATION_BYPASS_SECRET.",
-);
-
-assert.equal(
-  bootstrap.status,
-  200,
-  `Deployed bearer bootstrap returned HTTP ${bootstrap.status}.`,
-);
-
-const bootstrapBody =
-  await bootstrap.json();
-
-assert.ok(
-  bootstrapBody
-  && typeof bootstrapBody
-    === "object",
-  "Deployed POS bootstrap returned an invalid body.",
-);
-
-const crossTenant =
-  await request(
-    "/api/pos/v1/bootstrap",
-    {
-      headers: {
-        Authorization:
-          `Bearer ${token}`,
-
-        "X-Tindio-Organization-Id":
-          randomUUID(),
-      },
-    },
-  );
-
-assert.equal(
-  crossTenant.status,
-  401,
-  `Cross-tenant deployed request expected HTTP 401, received ${crossTenant.status}.`,
-);
-
-const crossStore =
-  await request(
-    `/api/pos/v1/catalog?store=${encodeURIComponent(randomUUID())}`,
-    {
-      headers: {
-        Authorization:
-          `Bearer ${token}`,
-      },
-    },
-  );
-
-assert.equal(
-  crossStore.status,
-  400,
-  `Cross-store deployed request expected HTTP 400, received ${crossStore.status}.`,
-);
-
+/*
+ * FIRST: use the real TINDIO login flow.
+ *
+ * The application login action is the authoritative provisioning boundary:
+ *
+ * Supabase Auth
+ * → ensureCurrentIdentityProfile()
+ * → Neon profile
+ * → private.identity_links
+ * → business membership
+ *
+ * Do not test mobile bearer bootstrap before this boundary has run.
+ */
 const browser =
   await chromium.launch();
 
@@ -296,7 +166,8 @@ try {
       });
 
   const page =
-    await context.newPage();
+    await context
+      .newPage();
 
   const response =
     await page.goto(
@@ -360,23 +231,252 @@ try {
       .click(),
   ]);
 
-  assert.ok(
-    !new URL(
+  await page.waitForLoadState(
+    "networkidle",
+  );
+
+  const signedInUrl =
+    new URL(
       page.url(),
-    ).pathname
+    );
+
+  assert.ok(
+    !signedInUrl.pathname
       .startsWith(
         "/login",
       ),
-    "Deployed cookie-based login did not leave the login page.",
+    "Deployed TINDIO login did not leave the login page.",
+  );
+
+  assert.ok(
+    !signedInUrl.pathname
+      .startsWith(
+        "/onboarding",
+      ),
+    "The Phase 04 certification account has no completed TINDIO business membership. Complete normal onboarding before bearer POS certification.",
+  );
+
+  console.log(
+    "Deployed TINDIO login + identity provisioning: PASS",
   );
 
   await context.close();
 } finally {
   await browser.close();
-
-  await auth.auth
-    .signOut();
 }
+
+/*
+ * SECOND: mint a fresh bearer token only after TINDIO has established the
+ * stable provider-neutral identity mapping.
+ */
+const auth =
+  createClient(
+    supabaseUrl,
+    publishableKey,
+    {
+      auth: {
+        persistSession:
+          false,
+
+        autoRefreshToken:
+          false,
+      },
+    },
+  );
+
+const {
+  data,
+  error,
+} =
+  await auth.auth
+    .signInWithPassword({
+      email,
+      password,
+    });
+
+assert.equal(
+  error,
+  null,
+  `Hosted Supabase bearer sign-in failed: ${error?.message ?? "unknown error"}`,
+);
+
+assert.ok(
+  data.session,
+  "Hosted Supabase did not return a bearer certification session.",
+);
+
+const token =
+  data.session
+    .access_token;
+
+/*
+ * THIRD: prove the identity exists at the authoritative Neon boundary before
+ * asking the deployed POS route to construct a full business context.
+ */
+const directIdentity =
+  await fetch(
+    new URL(
+      "/rpc/current_profile_id",
+      neonDataApiUrl.endsWith("/")
+        ? neonDataApiUrl
+        : `${neonDataApiUrl}/`,
+    ),
+    {
+      method:
+        "POST",
+
+      headers: {
+        Authorization:
+          `Bearer ${token}`,
+
+        "Content-Type":
+          "application/json",
+      },
+
+      body:
+        "{}",
+    },
+  );
+
+assert.equal(
+  directIdentity.status,
+  200,
+  `Direct Neon current_profile_id returned HTTP ${directIdentity.status}.`,
+);
+
+const directProfileId =
+  await directIdentity.json();
+
+assert.ok(
+  typeof directProfileId === "string"
+  && directProfileId.length > 0,
+  "TINDIO login completed, but Neon still did not resolve a stable profile identity.",
+);
+
+console.log(
+  "Direct Neon current_profile_id: PASS",
+);
+
+/*
+ * FOURTH: certify the deployed mobile-safe bearer POS contract.
+ */
+const loginPage =
+  await request(
+    "/login",
+  );
+
+assert.ok(
+  loginPage.ok,
+  `Deployed login page returned HTTP ${loginPage.status}.`,
+);
+
+const bootstrap =
+  await request(
+    "/api/pos/v1/bootstrap",
+    {
+      headers: {
+        Authorization:
+          `Bearer ${token}`,
+      },
+    },
+  );
+
+const bootstrapContentType =
+  bootstrap.headers
+    .get(
+      "content-type",
+    )
+  ?? "";
+
+assert.match(
+  bootstrapContentType,
+  /application\/json/i,
+  "Deployed bootstrap returned non-JSON content.",
+);
+
+assert.equal(
+  bootstrap.status,
+  200,
+  `Deployed bearer bootstrap returned HTTP ${bootstrap.status}.`,
+);
+
+const bootstrapBody =
+  await bootstrap.json();
+
+assert.ok(
+  bootstrapBody
+  && typeof bootstrapBody
+    === "object",
+  "Deployed POS bootstrap returned an invalid body.",
+);
+
+assert.ok(
+  typeof bootstrapBody
+    ?.organization
+    ?.id
+    === "string",
+  "Deployed POS bootstrap did not return an organization.",
+);
+
+assert.ok(
+  typeof bootstrapBody
+    ?.employee
+    ?.id
+    === "string",
+  "Deployed POS bootstrap did not return an employee.",
+);
+
+console.log(
+  "Deployed bearer POS bootstrap: PASS",
+);
+
+const crossTenant =
+  await request(
+    "/api/pos/v1/bootstrap",
+    {
+      headers: {
+        Authorization:
+          `Bearer ${token}`,
+
+        "X-Tindio-Organization-Id":
+          randomUUID(),
+      },
+    },
+  );
+
+assert.equal(
+  crossTenant.status,
+  401,
+  `Cross-tenant deployed request expected HTTP 401, received ${crossTenant.status}.`,
+);
+
+console.log(
+  "Deployed cross-tenant denial: PASS",
+);
+
+const crossStore =
+  await request(
+    `/api/pos/v1/catalog?store=${encodeURIComponent(randomUUID())}`,
+    {
+      headers: {
+        Authorization:
+          `Bearer ${token}`,
+      },
+    },
+  );
+
+assert.equal(
+  crossStore.status,
+  400,
+  `Cross-store deployed request expected HTTP 400, received ${crossStore.status}.`,
+);
+
+console.log(
+  "Deployed cross-store denial: PASS",
+);
+
+await auth.auth
+  .signOut();
 
 console.log(
   protectionBypass

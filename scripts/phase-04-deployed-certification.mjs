@@ -202,6 +202,10 @@ try {
   await page
     .getByLabel(
       "Password",
+      {
+        exact:
+          true,
+      },
     )
     .fill(
       password,

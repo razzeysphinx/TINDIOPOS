@@ -75,6 +75,15 @@ async function timedFetch(input, init = {}) {
   });
 }
 
+async function timedNeonFetch(input, init = {}) {
+  return fetch(input, {
+    ...init,
+    cache: "no-store",
+    headers: new Headers(init.headers),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+}
+
 async function jsonBody(response) {
   const type =
     response.headers.get("content-type")
@@ -150,7 +159,7 @@ const bearerHeaders = {
 
 try {
   const directCore =
-    await timedFetch(
+    await timedNeonFetch(
       neonUrl("rpc/get_pos_bootstrap_core_v2"),
       {
         method: "POST",

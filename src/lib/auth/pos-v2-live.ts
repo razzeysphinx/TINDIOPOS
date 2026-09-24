@@ -101,6 +101,10 @@ function bearerFromRequest(
 function authErrorStatus(
   error: unknown,
 ) {
+  if (error instanceof SyntaxError) {
+    return 401 as const;
+  }
+
   const status =
     error
     && typeof error === "object"
@@ -301,12 +305,16 @@ export async function getPosV2Live(
         token,
       );
   } catch (error) {
+    const status =
+      authErrorStatus(error);
+
     return {
       ok: false,
-      status:
-        authErrorStatus(error),
+      status,
       reason:
-        "AUTH_PROVIDER_UNAVAILABLE",
+        status === 401
+          ? "AUTH_INVALID"
+          : "AUTH_PROVIDER_UNAVAILABLE",
     };
   }
 

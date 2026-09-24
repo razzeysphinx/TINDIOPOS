@@ -113,6 +113,10 @@ function bearerFromRequest(
 function authErrorStatus(
   error: unknown,
 ) {
+  if (error instanceof SyntaxError) {
+    return 401 as const;
+  }
+
   const status =
     error
     && typeof error === "object"
@@ -246,10 +250,15 @@ async function getPosV2CatalogContext(
     claimsResult =
       await authClient.auth.getClaims(token);
   } catch (error) {
+    const status = authErrorStatus(error);
+
     return {
       ok: false,
-      status: authErrorStatus(error),
-      reason: "AUTH_PROVIDER_UNAVAILABLE",
+      status,
+      reason:
+        status === 401
+          ? "AUTH_INVALID"
+          : "AUTH_PROVIDER_UNAVAILABLE",
     };
   }
 

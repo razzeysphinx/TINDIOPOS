@@ -353,6 +353,26 @@ export type PosBootstrapV2CoreResponse = {
   };
 };
 
+export type PosReferenceV2Response = {
+  ok: true;
+  version: 2;
+  requestId: string;
+  organizationId: string;
+  referenceVersion: string;
+  reference: {
+    categories: PosCategory[];
+    paymentMethods: PosPaymentMethod[];
+    loyaltyProgram:
+      PosLoyaltyProgram | null;
+    discounts: PosDiscount[];
+    taxRates: PosTaxRate[];
+    diningOptions:
+      PosDiningOption[];
+    ticketTemplates:
+      PosTicketTemplate[];
+  };
+};
+
 export type PosCatalogResponse = {
   items:
     PosCatalogItem[];

@@ -7320,6 +7320,10 @@ export type Database = {
           variant_name: string
         }[]
       }
+      get_pos_reference_bundle_v2: {
+        Args: { target_organization_id?: string }
+        Returns: Json
+      }
       get_pos_shift_operational_summary: {
         Args: { target_organization_id: string; target_shift_id: string }
         Returns: Json

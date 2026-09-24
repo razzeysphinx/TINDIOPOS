@@ -373,6 +373,28 @@ export type PosReferenceV2Response = {
   };
 };
 
+export type PosLiveV2Response = {
+  ok: true;
+  version: 2;
+  requestId: string;
+  organizationId: string;
+  storeId: string | null;
+  registerId: string | null;
+  live: {
+    timeClockEntry:
+      TimeClockEntry | null;
+    customerDisplaySessions:
+      PosCustomerDisplaySession[];
+    canReceiveIncomingTransfers:
+      boolean;
+    incomingTransfers:
+      PosIncomingTransfer[];
+    openTickets: PosOpenTicket[];
+    ticketAssignees:
+      PosTicketAssignee[];
+  };
+};
+
 export type PosCatalogResponse = {
   items:
     PosCatalogItem[];

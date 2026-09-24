@@ -7222,6 +7222,14 @@ export type Database = {
           transfer_number: number
         }[]
       }
+      get_pos_live_state_v2: {
+        Args: {
+          target_organization_id: string
+          target_register_id?: string
+          target_store_id?: string
+        }
+        Returns: Json
+      }
       get_pos_open_tickets: {
         Args: {
           target_organization_id: string

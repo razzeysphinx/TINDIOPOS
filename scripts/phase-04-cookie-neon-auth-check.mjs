@@ -19,6 +19,7 @@ async function source(
 const [
   dal,
   contextClient,
+  authenticatedDatabaseClient,
 ] =
   await Promise.all([
     source(
@@ -28,10 +29,14 @@ const [
     source(
       "src/lib/supabase/context-client.ts",
     ),
+
+    source(
+      "src/lib/supabase/authenticated-database-client.ts",
+    ),
   ]);
 
 test(
-  "cookie BusinessContext carries a verified server-side authorization header",
+  "cookie BusinessContext keeps session verification separate from database identity",
   () => {
     assert.match(
       dal,
@@ -55,12 +60,12 @@ test(
 
     assert.match(
       dal,
-      /createClient\(\{[\s\S]*Authorization:[\s\S]*authorizationHeader/,
+      /createAuthenticatedDatabaseClient/,
     );
 
     assert.match(
       dal,
-      /resolveVerifiedUser\([\s\S]*supabase[\s\S]*accessToken/,
+      /resolveVerifiedUser\([\s\S]*cookieClient[\s\S]*accessToken[\s\S]*databaseClient/,
     );
 
     assert.match(
@@ -106,26 +111,41 @@ test(
 );
 
 test(
-  "authenticated context client preserves identity for bearer and cookie transports",
+  "authenticated database transport binds the verified token without SSR cookies",
   () => {
     assert.match(
-      contextClient,
-      /transport[\s\S]*=== "bearer"/,
+      authenticatedDatabaseClient,
+      /createClient as createSupabaseClient/,
+    );
+
+    assert.match(
+      authenticatedDatabaseClient,
+      /accessToken:[\s\S]*async[\s\S]*token/,
+    );
+
+    assert.match(
+      authenticatedDatabaseClient,
+      /createNeonDataApiFetch/,
+    );
+
+    assert.doesNotMatch(
+      authenticatedDatabaseClient,
+      /createServerClient/,
+    );
+
+    assert.match(
+      authenticatedDatabaseClient,
+      /normalized[\s\S]*!== "authorization"/,
     );
 
     assert.match(
       contextClient,
-      /transport[\s\S]*=== "cookie"/,
+      /createAuthenticatedDatabaseClient/,
     );
 
-    assert.match(
+    assert.doesNotMatch(
       contextClient,
-      /headers\.Authorization[\s\S]*authorizationHeader/,
-    );
-
-    assert.match(
-      contextClient,
-      /name\.toLowerCase\(\)[\s\S]*!== "authorization"/,
+      /createClient\(/,
     );
   },
 );

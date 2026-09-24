@@ -120,6 +120,7 @@
     "migrate:phase-04:neon-cutover": "node scripts/phase-04-neon-migrate.mjs --cutover",
     "certify:phase-04:neon-api": "node scripts/phase-04-neon-api-certification.mjs",
     "certify:phase-04:deployed": "node scripts/phase-04-deployed-certification.mjs",
+    "certify:phase-04:deployed-stability": "node scripts/phase-04-deployed-auth-stability.mjs",
     "test:phase-04-neon-contract": "node --test scripts/phase-04-neon-contract-check.mjs",
     "test:phase-04-cookie-neon-auth": "node --test scripts/phase-04-cookie-neon-auth-check.mjs",
     "test:provider-neutral-time-clock-runtime": "node --test scripts/provider-neutral-time-clock-runtime-check.mjs",

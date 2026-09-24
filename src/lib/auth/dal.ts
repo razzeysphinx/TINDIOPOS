@@ -19,6 +19,9 @@ import {
   hasInventoryControlResponsibility,
   hasPurchasingResponsibility,
 } from "@/lib/auth/inventory-capabilities";
+import {
+  createAuthenticatedDatabaseClient,
+} from "@/lib/supabase/authenticated-database-client";
 
 export type BusinessRequestAuth =
   | {
@@ -74,8 +77,17 @@ export type BusinessContext = {
 };
 
 export async function resolveVerifiedUser(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<
+    ReturnType<
+      typeof createClient
+    >
+  >,
   accessToken?: string,
+  identityClient:
+    Parameters<
+      typeof resolveCurrentProfileId
+    >[0]
+    = supabase,
 ): Promise<VerifiedUser | null> {
   let claimsResult:
     | Awaited<
@@ -87,9 +99,7 @@ export async function resolveVerifiedUser(
 
   try {
     claimsResult = accessToken
-      ? await supabase.auth.getClaims(
-          accessToken,
-        )
+      ? await supabase.auth.getClaims(accessToken)
       : await supabase.auth.getClaims();
   } catch {
     return null;
@@ -115,7 +125,9 @@ export async function resolveVerifiedUser(
 
   if (!subject) return null;
 
-  const id = await resolveCurrentProfileId(supabase);
+  const id = accessToken
+    ? await resolveCurrentProfileId(identityClient)
+    : await resolveCurrentProfileId(supabase);
 
   if (!id) return null;
 
@@ -516,18 +528,16 @@ export const getBusinessContext = cache(
     const authorizationHeader =
       `Bearer ${accessToken}`;
 
-    const supabase =
-      await createClient({
-        headers: {
-          Authorization:
-            authorizationHeader,
-        },
-      });
+    const databaseClient =
+      createAuthenticatedDatabaseClient(
+        authorizationHeader,
+      );
 
     const user =
       await resolveVerifiedUser(
-        supabase,
+        cookieClient,
         accessToken,
+        databaseClient,
       );
 
     if (!user) {
@@ -538,7 +548,8 @@ export const getBusinessContext = cache(
       await cookies();
 
     return loadBusinessContext({
-      supabase,
+      supabase:
+        databaseClient,
       user,
       requestedOrganizationId:
         cookieStore.get(

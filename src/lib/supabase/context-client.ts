@@ -4,8 +4,8 @@ import type {
   BusinessContext,
 } from "@/lib/auth/dal";
 import {
-  createClient,
-} from "@/lib/supabase/server";
+  createAuthenticatedDatabaseClient,
+} from "@/lib/supabase/authenticated-database-client";
 
 export async function createBusinessContextClient(
   context: Pick<
@@ -38,7 +38,11 @@ export async function createBusinessContextClient(
         .authorizationHeader;
   }
 
-  return createClient({
-    headers,
-  });
+  return createAuthenticatedDatabaseClient(
+    context.requestAuth
+      .authorizationHeader,
+    {
+      headers,
+    },
+  );
 }

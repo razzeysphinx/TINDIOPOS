@@ -9,6 +9,9 @@ import {
   type BusinessContext,
 } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
+import {
+  createAuthenticatedDatabaseClient,
+} from "@/lib/supabase/authenticated-database-client";
 
 export const TINDIO_ORGANIZATION_HEADER =
   "x-tindio-organization-id";
@@ -87,16 +90,19 @@ export async function getPosApiBusinessContext(
     return null;
   }
 
-  const supabase = await createClient({
-    headers: {
-      Authorization:
-        authentication.authorizationHeader,
-    },
-  });
+  const authClient =
+    await createClient();
+
+  const databaseClient =
+    createAuthenticatedDatabaseClient(
+      authentication
+        .authorizationHeader,
+    );
 
   const user = await resolveVerifiedUser(
-    supabase,
+    authClient,
     authentication.token,
+    databaseClient,
   );
 
   if (!user) {
@@ -128,7 +134,8 @@ export async function getPosApiBusinessContext(
       : null;
 
   return loadBusinessContext({
-    supabase,
+    supabase:
+      databaseClient,
     user,
     requestedOrganizationId,
     strictRequestedOrganization:

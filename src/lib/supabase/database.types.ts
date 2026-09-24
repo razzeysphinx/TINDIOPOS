@@ -7171,6 +7171,22 @@ export type Database = {
         Args: { target_organization_id: string }
         Returns: Json
       }
+      get_pos_bootstrap_core_v2: {
+        Args: { target_organization_id?: string }
+        Returns: Json
+      }
+      get_pos_catalog_v2: {
+        Args: {
+          target_category_id?: string
+          target_limit?: number
+          target_mode?: string
+          target_offset?: number
+          target_organization_id: string
+          target_query?: string
+          target_store_id: string
+        }
+        Returns: Json
+      }
       get_pos_customer_display_sessions: {
         Args: { target_organization_id: string }
         Returns: {
@@ -7217,6 +7233,22 @@ export type Database = {
           transfer_id: string
           transfer_number: number
         }[]
+      }
+      get_pos_live_state_v2: {
+        Args: {
+          target_organization_id: string
+          target_register_id?: string
+          target_store_id?: string
+        }
+        Returns: Json
+      }
+      get_pos_modifiers_v2: {
+        Args: {
+          target_organization_id: string
+          target_product_id: string
+          target_store_id: string
+        }
+        Returns: Json
       }
       get_pos_open_tickets: {
         Args: {
@@ -7315,6 +7347,10 @@ export type Database = {
           variant_id: string
           variant_name: string
         }[]
+      }
+      get_pos_reference_bundle_v2: {
+        Args: { target_organization_id?: string }
+        Returns: Json
       }
       get_pos_shift_operational_summary: {
         Args: { target_organization_id: string; target_shift_id: string }

@@ -9,12 +9,16 @@ import type {
   PosStore,
   PosTaxRate,
 } from "@/features/pos/pos-types";
+import type {
+  PosReferenceV2Response,
+} from "@/contracts/pos";
 
 const DATABASE_NAME = "tindio-offline";
-const DATABASE_VERSION = 3;
+const DATABASE_VERSION = 4;
 const CHECKOUT_QUEUE_STORE = "checkout-queue";
 const CATALOG_STORE = "catalog-snapshots";
 const DEVICE_IDENTITY_STORE = "device-identities";
+const REFERENCE_SNAPSHOT_STORE = "pos-reference-snapshots";
 const RUNTIME_SNAPSHOT_STORE = "pos-runtime-snapshots";
 const CHANGE_EVENT = "tindio-offline-store-change";
 const SYNCED_RECEIPT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -26,6 +30,16 @@ export type OfflineCheckoutState =
   | "SYNCED"
   | "CONFLICT"
   | "FAILED";
+
+export type OfflinePosReferenceSnapshot = {
+  key: string;
+  scope: string;
+  organizationId: string;
+  referenceVersion: string;
+  updatedAt: string;
+  reference:
+    PosReferenceV2Response["reference"];
+};
 
 export type OfflineConflictType =
   | "DUPLICATE_TRANSACTION"
@@ -361,6 +375,11 @@ function openDatabase() {
         database.createObjectStore(DEVICE_IDENTITY_STORE, { keyPath: "organizationId" });
       }
 
+      if (!database.objectStoreNames.contains(REFERENCE_SNAPSHOT_STORE)) {
+        const store = database.createObjectStore(REFERENCE_SNAPSHOT_STORE, { keyPath: "key" });
+        store.createIndex("scope", "scope", { unique: false });
+      }
+
       if (!database.objectStoreNames.contains(RUNTIME_SNAPSHOT_STORE)) {
         const store = database.createObjectStore(RUNTIME_SNAPSHOT_STORE, { keyPath: "key" });
         store.createIndex("scope", "scope", { unique: false });
@@ -551,6 +570,49 @@ export async function getCachedPosCatalog(scope: string, storeId: string) {
   return readFromStore(
     CATALOG_STORE,
     (store) => store.get(`${scope}:${storeId}`) as IDBRequest<OfflineCatalogSnapshot | undefined>,
+  );
+}
+
+export async function cachePosV2Reference(
+  snapshot: Omit<
+    OfflinePosReferenceSnapshot,
+    "key" | "updatedAt"
+  >,
+) {
+  if (
+    !snapshot.scope
+    || !snapshot.organizationId
+    || !snapshot.referenceVersion
+  ) {
+    return;
+  }
+
+  const value: OfflinePosReferenceSnapshot = {
+    ...snapshot,
+    key: `${snapshot.scope}:${snapshot.organizationId}`,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await writeToStore(
+    REFERENCE_SNAPSHOT_STORE,
+    (store) => store.put(value),
+  );
+
+  return value;
+}
+
+export async function getCachedPosV2Reference(
+  scope: string,
+  organizationId: string,
+) {
+  return readFromStore(
+    REFERENCE_SNAPSHOT_STORE,
+    (store) => store.get(
+      `${scope}:${organizationId}`,
+    ) as IDBRequest<
+      OfflinePosReferenceSnapshot
+      | undefined
+    >,
   );
 }
 

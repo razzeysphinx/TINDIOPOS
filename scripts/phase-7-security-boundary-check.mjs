@@ -33,6 +33,7 @@ const [
   deviceRoute,
   advancedSalesActions,
   posPage,
+  posV2CoreRoute,
   posCapabilities,
   posData,
   ticketActions,
@@ -60,7 +61,7 @@ const [
 ] = await Promise.all([
   source("../src/features/checkout/actions.ts"),
   source("../src/features/checkout/checkout-service.ts"),
-  source("../src/app/api/pos/checkout/route.ts"),
+  source("../src/app/api/pos/v2/checkout/route.ts"),
   source("../src/lib/auth/dal.ts"),
   source("../src/lib/server/back-office-store-scope.ts"),
   Promise.all([source("../src/features/receipts/actions.ts"), source("../src/features/receipts/service.ts")]).then((sources) => sources.join("\n")),
@@ -72,19 +73,20 @@ const [
   source("../src/features/payments/actions.ts"),
   source("../src/features/business-profile/actions.ts"),
   source("../src/features/devices/actions.ts"),
-  source("../src/app/api/pos/device/route.ts"),
+  source("../src/app/api/pos/v2/device/route.ts"),
   source("../src/features/advanced-sales/actions.ts"),
   source("../src/app/(pos)/pos/page.tsx"),
+  source("../src/app/api/pos/v2/bootstrap/route.ts"),
   source("../src/features/pos/pos-capabilities.ts"),
   source("../src/features/pos/data.ts"),
   Promise.all([source("../src/features/advanced-sales/ticket-actions.ts"), source("../src/features/advanced-sales/ticket-service.ts")]).then((sources) => sources.join("\n")),
   source("../src/features/pos/pos-terminal.tsx"),
   source("../src/features/pos/pos-operational-drawer.tsx"),
-  source("../src/app/api/pos/catalog/route.ts"),
-  source("../src/app/api/pos/modifiers/route.ts"),
-  source("../src/app/api/pos/customers/route.ts"),
-  source("../src/app/api/pos/customer-display/route.ts"),
-  source("../src/app/api/pos/offline-checkout/route.ts"),
+  source("../src/app/api/pos/v2/catalog/route.ts"),
+  source("../src/app/api/pos/v2/modifiers/route.ts"),
+  source("../src/app/api/pos/v2/customers/route.ts"),
+  source("../src/app/api/pos/v2/customer-display/route.ts"),
+  source("../src/app/api/pos/v2/offline-checkout/route.ts"),
   source("../src/app/api/reports/export/route.ts"),
   source("../src/app/api/catalog/export/route.ts"),
   source("../src/app/api/customers/export/route.ts"),
@@ -103,7 +105,7 @@ const [
 
 test("checkout keeps session-derived organization scope and capability-derived store validation on every entry point", () => {
   assert.match(checkoutAction, /requireBusinessContext\(\)/);
-  assert.match(checkoutRoute, /getPosApiBusinessContext\(request\)/);
+  assert.match(checkoutRoute, /getPosV2BusinessContext\(request\)/);
   assert.match(checkoutRoute, /completeCheckout\(context, input\)/);
   assert.match(checkoutService, /context\.storeIds\.includes\(parsed\.storeId\)/);
   assert.match(checkoutService, /target_organization_id: context\.organization\.id/);
@@ -124,9 +126,10 @@ test("checkout keeps session-derived organization scope and capability-derived s
 });
 
 test("POS capability gates are enforced consistently in the UI, server actions, and API routes", () => {
-  assert.match(posPage, /hasPermission\(context, "pos\.access"/);
-  assert.match(posPage, /hasPermission\(context, "sales\.create"/);
-  assert.match(posPage, /getPosCapabilities/);
+  assert.match(posPage, /<PosV2TerminalShell\s*\/>/);
+  assert.match(posV2CoreRoute, /permissions\.includes\("pos\.access"\)/);
+  assert.match(posV2CoreRoute, /permissions\.includes\("sales\.create"\)/);
+  assert.match(posV2CoreRoute, /POS_ACCESS_FORBIDDEN/);
   assert.match(posCapabilities, /canAcceptPayments: canCreateSales && has\("payments\.accept"\)/);
   assert.match(posCapabilities, /canApplyDiscounts: canCreateSales && has\("discounts\.apply"\)/);
   assert.match(posCapabilities, /features\.open_tickets && canCreateSales && has\("tickets\.manage"\)/);
@@ -141,14 +144,16 @@ test("POS capability gates are enforced consistently in the UI, server actions, 
   assert.match(posDrawer, /canUseShiftControls/);
 
   for (const [name, content] of [
-    ["catalog", posCatalogRoute],
-    ["modifier", posModifiersRoute],
     ["customer", posCustomersRoute],
     ["customer display", posCustomerDisplayRoute],
   ]) {
+    assert.match(content, /getPosV2BusinessContext/, `${name} API resolves V2 command context`);
     assert.match(content, /hasPermission\(context, "pos\.access"/, `${name} API requires POS access`);
     assert.match(content, /hasPermission\(context, "sales\.create"/, `${name} API requires sales authority`);
   }
+
+  assert.match(posCatalogRoute, /getPosV2Catalog/);
+  assert.match(posModifiersRoute, /getPosV2Modifiers/);
 });
 
 test("sensitive server actions require a business context and their established permission boundary", () => {
@@ -209,8 +214,8 @@ test("device validation rejects a caller-supplied organization that differs from
 test("every authenticated export and offline API has its capability or service authorization boundary", () => {
   assert.match(
     offlineCheckoutRoute,
-    /getPosApiBusinessContext\(\s*request\s*,?\s*\)/,
-    "offline checkout resolves the authenticated POS API business context",
+    /getPosV2BusinessContext\(\s*request\s*,?\s*\)/,
+    "offline checkout resolves the authenticated POS V2 business context",
   );
   assert.match(
     offlineCheckoutRoute,

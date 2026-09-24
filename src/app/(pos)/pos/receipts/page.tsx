@@ -5,7 +5,7 @@ import { ReceiptText } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { loadPosReceiptHistory, loadPosWorkspace } from "@/features/pos/data";
+import { loadPosReceiptHistory, loadPosSupportWorkspace } from "@/features/pos/data";
 import { PosReceiptHistory } from "@/features/pos/pos-receipt-history";
 import { PosReceiptSearch } from "@/features/pos/pos-receipt-search";
 import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
@@ -30,7 +30,7 @@ export default async function PosReceiptsPage({
     ? parsedBefore
     : undefined;
   const [workspace, receipts] = await Promise.all([
-    loadPosWorkspace(context),
+    loadPosSupportWorkspace(context),
     loadPosReceiptHistory(context, { beforeReceiptNumber, query }),
   ]);
   const hasMore = receipts.length === 25;
@@ -51,8 +51,9 @@ export default async function PosReceiptsPage({
         {...getPosNavigationCapabilities(context)}
         canUseTimeClock={context.features.time_clock}
         employeeName={context.profile.full_name || context.profile.email || "Cashier"}
-        incomingTransfers={workspace.incomingTransfers}
-        organizationName={context.organization.name}
+          incomingTransfers={workspace.incomingTransfers}
+          organizationId={context.organization.id}
+          organizationName={context.organization.name}
         scope={`${context.organization.id}:${context.user.id}`}
         stores={workspace.stores}
         timeClockEntry={workspace.timeClockEntry}

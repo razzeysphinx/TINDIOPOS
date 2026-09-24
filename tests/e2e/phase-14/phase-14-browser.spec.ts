@@ -106,9 +106,15 @@ async function addCompositeComponent(page: Page, compositeName: string, quantity
 
 async function sellProduct(page: Page, productName: string) {
   await page.goto("/pos");
-  if (await page.getByRole("button", { name: "Open shift" }).isVisible()) {
-    await page.getByRole("button", { name: "Open shift" }).click();
+  const openShift = page.getByRole("button", { name: "Open shift" });
+  const search = page.getByRole("searchbox").or(page.getByPlaceholder(/Search/i)).first();
+
+  await expect(openShift.or(search)).toBeVisible({ timeout: 30_000 });
+
+  if (await openShift.isVisible()) {
+    await openShift.click();
     const shiftDialog = page.getByRole("dialog", { name: "Open shift" });
+    await expect(shiftDialog).toBeVisible();
     const shiftSelects = shiftDialog.locator("select");
     if (await shiftSelects.count()) {
       await shiftSelects.nth(0).selectOption({ label: storeAName });
@@ -117,7 +123,7 @@ async function sellProduct(page: Page, productName: string) {
     await shiftDialog.getByRole("button", { name: "Open shift" }).click();
     await expect(shiftDialog).toBeHidden();
   }
-  const search = page.getByRole("searchbox").or(page.getByPlaceholder(/Search/i)).first();
+  await expect(search).toBeVisible({ timeout: 30_000 });
   await search.fill(productName);
   await page.getByRole("button", { name: new RegExp(productName) }).first().click();
   await page.getByRole("button", { name: "Charge", exact: true }).click();
@@ -128,7 +134,7 @@ async function sellProduct(page: Page, productName: string) {
   await page.getByRole("button", { name: "Apply cash payment" }).click();
   const checkoutRequestPromise = page.waitForRequest((request) => (
     request.method() === "POST"
-    && request.url().includes("/api/pos/checkout")
+    && request.url().includes("/api/pos/v2/checkout")
   ));
   await page.getByRole("button", { name: "Complete cash sale" }).click();
   const checkoutRequest = await checkoutRequestPromise;
@@ -136,7 +142,12 @@ async function sellProduct(page: Page, productName: string) {
   await page.getByRole("button", { name: /New sale/i }).click();
 
   return {
+    authorization: checkoutRequest.headers().authorization,
     body: checkoutRequest.postDataJSON(),
+    organizationId:
+      checkoutRequest.headers()[
+        "x-tindio-organization-id"
+      ],
     url: checkoutRequest.url(),
   };
 }
@@ -566,6 +577,10 @@ test("P14-BR-09 stocked assembly and made-to-order consumption boundaries", asyn
 
   const replayResponse = await phasePage.request.post(madeToOrderCheckout.url, {
     data: madeToOrderCheckout.body,
+    headers: {
+      Authorization: madeToOrderCheckout.authorization,
+      "X-Tindio-Organization-Id": madeToOrderCheckout.organizationId,
+    },
   });
   expect(replayResponse.ok()).toBe(true);
 

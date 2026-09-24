@@ -1,7 +1,7 @@
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 
-import { loadPosWorkspace } from "@/features/pos/data";
+import { loadPosSupportWorkspace } from "@/features/pos/data";
 import { PosSettingsWorkspace } from "@/features/pos/pos-settings-workspace";
 import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
 import { canAccessBackOffice, getPosNavigationCapabilities, getWorkspaceHome, hasPermission, requireBusinessContext } from "@/lib/auth/dal";
@@ -12,7 +12,7 @@ export default async function PosSettingsPage() {
   await connection();
   const context = await requireBusinessContext();
   if (!hasPermission(context, "pos.access") || !hasPermission(context, "sales.create")) redirect(getWorkspaceHome(context));
-  const workspace = await loadPosWorkspace(context);
+  const workspace = await loadPosSupportWorkspace(context);
 
   return (
     <main className="min-h-svh bg-background">
@@ -22,8 +22,9 @@ export default async function PosSettingsPage() {
         {...getPosNavigationCapabilities(context)}
         canUseTimeClock={context.features.time_clock}
         employeeName={context.profile.full_name || context.profile.email || "Cashier"}
-        incomingTransfers={workspace.incomingTransfers}
-        organizationName={context.organization.name}
+          incomingTransfers={workspace.incomingTransfers}
+          organizationId={context.organization.id}
+          organizationName={context.organization.name}
         scope={`${context.organization.id}:${context.user.id}`}
         stores={workspace.stores}
         timeClockEntry={workspace.timeClockEntry}

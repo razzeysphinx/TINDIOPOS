@@ -30,6 +30,10 @@ const posTerminal = await readFile(
   new URL("../src/features/pos/pos-terminal.tsx", import.meta.url),
   "utf8",
 );
+const posV2CoreRoute = await readFile(
+  new URL("../src/app/api/pos/v2/bootstrap/route.ts", import.meta.url),
+  "utf8",
+);
 const reporting = await readFile(
   new URL("../src/features/reports/reporting.ts", import.meta.url),
   "utf8",
@@ -90,8 +94,10 @@ test("reporting remains server-scoped through the established dashboard RPC", ()
   assert.match(reporting, /hasOrganizationReportingScope/);
 });
 
-test("cashier POS remains a sales-permission route with its existing shift gate", () => {
-  assert.match(posPage, /hasPermission\(context, "sales\.create"\)/);
-  assert.match(posPage, /redirect\(getWorkspaceHome\(context\)\)/);
+test("cashier POS remains V2 sales-permission-gated with its existing shift gate", () => {
+  assert.match(posPage, /<PosV2TerminalShell\s*\/>/);
+  assert.match(posV2CoreRoute, /permissions\.includes\("pos\.access"\)/);
+  assert.match(posV2CoreRoute, /permissions\.includes\("sales\.create"\)/);
+  assert.match(posV2CoreRoute, /POS_ACCESS_FORBIDDEN/);
   assert.match(posTerminal, /PosShiftGate/);
 });

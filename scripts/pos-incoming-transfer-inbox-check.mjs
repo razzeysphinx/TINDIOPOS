@@ -50,11 +50,11 @@ test("POS incoming transfers use the shared canonical status contract", async ()
 });
 
 test("shared POS header exposes incoming transfers without adding a duplicate POS navigation route", async () => {
-  const [header, drawer, data, ...pages] = await Promise.all([
+  const [header, drawer, data, posV2Shell, ...pages] = await Promise.all([
     source("../src/features/pos/pos-workspace-header.tsx"),
     source("../src/features/pos/pos-operational-drawer.tsx"),
     source("../src/features/pos/data.ts"),
-    source("../src/app/(pos)/pos/page.tsx"),
+    source("../src/features/pos/pos-v2-terminal-shell.tsx"),
     source("../src/app/(pos)/pos/items/page.tsx"),
     source("../src/app/(pos)/pos/receipts/page.tsx"),
     source("../src/app/(pos)/pos/receipts/[receiptId]/page.tsx"),
@@ -69,6 +69,8 @@ test("shared POS header exposes incoming transfers without adding a duplicate PO
   assert.match(data, /get_pos_incoming_stock_transfers/);
   assert.match(data, /hasPermission\(context, "inventory\.transfer\.receive"\)/);
   assert.match(data, /canReceiveIncomingTransfers/);
+  assert.match(posV2Shell, /canReceiveIncomingTransfers=\{\s*live\.canReceiveIncomingTransfers\s*\}/);
+  assert.match(posV2Shell, /incomingTransfers=\{live\.incomingTransfers\}/);
 
   for (const page of pages) {
     assert.match(page, /canReceiveIncomingTransfers=\{workspace\.canReceiveIncomingTransfers\}/);

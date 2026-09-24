@@ -15,6 +15,7 @@ import {
   type OfflineQueuedCheckout,
   type OfflineStorageHealth,
 } from "@/features/offline/offline-store";
+import { fetchPosV2Command } from "@/features/pos/pos-v2-browser-api";
 
 export type OfflineQueueSummary = {
   pending: number;
@@ -94,7 +95,10 @@ async function markTransientFailure(checkout: OfflineQueuedCheckout, message: st
   });
 }
 
-async function syncOne(checkout: OfflineQueuedCheckout) {
+async function syncOne(
+  checkout: OfflineQueuedCheckout,
+  organizationId: string,
+) {
   const attemptAt = new Date().toISOString();
   const attempts = checkout.attempts + 1;
   await updateOfflineCheckout(checkout.idempotencyKey, {
@@ -127,9 +131,9 @@ async function syncOne(checkout: OfflineQueuedCheckout) {
       };
     }
 
-    const response = await fetch("/api/pos/offline-checkout", {
+    const response = await fetchPosV2Command("/api/pos/v2/offline-checkout", {
       method: "POST",
-      credentials: "same-origin",
+      organizationId,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         checkout: checkout.payload,
@@ -188,7 +192,10 @@ async function syncOne(checkout: OfflineQueuedCheckout) {
   }
 }
 
-export function syncOfflineCheckouts(scope: string): Promise<OfflineSyncReport> {
+export function syncOfflineCheckouts(
+  scope: string,
+  organizationId: string,
+): Promise<OfflineSyncReport> {
   const active = activeSyncs.get(scope);
   if (active) return active;
 
@@ -203,7 +210,7 @@ export function syncOfflineCheckouts(scope: string): Promise<OfflineSyncReport> 
     // transient failure or conflict so later cash activity cannot overtake a
     // sale that depends on the same shift and inventory projection.
     for (const entry of entries.filter(isReadyToRetry)) {
-      const result = await syncOne(entry);
+      const result = await syncOne(entry, organizationId);
       if (result === "completed") completed += 1;
       if (result !== "completed") break;
     }
@@ -221,7 +228,10 @@ export function syncOfflineCheckouts(scope: string): Promise<OfflineSyncReport> 
   return sync;
 }
 
-export function useOfflineQueue(scope: string) {
+export function useOfflineQueue(
+  scope: string,
+  organizationId: string,
+) {
   const [summary, setSummary] = useState<OfflineQueueSummary>({
     pending: 0,
     syncing: 0,
@@ -251,13 +261,16 @@ export function useOfflineQueue(scope: string) {
     if (!scope || !isOnline()) return;
     setIsSyncing(true);
     try {
-      const report = await syncOfflineCheckouts(scope);
+      const report = await syncOfflineCheckouts(
+        scope,
+        organizationId,
+      );
       setSummary(report);
       await refresh();
     } finally {
       setIsSyncing(false);
     }
-  }, [refresh, scope]);
+  }, [organizationId, refresh, scope]);
 
   useEffect(() => {
     const updateConnectivity = () => setOnline(isOnline());

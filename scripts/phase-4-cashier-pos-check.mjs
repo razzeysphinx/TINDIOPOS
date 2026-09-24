@@ -14,6 +14,10 @@ const posPage = await readFile(
   new URL("../src/app/(pos)/pos/page.tsx", import.meta.url),
   "utf8",
 );
+const posV2CoreRoute = await readFile(
+  new URL("../src/app/api/pos/v2/bootstrap/route.ts", import.meta.url),
+  "utf8",
+);
 
 test("cashier tools use a responsive left hamburger menu with a capability-scoped workspace switch", () => {
   assert.doesNotMatch(drawer, /PosOperationalSidebar/);
@@ -32,7 +36,7 @@ test("cashier tools use a responsive left hamburger menu with a capability-scope
 });
 
 test("active terminal keeps the existing sync status and adds a customer header shortcut", () => {
-  assert.match(terminal, /<OfflineQueueStatus scope=\{offlineScope\} \/>/);
+  assert.match(terminal, /<OfflineQueueStatus organizationId=\{organizationId\} scope=\{offlineScope\} \/>/);
   assert.match(terminal, /aria-label="Select customer"/);
   assert.match(terminal, /onClick=\{focusCustomerPicker\}/);
   assert.doesNotMatch(terminal, /PosOperationalSidebar/);
@@ -44,8 +48,10 @@ test("active terminal keeps the existing sync status and adds a customer header 
   assert.match(terminal, /min-h-svh bg-background/);
 });
 
-test("POS remains sales-permission-gated and retains the shift gate", () => {
-  assert.match(posPage, /hasPermission\(context, "sales\.create"\)/);
+test("POS remains V2 sales-permission-gated and retains the shift gate", () => {
+  assert.match(posPage, /<PosV2TerminalShell\s*\/>/);
+  assert.match(posV2CoreRoute, /permissions\.includes\("pos\.access"\)/);
+  assert.match(posV2CoreRoute, /permissions\.includes\("sales\.create"\)/);
   assert.match(terminal, /PosShiftGate/);
   assert.match(terminal, /openShiftAction/);
   assert.match(terminal, /closeShiftAction/);

@@ -24,7 +24,6 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   type FormEvent,
@@ -53,6 +52,11 @@ import { OfflineQueueStatus } from "@/features/offline/offline-queue-status";
 import { focusCustomerPicker, PosOperationalDrawer } from "@/features/pos/pos-operational-drawer";
 import { readPosWorkspacePreferences } from "@/features/pos/pos-preferences";
 import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
+import {
+  fetchPosV2Catalog,
+  fetchPosV2Command,
+  fetchPosV2Modifiers,
+} from "@/features/pos/pos-v2-browser-api";
 import type { PosCapabilities } from "@/features/pos/pos-capabilities";
 import { useCompactPosPresentation } from "@/features/pos/pos-responsive";
 import {
@@ -73,7 +77,6 @@ import {
   posItemKey,
   type PosCartLine,
   type PosCatalogItem,
-  type PosCatalogResponse,
   type PosActiveShift,
   type PosCategory,
   type PosCustomer,
@@ -168,15 +171,13 @@ export function PosTerminal({
   discounts,
   currencyCode,
   employeeName,
-  initialItems,
-  initialFavoriteItems,
-  initialRecentItems,
   incomingTransfers,
   loyaltyProgram,
   organizationName,
   openTickets: initialOpenTickets,
   offlineScope,
   organizationId,
+  onRefreshLive,
   paymentMethods,
   registers: allRegisters,
   stores: allStores,
@@ -197,15 +198,18 @@ export function PosTerminal({
   discounts: PosDiscount[];
   currencyCode: string;
   employeeName: string;
-  initialItems: PosCatalogItem[];
-  initialFavoriteItems: PosCatalogItem[];
-  initialRecentItems: PosCatalogItem[];
   incomingTransfers: PosIncomingTransfer[];
   loyaltyProgram: PosLoyaltyProgram | null;
   organizationName: string;
   openTickets: PosOpenTicket[];
   offlineScope: string;
   organizationId: string;
+  onRefreshLive?: (
+    scope?: {
+      storeId?: string | null;
+      registerId?: string | null;
+    },
+  ) => void;
   paymentMethods: PosPaymentMethod[];
   registers: PosRegister[];
   stores: PosStore[];
@@ -215,7 +219,6 @@ export function PosTerminal({
   timeClockEntry: TimeClockEntry | null;
   timezone: string;
 }) {
-  const router = useRouter();
   const searchRef = useRef<HTMLInputElement>(null);
   const requestIdRef = useRef(0);
   const stockRequestIdRef = useRef(0);
@@ -226,11 +229,11 @@ export function PosTerminal({
   const [selectedRegisterSelectionId, setSelectedRegisterId] = useState(initialActiveShift?.registerId ?? "");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [items, setItems] = useState(initialItems);
-  const [favoriteItems, setFavoriteItems] = useState(initialFavoriteItems);
-  const [, setRecentItems] = useState(initialRecentItems);
+  const [items, setItems] = useState<PosCatalogItem[]>([]);
+  const [favoriteItems, setFavoriteItems] = useState<PosCatalogItem[]>([]);
+  const [, setRecentItems] = useState<PosCatalogItem[]>([]);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [hasMore, setHasMore] = useState(initialItems.length === PAGE_SIZE);
+  const [hasMore, setHasMore] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [cart, setCart] = useState<PosCartLine[]>([]);
@@ -282,6 +285,56 @@ export function PosTerminal({
     activeShift?.storeId === selectedStoreId &&
     activeShift.registerId === selectedRegisterId;
   const isOperational = Boolean(selectedStore && selectedRegister && hasOpenShift);
+
+  useEffect(() => {
+    if (taxRateId || taxRates.length === 0) {
+      return;
+    }
+
+    const defaultTax =
+      taxRates.find((rate) => rate.isDefault);
+
+    if (defaultTax) {
+      const timer = window.setTimeout(
+        () => setTaxRateId(defaultTax.id),
+        0,
+      );
+
+      return () => window.clearTimeout(timer);
+    }
+  }, [taxRateId, taxRates]);
+
+  useEffect(() => {
+    if (
+      diningOptionId
+      || diningOptions.length === 0
+    ) {
+      return;
+    }
+
+    const defaultDining =
+      diningOptions.find(
+        (option) => option.isDefault,
+      );
+
+    if (defaultDining) {
+      const timer = window.setTimeout(
+        () => setDiningOptionId(defaultDining.id),
+        0,
+      );
+
+      return () => window.clearTimeout(timer);
+    }
+  }, [diningOptionId, diningOptions]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setOpenTickets(initialOpenTickets),
+      0,
+    );
+
+    return () => window.clearTimeout(timer);
+  }, [initialOpenTickets]);
 
   useEffect(() => {
     const syncPreferences = () => {
@@ -409,14 +462,20 @@ export function PosTerminal({
     if (!isOperational || !activeCustomerDisplaySession) return;
 
     const timeout = window.setTimeout(() => {
-      void fetch("/api/pos/customer-display", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: activeCustomerDisplaySession.sessionId,
-          state: customerDisplayState,
-        }),
-      });
+      void fetchPosV2Command(
+        "/api/pos/v2/customer-display",
+        {
+          method: "PUT",
+          organizationId,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: activeCustomerDisplaySession.sessionId,
+            state: customerDisplayState,
+          }),
+        },
+      ).catch(
+        () => undefined,
+      );
 
       if (displayChannelRef.current) {
         void displayChannelRef.current.send({
@@ -428,7 +487,7 @@ export function PosTerminal({
     }, CUSTOMER_DISPLAY_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeout);
-  }, [activeCustomerDisplaySession, customerDisplayState, isOperational]);
+  }, [activeCustomerDisplaySession, customerDisplayState, isOperational, organizationId]);
   const canStartPayment =
     !isPaymentScreenOpen &&
     canAcceptPayments &&
@@ -474,29 +533,25 @@ export function PosTerminal({
       query?: string;
       storeId?: string;
     } = {}) => {
-      const params = new URLSearchParams({
-        store: storeId,
-        offset: String(offset),
-        limit: String(PAGE_SIZE),
-      });
-
-      if (query.trim()) params.set("query", query.trim());
-      if (categoryId) params.set("category", categoryId);
-
-      const response = await fetch(`/api/pos/catalog?${params.toString()}`);
-      const payload = (await response.json()) as PosCatalogResponse | { error?: string };
-
-      if (!response.ok || !("items" in payload)) {
-        throw new Error(
-          "error" in payload && payload.error
-            ? payload.error
-            : "The POS catalogue could not be loaded.",
+      const payload =
+        await fetchPosV2Catalog(
+          organizationId,
+          {
+            store: storeId,
+            mode: "search",
+            query: query.trim(),
+            category: categoryId ?? undefined,
+            offset,
+            limit: PAGE_SIZE,
+          },
         );
-      }
 
-      return payload;
+      return {
+        items: payload.items,
+        hasMore: payload.hasMore,
+      };
     },
-    [search, selectedCategoryId, selectedStoreId],
+    [organizationId, search, selectedCategoryId, selectedStoreId],
   );
 
   const loadCatalog = useCallback(
@@ -597,6 +652,48 @@ export function PosTerminal({
   }, [isOperational, loadCatalog, search, selectedCategoryId, selectedStoreId]);
 
   useEffect(() => {
+    if (!isOperational || !selectedStoreId) {
+      return;
+    }
+
+    let current = true;
+
+    void fetchPosV2Catalog(
+      organizationId,
+      {
+        store: selectedStoreId,
+        mode: "favorites",
+        query: "",
+        offset: 0,
+        limit: PAGE_SIZE,
+      },
+    ).then((payload) => {
+      if (current) {
+        setFavoriteItems(payload.items);
+      }
+    }).catch(() => undefined);
+
+    void fetchPosV2Catalog(
+      organizationId,
+      {
+        store: selectedStoreId,
+        mode: "recent",
+        query: "",
+        offset: 0,
+        limit: PAGE_SIZE,
+      },
+    ).then((payload) => {
+      if (current) {
+        setRecentItems(payload.items);
+      }
+    }).catch(() => undefined);
+
+    return () => {
+      current = false;
+    };
+  }, [isOperational, organizationId, selectedStoreId]);
+
+  useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (!isOperational) return;
 
@@ -657,9 +754,11 @@ export function PosTerminal({
   const addWithModifiers = async (item: PosCatalogItem, manualPriceMinor: number | null = null) => {
     if (!item.hasModifiers) { addToCart(item, [], manualPriceMinor); return; }
     try {
-      const response = await fetch(`/api/pos/modifiers?${new URLSearchParams({ product: item.productId, store: selectedStoreId })}`);
-      const payload = await response.json() as { groups?: ModifierGroup[]; error?: string };
-      if (!response.ok || !payload.groups) throw new Error(payload.error);
+      const payload = await fetchPosV2Modifiers(
+        organizationId,
+        selectedStoreId,
+        item.productId,
+      );
       if (payload.groups.length === 0) { addToCart(item, [], manualPriceMinor); return; }
       setModifierPicker({ item, groups: payload.groups, manualPriceMinor });
     } catch { setNotice("Modifiers could not be loaded. Try again."); }
@@ -898,7 +997,10 @@ export function PosTerminal({
       setActiveTicketId(result.ticketId);
       setOpenTickets((current) => [savedTicket, ...current.filter((ticket) => ticket.id !== result.ticketId)]);
       setIsTicketEditorOpen(false);
-      router.refresh();
+      onRefreshLive?.({
+        storeId: selectedStoreId,
+        registerId: selectedRegisterId || null,
+      });
     });
   };
 
@@ -928,7 +1030,10 @@ export function PosTerminal({
     setCheckoutKey(createCheckoutKey());
     setCompletedDisplaySale(null);
     setNotice("Shift open. The POS is ready for sales.");
-    router.refresh();
+    onRefreshLive?.({
+      storeId: shift.storeId,
+      registerId: shift.registerId,
+    });
   };
 
   const handleShiftClosed = () => {
@@ -939,7 +1044,10 @@ export function PosTerminal({
     setActiveTicketId(null);
     setIsPaymentScreenOpen(false);
     setCheckoutKey(createCheckoutKey());
-    router.refresh();
+    onRefreshLive?.({
+      storeId: null,
+      registerId: null,
+    });
   };
 
   const chargeGuidance = !selectedRegister
@@ -958,6 +1066,7 @@ export function PosTerminal({
           setSelectedCustomer(customer);
           setCheckoutKey(createCheckoutKey());
         }}
+        organizationId={organizationId}
         showLoyalty={canUseCustomerLoyalty}
         storeId={selectedStoreId}
         value={selectedCustomer}
@@ -1013,7 +1122,10 @@ export function PosTerminal({
                     if (result.ok) {
                       setOpenTickets((current) => current.filter((item) => item.id !== ticket.id));
                       if (activeTicketId === ticket.id) setActiveTicketId(null);
-                      router.refresh();
+                      onRefreshLive?.({
+                        storeId: selectedStoreId,
+                        registerId: selectedRegisterId || null,
+                      });
                     }
                   })}
                   type="button"
@@ -1120,7 +1232,14 @@ export function PosTerminal({
           incomingTransfers={incomingTransfers}
           itemCount={cartSummary.itemCount}
           onCreateCustomer={canCreateCustomers && !isPaymentScreenOpen ? () => setIsCustomerCreateOpen(true) : undefined}
+          onRefreshLive={() => {
+            onRefreshLive?.({
+              storeId: selectedStoreId || null,
+              registerId: selectedRegisterId || null,
+            });
+          }}
           onViewCart={() => setIsCartReviewOpen(true)}
+          organizationId={organizationId}
           organizationName={organizationName}
           scope={offlineScope}
           stores={stores}
@@ -1159,7 +1278,7 @@ export function PosTerminal({
 
           <div className="order-2 flex flex-wrap items-center gap-2 sm:order-1">
             <Badge variant="outline">{currencyCode}</Badge>
-            <OfflineQueueStatus scope={offlineScope} />
+            <OfflineQueueStatus organizationId={organizationId} scope={offlineScope} />
             <Button
               aria-label="Select customer"
               disabled={isPaymentScreenOpen}
@@ -1268,8 +1387,19 @@ export function PosTerminal({
 
               <div className="min-h-0 px-4 pt-4 pb-[calc(9rem+env(safe-area-inset-bottom))] sm:px-5 lg:pb-5">
                 {catalogError ? (
-                  <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-sm text-destructive">
-                    {catalogError}
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-sm text-destructive">
+                    <span>{catalogError}</span>
+                    <Button
+                      disabled={!isOperational || isLoading}
+                      onClick={() => {
+                        void loadCatalog();
+                      }}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      Retry
+                    </Button>
                   </div>
                 ) : null}
                 {displayedItems.length > 0 ? (
@@ -1422,6 +1552,7 @@ export function PosTerminal({
           customer={selectedCustomer}
           loyaltyProgram={loyaltyProgram}
           offlineScope={offlineScope}
+          organizationId={organizationId}
           onCancel={() => setIsPaymentScreenOpen(false)}
           onDiscountChange={(nextDiscountId) => {
             setDiscountId(nextDiscountId);
@@ -1457,6 +1588,10 @@ export function PosTerminal({
             setCompletedDisplaySale(null);
             setIsPaymentScreenOpen(false);
             setNotice("Ready for a new sale.");
+            onRefreshLive?.({
+              storeId: selectedStoreId,
+              registerId: selectedRegisterId || null,
+            });
           }}
           paymentMethods={availablePaymentMethods}
           register={selectedRegister}
@@ -1505,7 +1640,7 @@ export function PosTerminal({
         />
       ) : null}
       {isTicketEditorOpen ? <TicketSaveDialog assignees={ticketAssignees} canAssign={canAssignTickets} diningOptions={diningOptions} onClose={() => setIsTicketEditorOpen(false)} onSave={submitTicket} templates={ticketTemplates} ticket={openTickets.find((ticket) => ticket.id === activeTicketId) ?? null} /> : null}
-      {isTicketWorkspaceOpen ? <TicketOperationsDialog device={deviceCredential} onClose={() => setIsTicketWorkspaceOpen(false)} onComplete={(message) => { setNotice(message); setIsTicketWorkspaceOpen(false); router.refresh(); }} tickets={openTickets} /> : null}
+      {isTicketWorkspaceOpen ? <TicketOperationsDialog device={deviceCredential} onClose={() => setIsTicketWorkspaceOpen(false)} onComplete={(message) => { setNotice(message); setIsTicketWorkspaceOpen(false); onRefreshLive?.({ storeId: selectedStoreId, registerId: selectedRegisterId || null }); }} tickets={openTickets} /> : null}
     </>
   );
 }

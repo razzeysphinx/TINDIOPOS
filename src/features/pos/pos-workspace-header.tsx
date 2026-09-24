@@ -15,6 +15,8 @@ type PosWorkspaceHeaderProps = PosOperationalNavigationProps & {
   onViewCart?: () => void;
   canReceiveIncomingTransfers?: boolean;
   incomingTransfers?: PosIncomingTransfer[];
+  onRefreshLive?: () => void;
+  organizationId: string;
   scope: string;
   title: string;
 };
@@ -26,7 +28,9 @@ export function PosWorkspaceHeader({
   canReceiveIncomingTransfers = false,
   incomingTransfers = [],
   onCreateCustomer,
+  onRefreshLive,
   onViewCart,
+  organizationId,
   organizationName,
   scope,
   title,
@@ -79,8 +83,15 @@ export function PosWorkspaceHeader({
             <span className="sm:hidden">Customer</span>
           </Button>
         ) : null}
-        <PosIncomingTransferInbox enabled={canReceiveIncomingTransfers} transfers={incomingTransfers} />
-        <OfflineQueueStatus scope={scope} />
+        <PosIncomingTransferInbox
+          enabled={canReceiveIncomingTransfers}
+          onRefresh={onRefreshLive}
+          transfers={incomingTransfers}
+        />
+        <OfflineQueueStatus
+          organizationId={organizationId}
+          scope={scope}
+        />
       </div>
     </header>
   );

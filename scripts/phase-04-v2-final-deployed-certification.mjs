@@ -624,6 +624,21 @@ try {
       },
     ),
   );
+  await runSequential(
+    "Modifiers sequential stability",
+    50,
+    () => timedFetch(
+      deploymentUrl(
+        `/api/pos/v2/modifiers?store=${encodeURIComponent(activeStoreId)}&product=${encodeURIComponent(productId)}`,
+      ),
+      {
+        headers: {
+          ...bearerHeaders,
+          "X-Tindio-Organization-Id": organizationId,
+        },
+      },
+    ),
+  );
 
   const mixedRequests = [
     () => timedFetch(
@@ -711,7 +726,9 @@ try {
     0,
     `Mixed concurrency failures: ${JSON.stringify(mixedFailures.slice(0, 20))}`,
   );
+  console.log("Sequential V2 reliability: PASS 400/400");
   console.log("Mixed 5-endpoint concurrency: PASS 100/100");
+  console.log("Final V2 API reliability: PASS 500/500");
   console.log(
     bypass
       ? "Vercel protection bypass: ACTIVE"

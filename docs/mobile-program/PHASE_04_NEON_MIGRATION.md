@@ -103,3 +103,44 @@ SUPABASE_AUTH_RETAINED: YES
 SUPABASE_REALTIME_RETAINED: YES
 NEON_AUTH_ADOPTED: NO
 ```
+
+## Phase 04 Closure
+
+Status: COMPLETE
+
+Authoritative POS API: V2
+
+Supabase:
+- authoritative authentication provider
+- Realtime/Storage remain available where used
+
+Neon:
+- authoritative TINDIO business-data provider
+
+POS V2:
+- Core
+- Reference
+- Live
+- Catalog
+- Modifiers
+- operational command API
+
+Legacy V1:
+- /api/pos/v1 retired
+- monolithic V1 bootstrap retired
+- V1 deployed certification retired
+
+Temporary compatibility aliases retained:
+- /api/pos/checkout
+- /api/pos/offline-checkout
+- /api/pos/customers
+- /api/pos/device
+- /api/pos/customer-display
+
+Certification:
+- V2 deployed reliability: 1000/1000 PASS
+- V2 browser certification: PASS
+- provider/auth regression: PASS
+- V1 extraction/retirement: PASS
+- post-merge V2 smoke: PASS
+- post-merge tenant/store/register isolation: PASS

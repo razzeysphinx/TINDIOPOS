@@ -72,6 +72,43 @@ export const posCatalogQuerySchema =
         .default(24),
   });
 
+export const posCatalogV2QuerySchema =
+  z.object({
+    store: z.uuid(),
+    mode:
+      z.enum([
+        "search",
+        "favorites",
+        "recent",
+      ])
+        .optional()
+        .default("search"),
+    query:
+      z.string()
+        .trim()
+        .max(100)
+        .optional()
+        .default(""),
+    category:
+      z.uuid().optional(),
+    offset:
+      z.coerce
+        .number()
+        .int()
+        .min(0)
+        .max(10_000)
+        .optional()
+        .default(0),
+    limit:
+      z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(24)
+        .optional()
+        .default(24),
+  });
+
 export const posCustomerSearchQuerySchema =
   z.object({
     q:
@@ -110,6 +147,11 @@ export const posReceiptSearchQuerySchema =
 export type PosCatalogQuery =
   z.infer<
     typeof posCatalogQuerySchema
+  >;
+
+export type PosCatalogV2Query =
+  z.infer<
+    typeof posCatalogV2QuerySchema
   >;
 
 export type PosCustomerSearchQuery =
@@ -393,6 +435,32 @@ export type PosLiveV2Response = {
     ticketAssignees:
       PosTicketAssignee[];
   };
+};
+
+export type PosCatalogV2Response = {
+  ok: true;
+  version: 2;
+  requestId: string;
+  organizationId: string;
+  storeId: string;
+  mode:
+    | "search"
+    | "favorites"
+    | "recent";
+  offset: number;
+  limit: number;
+  items: PosCatalogItem[];
+  hasMore: boolean;
+};
+
+export type PosModifiersV2Response = {
+  ok: true;
+  version: 2;
+  requestId: string;
+  organizationId: string;
+  storeId: string;
+  productId: string;
+  groups: PosModifierGroup[];
 };
 
 export type PosCatalogResponse = {

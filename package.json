@@ -127,6 +127,7 @@
     "test:phase-04-v2-final-architecture": "node --test scripts/phase-04-v2-final-architecture-check.mjs",
     "test:phase-04-v1-retirement": "node --test scripts/phase-04-v1-retirement-check.mjs",
     "migrate:phase-04:v2-hosted": "node scripts/phase-04-v2-hosted-apply.mjs",
+    "migrate:phase-05:governance-hosted": "node scripts/phase-05-organization-governance-hosted-apply.mjs",
     "certify:phase-04:v2-final": "node scripts/phase-04-v2-final-deployed-certification.mjs",
     "certify:phase-04:v2-browser": "node scripts/phase-04-v2-progressive-browser-check.mjs",
     "profile:phase-05:neon": "node scripts/phase-05-neon-runtime-profile.mjs",

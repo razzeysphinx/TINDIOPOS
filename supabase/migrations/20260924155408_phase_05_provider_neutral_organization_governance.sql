@@ -159,7 +159,7 @@ declare
 begin
   if current_profile_id is null then
     raise exception
-      'A current profile is required for organization rate limiting.'
+      'An authenticated TINDIO profile is required.'
       using errcode = '42501';
   end if;
 
@@ -287,12 +287,6 @@ declare
   actor_employee_id uuid;
   current_profile_id uuid := private.current_profile_id();
 begin
-  if current_profile_id is null then
-    raise exception
-      'A current profile is required to prepare an organization export.'
-      using errcode = '42501';
-  end if;
-
   rate_limit_result := private.consume_organization_rate_limit(
     target_organization_id,
     'organization.export'
@@ -362,12 +356,6 @@ declare
   next_after_id uuid;
   current_profile_id uuid := private.current_profile_id();
 begin
-  if current_profile_id is null then
-    raise exception
-      'A current profile is required to read an organization export.'
-      using errcode = '42501';
-  end if;
-
   select session.*
   into export_session
   from public.organization_export_sessions session
@@ -450,12 +438,6 @@ declare
   delivery_completed_at timestamptz := clock_timestamp();
   current_profile_id uuid := private.current_profile_id();
 begin
-  if current_profile_id is null then
-    raise exception
-      'A current profile is required to complete an organization export.'
-      using errcode = '42501';
-  end if;
-
   if target_record_count not between 1 and 50000000
     or jsonb_typeof(target_manifest) <> 'object'
     or not (target_manifest ? 'format')
@@ -572,7 +554,7 @@ begin
 
   if actor_employee_id is null then
     raise exception
-      'An active organization member is required for lifecycle management.'
+      'An active organization employee is required.'
       using errcode = '42501';
   end if;
 

@@ -46,8 +46,8 @@ function quantile(values, fraction) {
   return Math.round(sorted[index]);
 }
 
-function classify(duration, timeoutCount, thresholds) {
-  if (timeoutCount > 0 || duration === null) {
+function classify(duration, timeoutCount, failureCount, thresholds) {
+  if (timeoutCount > 0 || failureCount > 0 || duration === null) {
     return "HARDEN_REQUIRED";
   }
 
@@ -60,6 +60,25 @@ function classify(duration, timeoutCount, thresholds) {
   }
 
   return "HARDEN_REQUIRED";
+}
+
+function totalConnections(snapshot) {
+  return Object.values(snapshot.activity)
+    .reduce((total, count) => total + Number(count), 0);
+}
+
+function counterDelta(before, after) {
+  const delta = {};
+
+  for (const [name, value] of Object.entries(after.database ?? {})) {
+    if (name === "datname") {
+      continue;
+    }
+
+    delta[name] = Number(value) - Number(before.database?.[name] ?? 0);
+  }
+
+  return delta;
 }
 
 function deploymentUrl(deployment, pathname) {
@@ -280,7 +299,7 @@ async function measureHttpEndpoint({
     timeout_count: timeoutCount,
     failure_count: failures.length,
     failures,
-    classification: classify(p95, timeoutCount, {
+    classification: classify(p95, timeoutCount, failures.length, {
       good: 750,
       watch: 1_500,
     }),
@@ -394,12 +413,13 @@ async function measureBackOffice({
         .map((sample) => sample.duration_ms);
       const warmP95 = quantile(warmDurations, 0.95);
       const timeoutCount = samples.filter((sample) => sample.fatal === "TIMEOUT").length;
+      const failureCount = samples.filter((sample) => !sample.success).length;
 
       pages.push({
         pathname,
         samples,
         warm_p95_ms: warmP95,
-        classification: classify(warmP95, timeoutCount, {
+        classification: classify(warmP95, timeoutCount, failureCount, {
           good: 1_500,
           watch: 3_000,
         }),
@@ -449,7 +469,9 @@ const report = {
   timeout_ms: REQUEST_TIMEOUT_MS,
   protection_bypass: bypass ? "ACTIVE" : "NOT_REQUIRED",
   database_before: null,
-  database_after: null,
+  database_delta: null,
+  connection_baseline: null,
+  observed_connection_peak: null,
   pg_stat_statements_window: null,
   http: [],
   back_office: null,
@@ -459,6 +481,7 @@ let statementsBefore;
 
 try {
   report.database_before = readDatabaseSnapshot(databaseUrl);
+  report.connection_baseline = totalConnections(report.database_before);
   statementsBefore = readStatements(databaseUrl);
 
   const { data, error } = await auth.auth.signInWithPassword({
@@ -573,7 +596,12 @@ try {
     bypass,
   });
 } finally {
-  report.database_after = readDatabaseSnapshot(databaseUrl);
+  const databaseAfter = readDatabaseSnapshot(databaseUrl);
+  report.database_delta = counterDelta(report.database_before ?? {}, databaseAfter);
+  report.observed_connection_peak = Math.max(
+    report.connection_baseline ?? 0,
+    totalConnections(databaseAfter),
+  );
   report.pg_stat_statements_window = changedStatements(
     statementsBefore ?? { available: false, statements: [] },
     readStatements(databaseUrl),

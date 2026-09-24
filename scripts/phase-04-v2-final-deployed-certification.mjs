@@ -159,9 +159,7 @@ try {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({
-          target_organization_id: null,
-        }),
+        body: "{}",
       },
     );
 

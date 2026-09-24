@@ -77,6 +77,11 @@ test(
       context,
       /DATABASE_UNAVAILABLE/,
     );
+
+    assert.match(
+      context,
+      /status >= 400[\s\S]*status < 500[\s\S]*status !== 429/,
+    );
   },
 );
 

@@ -72,14 +72,19 @@ function bearerFromRequest(
 function authErrorStatus(
   error: unknown,
 ) {
-  if (
+  const status =
     error
     && typeof error === "object"
     && "status" in error
-    && (
-      error.status === 401
-      || error.status === 403
-    )
+    && typeof error.status === "number"
+      ? error.status
+      : null;
+
+  if (
+    status !== null
+    && status >= 400
+    && status < 500
+    && status !== 429
   ) {
     return 401 as const;
   }

@@ -378,13 +378,13 @@ test.afterAll(
 );
 
 test(
-  "P02-AUTH-01 web cookie authentication remains compatible",
+  "P02-AUTH-01 web cookie authentication remains compatible outside bearer-only V2 APIs",
   async () => {
     const response =
       await ownerAContext
         .request
         .get(
-          `${appUrl}/api/pos/v1/bootstrap`,
+          `${appUrl}/back-office`,
         );
 
     expect(
@@ -392,16 +392,12 @@ test(
     ).toBe(200);
 
     const body =
-      await response.json() as {
-        organization: {
-          id: string;
-        };
-      };
+      await response.text();
 
     expect(
-      body.organization.id,
-    ).toBe(
-      organizationAId,
+      body,
+    ).toContain(
+      businessAName,
     );
   },
 );
@@ -411,7 +407,7 @@ test(
   async () => {
     const response =
       await bearerFetch(
-        "/api/pos/v1/bootstrap",
+        "/api/pos/v2/bootstrap",
         ownerAToken,
         organizationAId,
       );
@@ -422,13 +418,15 @@ test(
 
     const body =
       await response.json() as {
-        organization: {
-          id: string;
+        core: {
+          organization: {
+            id: string;
+          };
         };
       };
 
     expect(
-      body.organization.id,
+      body.core.organization.id,
     ).toBe(
       organizationAId,
     );
@@ -442,7 +440,7 @@ test(
       await ownerAContext
         .request
         .get(
-          `${appUrl}/api/pos/v1/bootstrap`,
+          `${appUrl}/api/pos/v2/bootstrap`,
           {
             headers: {
               Authorization:
@@ -462,14 +460,14 @@ test(
   async () => {
     const response =
       await bearerFetch(
-        "/api/pos/v1/bootstrap",
+        "/api/pos/v2/bootstrap",
         ownerAToken,
         organizationBId,
       );
 
     expect(
       response.status,
-    ).toBe(401);
+    ).toBe(403);
 
     const text =
       await response.text();
@@ -485,7 +483,7 @@ test(
   async () => {
     const response =
       await fetch(
-        `${appUrl}/api/pos/v1/bootstrap`,
+        `${appUrl}/api/pos/v2/bootstrap`,
         {
           headers: {
             Authorization:
@@ -499,7 +497,7 @@ test(
 
     expect(
       response.status,
-    ).toBe(401);
+    ).toBe(403);
   },
 );
 
@@ -520,7 +518,7 @@ test(
         await ownerAContext
           .request
           .get(
-            `${appUrl}/api/pos/v1/bootstrap`,
+            `${appUrl}/api/pos/v2/bootstrap`,
             {
               headers: {
                 Authorization:
@@ -541,7 +539,7 @@ test(
   async () => {
     const bootstrapResponse =
       await bearerFetch(
-        "/api/pos/v1/bootstrap",
+        "/api/pos/v2/bootstrap",
         scopedToken,
         organizationAId,
       );
@@ -552,7 +550,7 @@ test(
 
     const bootstrap =
       await bootstrapResponse.json() as {
-        workspace: {
+        core: {
           stores: Array<{
             id: string;
           }>;
@@ -560,7 +558,7 @@ test(
       };
 
     const storeIds =
-      bootstrap.workspace
+      bootstrap.core
         .stores
         .map(
           (store) => store.id,
@@ -576,14 +574,14 @@ test(
 
     const catalogResponse =
       await bearerFetch(
-        `/api/pos/v1/catalog?store=${encodeURIComponent(storeBId)}`,
+        `/api/pos/v2/catalog?store=${encodeURIComponent(storeBId)}`,
         scopedToken,
         organizationAId,
       );
 
     expect(
       catalogResponse.status,
-    ).toBe(400);
+    ).toBe(403);
   },
 );
 
@@ -592,7 +590,7 @@ test(
   async () => {
     const response =
       await bearerFetch(
-        "/api/pos/v1/bootstrap",
+        "/api/pos/v2/bootstrap",
         ownerAToken,
         organizationAId,
       );
@@ -603,14 +601,16 @@ test(
 
     const body =
       await response.json() as {
-        availableOrganizations:
-          Array<{
-            id: string;
-          }>;
+        core: {
+          availableOrganizations:
+            Array<{
+              id: string;
+            }>;
+        };
       };
 
     const organizationIds =
-      body.availableOrganizations
+      body.core.availableOrganizations
         .map(
           (organization) =>
             organization.id,

@@ -179,6 +179,12 @@ if (
 const env = {
   ...process.env,
 
+  // Phase 02 provisions and verifies identities against the local Supabase
+  // stack. An ignored hosted-Neon .env.local must not redirect server-side
+  // data calls away from that isolated runtime.
+  TINDIO_DATABASE_PROVIDER:
+    "supabase",
+
   NEXT_PUBLIC_APP_URL:
     "http://127.0.0.1:3100",
 

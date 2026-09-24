@@ -75,6 +75,18 @@ function authErrorStatus(
     return 401 as const;
   }
 
+  const message =
+    error instanceof Error
+      ? error.message
+      : "";
+
+  if (
+    /(?:invalid|malformed)[\s\S]*(?:token|jwt|jws|utf-8|signature)|expired[\s\S]*(?:token|jwt|jws)/i
+      .test(message)
+  ) {
+    return 401 as const;
+  }
+
   const status =
     error
     && typeof error === "object"

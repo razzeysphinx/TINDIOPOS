@@ -294,7 +294,12 @@ export function PosTerminal({
       taxRates.find((rate) => rate.isDefault);
 
     if (defaultTax) {
-      setTaxRateId(defaultTax.id);
+      const timer = window.setTimeout(
+        () => setTaxRateId(defaultTax.id),
+        0,
+      );
+
+      return () => window.clearTimeout(timer);
     }
   }, [taxRateId, taxRates]);
 
@@ -312,12 +317,22 @@ export function PosTerminal({
       );
 
     if (defaultDining) {
-      setDiningOptionId(defaultDining.id);
+      const timer = window.setTimeout(
+        () => setDiningOptionId(defaultDining.id),
+        0,
+      );
+
+      return () => window.clearTimeout(timer);
     }
   }, [diningOptionId, diningOptions]);
 
   useEffect(() => {
-    setOpenTickets(initialOpenTickets);
+    const timer = window.setTimeout(
+      () => setOpenTickets(initialOpenTickets),
+      0,
+    );
+
+    return () => window.clearTimeout(timer);
   }, [initialOpenTickets]);
 
   useEffect(() => {

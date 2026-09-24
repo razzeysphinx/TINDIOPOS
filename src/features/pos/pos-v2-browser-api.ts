@@ -9,8 +9,8 @@ import type {
   PosReferenceV2Response,
 } from "@/contracts/pos-v1";
 import {
-  createClient,
-} from "@/lib/supabase/client";
+  getRealtimeClient,
+} from "@/lib/supabase/realtime-client";
 
 const ORGANIZATION_HEADER =
   "x-tindio-organization-id";
@@ -22,11 +22,11 @@ const REGISTER_HEADER =
   "x-tindio-register-id";
 
 let browserClient:
-  ReturnType<typeof createClient>
+  ReturnType<typeof getRealtimeClient>
   | null = null;
 
 function getBrowserClient() {
-  browserClient ??= createClient();
+  browserClient ??= getRealtimeClient();
 
   return browserClient;
 }

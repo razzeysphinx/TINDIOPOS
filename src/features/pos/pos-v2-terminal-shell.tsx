@@ -316,7 +316,14 @@ export function PosV2TerminalShell() {
     }, [core]);
 
   useEffect(() => {
-    void loadCore();
+    const timer = window.setTimeout(
+      () => {
+        void loadCore();
+      },
+      0,
+    );
+
+    return () => window.clearTimeout(timer);
   }, [loadCore]);
 
   useEffect(() => {
@@ -324,8 +331,15 @@ export function PosV2TerminalShell() {
       return;
     }
 
-    void refreshReference();
-    void refreshLive();
+    const timer = window.setTimeout(
+      () => {
+        void refreshReference();
+        void refreshLive();
+      },
+      0,
+    );
+
+    return () => window.clearTimeout(timer);
   }, [core, refreshLive, refreshReference]);
 
   const features =

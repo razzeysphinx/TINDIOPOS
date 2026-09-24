@@ -33,6 +33,7 @@ const [
   deviceRoute,
   advancedSalesActions,
   posPage,
+  posV2CoreRoute,
   posCapabilities,
   posData,
   ticketActions,
@@ -75,6 +76,7 @@ const [
   source("../src/app/api/pos/device/route.ts"),
   source("../src/features/advanced-sales/actions.ts"),
   source("../src/app/(pos)/pos/page.tsx"),
+  source("../src/app/api/pos/v2/bootstrap/route.ts"),
   source("../src/features/pos/pos-capabilities.ts"),
   source("../src/features/pos/data.ts"),
   Promise.all([source("../src/features/advanced-sales/ticket-actions.ts"), source("../src/features/advanced-sales/ticket-service.ts")]).then((sources) => sources.join("\n")),
@@ -124,9 +126,10 @@ test("checkout keeps session-derived organization scope and capability-derived s
 });
 
 test("POS capability gates are enforced consistently in the UI, server actions, and API routes", () => {
-  assert.match(posPage, /hasPermission\(context, "pos\.access"/);
-  assert.match(posPage, /hasPermission\(context, "sales\.create"/);
-  assert.match(posPage, /getPosCapabilities/);
+  assert.match(posPage, /<PosV2TerminalShell\s*\/>/);
+  assert.match(posV2CoreRoute, /permissions\.includes\("pos\.access"\)/);
+  assert.match(posV2CoreRoute, /permissions\.includes\("sales\.create"\)/);
+  assert.match(posV2CoreRoute, /POS_ACCESS_FORBIDDEN/);
   assert.match(posCapabilities, /canAcceptPayments: canCreateSales && has\("payments\.accept"\)/);
   assert.match(posCapabilities, /canApplyDiscounts: canCreateSales && has\("discounts\.apply"\)/);
   assert.match(posCapabilities, /features\.open_tickets && canCreateSales && has\("tickets\.manage"\)/);

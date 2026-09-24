@@ -106,9 +106,15 @@ async function addCompositeComponent(page: Page, compositeName: string, quantity
 
 async function sellProduct(page: Page, productName: string) {
   await page.goto("/pos");
-  if (await page.getByRole("button", { name: "Open shift" }).isVisible()) {
-    await page.getByRole("button", { name: "Open shift" }).click();
+  const openShift = page.getByRole("button", { name: "Open shift" });
+  const search = page.getByRole("searchbox").or(page.getByPlaceholder(/Search/i)).first();
+
+  await expect(openShift.or(search)).toBeVisible({ timeout: 30_000 });
+
+  if (await openShift.isVisible()) {
+    await openShift.click();
     const shiftDialog = page.getByRole("dialog", { name: "Open shift" });
+    await expect(shiftDialog).toBeVisible();
     const shiftSelects = shiftDialog.locator("select");
     if (await shiftSelects.count()) {
       await shiftSelects.nth(0).selectOption({ label: storeAName });
@@ -117,7 +123,7 @@ async function sellProduct(page: Page, productName: string) {
     await shiftDialog.getByRole("button", { name: "Open shift" }).click();
     await expect(shiftDialog).toBeHidden();
   }
-  const search = page.getByRole("searchbox").or(page.getByPlaceholder(/Search/i)).first();
+  await expect(search).toBeVisible({ timeout: 30_000 });
   await search.fill(productName);
   await page.getByRole("button", { name: new RegExp(productName) }).first().click();
   await page.getByRole("button", { name: "Charge", exact: true }).click();

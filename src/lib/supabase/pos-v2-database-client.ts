@@ -14,34 +14,11 @@ import {
 
 import type {
   Database,
-  Json,
 } from "@/lib/supabase/database.types";
 
 import {
   getPublicEnvironment,
 } from "@/lib/supabase/env";
-
-// This bridge keeps the new RPC typed until the packet-required local
-// migration replay can regenerate Database. It must reconcile with the
-// generated function signature before this work is certified.
-type PosV2Database =
-  Omit<Database, "public"> & {
-    public:
-      Omit<
-        Database["public"],
-        "Functions"
-      > & {
-        Functions:
-          Database["public"]["Functions"] & {
-            get_pos_bootstrap_core_v2: {
-              Args: {
-                target_organization_id?: string;
-              };
-              Returns: Json;
-            };
-          };
-      };
-  };
 
 export function createPosV2DatabaseClient(
   accessToken: string,
@@ -62,7 +39,7 @@ export function createPosV2DatabaseClient(
         })
       : undefined;
 
-  return createSupabaseClient<PosV2Database>(
+  return createSupabaseClient<Database>(
     environment.NEXT_PUBLIC_SUPABASE_URL,
     environment.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {

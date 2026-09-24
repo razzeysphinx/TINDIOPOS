@@ -7171,6 +7171,10 @@ export type Database = {
         Args: { target_organization_id: string }
         Returns: Json
       }
+      get_pos_bootstrap_core_v2: {
+        Args: { target_organization_id?: string }
+        Returns: Json
+      }
       get_pos_customer_display_sessions: {
         Args: { target_organization_id: string }
         Returns: {

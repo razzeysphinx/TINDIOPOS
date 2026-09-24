@@ -87,8 +87,41 @@ export function createNeonDataApiFetch({
       "apikey",
     );
 
-    return fetchImpl(
-      rewritten,
-    );
+    const response =
+      await fetchImpl(
+        rewritten,
+      );
+
+    if (!response.ok) {
+      const requestId =
+        response.headers.get(
+          "x-request-id",
+        )
+        ?? response.headers.get(
+          "x-neon-request-id",
+        )
+        ?? response.headers.get(
+          "traceparent",
+        )
+        ?? null;
+
+      console.error(
+        "Neon Data API request failed",
+        {
+          status:
+            response.status,
+
+          method:
+            rewritten.method,
+
+          pathname:
+            target.pathname,
+
+          requestId,
+        },
+      );
+    }
+
+    return response;
   };
 }

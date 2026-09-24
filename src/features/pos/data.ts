@@ -109,6 +109,31 @@ function mapIncomingTransferLines(value: Json): PosIncomingTransfer["lines"] {
   });
 }
 
+function throwPosReadError(
+  stage: string,
+  results: ReadonlyArray<{
+    error:
+      | {
+          message: string;
+        }
+      | null;
+  }>,
+) {
+  const error =
+    results.find(
+      (result) =>
+        result.error,
+    )?.error;
+
+  if (!error) {
+    return;
+  }
+
+  throw new Error(
+    `Unable to open the POS [${stage}]: ${error.message}`,
+  );
+}
+
 export async function loadPosWorkspace(
   context: BusinessContext,
 ): Promise<PosPageData> {
@@ -123,7 +148,12 @@ export async function loadPosWorkspace(
     && hasPermission(context, "inventory.transfer.receive");
   const supabase = await createBusinessContextClient(context);
   const database = supabase as unknown as { from: (table: string) => any };
-  const [storesResult, categoriesResult, registersResult, paymentMethodsResult, storePaymentMethodsResult, openShiftsResult, loyaltyProgramResult, discountsResult, taxRatesResult, diningOptionsResult, ticketTemplatesResult, customerDisplaySessionsResult, timeClockResult, incomingTransfersResult] = await Promise.all([
+  const [
+    storesResult,
+    categoriesResult,
+    registersResult,
+    paymentMethodsResult,
+  ] = await Promise.all([
     supabase
       .from("stores")
       .select("id, name")
@@ -152,6 +182,24 @@ export async function loadPosWorkspace(
       .eq("is_enabled", true)
       .order("sort_order", { ascending: true })
       .order("name", { ascending: true }),
+  ]);
+
+  throwPosReadError(
+    "core-catalog",
+    [
+      storesResult,
+      categoriesResult,
+      registersResult,
+      paymentMethodsResult,
+    ],
+  );
+
+  const [
+    storePaymentMethodsResult,
+    openShiftsResult,
+    loyaltyProgramResult,
+    discountsResult,
+  ] = await Promise.all([
     supabase
       .from("store_payment_methods")
       .select("store_id, payment_method_id")
@@ -171,6 +219,24 @@ export async function loadPosWorkspace(
       .eq("organization_id", context.organization.id)
       .maybeSingle(),
     database.from("discounts").select("id, name, discount_type, percentage_bps, amount_minor").eq("organization_id", context.organization.id).eq("is_active", true).order("sort_order", { ascending: true }).order("name", { ascending: true }),
+  ]);
+
+  throwPosReadError(
+    "payment-shift-loyalty",
+    [
+      storePaymentMethodsResult,
+      openShiftsResult,
+      loyaltyProgramResult,
+      discountsResult,
+    ],
+  );
+
+  const [
+    taxRatesResult,
+    diningOptionsResult,
+    ticketTemplatesResult,
+    customerDisplaySessionsResult,
+  ] = await Promise.all([
     database.from("tax_rates").select("id, name, rate_bps, is_inclusive, is_default").eq("organization_id", context.organization.id).eq("is_active", true).order("name", { ascending: true }),
     database.from("dining_options").select("id, name, is_default").eq("organization_id", context.organization.id).eq("is_active", true).order("sort_order", { ascending: true }).order("name", { ascending: true }),
     supabase.from("ticket_templates").select("id, label, note, dining_option_id").eq("organization_id", context.organization.id).eq("is_active", true).order("sort_order", { ascending: true }).order("label", { ascending: true }),
@@ -179,6 +245,22 @@ export async function loadPosWorkspace(
           target_organization_id: context.organization.id,
         })
       : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  throwPosReadError(
+    "tax-dining-ticket-display",
+    [
+      taxRatesResult,
+      diningOptionsResult,
+      ticketTemplatesResult,
+      customerDisplaySessionsResult,
+    ],
+  );
+
+  const [
+    timeClockResult,
+    incomingTransfersResult,
+  ] = await Promise.all([
     features.time_clock
       ? supabase.rpc("get_current_time_clock_entry", {
           target_organization_id: context.organization.id,
@@ -191,28 +273,13 @@ export async function loadPosWorkspace(
       : Promise.resolve({ data: [], error: null }),
   ]);
 
-  const baseError = [
-    storesResult,
-    categoriesResult,
-    registersResult,
-    paymentMethodsResult,
-    storePaymentMethodsResult,
-    openShiftsResult,
-    loyaltyProgramResult,
-    discountsResult,
-    taxRatesResult,
-    diningOptionsResult,
-    ticketTemplatesResult,
-    customerDisplaySessionsResult,
-    timeClockResult,
-    incomingTransfersResult,
-  ].find(
-    (result) => result.error,
-  )?.error;
-
-  if (baseError) {
-    throw new Error(`Unable to open the POS: ${baseError.message}`);
-  }
+  throwPosReadError(
+    "time-clock-transfers",
+    [
+      timeClockResult,
+      incomingTransfersResult,
+    ],
+  );
 
   const stores = storesResult.data ?? [];
   const categories = categoriesResult.data ?? [];
@@ -312,7 +379,11 @@ export async function loadPosWorkspace(
   let ticketAssignees: PosTicketAssignee[] = [];
 
   if (activeShift) {
-    const [catalogResult, favoriteResult, recentResult, ticketsResult, assigneesResult] = await Promise.all([
+    const [
+      catalogResult,
+      favoriteResult,
+      recentResult,
+    ] = await Promise.all([
       supabase.rpc("search_pos_catalog", {
         target_organization_id: context.organization.id,
         target_store_id: activeShift.storeId,
@@ -330,6 +401,21 @@ export async function loadPosWorkspace(
         target_store_id: activeShift.storeId,
         target_limit: 12,
       }),
+    ]);
+
+    throwPosReadError(
+      "active-shift-catalog",
+      [
+        catalogResult,
+        favoriteResult,
+        recentResult,
+      ],
+    );
+
+    const [
+      ticketsResult,
+      assigneesResult,
+    ] = await Promise.all([
       canUseOpenTickets
         ? supabase.rpc("get_pos_open_tickets", {
             target_organization_id: context.organization.id,
@@ -341,16 +427,17 @@ export async function loadPosWorkspace(
         ? supabase.rpc("get_pos_ticket_assignees", {
             target_organization_id: context.organization.id,
             target_store_id: activeShift.storeId,
-          })
-        : Promise.resolve({ data: [], error: null }),
+        })
+      : Promise.resolve({ data: [], error: null }),
     ]);
 
-    const workspaceError = [catalogResult, favoriteResult, recentResult, ticketsResult, assigneesResult].find(
-      (result) => result.error,
-    )?.error;
-    if (workspaceError) {
-      throw new Error(`Unable to load the POS workspace: ${workspaceError.message}`);
-    }
+    throwPosReadError(
+      "active-shift-ticketing",
+      [
+        ticketsResult,
+        assigneesResult,
+      ],
+    );
 
     const workspaceRows = [
       ...(catalogResult.data ?? []),

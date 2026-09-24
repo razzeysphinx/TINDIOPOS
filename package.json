@@ -44,6 +44,7 @@
     "test:inventory-rpc-contract": "node --test scripts/inventory-rpc-contract-hardening-check.mjs",
     "test:current-rpc-contracts": "node scripts/current-rpc-contract-coherence-check.mjs",
     "test:provider-neutral-inventory-auth": "node scripts/provider-neutral-inventory-authorization-check.mjs",
+    "test:provider-neutral-organization-governance": "node scripts/provider-neutral-organization-governance-check.mjs",
     "test:inventory-count-stocktake": "node --test scripts/inventory-count-stocktake-check.mjs",
     "test:inventory-idempotency-recovery": "node --test scripts/inventory-idempotency-failure-recovery-check.mjs",
     "test:inventory-reconciliation-concurrency": "node --test scripts/inventory-reconciliation-concurrency-check.mjs",
@@ -128,6 +129,7 @@
     "migrate:phase-04:v2-hosted": "node scripts/phase-04-v2-hosted-apply.mjs",
     "certify:phase-04:v2-final": "node scripts/phase-04-v2-final-deployed-certification.mjs",
     "certify:phase-04:v2-browser": "node scripts/phase-04-v2-progressive-browser-check.mjs",
+    "profile:phase-05:neon": "node scripts/phase-05-neon-runtime-profile.mjs",
     "test:provider-neutral-time-clock-runtime": "node --test scripts/provider-neutral-time-clock-runtime-check.mjs",
     "certify:phase-02:bearer-auth": "node scripts/phase-02-bearer-auth-e2e.mjs",
     "typecheck": "tsc --noEmit --incremental false"

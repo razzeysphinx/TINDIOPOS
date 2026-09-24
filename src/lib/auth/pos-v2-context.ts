@@ -26,6 +26,12 @@ export type PosV2CoreResult =
   | {
       ok: true;
       core: Record<string, unknown>;
+      auth: {
+        token: string;
+        authorizationHeader: string;
+        subject: string;
+        email: string | null;
+      };
     }
   | {
       ok: false;
@@ -144,6 +150,27 @@ export async function getPosV2Core(
     };
   }
 
+  const claims =
+    claimsResult.data.claims as Record<string, unknown>;
+  const subject =
+    typeof claims.sub === "string"
+    && claims.sub.length > 0
+      ? claims.sub
+      : null;
+
+  if (!subject) {
+    return {
+      ok: false,
+      status: 401,
+      reason: "AUTH_INVALID",
+    };
+  }
+
+  const email =
+    typeof claims.email === "string"
+      ? claims.email
+      : null;
+
   const requestedHeader =
     request.headers.get(
       POS_V2_ORGANIZATION_HEADER,
@@ -244,5 +271,12 @@ export async function getPosV2Core(
   return {
     ok: true,
     core: record,
+    auth: {
+      token,
+      authorizationHeader:
+        `Bearer ${token}`,
+      subject,
+      email,
+    },
   };
 }

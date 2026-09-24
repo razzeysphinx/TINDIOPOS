@@ -8,7 +8,7 @@ import type {
 
 import type {
   PosModifiersV2Response,
-} from "@/contracts/pos-v1";
+} from "@/contracts/pos";
 import {
   posApiJson,
 } from "@/features/pos/pos-api-response";

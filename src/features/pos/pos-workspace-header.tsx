@@ -16,6 +16,7 @@ type PosWorkspaceHeaderProps = PosOperationalNavigationProps & {
   canReceiveIncomingTransfers?: boolean;
   incomingTransfers?: PosIncomingTransfer[];
   onRefreshLive?: () => void;
+  organizationId: string;
   scope: string;
   title: string;
 };
@@ -29,6 +30,7 @@ export function PosWorkspaceHeader({
   onCreateCustomer,
   onRefreshLive,
   onViewCart,
+  organizationId,
   organizationName,
   scope,
   title,
@@ -86,7 +88,10 @@ export function PosWorkspaceHeader({
           onRefresh={onRefreshLive}
           transfers={incomingTransfers}
         />
-        <OfflineQueueStatus scope={scope} />
+        <OfflineQueueStatus
+          organizationId={organizationId}
+          scope={scope}
+        />
       </div>
     </header>
   );

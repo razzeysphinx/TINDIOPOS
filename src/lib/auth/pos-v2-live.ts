@@ -6,7 +6,7 @@ import {
 
 import type {
   PosLiveV2Response,
-} from "@/contracts/pos-v1";
+} from "@/contracts/pos";
 import type {
   PosCustomerDisplaySession,
 } from "@/features/customer-display/customer-display-types";

@@ -10,13 +10,13 @@ import {
 import {
   posCatalogV2QuerySchema,
   posModifierQuerySchema,
-} from "@/contracts/pos-v1";
+} from "@/contracts/pos";
 import type {
   PosCatalogV2Response,
   PosModifierGroup,
   PosModifierOption,
   PosModifiersV2Response,
-} from "@/contracts/pos-v1";
+} from "@/contracts/pos";
 import type {
   PosCatalogItem,
 } from "@/features/pos/pos-types";

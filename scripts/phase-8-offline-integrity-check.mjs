@@ -21,7 +21,7 @@ const [
   source("../src/features/checkout/payment-screen.tsx"),
   source("../src/features/pos/pos-terminal.tsx"),
   source("../src/features/devices/pos-device.ts"),
-  source("../src/app/api/pos/offline-checkout/route.ts"),
+  source("../src/app/api/pos/v2/offline-checkout/route.ts"),
   source("../supabase/migrations/20260827152628_phase_8_offline_sync_binding_integrity.sql"),
   source("../supabase/tests/database/improvement_13_offline_sync_foundation.test.sql"),
 ]);
@@ -59,14 +59,14 @@ test("the POS exposes the required sync states while manual controls remain supp
   assert.match(offlineStatus, /⚠ Sync Problem/);
   assert.match(offlineStatus, /Retry after resolving/);
   assert.match(offlineStatus, /Sync now/);
-  assert.match(offlineStatus, /useOfflineQueue\(scope\)/);
+  assert.match(offlineStatus, /useOfflineQueue\(scope, organizationId\)/);
 });
 
 test("the server checkout and telemetry paths preserve authoritative context and binding", () => {
   assert.match(
     offlineRoute,
-    /getPosApiBusinessContext\(\s*request\s*,?\s*\)/,
-    "offline checkout resolves the authenticated POS API business context",
+    /getPosV2BusinessContext\(\s*request\s*,?\s*\)/,
+    "offline checkout resolves the authenticated POS V2 business context",
   );
   assert.match(
     offlineRoute,

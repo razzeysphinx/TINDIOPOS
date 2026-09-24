@@ -41,8 +41,14 @@ function stateClassName(state: OfflineCheckoutState) {
   return "rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-primary";
 }
 
-export function OfflineQueueStatus({ scope }: { scope: string }) {
-  const { entries, isOnline, isSyncing, refresh, storage, summary, sync } = useOfflineQueue(scope);
+export function OfflineQueueStatus({
+  organizationId,
+  scope,
+}: {
+  organizationId: string;
+  scope: string;
+}) {
+  const { entries, isOnline, isSyncing, refresh, storage, summary, sync } = useOfflineQueue(scope, organizationId);
   const [isOpen, setIsOpen] = useState(false);
   const hasLocalHistory = entries.length > 0;
   const unresolved = summary.pending + summary.syncing + summary.conflict + summary.failed;

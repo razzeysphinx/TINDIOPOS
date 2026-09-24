@@ -54,6 +54,7 @@ import { readPosWorkspacePreferences } from "@/features/pos/pos-preferences";
 import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
 import {
   fetchPosV2Catalog,
+  fetchPosV2Command,
   fetchPosV2Modifiers,
 } from "@/features/pos/pos-v2-browser-api";
 import type { PosCapabilities } from "@/features/pos/pos-capabilities";
@@ -461,14 +462,20 @@ export function PosTerminal({
     if (!isOperational || !activeCustomerDisplaySession) return;
 
     const timeout = window.setTimeout(() => {
-      void fetch("/api/pos/customer-display", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: activeCustomerDisplaySession.sessionId,
-          state: customerDisplayState,
-        }),
-      });
+      void fetchPosV2Command(
+        "/api/pos/v2/customer-display",
+        {
+          method: "PUT",
+          organizationId,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: activeCustomerDisplaySession.sessionId,
+            state: customerDisplayState,
+          }),
+        },
+      ).catch(
+        () => undefined,
+      );
 
       if (displayChannelRef.current) {
         void displayChannelRef.current.send({
@@ -480,7 +487,7 @@ export function PosTerminal({
     }, CUSTOMER_DISPLAY_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeout);
-  }, [activeCustomerDisplaySession, customerDisplayState, isOperational]);
+  }, [activeCustomerDisplaySession, customerDisplayState, isOperational, organizationId]);
   const canStartPayment =
     !isPaymentScreenOpen &&
     canAcceptPayments &&
@@ -1059,6 +1066,7 @@ export function PosTerminal({
           setSelectedCustomer(customer);
           setCheckoutKey(createCheckoutKey());
         }}
+        organizationId={organizationId}
         showLoyalty={canUseCustomerLoyalty}
         storeId={selectedStoreId}
         value={selectedCustomer}
@@ -1231,6 +1239,7 @@ export function PosTerminal({
             });
           }}
           onViewCart={() => setIsCartReviewOpen(true)}
+          organizationId={organizationId}
           organizationName={organizationName}
           scope={offlineScope}
           stores={stores}
@@ -1269,7 +1278,7 @@ export function PosTerminal({
 
           <div className="order-2 flex flex-wrap items-center gap-2 sm:order-1">
             <Badge variant="outline">{currencyCode}</Badge>
-            <OfflineQueueStatus scope={offlineScope} />
+            <OfflineQueueStatus organizationId={organizationId} scope={offlineScope} />
             <Button
               aria-label="Select customer"
               disabled={isPaymentScreenOpen}
@@ -1543,6 +1552,7 @@ export function PosTerminal({
           customer={selectedCustomer}
           loyaltyProgram={loyaltyProgram}
           offlineScope={offlineScope}
+          organizationId={organizationId}
           onCancel={() => setIsPaymentScreenOpen(false)}
           onDiscountChange={(nextDiscountId) => {
             setDiscountId(nextDiscountId);

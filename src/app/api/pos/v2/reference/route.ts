@@ -4,7 +4,7 @@ import {
 
 import type {
   PosReferenceV2Response,
-} from "@/contracts/pos-v1";
+} from "@/contracts/pos";
 import {
   posApiJson,
 } from "@/features/pos/pos-api-response";

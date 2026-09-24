@@ -8,7 +8,7 @@ import type {
 
 import type {
   PosCatalogV2Response,
-} from "@/contracts/pos-v1";
+} from "@/contracts/pos";
 import {
   posApiJson,
 } from "@/features/pos/pos-api-response";

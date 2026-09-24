@@ -226,7 +226,7 @@ try {
 
   const bootstrap =
     await fetch(
-      `${appUrl}/api/pos/v1/bootstrap`,
+      `${appUrl}/api/pos/v2/bootstrap`,
       {
         headers: {
           Authorization:
@@ -247,9 +247,9 @@ try {
     await bootstrap.json();
 
   if (
-    body?.employee?.id
+    body?.core?.employee?.id
       === undefined
-    || body?.organization?.id
+    || body?.core?.organization?.id
       === undefined
   ) {
     fail(
@@ -262,7 +262,7 @@ try {
 
   const foreign =
     await fetch(
-      `${appUrl}/api/pos/v1/bootstrap`,
+      `${appUrl}/api/pos/v2/bootstrap`,
       {
         headers: {
           Authorization:
@@ -275,10 +275,10 @@ try {
     );
 
   if (
-    foreign.status !== 401
+    foreign.status !== 403
   ) {
     fail(
-      `Cross-tenant Neon request expected HTTP 401, received ${foreign.status}.`,
+      `Cross-tenant Neon request expected HTTP 403, received ${foreign.status}.`,
     );
   }
 
@@ -287,20 +287,23 @@ try {
 
   const catalog =
     await fetch(
-      `${appUrl}/api/pos/v1/catalog?store=${encodeURIComponent(foreignStore)}`,
+      `${appUrl}/api/pos/v2/catalog?store=${encodeURIComponent(foreignStore)}`,
       {
         headers: {
           Authorization:
             `Bearer ${token}`,
+
+          "X-Tindio-Organization-Id":
+            body.core.organization.id,
         },
       },
     );
 
   if (
-    catalog.status !== 400
+    catalog.status !== 403
   ) {
     fail(
-      `Cross-store Neon request expected HTTP 400, received ${catalog.status}.`,
+      `Cross-store Neon request expected HTTP 403, received ${catalog.status}.`,
     );
   }
 

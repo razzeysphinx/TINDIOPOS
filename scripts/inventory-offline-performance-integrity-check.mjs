@@ -14,8 +14,8 @@ const [
 ] = await Promise.all([
   source("../src/features/offline/offline-sync.ts"),
   source("../src/features/checkout/checkout-service.ts"),
-  source("../src/app/api/pos/catalog/route.ts"),
-  source("../src/contracts/pos-v1.ts"),
+  source("../src/lib/auth/pos-v2-catalog.ts"),
+  source("../src/contracts/pos.ts"),
   source("../src/app/(back-office)/back-office/inventory/page.tsx"),
   source("../supabase/tests/database/improvement_13_offline_sync_foundation.test.sql"),
 ]);
@@ -38,13 +38,13 @@ test("the authoritative checkout still supplies exactly-once replay protection",
   assert.match(offlineDatabaseTest, /automatic retry creates exactly one receipt/);
 });
 
-test("POS catalogue loading stays server-authorized and page-bounded", () => {
-  assert.match(catalogRoute, /hasPermission\(context, "pos\.access"\)/);
-  assert.match(catalogRoute, /hasPermission\(context, "sales\.create"\)/);
+test("POS V2 catalogue loading stays bearer-authorized and page-bounded", () => {
+  assert.match(catalogRoute, /getPosV2CatalogContext/);
+  assert.match(catalogRoute, /authClient\.auth\.getClaims/);
   assert.match(
     catalogRoute,
-    /posCatalogQuerySchema as catalogRequestSchema/,
-    "POS catalogue route must consume the canonical shared bounded query contract",
+    /posCatalogV2QuerySchema/,
+    "POS catalogue resolver must consume the canonical V2 bounded query contract",
   );
 
   assert.match(
@@ -52,9 +52,9 @@ test("POS catalogue loading stays server-authorized and page-bounded", () => {
     /limit:[\s\S]*?\.max\(24\)/,
     "canonical POS catalogue contract must keep the page limit bounded at 24",
   );
-  assert.match(catalogRoute, /target_offset: parsed\.data\.offset/);
-  assert.match(catalogRoute, /target_limit: parsed\.data\.limit/);
-  assert.match(catalogRoute, /hasMore: items\.length === parsed\.data\.limit/);
+  assert.match(catalogRoute, /target_offset:\s*parsedQuery\.data\.offset/);
+  assert.match(catalogRoute, /target_limit:\s*parsedQuery\.data\.limit/);
+  assert.match(catalogRoute, /hasMore:\s*payload\.hasMore/);
 });
 
 test("Inventory activity remains bounded and implements correct page look-ahead", () => {

@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { createCustomerAction } from "@/features/customers/actions";
 import { createCustomerSchema } from "@/features/customers/customer-schema";
 import type { PosCustomer } from "@/features/pos/pos-types";
+import { fetchPosV2Command } from "@/features/pos/pos-v2-browser-api";
 
 type CustomerSearchResponse =
   | { customers: PosCustomer[] }
@@ -25,12 +26,14 @@ type CustomerSearchResponse =
 export function PosCustomerPicker({
   disabled,
   onChange,
+  organizationId,
   showLoyalty,
   storeId,
   value,
 }: {
   disabled: boolean;
   onChange: (customer: PosCustomer | null) => void;
+  organizationId: string;
   showLoyalty: boolean;
   storeId: string;
   value: PosCustomer | null;
@@ -52,7 +55,8 @@ export function PosCustomerPicker({
       try {
         const parameters = new URLSearchParams({ store: storeId });
         if (query.trim()) parameters.set("q", query.trim());
-        const response = await fetch(`/api/pos/customers?${parameters.toString()}`, {
+        const response = await fetchPosV2Command(`/api/pos/v2/customers?${parameters.toString()}`, {
+          organizationId,
           signal: controller.signal,
         });
         const payload = await response.json() as CustomerSearchResponse;
@@ -77,7 +81,7 @@ export function PosCustomerPicker({
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [disabled, isOpen, query, storeId]);
+  }, [disabled, isOpen, organizationId, query, storeId]);
 
   if (value) {
     return (

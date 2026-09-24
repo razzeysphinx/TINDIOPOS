@@ -11,7 +11,7 @@ import type {
 } from "@/features/pos/pos-types";
 import type {
   PosReferenceV2Response,
-} from "@/contracts/pos-v1";
+} from "@/contracts/pos";
 
 const DATABASE_NAME = "tindio-offline";
 const DATABASE_VERSION = 4;

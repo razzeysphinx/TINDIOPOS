@@ -4,8 +4,8 @@ import "server-only";
 import type {
   PosReceiptDetail,
   PosReceiptSummary,
-  PosWorkspaceContract,
-} from "@/contracts/pos-v1";
+  PosSupportWorkspace,
+} from "@/contracts/pos";
 import type { PosCustomerDisplaySession } from "@/features/customer-display/customer-display-types";
 import type { TimeClockEntry } from "@/features/time-clock/time-clock-types";
 import { isReceivableTransferState } from "@/features/inventory/inventory-transfer-reader-contract";
@@ -31,12 +31,12 @@ import type {
 } from "@/features/pos/pos-types";
 
 export type PosPageData =
-  PosWorkspaceContract;
+  PosSupportWorkspace;
 
 export type {
   PosReceiptDetail,
   PosReceiptSummary,
-} from "@/contracts/pos-v1";
+} from "@/contracts/pos";
 
 type PosReceiptRpc = {
   rpc: (name: string, args: Record<string, unknown>) => Promise<{
@@ -109,7 +109,7 @@ function mapIncomingTransferLines(value: Json): PosIncomingTransfer["lines"] {
   });
 }
 
-export async function loadPosWorkspace(
+export async function loadPosSupportWorkspace(
   context: BusinessContext,
 ): Promise<PosPageData> {
   const features = context.features;

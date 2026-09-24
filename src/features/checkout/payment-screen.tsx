@@ -30,6 +30,7 @@ import type {
   CheckoutSaleActionResult,
 } from "@/features/checkout/checkout-types";
 import { enqueueOfflineCheckout } from "@/features/offline/offline-store";
+import { fetchPosV2Command } from "@/features/pos/pos-v2-browser-api";
 import type {
   PosCartLine,
   PosCustomer,
@@ -87,12 +88,13 @@ function roundUp(value: number, step: number) {
 }
 
 async function submitOnlineCheckout(
+  organizationId: string,
   payload: CheckoutSaleValues,
   device: PosDeviceCredential | null,
 ): Promise<CheckoutSaleActionResult> {
-  const response = await fetch("/api/pos/checkout", {
+  const response = await fetchPosV2Command("/api/pos/v2/checkout", {
     method: "POST",
-    credentials: "same-origin",
+    organizationId,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ checkout: payload, device }),
   });
@@ -163,6 +165,7 @@ export function PaymentScreen({
   diningOptionId,
   openTicketId,
   offlineScope,
+  organizationId,
   taxRateId,
   taxMinor,
   subtotalMinor,
@@ -192,6 +195,7 @@ export function PaymentScreen({
   diningOptionId: string | null;
   openTicketId: string | null;
   offlineScope: string;
+  organizationId: string;
   taxRateId: string | null;
   taxMinor: number;
   subtotalMinor: number;
@@ -535,7 +539,7 @@ export function PaymentScreen({
       }
 
       try {
-        const result = await submitOnlineCheckout(payload, device);
+        const result = await submitOnlineCheckout(organizationId, payload, device);
 
         if (!result.ok) {
           setMessage(result.message);

@@ -19,7 +19,7 @@ import type {
   PosBootstrapV2CoreResponse,
   PosLiveV2Response,
   PosReferenceV2Response,
-} from "@/contracts/pos-v1";
+} from "@/contracts/pos";
 import {
   Button,
 } from "@/components/ui/button";

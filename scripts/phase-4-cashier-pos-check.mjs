@@ -36,7 +36,7 @@ test("cashier tools use a responsive left hamburger menu with a capability-scope
 });
 
 test("active terminal keeps the existing sync status and adds a customer header shortcut", () => {
-  assert.match(terminal, /<OfflineQueueStatus scope=\{offlineScope\} \/>/);
+  assert.match(terminal, /<OfflineQueueStatus organizationId=\{organizationId\} scope=\{offlineScope\} \/>/);
   assert.match(terminal, /aria-label="Select customer"/);
   assert.match(terminal, /onClick=\{focusCustomerPicker\}/);
   assert.doesNotMatch(terminal, /PosOperationalSidebar/);

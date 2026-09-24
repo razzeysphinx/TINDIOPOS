@@ -11,6 +11,7 @@ import {
   savePosDeviceIdentity,
   type PosDeviceIdentity,
 } from "@/features/offline/offline-store";
+import { fetchPosV2Command } from "@/features/pos/pos-v2-browser-api";
 
 export type PosDeviceBinding = {
   deviceId: string;
@@ -84,9 +85,9 @@ export function usePosDevice({
           return;
         }
 
-        const response = await fetch("/api/pos/device", {
+        const response = await fetchPosV2Command("/api/pos/v2/device", {
           method: "POST",
-          credentials: "same-origin",
+          organizationId,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ organizationId, device: credential }),
         });

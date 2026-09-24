@@ -134,7 +134,7 @@ async function sellProduct(page: Page, productName: string) {
   await page.getByRole("button", { name: "Apply cash payment" }).click();
   const checkoutRequestPromise = page.waitForRequest((request) => (
     request.method() === "POST"
-    && request.url().includes("/api/pos/checkout")
+    && request.url().includes("/api/pos/v2/checkout")
   ));
   await page.getByRole("button", { name: "Complete cash sale" }).click();
   const checkoutRequest = await checkoutRequestPromise;
@@ -142,7 +142,12 @@ async function sellProduct(page: Page, productName: string) {
   await page.getByRole("button", { name: /New sale/i }).click();
 
   return {
+    authorization: checkoutRequest.headers().authorization,
     body: checkoutRequest.postDataJSON(),
+    organizationId:
+      checkoutRequest.headers()[
+        "x-tindio-organization-id"
+      ],
     url: checkoutRequest.url(),
   };
 }
@@ -572,6 +577,10 @@ test("P14-BR-09 stocked assembly and made-to-order consumption boundaries", asyn
 
   const replayResponse = await phasePage.request.post(madeToOrderCheckout.url, {
     data: madeToOrderCheckout.body,
+    headers: {
+      Authorization: madeToOrderCheckout.authorization,
+      "X-Tindio-Organization-Id": madeToOrderCheckout.organizationId,
+    },
   });
   expect(replayResponse.ok()).toBe(true);
 

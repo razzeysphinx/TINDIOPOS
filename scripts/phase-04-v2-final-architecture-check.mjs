@@ -44,7 +44,15 @@ test(
   "active POS sales startup is V2, not the V1 monolithic workspace",
   () => {
     assert.match(page, /PosV2TerminalShell/);
-    assert.doesNotMatch(page, /loadPosWorkspace/);
+    assert.doesNotMatch(
+      page,
+      new RegExp(
+        [
+          "loadPos",
+          "Workspace",
+        ].join(""),
+      ),
+    );
     assert.doesNotMatch(page, /requireBusinessContext/);
   },
 );

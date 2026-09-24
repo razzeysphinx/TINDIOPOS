@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import { ShiftWorkspacePage } from "@/app/(back-office)/back-office/shifts/page";
-import { loadPosWorkspace } from "@/features/pos/data";
+import { loadPosSupportWorkspace } from "@/features/pos/data";
 import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
 import { canAccessBackOffice, getPosNavigationCapabilities, getWorkspaceHome, hasAnyPermission, hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 
@@ -16,7 +16,7 @@ export default async function PosShiftsPage() {
   if (!hasPermission(context, "pos.access") || !hasAnyPermission(context, ["shifts.open", "shifts.close", "cash.pay_in", "cash.pay_out", "settings.manage"])) {
     redirect(getWorkspaceHome(context));
   }
-  const workspace = await loadPosWorkspace(context);
+  const workspace = await loadPosSupportWorkspace(context);
 
   return (
     <main className="min-h-svh bg-muted/35">
@@ -26,8 +26,9 @@ export default async function PosShiftsPage() {
         {...getPosNavigationCapabilities(context)}
         canUseTimeClock={context.features.time_clock}
         employeeName={context.profile.full_name || context.profile.email || "Cashier"}
-        incomingTransfers={workspace.incomingTransfers}
-        organizationName={context.organization.name}
+          incomingTransfers={workspace.incomingTransfers}
+          organizationId={context.organization.id}
+          organizationName={context.organization.name}
         scope={`${context.organization.id}:${context.user.id}`}
         stores={workspace.stores}
         timeClockEntry={workspace.timeClockEntry}

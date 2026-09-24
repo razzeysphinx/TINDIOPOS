@@ -25,21 +25,21 @@ async function source(path) {
 
 const [
   dal,
-  posApiContext,
+  posV2CoreContext,
+  posV2BusinessContext,
   contextClient,
   bootstrap,
   workflow,
   packageText,
 ] = await Promise.all([
   source("src/lib/auth/dal.ts"),
-  source(
-    "src/lib/auth/pos-api-context.ts",
-  ),
+  source("src/lib/auth/pos-v2-context.ts"),
+  source("src/lib/auth/pos-v2-business-context.ts"),
   source(
     "src/lib/supabase/context-client.ts",
   ),
   source(
-    "src/app/api/pos/v1/bootstrap/route.ts",
+    "src/app/api/pos/v2/bootstrap/route.ts",
   ),
   source(
     ".github/workflows/tindio-baseline-certification.yml",
@@ -62,12 +62,10 @@ const contextClientFiles = [
   "src/features/approvals/service.ts",
   "src/features/time-clock/service.ts",
   "src/features/time-clock/data.ts",
-  "src/app/api/pos/catalog/route.ts",
-  "src/app/api/pos/customer-display/route.ts",
-  "src/app/api/pos/customers/route.ts",
-  "src/app/api/pos/device/route.ts",
-  "src/app/api/pos/modifiers/route.ts",
-  "src/app/api/pos/offline-checkout/route.ts",
+  "src/app/api/pos/v2/customers/route.ts",
+  "src/app/api/pos/v2/customer-display/route.ts",
+  "src/app/api/pos/v2/device/route.ts",
+  "src/app/api/pos/v2/offline-checkout/route.ts",
 ];
 
 test(
@@ -111,56 +109,56 @@ test(
 );
 
 test(
-  "Bearer authentication is verified and never falls back to cookies when present",
+  "V2 bearer authentication is verified and never falls back to cookies",
   () => {
     assert.match(
-      posApiContext,
+      posV2CoreContext,
       /request\.headers\.get\("authorization"\)/,
     );
 
     assert.match(
-      posApiContext,
-      /kind:\s*"invalid"/,
+      posV2CoreContext,
+      /authClient\.auth\.getClaims/,
     );
 
     assert.match(
-      posApiContext,
-      /authentication\.kind === "none"[\s\S]*return getBusinessContext\(\)/,
+      posV2CoreContext,
+      /if \(!token\)[\s\S]*status: 401/,
     );
 
     assert.match(
-      posApiContext,
-      /authentication\.kind === "invalid"[\s\S]*return null/,
+      posV2CoreContext,
+      /AUTH_INVALID/,
     );
 
     assert.match(
-      posApiContext,
-      /resolveVerifiedUser\([\s\S]*authentication\.token/,
+      posV2CoreContext,
+      /claims\.sub/,
     );
 
     assert.match(
-      dal,
-      /supabase\.auth\.getClaims\(\s*accessToken,?\s*\)/,
+      posV2CoreContext,
+      /authClient\.auth\.getClaims\(\s*token,?\s*\)/,
     );
 
     assert.match(
-      dal,
-      /try\s*\{[\s\S]*supabase\.auth\.getClaims/,
+      posV2CoreContext,
+      /try\s*\{[\s\S]*authClient\.auth\.getClaims/,
     );
 
     assert.match(
-      dal,
-      /catch\s*\{[\s\S]*return null/,
+      posV2CoreContext,
+      /catch \(error\)[\s\S]*AUTH_PROVIDER_UNAVAILABLE/,
     );
 
     assert.match(
-      dal,
-      /resolveCurrentProfileId\(supabase\)/,
+      posV2BusinessContext,
+      /getPosV2Core/,
     );
 
-    assert.doesNotMatch(
-      dal,
-      /id:\s*claims\.sub/,
+    assert.match(
+      posV2BusinessContext,
+      /requestAuth:[\s\S]*transport:[\s\S]*"bearer"/,
     );
   },
 );
@@ -169,18 +167,18 @@ test(
   "explicit mobile organization selection is strict and request scoped",
   () => {
     assert.match(
-      posApiContext,
-      /x-tindio-organization-id/,
+      posV2CoreContext,
+      /POS_V2_ORGANIZATION_HEADER/,
     );
 
     assert.match(
-      posApiContext,
-      /organizationIdSchema\.safeParse/,
+      posV2CoreContext,
+      /uuidSchema\.safeParse/,
     );
 
     assert.match(
-      posApiContext,
-      /strictRequestedOrganization:\s*requestedOrganizationHeader !== null/,
+      posV2CoreContext,
+      /target_organization_id/,
     );
   },
 );
@@ -236,16 +234,16 @@ test(
 );
 
 test(
-  "bootstrap exposes only client-safe organization choices",
+  "bootstrap exposes only a client-safe V2 Core response",
   () => {
     assert.match(
       bootstrap,
-      /availableOrganizations/,
+      /version: 2/,
     );
 
     assert.match(
       bootstrap,
-      /context\.availableOrganizations\.map/,
+      /core:[\s\S]*result\.core/,
     );
 
     assert.doesNotMatch(
@@ -259,9 +257,10 @@ test(
   "production mobile auth paths contain no service-role secret",
   async () => {
     const paths = [
-      "src/lib/auth/pos-api-context.ts",
+      "src/lib/auth/pos-v2-context.ts",
+      "src/lib/auth/pos-v2-business-context.ts",
       "src/lib/supabase/context-client.ts",
-      "src/app/api/pos/v1/bootstrap/route.ts",
+      "src/app/api/pos/v2/bootstrap/route.ts",
       ...contextClientFiles,
     ];
 

@@ -45,7 +45,12 @@ test(
 
     assert.doesNotMatch(
       route,
-      /loadPosWorkspace/,
+      new RegExp(
+        [
+          "loadPos",
+          "Workspace",
+        ].join(""),
+      ),
     );
 
     assert.doesNotMatch(

@@ -6,7 +6,7 @@ import {
 
 import type {
   PosReferenceV2Response,
-} from "@/contracts/pos-v1";
+} from "@/contracts/pos";
 
 import {
   POS_V2_ORGANIZATION_HEADER,

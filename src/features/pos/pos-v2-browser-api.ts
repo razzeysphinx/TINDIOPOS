@@ -7,7 +7,7 @@ import type {
   PosLiveV2Response,
   PosModifiersV2Response,
   PosReferenceV2Response,
-} from "@/contracts/pos-v1";
+} from "@/contracts/pos";
 import {
   getRealtimeClient,
 } from "@/lib/supabase/realtime-client";
@@ -113,10 +113,12 @@ async function authorizedFetch(
   {
     organizationId,
     requestHeaders,
+    requestInit = {},
     retryAuth = true,
   }: {
     organizationId?: string;
     requestHeaders?: Headers;
+    requestInit?: RequestInit;
     retryAuth?: boolean;
   } = {},
 ) {
@@ -139,12 +141,15 @@ async function authorizedFetch(
     );
   }
 
-  let response =
-    await fetch(input, {
-      method: "GET",
+  const request =
+    () => fetch(input, {
+      ...requestInit,
       cache: "no-store",
       headers,
     });
+
+  let response =
+    await request();
 
   if (
     response.status === 401
@@ -159,11 +164,7 @@ async function authorizedFetch(
     );
 
     response =
-      await fetch(input, {
-        method: "GET",
-        cache: "no-store",
-        headers,
-      });
+      await request();
   }
 
   if (!response.ok) {
@@ -171,6 +172,27 @@ async function authorizedFetch(
   }
 
   return response;
+}
+
+export async function fetchPosV2Command(
+  input: string,
+  {
+    organizationId,
+    headers,
+    ...requestInit
+  }: RequestInit & {
+    organizationId: string;
+  },
+) {
+  return authorizedFetch(
+    input,
+    {
+      organizationId,
+      requestHeaders:
+        new Headers(headers),
+      requestInit,
+    },
+  );
 }
 
 export async function fetchPosV2Core(

@@ -14,7 +14,7 @@ import {
   type ReceiptSaleLine,
 } from "@/features/receipts/receipt-document";
 import { ReceiptPrintButton } from "@/features/receipts/receipt-print-button";
-import { loadPosReceiptDetail, loadPosWorkspace } from "@/features/pos/data";
+import { loadPosReceiptDetail, loadPosSupportWorkspace } from "@/features/pos/data";
 import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
 import { canAccessBackOffice, getPosNavigationCapabilities, getWorkspaceHome, hasPermission, hasStoreAccess, requireBusinessContext } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
@@ -37,7 +37,7 @@ export default async function PosReceiptDetailPage({
   const context = await requireBusinessContext();
   if (!hasPermission(context, "pos.access") || !hasPermission(context, "sales.create") || !hasPermission(context, "receipts.view")) redirect(getWorkspaceHome(context));
   const [workspace, detail] = await Promise.all([
-    loadPosWorkspace(context),
+    loadPosSupportWorkspace(context),
     loadPosReceiptDetail(context, receiptId),
   ]);
   if (!detail) notFound();
@@ -101,6 +101,7 @@ export default async function PosReceiptDetailPage({
         canUseTimeClock={context.features.time_clock}
         employeeName={context.profile.full_name || context.profile.email || "Cashier"}
         incomingTransfers={workspace.incomingTransfers}
+        organizationId={context.organization.id}
         organizationName={context.organization.name}
         scope={`${context.organization.id}:${context.user.id}`}
         stores={workspace.stores}

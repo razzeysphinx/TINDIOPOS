@@ -157,29 +157,44 @@ const bearerHeaders = {
   Accept: "application/json",
 };
 
-try {
-  const directCore =
-    await timedNeonFetch(
-      neonUrl("rpc/get_pos_bootstrap_core_v2"),
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: "{}",
+async function directCoreRequest() {
+  return timedNeonFetch(
+    neonUrl("rpc/get_pos_bootstrap_core_v2"),
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
       },
-    );
+      body: "{}",
+    },
+  );
+}
+
+try {
+  let directCore =
+    await directCoreRequest();
+
+  let directCoreBody =
+    await jsonBody(directCore);
+
+  if (
+    directCore.status === 200
+    && directCoreBody?.reason === "IDENTITY_UNMAPPED"
+  ) {
+    await sleep(100);
+    directCore =
+      await directCoreRequest();
+    directCoreBody =
+      await jsonBody(directCore);
+  }
 
   assert.equal(
     directCore.status,
     200,
     `Direct Neon V2 core returned ${directCore.status}.`,
   );
-
-  const directCoreBody =
-    await jsonBody(directCore);
 
   assert.equal(
     directCoreBody?.ok,

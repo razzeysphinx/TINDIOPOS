@@ -25,6 +25,7 @@ const [
   liveRoute,
   catalogRoute,
   modifiersRoute,
+  finalCertifier,
 ] = await Promise.all([
   source("src/app/(pos)/pos/page.tsx"),
   source("src/features/pos/pos-v2-terminal-shell.tsx"),
@@ -36,6 +37,7 @@ const [
   source("src/app/api/pos/v2/live/route.ts"),
   source("src/app/api/pos/v2/catalog/route.ts"),
   source("src/app/api/pos/v2/modifiers/route.ts"),
+  source("scripts/phase-04-v2-final-deployed-certification.mjs"),
 ]);
 
 test(
@@ -121,5 +123,20 @@ test(
     ) {
       assert.match(route, /x-tindio-request-id/);
     }
+  },
+);
+
+test(
+  "direct V2 exposure preflight retries only identity mapping",
+  () => {
+    assert.match(
+      finalCertifier,
+      /directCoreBody\?\.reason === "IDENTITY_UNMAPPED"/,
+    );
+
+    assert.match(
+      finalCertifier,
+      /await sleep\(100\)[\s\S]*directCore =\s*await directCoreRequest\(\)/,
+    );
   },
 );

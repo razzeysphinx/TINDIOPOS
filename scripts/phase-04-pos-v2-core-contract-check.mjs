@@ -106,6 +106,31 @@ test(
 );
 
 test(
+  "V2 retries only a transient identity-mapping envelope",
+  () => {
+    assert.match(
+      client,
+      /retryPosV2IdentityUnmapped/,
+    );
+
+    assert.match(
+      client,
+      /payload\.reason === "IDENTITY_UNMAPPED"/,
+    );
+
+    assert.match(
+      client,
+      /first\.error[\s\S]*!isIdentityUnmapped\(first\.data\)[\s\S]*return first[\s\S]*return request\(\)/,
+    );
+
+    assert.match(
+      context,
+      /retryPosV2IdentityUnmapped\([\s\S]*get_pos_bootstrap_core_v2/,
+    );
+  },
+);
+
+test(
   "V2 identity cannot be supplied by the browser",
   () => {
     assert.match(

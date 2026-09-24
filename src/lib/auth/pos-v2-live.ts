@@ -23,6 +23,7 @@ import {
 } from "@/lib/auth/pos-v2-context";
 import {
   createPosV2DatabaseClient,
+  retryPosV2IdentityUnmapped,
 } from "@/lib/supabase/pos-v2-database-client";
 import {
   createClient,
@@ -342,20 +343,22 @@ export async function getPosV2Live(
 
   try {
     rpcResult =
-      await database.rpc(
-        "get_pos_live_state_v2",
-        {
-          target_organization_id:
-            parsedOrganization.data,
-          target_store_id:
-            parsedStore?.success
-              ? parsedStore.data
-              : undefined,
-          target_register_id:
-            parsedRegister?.success
-              ? parsedRegister.data
-              : undefined,
-        },
+      await retryPosV2IdentityUnmapped(
+        () => database.rpc(
+          "get_pos_live_state_v2",
+          {
+            target_organization_id:
+              parsedOrganization.data,
+            target_store_id:
+              parsedStore?.success
+                ? parsedStore.data
+                : undefined,
+            target_register_id:
+              parsedRegister?.success
+                ? parsedRegister.data
+                : undefined,
+          },
+        ),
       );
   } catch {
     return {

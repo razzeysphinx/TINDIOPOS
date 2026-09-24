@@ -25,6 +25,7 @@ import {
 } from "@/lib/auth/pos-v2-context";
 import {
   createPosV2DatabaseClient,
+  retryPosV2IdentityUnmapped,
 } from "@/lib/supabase/pos-v2-database-client";
 import {
   createClient,
@@ -383,24 +384,26 @@ export async function getPosV2Catalog(
 
   try {
     rpcResult =
-      await database.rpc(
-        "get_pos_catalog_v2",
-        {
-          target_organization_id:
-            context.organizationId,
-          target_store_id:
-            parsedQuery.data.store,
-          target_mode:
-            parsedQuery.data.mode,
-          target_query:
-            parsedQuery.data.query || undefined,
-          target_category_id:
-            parsedQuery.data.category,
-          target_offset:
-            parsedQuery.data.offset,
-          target_limit:
-            parsedQuery.data.limit,
-        },
+      await retryPosV2IdentityUnmapped(
+        () => database.rpc(
+          "get_pos_catalog_v2",
+          {
+            target_organization_id:
+              context.organizationId,
+            target_store_id:
+              parsedQuery.data.store,
+            target_mode:
+              parsedQuery.data.mode,
+            target_query:
+              parsedQuery.data.query || undefined,
+            target_category_id:
+              parsedQuery.data.category,
+            target_offset:
+              parsedQuery.data.offset,
+            target_limit:
+              parsedQuery.data.limit,
+          },
+        ),
       );
   } catch {
     return {
@@ -499,16 +502,18 @@ export async function getPosV2Modifiers(
 
   try {
     rpcResult =
-      await database.rpc(
-        "get_pos_modifiers_v2",
-        {
-          target_organization_id:
-            context.organizationId,
-          target_store_id:
-            parsedQuery.data.store,
-          target_product_id:
-            parsedQuery.data.product,
-        },
+      await retryPosV2IdentityUnmapped(
+        () => database.rpc(
+          "get_pos_modifiers_v2",
+          {
+            target_organization_id:
+              context.organizationId,
+            target_store_id:
+              parsedQuery.data.store,
+            target_product_id:
+              parsedQuery.data.product,
+          },
+        ),
       );
   } catch {
     return {

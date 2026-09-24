@@ -10,6 +10,7 @@ import {
 
 import {
   createPosV2DatabaseClient,
+  retryPosV2IdentityUnmapped,
 } from "@/lib/supabase/pos-v2-database-client";
 
 export const POS_V2_ORGANIZATION_HEADER =
@@ -176,14 +177,16 @@ export async function getPosV2Core(
 
   try {
     rpcResult =
-      await database.rpc(
-        "get_pos_bootstrap_core_v2",
-        parsedOrganization?.success
-          ? {
-              target_organization_id:
-                parsedOrganization.data,
-            }
-          : {},
+      await retryPosV2IdentityUnmapped(
+        () => database.rpc(
+          "get_pos_bootstrap_core_v2",
+          parsedOrganization?.success
+            ? {
+                target_organization_id:
+                  parsedOrganization.data,
+              }
+            : {},
+        ),
       );
   } catch {
     return {

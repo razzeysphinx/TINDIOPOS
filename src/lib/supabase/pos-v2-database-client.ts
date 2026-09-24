@@ -55,3 +55,39 @@ export function createPosV2DatabaseClient(
     },
   );
 }
+
+function isIdentityUnmapped(
+  payload: unknown,
+) {
+  if (
+    typeof payload !== "object"
+    || payload === null
+    || Array.isArray(payload)
+    || !("reason" in payload)
+  ) {
+    return false;
+  }
+
+  return payload.reason === "IDENTITY_UNMAPPED";
+}
+
+export async function retryPosV2IdentityUnmapped<
+  Result extends {
+    data: unknown;
+    error: unknown;
+  },
+>(
+  request: () => PromiseLike<Result>,
+): Promise<Result> {
+  const first =
+    await request();
+
+  if (
+    first.error
+    || !isIdentityUnmapped(first.data)
+  ) {
+    return first;
+  }
+
+  return request();
+}

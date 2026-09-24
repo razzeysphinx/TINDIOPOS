@@ -13,6 +13,7 @@ import {
 } from "@/lib/auth/pos-v2-context";
 import {
   createPosV2DatabaseClient,
+  retryPosV2IdentityUnmapped,
 } from "@/lib/supabase/pos-v2-database-client";
 import {
   createClient,
@@ -346,14 +347,16 @@ export async function getPosV2Reference(
 
   try {
     rpcResult =
-      await database.rpc(
-        "get_pos_reference_bundle_v2",
-        parsedOrganization?.success
-          ? {
-              target_organization_id:
-                parsedOrganization.data,
-            }
-          : {},
+      await retryPosV2IdentityUnmapped(
+        () => database.rpc(
+          "get_pos_reference_bundle_v2",
+          parsedOrganization?.success
+            ? {
+                target_organization_id:
+                  parsedOrganization.data,
+              }
+            : {},
+        ),
       );
   } catch {
     return {

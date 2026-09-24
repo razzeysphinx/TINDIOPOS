@@ -48,9 +48,25 @@ test("identity adapter resolves only the current authenticated profile", () => {
 });
 
 test("DAL assigns provider subject separately from stable business identity", () => {
-  assert.match(dal, /const\s+subject\s*=\s+typeof\s+claims\.sub/);
-  assert.match(dal, /const\s+id\s*=\s+await\s+resolveCurrentProfileId\(supabase\)/);
-  assert.doesNotMatch(dal, /id\s*:\s*(?:data\.)?claims\.sub/);
+  assert.match(
+    dal,
+    /const\s+subject\s*=\s+typeof\s+claims\.sub/,
+  );
+
+  assert.match(
+    dal,
+    /identityClient:[\s\S]*=\s*supabase/,
+  );
+
+  assert.match(
+    dal,
+    /const\s+id\s*=\s*accessToken[\s\S]*resolveCurrentProfileId\(\s*identityClient\s*\)[\s\S]*resolveCurrentProfileId\(\s*supabase\s*\)/,
+  );
+
+  assert.doesNotMatch(
+    dal,
+    /id\s*:\s*(?:data\.)?claims\.sub/,
+  );
 });
 
 test("VerifiedUser carries both stable id and provider subject", () => {

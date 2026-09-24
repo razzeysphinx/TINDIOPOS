@@ -53,9 +53,11 @@ function createReceiptDraft(transfer: PosIncomingTransfer) {
  */
 export function PosIncomingTransferInbox({
   enabled,
+  onRefresh,
   transfers,
 }: {
   enabled: boolean;
+  onRefresh?: () => void;
   transfers: PosIncomingTransfer[];
 }) {
   const router = useRouter();
@@ -73,8 +75,17 @@ export function PosIncomingTransferInbox({
   );
 
   const refreshFromServer = useCallback(() => {
-    if (typeof navigator !== "undefined" && navigator.onLine) router.refresh();
-  }, [router]);
+    if (
+      typeof navigator !== "undefined"
+      && navigator.onLine
+    ) {
+      if (onRefresh) {
+        onRefresh();
+      } else {
+        router.refresh();
+      }
+    }
+  }, [onRefresh, router]);
 
   useEffect(() => {
     const updateOnlineState = () => setOnline(navigator.onLine);
@@ -139,7 +150,7 @@ export function PosIncomingTransferInbox({
       setResult(actionResult);
       if (actionResult.ok) {
         clearInventoryOperationId(operationScope);
-        router.refresh();
+        refreshFromServer();
       }
     });
   }

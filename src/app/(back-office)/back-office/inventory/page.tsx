@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, Boxes, ClipboardCheck, PackageOpen, Warehouse } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import type { ReactNode } from "react";
 
 import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
@@ -304,6 +305,7 @@ type PurchasingWorkspaceProps = {
   canViewPurchasing: boolean;
   context: Awaited<ReturnType<typeof requireBackOfficeContext>>;
   dataNeeds: InventoryWorkspaceDataNeeds;
+  header: ReactNode;
   organizationId: string;
   purchasingEnabled: boolean;
   requestedPurchaseOrderId: string | null;
@@ -328,6 +330,7 @@ async function renderPurchasingWorkspace({
   canViewPurchasing,
   context,
   dataNeeds,
+  header,
   organizationId,
   purchasingEnabled,
   requestedPurchaseOrderId,
@@ -613,26 +616,9 @@ async function renderPurchasingWorkspace({
   }));
   const purchasingTabHref = (tab: PurchasingTab) =>
     `/back-office/purchasing?tab=${tab}${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}`;
-  const purchasingSectionLabels: Record<PurchasingTab, string> = {
-    "purchase-orders": "Purchase orders",
-    receiving: "Receiving",
-    suppliers: "Suppliers",
-    "supplier-returns": "Supplier returns",
-  };
-
   return (
     <div className="space-y-8">
-      <PageHeader
-        eyebrow="Purchasing"
-        title="Purchasing"
-        description="Manage suppliers, purchase orders, receiving, and supplier returns."
-        breadcrumbs={[
-          { href: "/back-office", label: "Back Office" },
-          { href: "/back-office/inventory?tab=overview", label: "Inventory" },
-          { href: purchasingTabHref("purchase-orders"), label: "Purchasing" },
-          { label: purchasingSectionLabels[activeTab] },
-        ]}
-      />
+      {header}
 
       <InventoryWorkspaceNavigation
         activeTab={activeTab}
@@ -948,8 +934,29 @@ export async function InventoryWorkspacePage({
     canViewPurchasing,
     canViewCosts,
   });
-  // Preserve the original union for the control-only renderer after the
-  // purchasing early return has narrowed `workspace` to "control".
+  const earlyPurchasingSectionLabels: Record<PurchasingTab, string> = {
+    "purchase-orders": "Purchase orders",
+    receiving: "Receiving",
+    suppliers: "Suppliers",
+    "supplier-returns": "Supplier returns",
+  };
+  const earlyPurchasingTabHref = (tab: PurchasingTab) =>
+    `/back-office/purchasing?tab=${tab}${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}`;
+  const purchasingHeader = (
+    <PageHeader
+      eyebrow={workspace === "purchasing" ? "Purchasing" : "Stock control"}
+      title={workspace === "purchasing" ? "Purchasing" : "Stock Control"}
+      description={workspace === "purchasing"
+        ? "Manage suppliers, purchase orders, receiving, and supplier returns."
+        : "See stock health, investigate changes, and manage controlled stock operations."}
+      breadcrumbs={[
+        { href: "/back-office", label: "Back Office" },
+        { href: "/back-office/inventory?tab=overview", label: "Inventory" },
+        { href: earlyPurchasingTabHref("purchase-orders"), label: "Purchasing" },
+        { label: earlyPurchasingSectionLabels[activeTab as PurchasingTab] },
+      ]}
+    />
+  );
   const renderWorkspace = workspace;
 
   if (workspace === "purchasing") {
@@ -964,6 +971,7 @@ export async function InventoryWorkspacePage({
       canViewPurchasing,
       context,
       dataNeeds,
+      header: purchasingHeader,
       organizationId,
       purchasingEnabled: inventoryModules.purchasing,
       requestedPurchaseOrderId,

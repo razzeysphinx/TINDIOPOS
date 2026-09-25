@@ -3,6 +3,7 @@ import { chromium } from "@playwright/test";
 const BOOTSTRAP_TIMEOUT_MS = 45_000;
 const MEASURED_NAVIGATION_TIMEOUT_MS = 10_000;
 const AUTHENTICATED_BOOTSTRAP_PATH = "/back-office/purchasing?tab=purchase-orders";
+const MAX_SAFE_SIGN_IN_NETWORK_EVENTS = 20;
 const PURCHASE_PATHS = [
   "/back-office/purchasing?tab=purchase-orders",
   "/back-office/purchasing?tab=receiving",
@@ -34,13 +35,14 @@ function deploymentUrl(deployment, pathname) {
 }
 
 class ProfileHarnessFailure extends Error {
-  constructor({ stage, errorClass, timeoutMs, pathname, status = null }) {
+  constructor({ stage, errorClass, timeoutMs, pathname, status = null, signInNetwork = null }) {
     super(`${stage}: ${errorClass}`);
     this.stage = stage;
     this.errorClass = errorClass;
     this.timeoutMs = timeoutMs;
     this.pathname = pathname;
     this.status = status;
+    this.signInNetwork = signInNetwork;
   }
 }
 
@@ -60,6 +62,7 @@ function failureDetails(error, fallback) {
       timeout_ms: error.timeoutMs,
       pathname: error.pathname,
       status: error.status,
+      sign_in_network: error.signInNetwork,
     };
   }
 
@@ -67,6 +70,72 @@ function failureDetails(error, fallback) {
     ...fallback,
     error_class: errorClass(error),
     status: null,
+  };
+}
+
+function isDeploymentRequest(deployment, request) {
+  try {
+    return new URL(request.url()).host === deployment.host;
+  } catch {
+    return false;
+  }
+}
+
+function safeRequestFailureReason(request) {
+  const message = request.failure()?.errorText ?? "";
+  if (/timeout/i.test(message)) return "TIMEOUT";
+  if (/net::/i.test(message)) return "NETWORK_ERROR";
+  return "REQUEST_FAILED";
+}
+
+function createSignInNetworkEvidence({ page, deployment }) {
+  const startedAt = performance.now();
+  const evidence = {
+    events: [],
+    server_action_post_observed: false,
+    server_action_response_observed: false,
+    server_action_response_status: null,
+    url_left_login: false,
+  };
+  const record = (event) => {
+    if (evidence.events.length < MAX_SAFE_SIGN_IN_NETWORK_EVENTS) evidence.events.push(event);
+  };
+  const metadata = (request) => ({
+    method: request.method(),
+    pathname: new URL(request.url()).pathname,
+    relative_ms: Math.round(performance.now() - startedAt),
+  });
+
+  page.on("request", (request) => {
+    if (!isDeploymentRequest(deployment, request)) return;
+    const entry = metadata(request);
+    if (entry.method === "POST") evidence.server_action_post_observed = true;
+    record({ type: "request", ...entry });
+  });
+  page.on("response", (response) => {
+    const request = response.request();
+    if (!isDeploymentRequest(deployment, request)) return;
+    const entry = { ...metadata(request), status: response.status() };
+    if (entry.method === "POST") {
+      evidence.server_action_response_observed = true;
+      evidence.server_action_response_status = entry.status;
+    }
+    record({ type: "response", ...entry });
+  });
+  page.on("requestfailed", (request) => {
+    if (!isDeploymentRequest(deployment, request)) return;
+    record({
+      type: "request_failed",
+      ...metadata(request),
+      failure_reason: safeRequestFailureReason(request),
+    });
+  });
+
+  return {
+    markUrl: () => {
+      evidence.url_left_login = !new URL(page.url()).pathname.startsWith("/login");
+    },
+    value: () => evidence,
   };
 }
 
@@ -111,7 +180,6 @@ async function signInBrowser({ browser, deployment, email, password, bypass }) {
     extraHTTPHeaders: bypass
       ? {
           "x-vercel-protection-bypass": bypass,
-          "x-vercel-set-bypass-cookie": "true",
         }
       : {},
   });
@@ -124,6 +192,7 @@ async function signInBrowser({ browser, deployment, email, password, bypass }) {
   });
 
   profileStage("sign_in");
+  const signInNetwork = createSignInNetworkEvidence({ page, deployment });
   const signInStartedAt = performance.now();
   try {
     await page.getByLabel("Email").fill(email);
@@ -131,19 +200,24 @@ async function signInBrowser({ browser, deployment, email, password, bypass }) {
     await page.getByRole("button", { name: "Sign in" }).click();
     await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: BOOTSTRAP_TIMEOUT_MS });
   } catch (error) {
+    signInNetwork.markUrl();
     throw new ProfileHarnessFailure({
       stage: "sign_in",
       errorClass: errorClass(error, "SIGN_IN_ERROR"),
       timeoutMs: BOOTSTRAP_TIMEOUT_MS,
       pathname: "/login",
+      signInNetwork: signInNetwork.value(),
     });
   }
+
+  signInNetwork.markUrl();
 
   const signIn = {
     success: true,
     duration_ms: Math.round(performance.now() - signInStartedAt),
     timeout_ms: BOOTSTRAP_TIMEOUT_MS,
     pathname: "/login",
+    sign_in_network: signInNetwork.value(),
   };
   const authenticatedBootstrap = await bootstrapNavigation({
     page,
@@ -158,6 +232,9 @@ const deployment = new URL(required("TINDIO_PHASE_05_DEPLOYMENT_URL"));
 const email = required("TINDIO_PHASE_05_TEST_EMAIL");
 const password = required("TINDIO_PHASE_05_TEST_PASSWORD");
 const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() || null;
+if (!bypass) {
+  throw new Error("VERCEL_AUTOMATION_BYPASS_SECRET is required for this protected Preview.");
+}
 const browser = await chromium.launch();
 let context;
 

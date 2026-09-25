@@ -197,8 +197,12 @@ async function signInBrowser({ browser, deployment, email, password, bypass }) {
   try {
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password", { exact: true }).fill(password);
+    const loginRedirect = page.waitForURL(
+      (url) => !url.pathname.startsWith("/login"),
+      { timeout: BOOTSTRAP_TIMEOUT_MS },
+    );
     await page.getByRole("button", { name: "Sign in" }).click();
-    await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: BOOTSTRAP_TIMEOUT_MS });
+    await loginRedirect;
   } catch (error) {
     signInNetwork.markUrl();
     throw new ProfileHarnessFailure({
@@ -211,12 +215,23 @@ async function signInBrowser({ browser, deployment, email, password, bypass }) {
   }
 
   signInNetwork.markUrl();
+  const signedInPathname = new URL(page.url()).pathname;
+  if (signedInPathname.startsWith("/login")) {
+    throw new ProfileHarnessFailure({
+      stage: "sign_in",
+      errorClass: "LOGIN_REDIRECT_NOT_COMMITTED",
+      timeoutMs: BOOTSTRAP_TIMEOUT_MS,
+      pathname: signedInPathname,
+      signInNetwork: signInNetwork.value(),
+    });
+  }
 
   const signIn = {
     success: true,
     duration_ms: Math.round(performance.now() - signInStartedAt),
     timeout_ms: BOOTSTRAP_TIMEOUT_MS,
     pathname: "/login",
+    final_pathname: signedInPathname,
     sign_in_network: signInNetwork.value(),
   };
   const authenticatedBootstrap = await bootstrapNavigation({

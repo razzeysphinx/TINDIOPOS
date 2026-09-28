@@ -44,6 +44,7 @@
     "test:inventory-rpc-contract": "node --test scripts/inventory-rpc-contract-hardening-check.mjs",
     "test:current-rpc-contracts": "node scripts/current-rpc-contract-coherence-check.mjs",
     "test:provider-neutral-inventory-auth": "node scripts/provider-neutral-inventory-authorization-check.mjs",
+    "test:provider-neutral-login-membership": "node --test scripts/provider-neutral-login-membership-check.mjs",
     "test:provider-neutral-organization-governance": "node scripts/provider-neutral-organization-governance-check.mjs",
     "test:inventory-count-stocktake": "node --test scripts/inventory-count-stocktake-check.mjs",
     "test:inventory-idempotency-recovery": "node --test scripts/inventory-idempotency-failure-recovery-check.mjs",

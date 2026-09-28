@@ -1,0 +1,19 @@
+# Phase 06 — Native Android Foundation
+
+SOURCE_OF_TRUTH: `docs/TINDIO_MOBILE_NEON_SOURCE_OF_TRUTH.md`
+
+STATUS: `IMPLEMENTING`
+
+SLICE: `06A — Native Workspace + Authenticated Backend V1 Handshake`
+
+- Backend V1 base: `99c452536ec0344f8a1a7216a693799b6620573b`
+- Native workspace: `apps/mobile`
+- Auth: Supabase Auth
+- Mobile transport: Bearer access token
+- Backend: POS V2
+- Business context: server-authoritative
+- Direct database access from mobile: NONE
+- SQLite: NOT STARTED — PHASE 07
+- Device enrollment: NEXT 06B
+- Store/register selection: NEXT 06B
+- Shift/POS shells: later Phase 06 slices

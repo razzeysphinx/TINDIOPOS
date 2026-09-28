@@ -10,6 +10,10 @@
   },
   "scripts": {
     "dev": "next dev",
+    "mobile:start": "pnpm --dir apps/mobile start",
+    "mobile:android": "pnpm --dir apps/mobile android",
+    "mobile:typecheck": "pnpm --dir apps/mobile typecheck",
+    "test:phase-06-native-foundation": "node --test scripts/phase-06-native-foundation-check.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

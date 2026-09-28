@@ -3,7 +3,6 @@ import { chromium } from "@playwright/test";
 const BOOTSTRAP_TIMEOUT_MS = 45_000;
 const MEASURED_NAVIGATION_TIMEOUT_MS = 10_000;
 const AUTHENTICATED_BOOTSTRAP_PATH = "/back-office/purchasing?tab=purchase-orders";
-const MAX_SAFE_SIGN_IN_NETWORK_EVENTS = 20;
 const PURCHASE_PATHS = [
   "/back-office/purchasing?tab=purchase-orders",
   "/back-office/purchasing?tab=receiving",
@@ -35,14 +34,13 @@ function deploymentUrl(deployment, pathname) {
 }
 
 class ProfileHarnessFailure extends Error {
-  constructor({ stage, errorClass, timeoutMs, pathname, status = null, signInNetwork = null }) {
+  constructor({ stage, errorClass, timeoutMs, pathname, status = null }) {
     super(`${stage}: ${errorClass}`);
     this.stage = stage;
     this.errorClass = errorClass;
     this.timeoutMs = timeoutMs;
     this.pathname = pathname;
     this.status = status;
-    this.signInNetwork = signInNetwork;
   }
 }
 
@@ -62,7 +60,6 @@ function failureDetails(error, fallback) {
       timeout_ms: error.timeoutMs,
       pathname: error.pathname,
       status: error.status,
-      sign_in_network: error.signInNetwork,
     };
   }
 
@@ -73,73 +70,7 @@ function failureDetails(error, fallback) {
   };
 }
 
-function isDeploymentRequest(deployment, request) {
-  try {
-    return new URL(request.url()).host === deployment.host;
-  } catch {
-    return false;
-  }
-}
-
-function safeRequestFailureReason(request) {
-  const message = request.failure()?.errorText ?? "";
-  if (/timeout/i.test(message)) return "TIMEOUT";
-  if (/net::/i.test(message)) return "NETWORK_ERROR";
-  return "REQUEST_FAILED";
-}
-
-function createSignInNetworkEvidence({ page, deployment }) {
-  const startedAt = performance.now();
-  const evidence = {
-    events: [],
-    server_action_post_observed: false,
-    server_action_response_observed: false,
-    server_action_response_status: null,
-    url_left_login: false,
-  };
-  const record = (event) => {
-    if (evidence.events.length < MAX_SAFE_SIGN_IN_NETWORK_EVENTS) evidence.events.push(event);
-  };
-  const metadata = (request) => ({
-    method: request.method(),
-    pathname: new URL(request.url()).pathname,
-    relative_ms: Math.round(performance.now() - startedAt),
-  });
-
-  page.on("request", (request) => {
-    if (!isDeploymentRequest(deployment, request)) return;
-    const entry = metadata(request);
-    if (entry.method === "POST") evidence.server_action_post_observed = true;
-    record({ type: "request", ...entry });
-  });
-  page.on("response", (response) => {
-    const request = response.request();
-    if (!isDeploymentRequest(deployment, request)) return;
-    const entry = { ...metadata(request), status: response.status() };
-    if (entry.method === "POST") {
-      evidence.server_action_response_observed = true;
-      evidence.server_action_response_status = entry.status;
-    }
-    record({ type: "response", ...entry });
-  });
-  page.on("requestfailed", (request) => {
-    if (!isDeploymentRequest(deployment, request)) return;
-    record({
-      type: "request_failed",
-      ...metadata(request),
-      failure_reason: safeRequestFailureReason(request),
-    });
-  });
-
-  return {
-    markUrl: () => {
-      evidence.url_left_login = !new URL(page.url()).pathname.startsWith("/login");
-    },
-    value: () => evidence,
-  };
-}
-
-async function bootstrapNavigation({ page, deployment, pathname, stage }) {
+async function bootstrapNavigation({ page, deployment, pathname, stage, expectedPathPrefix = null }) {
   profileStage(stage);
   const startedAt = performance.now();
   try {
@@ -157,11 +88,22 @@ async function bootstrapNavigation({ page, deployment, pathname, stage }) {
         status,
       });
     }
+    const finalPathname = new URL(page.url()).pathname;
+    if (expectedPathPrefix && !finalPathname.startsWith(expectedPathPrefix)) {
+      throw new ProfileHarnessFailure({
+        stage,
+        errorClass: "UNEXPECTED_PATHNAME",
+        timeoutMs: BOOTSTRAP_TIMEOUT_MS,
+        pathname: finalPathname,
+        status,
+      });
+    }
     return {
       success: true,
       duration_ms: Math.round(performance.now() - startedAt),
       timeout_ms: BOOTSTRAP_TIMEOUT_MS,
       pathname,
+      final_pathname: finalPathname,
       status,
     };
   } catch (error) {
@@ -176,71 +118,107 @@ async function bootstrapNavigation({ page, deployment, pathname, stage }) {
 }
 
 async function signInBrowser({ browser, deployment, email, password, bypass }) {
-  const context = await browser.newContext({
-    extraHTTPHeaders: bypass
-      ? {
-          "x-vercel-protection-bypass": bypass,
-        }
-      : {},
-  });
-  const page = await context.newPage();
-  const loginPage = await bootstrapNavigation({
-    page,
-    deployment,
-    pathname: "/login",
-    stage: "login_page",
-  });
-
-  profileStage("sign_in");
-  const signInNetwork = createSignInNetworkEvidence({ page, deployment });
-  const signInStartedAt = performance.now();
+  const headers = { "x-vercel-protection-bypass": bypass };
+  let authContext;
+  let authPage;
+  let nativeLoginPageStatus = null;
   try {
-    await page.getByLabel("Email").fill(email);
-    await page.getByLabel("Password", { exact: true }).fill(password);
-    const loginRedirect = page.waitForURL(
+    authContext = await browser.newContext({
+      javaScriptEnabled: false,
+      extraHTTPHeaders: headers,
+    });
+    authPage = await authContext.newPage();
+    profileStage("native_login_page");
+    const loginResponse = await authPage.goto(deploymentUrl(deployment, "/login"), {
+      waitUntil: "domcontentloaded",
+      timeout: BOOTSTRAP_TIMEOUT_MS,
+    });
+    nativeLoginPageStatus = loginResponse?.status() ?? null;
+    const nativeLoginPagePathname = new URL(authPage.url()).pathname;
+    if (nativeLoginPageStatus !== 200 || nativeLoginPagePathname !== "/login") {
+      throw new ProfileHarnessFailure({
+        stage: "native_login_page",
+        errorClass: nativeLoginPageStatus === 200 ? "UNEXPECTED_PATHNAME" : `HTTP_${nativeLoginPageStatus ?? "NO_RESPONSE"}`,
+        timeoutMs: BOOTSTRAP_TIMEOUT_MS,
+        pathname: nativeLoginPagePathname,
+        status: nativeLoginPageStatus,
+      });
+    }
+
+    profileStage("native_sign_in");
+    await authPage.getByLabel("Email").fill(email);
+    await authPage.getByLabel("Password", { exact: true }).fill(password);
+    const nativeRedirect = authPage.waitForURL(
       (url) => !url.pathname.startsWith("/login"),
       { timeout: BOOTSTRAP_TIMEOUT_MS },
     );
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await loginRedirect;
+    await authPage.getByRole("button", { name: "Sign in" }).click();
+    await nativeRedirect;
   } catch (error) {
-    signInNetwork.markUrl();
+    await authContext?.close().catch(() => null);
+    authContext = null;
+    if (error instanceof ProfileHarnessFailure) throw error;
     throw new ProfileHarnessFailure({
-      stage: "sign_in",
-      errorClass: errorClass(error, "SIGN_IN_ERROR"),
+      stage: "native_sign_in",
+      errorClass: errorClass(error, "NATIVE_SIGN_IN_ERROR"),
       timeoutMs: BOOTSTRAP_TIMEOUT_MS,
       pathname: "/login",
-      signInNetwork: signInNetwork.value(),
     });
   }
 
-  signInNetwork.markUrl();
-  const signedInPathname = new URL(page.url()).pathname;
-  if (signedInPathname.startsWith("/login")) {
-    throw new ProfileHarnessFailure({
-      stage: "sign_in",
-      errorClass: "LOGIN_REDIRECT_NOT_COMMITTED",
-      timeoutMs: BOOTSTRAP_TIMEOUT_MS,
-      pathname: signedInPathname,
-      signInNetwork: signInNetwork.value(),
-    });
-  }
+  try {
+    const nativeLoginFinalPathname = new URL(authPage.url()).pathname;
+    const authCookies = await authContext.cookies();
+    const supabaseAuthCookieCount = authCookies.filter(
+      (cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("auth-token"),
+    ).length;
+    if (supabaseAuthCookieCount === 0) {
+      throw new ProfileHarnessFailure({
+        stage: "native_login_session",
+        errorClass: "MISSING_SUPABASE_AUTH_COOKIE",
+        timeoutMs: BOOTSTRAP_TIMEOUT_MS,
+        pathname: nativeLoginFinalPathname,
+      });
+    }
+    const authenticatedStorage = await authContext.storageState();
+    await authContext.close();
+    authContext = null;
 
-  const signIn = {
-    success: true,
-    duration_ms: Math.round(performance.now() - signInStartedAt),
-    timeout_ms: BOOTSTRAP_TIMEOUT_MS,
-    pathname: "/login",
-    final_pathname: signedInPathname,
-    sign_in_network: signInNetwork.value(),
-  };
-  const authenticatedBootstrap = await bootstrapNavigation({
-    page,
-    deployment,
-    pathname: AUTHENTICATED_BOOTSTRAP_PATH,
-    stage: "authenticated_bootstrap",
-  });
-  return { context, page, bootstrap: { login_page: loginPage, sign_in: signIn, authenticated_bootstrap: authenticatedBootstrap } };
+    const context = await browser.newContext({
+      storageState: authenticatedStorage,
+      extraHTTPHeaders: headers,
+    });
+    const page = await context.newPage();
+    const pageErrors = [];
+    const consoleErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
+    const authenticatedBootstrap = await bootstrapNavigation({
+      page,
+      deployment,
+      pathname: AUTHENTICATED_BOOTSTRAP_PATH,
+      stage: "authenticated_bootstrap",
+      expectedPathPrefix: "/back-office/purchasing",
+    });
+    return {
+      context,
+      page,
+      pageErrors,
+      consoleErrors,
+      bootstrap: {
+        auth_mode: "native_progressive_enhancement",
+        native_login_page_status: nativeLoginPageStatus,
+        native_login_final_pathname: nativeLoginFinalPathname,
+        supabase_auth_cookie_count: supabaseAuthCookieCount,
+        measurement_context_authenticated: "YES",
+        authenticated_bootstrap: authenticatedBootstrap,
+      },
+    };
+  } finally {
+    await authContext?.close().catch(() => null);
+  }
 }
 
 const deployment = new URL(required("TINDIO_PHASE_05_DEPLOYMENT_URL"));
@@ -257,12 +235,8 @@ try {
   const session = await signInBrowser({ browser, deployment, email, password, bypass });
   context = session.context;
   const page = session.page;
-  const pageErrors = [];
-  const consoleErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(error.message));
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
+  const pageErrors = session.pageErrors;
+  const consoleErrors = session.consoleErrors;
 
   const pages = [];
   profileStage("measurement_begin");
@@ -332,15 +306,20 @@ try {
     timeout_ms: BOOTSTRAP_TIMEOUT_MS,
     pathname: AUTHENTICATED_BOOTSTRAP_PATH,
   });
+  const result = failure.stage.startsWith("native_")
+    ? "BLOCKED_NATIVE_LOGIN"
+    : failure.stage === "authenticated_bootstrap"
+      ? "BLOCKED_AUTH_STORAGE_TRANSFER"
+      : "BLOCKED_PURCHASING_PROFILE";
   console.log(JSON.stringify({
     phase: "05C",
     kind: "targeted purchasing runtime profile",
-    result: "BLOCKED_PREVIEW_SESSION_BOOTSTRAP",
+    result,
     bootstrap_timeout_ms: BOOTSTRAP_TIMEOUT_MS,
     measured_navigation_timeout_ms: MEASURED_NAVIGATION_TIMEOUT_MS,
     failure,
   }, null, 2));
-  console.log("PHASE 05 PURCHASING RUNTIME PROFILE: BLOCKED_PREVIEW_SESSION_BOOTSTRAP");
+  console.log(`PHASE 05 PURCHASING RUNTIME PROFILE: ${result}`);
   process.exitCode = 1;
 } finally {
   await context?.close().catch(() => null);

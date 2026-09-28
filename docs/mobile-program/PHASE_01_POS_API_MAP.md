@@ -25,6 +25,7 @@ V2 command routes resolve the bearer-authenticated `BusinessContext` through `ge
 | Customer display | Existing display handler | `PUT /api/pos/v2/customer-display` |
 | Customer search/create | Existing customer handler / `createCustomer()` | `GET /api/pos/v2/customers`, `POST /api/pos/v2/customers/create` |
 | Device validation | Existing device handler | `POST /api/pos/v2/device` |
+| Device enrollment | `register_pos_device` (requires `devices.manage`) | `POST /api/pos/v2/device/enroll` |
 | Favorite tile | `setPosFavoriteTile()` | `POST /api/pos/v2/favorites` |
 | Shift lifecycle | `openShift()`, `closeShift()`, `recordCashMovement()` | `POST /api/pos/v2/shifts/*` |
 | Open tickets | Shared ticket services | `POST /api/pos/v2/tickets/*` |
@@ -40,3 +41,5 @@ V2 command routes resolve the bearer-authenticated `BusinessContext` through `ge
 Phase 01 established the capability inventory above and the rule that all POS operations must use server-validated organization, RBAC, store, register, device, RPC, and RLS boundaries. Its original monolithic bootstrap and version-specific route plumbing are retired; the capability and shared-service provenance remain intact in the V2 map.
 
 The mobile bearer-authentication extension originally deferred to Phase 02 is now implemented by the V2 bearer context. No service-role credential is used in production POS request paths.
+
+Device validation requires existing POS/sales access and employee assignment to the bound store. Store/register binding is server-authoritative.

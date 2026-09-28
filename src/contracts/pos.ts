@@ -563,3 +563,6 @@ export type {
   PosTicketAssignee,
   PosTicketTemplate,
 } from "@/features/pos/pos-types";
+
+export type PosOpenShiftV2Response = { ok: true; message: string; shift: PosActiveShift } | { ok: false; message: string };
+export type PosCloseShiftV2Response = { ok: true; message: string; closeSummary?: { expectedCashMinor: number; countedCashMinor: number; differenceMinor: number } } | { ok: false; message: string };

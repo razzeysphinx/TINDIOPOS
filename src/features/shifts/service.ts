@@ -9,32 +9,10 @@ import {
 } from "@/features/shifts/shift-schema";
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
 import { createBusinessContextClient } from "@/lib/supabase/context-client";
+import type { PosCloseShiftV2Response, PosOpenShiftV2Response } from "@/contracts/pos";
 
-export type ShiftActionResult =
-  | {
-      ok: true;
-      message: string;
-      closeSummary?: {
-        expectedCashMinor: number;
-        countedCashMinor: number;
-        differenceMinor: number;
-      };
-    }
-  | { ok: false; message: string };
-
-export type OpenShiftActionResult =
-  | {
-      ok: true;
-      message: string;
-      shift: {
-        id: string;
-        storeId: string;
-        registerId: string;
-        openingCashMinor: number;
-        openedAt: string;
-      };
-    }
-  | { ok: false; message: string };
+export type ShiftActionResult = PosCloseShiftV2Response;
+export type OpenShiftActionResult = PosOpenShiftV2Response;
 
 function databaseMessage(
   code: string | undefined,

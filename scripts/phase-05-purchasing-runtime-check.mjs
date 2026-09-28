@@ -1,6 +1,7 @@
 import { chromium } from "@playwright/test";
 
 const BOOTSTRAP_TIMEOUT_MS = 45_000;
+const AUTH_SESSION_TIMEOUT_MS = 15_000;
 const MEASURED_NAVIGATION_TIMEOUT_MS = 10_000;
 const AUTHENTICATED_BOOTSTRAP_PATH = "/back-office/purchasing?tab=purchase-orders";
 const PURCHASE_PATHS = [
@@ -34,13 +35,16 @@ function deploymentUrl(deployment, pathname) {
 }
 
 class ProfileHarnessFailure extends Error {
-  constructor({ stage, errorClass, timeoutMs, pathname, status = null }) {
+  constructor({ stage, errorClass, timeoutMs, pathname, status = null, safeAlert = null, loginPostObserved = null, loginResponseStatus = null }) {
     super(`${stage}: ${errorClass}`);
     this.stage = stage;
     this.errorClass = errorClass;
     this.timeoutMs = timeoutMs;
     this.pathname = pathname;
     this.status = status;
+    this.safeAlert = safeAlert;
+    this.loginPostObserved = loginPostObserved;
+    this.loginResponseStatus = loginResponseStatus;
   }
 }
 
@@ -60,6 +64,9 @@ function failureDetails(error, fallback) {
       timeout_ms: error.timeoutMs,
       pathname: error.pathname,
       status: error.status,
+      safe_alert: error.safeAlert,
+      login_post_observed: error.loginPostObserved,
+      login_response_status: error.loginResponseStatus,
     };
   }
 
@@ -68,6 +75,27 @@ function failureDetails(error, fallback) {
     error_class: errorClass(error),
     status: null,
   };
+}
+
+function isSupabaseAuthCookieName(name) {
+  return name.startsWith("sb-") && name.includes("auth-token");
+}
+
+async function supabaseAuthCookieCount(context) {
+  const cookies = await context.cookies();
+  return cookies.filter((cookie) => isSupabaseAuthCookieName(cookie.name)).length;
+}
+
+async function waitForSupabaseAuthCookie({ context, timeoutMs }) {
+  const startedAt = performance.now();
+  while (performance.now() - startedAt < timeoutMs) {
+    const count = await supabaseAuthCookieCount(context);
+    if (count > 0) {
+      return { success: true, count, elapsed_ms: Math.round(performance.now() - startedAt) };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return { success: false, count: 0, elapsed_ms: Math.round(performance.now() - startedAt) };
 }
 
 async function bootstrapNavigation({ page, deployment, pathname, stage, expectedPathPrefix = null }) {
@@ -119,76 +147,52 @@ async function bootstrapNavigation({ page, deployment, pathname, stage, expected
 
 async function signInBrowser({ browser, deployment, email, password, bypass }) {
   const headers = { "x-vercel-protection-bypass": bypass };
-  let authContext;
-  let authPage;
-  let nativeLoginPageStatus = null;
+  const context = await browser.newContext({ extraHTTPHeaders: headers });
+  const page = await context.newPage();
   try {
-    authContext = await browser.newContext({
-      javaScriptEnabled: false,
-      extraHTTPHeaders: headers,
-    });
-    authPage = await authContext.newPage();
-    profileStage("native_login_page");
-    const loginResponse = await authPage.goto(deploymentUrl(deployment, "/login"), {
-      waitUntil: "domcontentloaded",
-      timeout: BOOTSTRAP_TIMEOUT_MS,
-    });
-    nativeLoginPageStatus = loginResponse?.status() ?? null;
-    const nativeLoginPagePathname = new URL(authPage.url()).pathname;
-    if (nativeLoginPageStatus !== 200 || nativeLoginPagePathname !== "/login") {
-      throw new ProfileHarnessFailure({
-        stage: "native_login_page",
-        errorClass: nativeLoginPageStatus === 200 ? "UNEXPECTED_PATHNAME" : `HTTP_${nativeLoginPageStatus ?? "NO_RESPONSE"}`,
-        timeoutMs: BOOTSTRAP_TIMEOUT_MS,
-        pathname: nativeLoginPagePathname,
-        status: nativeLoginPageStatus,
-      });
-    }
-
-    profileStage("native_sign_in");
-    await authPage.getByLabel("Email").fill(email);
-    await authPage.getByLabel("Password", { exact: true }).fill(password);
-    const nativeRedirect = authPage.waitForURL(
-      (url) => !url.pathname.startsWith("/login"),
-      { timeout: BOOTSTRAP_TIMEOUT_MS },
-    );
-    await authPage.getByRole("button", { name: "Sign in" }).click();
-    await nativeRedirect;
-  } catch (error) {
-    await authContext?.close().catch(() => null);
-    authContext = null;
-    if (error instanceof ProfileHarnessFailure) throw error;
-    throw new ProfileHarnessFailure({
-      stage: "native_sign_in",
-      errorClass: errorClass(error, "NATIVE_SIGN_IN_ERROR"),
-      timeoutMs: BOOTSTRAP_TIMEOUT_MS,
+    const loginPage = await bootstrapNavigation({
+      page,
+      deployment,
       pathname: "/login",
+      stage: "login_page",
+      expectedPathPrefix: "/login",
     });
-  }
-
-  try {
-    const nativeLoginFinalPathname = new URL(authPage.url()).pathname;
-    const authCookies = await authContext.cookies();
-    const supabaseAuthCookieCount = authCookies.filter(
-      (cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("auth-token"),
-    ).length;
-    if (supabaseAuthCookieCount === 0) {
+    profileStage("sign_in");
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(password);
+    const authCookieCountBefore = await supabaseAuthCookieCount(context);
+    const loginTransport = { postObserved: false, responseStatus: null };
+    page.on("request", (request) => {
+      if (request.method() === "POST" && new URL(request.url()).host === deployment.host) {
+        loginTransport.postObserved = true;
+      }
+    });
+    page.on("response", (response) => {
+      const request = response.request();
+      if (request.method() === "POST" && new URL(request.url()).host === deployment.host) {
+        loginTransport.responseStatus = response.status();
+      }
+    });
+    await page.getByRole("button", { name: "Sign in" }).click();
+    const sessionCommit = await waitForSupabaseAuthCookie({
+      context,
+      timeoutMs: AUTH_SESSION_TIMEOUT_MS,
+    });
+    if (!sessionCommit.success) {
+      const alert = page.getByRole("alert");
+      const alertVisible = await alert.isVisible().catch(() => false);
+      const alertText = alertVisible ? (await alert.textContent())?.trim() : null;
       throw new ProfileHarnessFailure({
-        stage: "native_login_session",
-        errorClass: "MISSING_SUPABASE_AUTH_COOKIE",
-        timeoutMs: BOOTSTRAP_TIMEOUT_MS,
-        pathname: nativeLoginFinalPathname,
+        stage: "sign_in",
+        errorClass: alertText ? "LOGIN_APPLICATION_ERROR" : "AUTH_COOKIE_NOT_COMMITTED",
+        timeoutMs: AUTH_SESSION_TIMEOUT_MS,
+        pathname: new URL(page.url()).pathname,
+        safeAlert: alertText ? "PRESENT" : null,
+        loginPostObserved: loginTransport.postObserved,
+        loginResponseStatus: loginTransport.responseStatus,
       });
     }
-    const authenticatedStorage = await authContext.storageState();
-    await authContext.close();
-    authContext = null;
-
-    const context = await browser.newContext({
-      storageState: authenticatedStorage,
-      extraHTTPHeaders: headers,
-    });
-    const page = await context.newPage();
+    const loginPathAfterCookieCommit = new URL(page.url()).pathname;
     const pageErrors = [];
     const consoleErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -208,16 +212,24 @@ async function signInBrowser({ browser, deployment, email, password, bypass }) {
       pageErrors,
       consoleErrors,
       bootstrap: {
-        auth_mode: "native_progressive_enhancement",
-        native_login_page_status: nativeLoginPageStatus,
-        native_login_final_pathname: nativeLoginFinalPathname,
-        supabase_auth_cookie_count: supabaseAuthCookieCount,
-        measurement_context_authenticated: "YES",
+        auth_mode: "cookie_commit",
+        login_page: loginPage,
+        auth_cookie_count_before: authCookieCountBefore,
+        auth_cookie_count_after: sessionCommit.count,
+        auth_cookie_commit_elapsed_ms: sessionCommit.elapsed_ms,
+        login_path_after_cookie_commit: loginPathAfterCookieCommit,
         authenticated_bootstrap: authenticatedBootstrap,
       },
     };
-  } finally {
-    await authContext?.close().catch(() => null);
+  } catch (error) {
+    await context.close().catch(() => null);
+    if (error instanceof ProfileHarnessFailure) throw error;
+    throw new ProfileHarnessFailure({
+      stage: "sign_in",
+      errorClass: errorClass(error, "SIGN_IN_ERROR"),
+      timeoutMs: AUTH_SESSION_TIMEOUT_MS,
+      pathname: new URL(page.url()).pathname,
+    });
   }
 }
 
@@ -306,10 +318,10 @@ try {
     timeout_ms: BOOTSTRAP_TIMEOUT_MS,
     pathname: AUTHENTICATED_BOOTSTRAP_PATH,
   });
-  const result = failure.stage.startsWith("native_")
-    ? "BLOCKED_NATIVE_LOGIN"
-    : failure.stage === "authenticated_bootstrap"
-      ? "BLOCKED_AUTH_STORAGE_TRANSFER"
+  const result = failure.stage === "authenticated_bootstrap"
+    ? "BLOCKED_AUTH_COOKIE_SESSION"
+    : failure.stage === "login_page" || failure.stage === "sign_in"
+      ? "BLOCKED_AUTH_COOKIE_COMMIT"
       : "BLOCKED_PURCHASING_PROFILE";
   console.log(JSON.stringify({
     phase: "05C",

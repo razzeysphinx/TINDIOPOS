@@ -1,0 +1,5 @@
+import { Text, View, Pressable } from "react-native";
+import { useBusinessContext } from "../../src/features/business/use-business-context";
+import { useTerminalDevice } from "../../src/features/device/use-terminal-device";
+import { useSession } from "../../src/features/session/session-provider";
+export default function SettingsScreen() { const { data } = useBusinessContext(); const { signOut } = useSession(); const core = data?.core; const terminal = useTerminalDevice(core?.organization.id); if (!core) return <Text>Loading…</Text>; const binding = terminal.identity?.binding; return <View><Text>Settings</Text><Text>{core.organization.name}</Text><Text>{core.employee.name}</Text><Text>{core.roleNames.join(", ")}</Text><Text>{binding ? `Device ready: ${binding.storeId} / ${binding.registerId}` : "Device missing"}</Text><Text>{binding?.appVersion ?? ""}</Text><Text>{terminal.identity?.lastVerifiedAt ?? ""}</Text><Pressable onPress={() => void signOut()}><Text>Sign out</Text></Pressable></View>; }

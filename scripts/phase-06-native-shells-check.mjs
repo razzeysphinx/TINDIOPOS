@@ -1,0 +1,5 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import test from "node:test";
+const read = (path) => fs.readFileSync(path, "utf8");
+test("Phase 06 native shells preserve the mobile boundary", () => { const layout = read("apps/mobile/app/(app)/_layout.tsx"); const shift = read("apps/mobile/app/(app)/shift.tsx"); const pos = read("apps/mobile/app/(app)/pos.tsx"); const sync = read("apps/mobile/app/(app)/sync-status.tsx"); const pkg = read("apps/mobile/package.json"); assert.match(layout, /BusinessContextProvider/); for (const value of ["openPosV2Shift", "closePosV2Shift", "shifts.open", "shifts.close", "useTerminalDevice"]) assert.ok(shift.includes(value)); for (const value of ["fetchPosV2Live", "useTerminalDevice", "activeShift", "binding"]) assert.ok(pos.includes(value)); assert.ok(fs.existsSync("apps/mobile/app/(app)/settings.tsx")); for (const value of ["PHASE 07", "PHASE 08", "PHASE 09", "PHASE 10", "PHASE 12"]) assert.ok(sync.includes(value)); assert.ok(!pkg.includes("expo-sqlite")); });

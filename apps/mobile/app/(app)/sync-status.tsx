@@ -1,0 +1,4 @@
+import { useState } from "react";
+import { Pressable, Text, View } from "react-native";
+import { useBusinessContext } from "../../src/features/business/use-business-context";
+export default function SyncStatusScreen() { const { data, reload } = useBusinessContext(); const [checked, setChecked] = useState<string | null>(null); const check = async () => { await reload(data?.core.organization.id); setChecked(new Date().toISOString()); }; return <View><Text>Cloud Backend: CONNECTED / CHECK REQUIRED</Text><Text>Native SQLite: NOT STARTED — PHASE 07</Text><Text>Cold-start Offline: NOT STARTED — PHASE 08</Text><Text>Local-first Cache: NOT STARTED — PHASE 09</Text><Text>Durable Outbox: NOT STARTED — PHASE 10</Text><Text>Delta Sync: NOT STARTED — PHASE 12</Text><Text>{checked ?? ""}</Text><Pressable onPress={() => void check()}><Text>Recheck Backend</Text></Pressable></View>; }

@@ -1,7 +1,8 @@
 import { chromium } from "@playwright/test";
+import { createServerClient } from "@supabase/ssr";
 
 const BOOTSTRAP_TIMEOUT_MS = 45_000;
-const AUTH_SESSION_TIMEOUT_MS = 15_000;
+const SESSION_SEED_TIMEOUT_MS = 15_000;
 const MEASURED_NAVIGATION_TIMEOUT_MS = 10_000;
 const AUTHENTICATED_BOOTSTRAP_PATH = "/back-office/purchasing?tab=purchase-orders";
 const PURCHASE_PATHS = [
@@ -35,16 +36,13 @@ function deploymentUrl(deployment, pathname) {
 }
 
 class ProfileHarnessFailure extends Error {
-  constructor({ stage, errorClass, timeoutMs, pathname, status = null, safeAlert = null, loginPostObserved = null, loginResponseStatus = null }) {
+  constructor({ stage, errorClass, timeoutMs, pathname, status = null }) {
     super(`${stage}: ${errorClass}`);
     this.stage = stage;
     this.errorClass = errorClass;
     this.timeoutMs = timeoutMs;
     this.pathname = pathname;
     this.status = status;
-    this.safeAlert = safeAlert;
-    this.loginPostObserved = loginPostObserved;
-    this.loginResponseStatus = loginResponseStatus;
   }
 }
 
@@ -64,9 +62,6 @@ function failureDetails(error, fallback) {
       timeout_ms: error.timeoutMs,
       pathname: error.pathname,
       status: error.status,
-      safe_alert: error.safeAlert,
-      login_post_observed: error.loginPostObserved,
-      login_response_status: error.loginResponseStatus,
     };
   }
 
@@ -77,25 +72,62 @@ function failureDetails(error, fallback) {
   };
 }
 
-function isSupabaseAuthCookieName(name) {
-  return name.startsWith("sb-") && name.includes("auth-token");
+function normalizeSameSite(sameSite) {
+  if (sameSite === "strict" || sameSite === "Strict") return "Strict";
+  if (sameSite === "none" || sameSite === "None") return "None";
+  return "Lax";
 }
 
-async function supabaseAuthCookieCount(context) {
-  const cookies = await context.cookies();
-  return cookies.filter((cookie) => isSupabaseAuthCookieName(cookie.name)).length;
-}
-
-async function waitForSupabaseAuthCookie({ context, timeoutMs }) {
+async function createAuthenticatedSessionCookies({ supabaseUrl, publishableKey, email, password, deployment }) {
+  const cookieJar = new Map();
+  const supabase = createServerClient(supabaseUrl, publishableKey, {
+    cookies: {
+      getAll() {
+        return [...cookieJar.values()].map(({ name, value }) => ({ name, value }));
+      },
+      setAll(cookiesToSet) {
+        for (const cookie of cookiesToSet) cookieJar.set(cookie.name, cookie);
+      },
+    },
+  });
   const startedAt = performance.now();
-  while (performance.now() - startedAt < timeoutMs) {
-    const count = await supabaseAuthCookieCount(context);
-    if (count > 0) {
-      return { success: true, count, elapsed_ms: Math.round(performance.now() - startedAt) };
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error || !data.session) {
+    throw new ProfileHarnessFailure({
+      stage: "session_seed",
+      errorClass: "SUPABASE_SIGN_IN_FAILED",
+      timeoutMs: SESSION_SEED_TIMEOUT_MS,
+      pathname: deployment.pathname,
+    });
   }
-  return { success: false, count: 0, elapsed_ms: Math.round(performance.now() - startedAt) };
+  const cookieEntries = [...cookieJar.values()];
+  const authCookies = cookieEntries.filter(
+    (cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("auth-token"),
+  );
+  if (authCookies.length === 0) {
+    throw new ProfileHarnessFailure({
+      stage: "session_seed",
+      errorClass: "SSR_AUTH_COOKIES_NOT_GENERATED",
+      timeoutMs: SESSION_SEED_TIMEOUT_MS,
+      pathname: deployment.pathname,
+    });
+  }
+  return {
+    browserCookies: cookieEntries.map((cookie) => {
+      const options = cookie.options ?? {};
+      return {
+        name: cookie.name,
+        value: cookie.value,
+        url: deployment.origin,
+        path: options.path ?? "/",
+        httpOnly: options.httpOnly ?? false,
+        secure: options.secure ?? true,
+        sameSite: normalizeSameSite(options.sameSite),
+      };
+    }),
+    authCookieCount: authCookies.length,
+    elapsedMs: Math.round(performance.now() - startedAt),
+  };
 }
 
 async function bootstrapNavigation({ page, deployment, pathname, stage, expectedPathPrefix = null }) {
@@ -145,54 +177,19 @@ async function bootstrapNavigation({ page, deployment, pathname, stage, expected
   }
 }
 
-async function signInBrowser({ browser, deployment, email, password, bypass }) {
+async function createSessionSeededBrowser({ browser, deployment, supabaseUrl, publishableKey, email, password, bypass }) {
+  const sessionSeed = await createAuthenticatedSessionCookies({
+    supabaseUrl,
+    publishableKey,
+    email,
+    password,
+    deployment,
+  });
   const headers = { "x-vercel-protection-bypass": bypass };
   const context = await browser.newContext({ extraHTTPHeaders: headers });
-  const page = await context.newPage();
   try {
-    const loginPage = await bootstrapNavigation({
-      page,
-      deployment,
-      pathname: "/login",
-      stage: "login_page",
-      expectedPathPrefix: "/login",
-    });
-    profileStage("sign_in");
-    await page.getByLabel("Email").fill(email);
-    await page.getByLabel("Password", { exact: true }).fill(password);
-    const authCookieCountBefore = await supabaseAuthCookieCount(context);
-    const loginTransport = { postObserved: false, responseStatus: null };
-    page.on("request", (request) => {
-      if (request.method() === "POST" && new URL(request.url()).host === deployment.host) {
-        loginTransport.postObserved = true;
-      }
-    });
-    page.on("response", (response) => {
-      const request = response.request();
-      if (request.method() === "POST" && new URL(request.url()).host === deployment.host) {
-        loginTransport.responseStatus = response.status();
-      }
-    });
-    await page.getByRole("button", { name: "Sign in" }).click();
-    const sessionCommit = await waitForSupabaseAuthCookie({
-      context,
-      timeoutMs: AUTH_SESSION_TIMEOUT_MS,
-    });
-    if (!sessionCommit.success) {
-      const alert = page.getByRole("alert");
-      const alertVisible = await alert.isVisible().catch(() => false);
-      const alertText = alertVisible ? (await alert.textContent())?.trim() : null;
-      throw new ProfileHarnessFailure({
-        stage: "sign_in",
-        errorClass: alertText ? "LOGIN_APPLICATION_ERROR" : "AUTH_COOKIE_NOT_COMMITTED",
-        timeoutMs: AUTH_SESSION_TIMEOUT_MS,
-        pathname: new URL(page.url()).pathname,
-        safeAlert: alertText ? "PRESENT" : null,
-        loginPostObserved: loginTransport.postObserved,
-        loginResponseStatus: loginTransport.responseStatus,
-      });
-    }
-    const loginPathAfterCookieCommit = new URL(page.url()).pathname;
+    await context.addCookies(sessionSeed.browserCookies);
+    const page = await context.newPage();
     const pageErrors = [];
     const consoleErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -212,12 +209,10 @@ async function signInBrowser({ browser, deployment, email, password, bypass }) {
       pageErrors,
       consoleErrors,
       bootstrap: {
-        auth_mode: "cookie_commit",
-        login_page: loginPage,
-        auth_cookie_count_before: authCookieCountBefore,
-        auth_cookie_count_after: sessionCommit.count,
-        auth_cookie_commit_elapsed_ms: sessionCommit.elapsed_ms,
-        login_path_after_cookie_commit: loginPathAfterCookieCommit,
+        auth_mode: "supabase_ssr_session_seed",
+        session_seed: "PASS",
+        session_seed_elapsed_ms: sessionSeed.elapsedMs,
+        supabase_auth_cookie_count: sessionSeed.authCookieCount,
         authenticated_bootstrap: authenticatedBootstrap,
       },
     };
@@ -225,15 +220,17 @@ async function signInBrowser({ browser, deployment, email, password, bypass }) {
     await context.close().catch(() => null);
     if (error instanceof ProfileHarnessFailure) throw error;
     throw new ProfileHarnessFailure({
-      stage: "sign_in",
-      errorClass: errorClass(error, "SIGN_IN_ERROR"),
-      timeoutMs: AUTH_SESSION_TIMEOUT_MS,
-      pathname: new URL(page.url()).pathname,
+      stage: "authenticated_bootstrap",
+      errorClass: errorClass(error, "SEEDED_SESSION_BOOTSTRAP_ERROR"),
+      timeoutMs: BOOTSTRAP_TIMEOUT_MS,
+      pathname: AUTHENTICATED_BOOTSTRAP_PATH,
     });
   }
 }
 
 const deployment = new URL(required("TINDIO_PHASE_05_DEPLOYMENT_URL"));
+const supabaseUrl = required("NEXT_PUBLIC_SUPABASE_URL");
+const publishableKey = required("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
 const email = required("TINDIO_PHASE_05_TEST_EMAIL");
 const password = required("TINDIO_PHASE_05_TEST_PASSWORD");
 const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() || null;
@@ -244,7 +241,15 @@ const browser = await chromium.launch();
 let context;
 
 try {
-  const session = await signInBrowser({ browser, deployment, email, password, bypass });
+  const session = await createSessionSeededBrowser({
+    browser,
+    deployment,
+    supabaseUrl,
+    publishableKey,
+    email,
+    password,
+    bypass,
+  });
   context = session.context;
   const page = session.page;
   const pageErrors = session.pageErrors;
@@ -318,10 +323,10 @@ try {
     timeout_ms: BOOTSTRAP_TIMEOUT_MS,
     pathname: AUTHENTICATED_BOOTSTRAP_PATH,
   });
-  const result = failure.stage === "authenticated_bootstrap"
-    ? "BLOCKED_AUTH_COOKIE_SESSION"
-    : failure.stage === "login_page" || failure.stage === "sign_in"
-      ? "BLOCKED_AUTH_COOKIE_COMMIT"
+  const result = failure.stage === "session_seed"
+    ? "BLOCKED_SESSION_SEED"
+    : failure.stage === "authenticated_bootstrap"
+      ? "BLOCKED_SEEDED_SESSION_REJECTED"
       : "BLOCKED_PURCHASING_PROFILE";
   console.log(JSON.stringify({
     phase: "05C",

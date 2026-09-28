@@ -17,3 +17,13 @@ SLICE: `06A — Native Workspace + Authenticated Backend V1 Handshake`
 - Device enrollment: NEXT 06B
 - Store/register selection: NEXT 06B
 - Shift/POS shells: later Phase 06 slices
+
+## 06A
+
+Status: `COMPLETE`
+
+## 06B — Device Enrollment + Store/Register Binding
+
+Native enrollment requires `devices.manage`. The device secret is retained in Expo SecureStore and is sent only to the authorized Backend V1 enrollment or validation API; the server stores only its existing secret hash. Store/register binding remains server-authoritative.
+
+The provider-neutral device identity compatibility migration replaces provider-specific identity resolution with existing helpers. Tables/columns changed: NO. RBAC changed: NO. RLS changed: NO. Business semantics changed: NO.

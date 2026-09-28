@@ -14,6 +14,8 @@
     "mobile:android": "pnpm --dir apps/mobile android",
     "mobile:typecheck": "pnpm --dir apps/mobile typecheck",
     "test:phase-06-native-foundation": "node --test scripts/phase-06-native-foundation-check.mjs",
+    "test:phase-06-provider-neutral-device-runtime": "node --test scripts/phase-06-provider-neutral-device-runtime-check.mjs",
+    "test:phase-06-device-enrollment": "node --test scripts/phase-06-device-enrollment-check.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

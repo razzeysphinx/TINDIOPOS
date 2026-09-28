@@ -1,5 +1,5 @@
 import "react-native-url-polyfill/auto";
-import type { PosBootstrapV2CoreResponse } from "../../../../src/contracts/pos";
+import type { PosBootstrapV2CoreResponse, PosDeviceBinding, PosDeviceCredential, PosDeviceValidationResponse } from "../../../../src/contracts/pos";
 import { mobileEnvironment } from "./env";
 import { supabase } from "./supabase";
 
@@ -13,12 +13,15 @@ async function token(refresh: boolean) {
   if (result.error || !result.data.session) throw new TindioApiError("Sign in is required.", 401, "AUTH_REQUIRED", null);
   return result.data.session.access_token;
 }
-async function request(pathname: string, organizationId?: string) {
+async function request(pathname: string, { organizationId, init = {} }: { organizationId?: string; init?: RequestInit } = {}) {
   const headers = new Headers({ Accept: "application/json", Authorization: `Bearer ${await token(false)}` });
   if (organizationId) headers.set(ORGANIZATION_HEADER, organizationId);
-  let response = await fetch(endpoint(pathname), { method: "GET", headers });
-  if (response.status === 401) { headers.set("Authorization", `Bearer ${await token(true)}`); response = await fetch(endpoint(pathname), { method: "GET", headers }); }
+  for (const [key, value] of new Headers(init.headers).entries()) headers.set(key, value);
+  let response = await fetch(endpoint(pathname), { ...init, method: init.method ?? "GET", headers });
+  if (response.status === 401) { headers.set("Authorization", `Bearer ${await token(true)}`); response = await fetch(endpoint(pathname), { ...init, method: init.method ?? "GET", headers }); }
   if (!response.ok) throw new TindioApiError(`HTTP_${response.status}`, response.status, `HTTP_${response.status}`, response.headers.get("x-tindio-request-id"));
   return response;
 }
-export async function fetchPosV2Core(organizationId?: string) { return (await request("/api/pos/v2/bootstrap", organizationId)).json() as Promise<PosBootstrapV2CoreResponse>; }
+export async function fetchPosV2Core(organizationId?: string) { return (await request("/api/pos/v2/bootstrap", { organizationId })).json() as Promise<PosBootstrapV2CoreResponse>; }
+export async function enrollPosV2Device(organizationId: string, input: PosDeviceCredential & { storeId: string; registerId: string; name: string }) { return (await request("/api/pos/v2/device/enroll", { organizationId, init: { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) } })).json() as Promise<{ ok: true; device: PosDeviceBinding }>; }
+export async function validatePosV2Device(organizationId: string, credential: PosDeviceCredential) { return (await request("/api/pos/v2/device", { organizationId, init: { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, device: credential }) } })).json() as Promise<PosDeviceValidationResponse>; }

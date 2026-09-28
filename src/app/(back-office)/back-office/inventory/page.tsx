@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, Boxes, ClipboardCheck, PackageOpen, Warehouse } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import type { ReactNode } from "react";
 
 import { BackOfficeStateCard } from "@/components/back-office/back-office-state-card";
 import { GlobalFilterBar } from "@/components/back-office/global-filter-bar";
@@ -17,6 +18,7 @@ import { DashboardActionGrid } from "@/features/dashboard/dashboard-action-grid"
 import {
   AdvancedInventoryWorkflows,
   type AdvancedGoodsReceipt,
+  type AdvancedInventoryItem,
   type AdvancedPurchaseOrder,
 } from "@/features/inventory/advanced-inventory-workflows";
 import { InventoryIntegrityWorkflows } from "@/features/inventory/inventory-integrity-workflows";
@@ -61,6 +63,10 @@ import {
   type InventoryWorkspace,
   type PurchasingTab,
 } from "@/features/inventory/inventory-workspace-navigation";
+import {
+  getInventoryWorkspaceDataNeeds,
+  type InventoryWorkspaceDataNeeds,
+} from "@/features/inventory/inventory-workspace-data-needs";
 import { resolveBackOfficeStoreScope } from "@/lib/server/back-office-store-scope";
 import {
   getBackOfficeHome,
@@ -285,6 +291,405 @@ export function InventoryTabs({
         })}
       </div>
     </nav>
+  );
+}
+
+type PurchasingWorkspaceProps = {
+  activeTab: PurchasingTab;
+  canCreatePurchaseOrders: boolean;
+  canManage: boolean;
+  canManageSuppliers: boolean;
+  canReceivePurchaseOrders: boolean;
+  canReturnToSupplier: boolean;
+  canViewCosts: boolean;
+  canViewPurchasing: boolean;
+  context: Awaited<ReturnType<typeof requireBackOfficeContext>>;
+  dataNeeds: InventoryWorkspaceDataNeeds;
+  header: ReactNode;
+  organizationId: string;
+  purchasingEnabled: boolean;
+  requestedPurchaseOrderId: string | null;
+  scopedStoreIds: string[] | null;
+  storeScope: ReturnType<typeof resolveBackOfficeStoreScope>;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+};
+
+/**
+ * The Purchasing route retains the canonical components and server actions but
+ * has its own, intentionally small server read shape. Keeping this return path
+ * before the Stock Control loader prevents control-only query and map fan-out.
+ */
+async function renderPurchasingWorkspace({
+  activeTab,
+  canCreatePurchaseOrders,
+  canManage,
+  canManageSuppliers,
+  canReceivePurchaseOrders,
+  canReturnToSupplier,
+  canViewCosts,
+  canViewPurchasing,
+  context,
+  dataNeeds,
+  header,
+  organizationId,
+  purchasingEnabled,
+  requestedPurchaseOrderId,
+  scopedStoreIds,
+  storeScope,
+  supabase,
+}: PurchasingWorkspaceProps) {
+  type Store = Pick<TableRow<"stores">, "id" | "name" | "is_active">;
+  type Product = Pick<TableRow<"products">, "id" | "name" | "sku" | "barcode" | "product_type" | "unit" | "status" | "track_inventory">;
+  type Variant = Pick<TableRow<"product_variants">, "id" | "product_id" | "name" | "sku" | "barcode" | "sort_order" | "is_active">;
+  type ProductUnit = Pick<TableRow<"product_units">, "product_id" | "unit_code" | "unit_name" | "factor_to_base" | "is_base" | "is_purchase_unit">;
+  type ProductStoreSetting = Pick<TableRow<"product_store_settings">, "product_id" | "store_id" | "is_available">;
+  type Supplier = Pick<TableRow<"suppliers">, "id" | "name" | "contact_name" | "email" | "phone" | "address" | "notes" | "is_active" | "lead_time_days">;
+  type PurchaseOrder = Pick<TableRow<"purchase_orders">, "id" | "supplier_id" | "store_id" | "order_number" | "status" | "expected_at" | "created_at">;
+  type PurchaseOrderLine = Pick<TableRow<"purchase_order_lines">, "id" | "purchase_order_id" | "product_id" | "variant_id" | "product_name_snapshot" | "variant_name_snapshot" | "unit_snapshot" | "purchase_unit_code_snapshot" | "purchase_unit_factor_to_base" | "ordered_quantity" | "received_quantity">;
+  type GoodsReceipt = Pick<TableRow<"goods_receipts">, "id" | "receipt_number" | "purchase_order_id" | "store_id" | "note" | "received_at">;
+  type GoodsReceiptLine = Pick<TableRow<"goods_receipt_lines">, "goods_receipt_id" | "purchase_order_line_id" | "quantity_received">;
+  const emptyResult = <T,>() => Promise.resolve({ data: [] as T[], error: null });
+  const visibleStore = (storeId: string) => scopedStoreIds === null || scopedStoreIds.includes(storeId);
+
+  const storesQuery = dataNeeds.has("stores")
+    ? supabase
+        .from("stores")
+        .select("id, name, is_active")
+        .eq("organization_id", organizationId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
+    : null;
+  const productsQuery = dataNeeds.has("products")
+    ? supabase
+        .from("products")
+        .select("id, name, sku, barcode, product_type, unit, status, track_inventory")
+        .eq("organization_id", organizationId)
+        .eq("status", "active")
+        .eq("track_inventory", true)
+        .order("name", { ascending: true })
+    : null;
+  const variantsQuery = dataNeeds.has("variants")
+    ? supabase
+        .from("product_variants")
+        .select("id, product_id, name, sku, barcode, sort_order, is_active")
+        .eq("organization_id", organizationId)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+    : null;
+  const productUnitsQuery = dataNeeds.has("productUnits") && purchasingEnabled
+    ? supabase
+        .from("product_units")
+        .select("product_id, unit_code, unit_name, factor_to_base, is_base, is_purchase_unit")
+        .eq("organization_id", organizationId)
+        .order("is_purchase_unit", { ascending: false })
+        .order("is_base", { ascending: false })
+        .order("unit_name", { ascending: true })
+    : null;
+  const settingsQuery = dataNeeds.has("productStoreSettings")
+    ? supabase
+        .from("product_store_settings")
+        .select("product_id, store_id, is_available")
+        .eq("organization_id", organizationId)
+    : null;
+  const suppliersQuery = dataNeeds.has("suppliers") && purchasingEnabled
+    ? supabase
+        .from("suppliers")
+        .select("id, name, contact_name, email, phone, address, notes, is_active, lead_time_days")
+        .eq("organization_id", organizationId)
+        .order("name", { ascending: true })
+    : null;
+  const purchaseOrdersQuery = dataNeeds.has("purchaseOrders") && purchasingEnabled
+    ? supabase
+        .from("purchase_orders")
+        .select("id, supplier_id, store_id, order_number, status, expected_at, created_at")
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: false })
+        .limit(30)
+    : null;
+
+  if (scopedStoreIds) {
+    settingsQuery?.in("store_id", scopedStoreIds);
+    purchaseOrdersQuery?.in("store_id", scopedStoreIds);
+  }
+
+  const [
+    storesResult,
+    productsResult,
+    variantsResult,
+    productUnitsResult,
+    settingsResult,
+    suppliersResult,
+    purchaseOrdersResult,
+  ] = await Promise.all([
+    storesQuery ?? emptyResult<Store>(),
+    productsQuery ?? emptyResult<Product>(),
+    variantsQuery ?? emptyResult<Variant>(),
+    productUnitsQuery ?? emptyResult<ProductUnit>(),
+    settingsQuery ?? emptyResult<ProductStoreSetting>(),
+    suppliersQuery ?? emptyResult<Supplier>(),
+    purchaseOrdersQuery ?? emptyResult<PurchaseOrder>(),
+  ]);
+
+  const initialPurchasingError = [
+    storesResult,
+    productsResult,
+    variantsResult,
+    productUnitsResult,
+    settingsResult,
+    suppliersResult,
+    purchaseOrdersResult,
+  ].find((result) => result.error)?.error;
+  const initialPurchasingFailure = initialPurchasingError
+    ? reportInventoryModuleFailure("purchasing", initialPurchasingError)
+    : null;
+
+  const stores = ((storesResult.data ?? []) as Store[]).filter((store) => visibleStore(store.id));
+  const products = (productsResult.data ?? []) as Product[];
+  const variants = (variantsResult.data ?? []) as Variant[];
+  const productUnits = (productUnitsResult.data ?? []) as ProductUnit[];
+  const settings = ((settingsResult.data ?? []) as ProductStoreSetting[]).filter((setting) => visibleStore(setting.store_id));
+  const suppliers = (suppliersResult.data ?? []) as Supplier[];
+  const purchaseOrders = ((purchaseOrdersResult.data ?? []) as PurchaseOrder[]).filter((order) => visibleStore(order.store_id));
+  const purchaseOrderIds = purchaseOrders.map((order) => order.id);
+
+  const [purchaseOrderLinesResult, goodsReceiptsResult] = await Promise.all([
+    dataNeeds.has("purchaseOrderLines") && purchasingEnabled && !initialPurchasingFailure && purchaseOrderIds.length
+      ? supabase
+          .from("purchase_order_lines")
+          .select("id, purchase_order_id, product_id, variant_id, product_name_snapshot, variant_name_snapshot, unit_snapshot, purchase_unit_code_snapshot, purchase_unit_factor_to_base, ordered_quantity, received_quantity")
+          .eq("organization_id", organizationId)
+          .in("purchase_order_id", purchaseOrderIds)
+      : emptyResult<PurchaseOrderLine>(),
+    dataNeeds.has("goodsReceipts") && purchasingEnabled && !initialPurchasingFailure && purchaseOrderIds.length
+      ? supabase
+          .from("goods_receipts")
+          .select("id, receipt_number, purchase_order_id, store_id, note, received_at")
+          .eq("organization_id", organizationId)
+          .in("purchase_order_id", purchaseOrderIds)
+          .order("received_at", { ascending: false })
+          .limit(50)
+      : emptyResult<GoodsReceipt>(),
+  ]);
+  const purchasingHistoryError = [purchaseOrderLinesResult, goodsReceiptsResult].find((result) => result.error)?.error;
+  const purchasingHistoryFailure = purchasingHistoryError
+    ? reportInventoryModuleFailure("purchasing", purchasingHistoryError)
+    : null;
+  const purchaseOrderLines = (purchaseOrderLinesResult.data ?? []) as PurchaseOrderLine[];
+  const goodsReceipts = (goodsReceiptsResult.data ?? []) as GoodsReceipt[];
+  const goodsReceiptIds = goodsReceipts.map((receipt) => receipt.id);
+  const goodsReceiptLinesResult = dataNeeds.has("goodsReceiptLines") && purchasingEnabled && !purchasingHistoryFailure && goodsReceiptIds.length
+    ? await supabase
+        .from("goods_receipt_lines")
+        .select("goods_receipt_id, purchase_order_line_id, quantity_received")
+        .eq("organization_id", organizationId)
+        .in("goods_receipt_id", goodsReceiptIds)
+    : await emptyResult<GoodsReceiptLine>();
+  const goodsReceiptLinesFailure = goodsReceiptLinesResult.error
+    ? reportInventoryModuleFailure("purchasing", goodsReceiptLinesResult.error)
+    : null;
+  const goodsReceiptLines = (goodsReceiptLinesResult.data ?? []) as GoodsReceiptLine[];
+
+  const purchaseOrderLineCostRows: Array<{ id: string; unit_cost_minor: number }> = [];
+  let purchaseOrderCostsFailure: InventoryModuleFailure | null = null;
+  if (canViewCosts && dataNeeds.has("purchaseOrderLines") && !purchasingHistoryFailure && !goodsReceiptLinesFailure) {
+    for (let start = 0; start < purchaseOrderLines.length; start += 100) {
+      const purchaseOrderLineCostsResult = await supabase.rpc("get_purchase_order_line_costs", {
+        requested_purchase_order_line_ids: purchaseOrderLines.slice(start, start + 100).map((line) => line.id),
+        target_organization_id: organizationId,
+      });
+      if (purchaseOrderLineCostsResult.error) {
+        purchaseOrderCostsFailure = reportInventoryModuleFailure("purchasing", purchaseOrderLineCostsResult.error);
+        break;
+      }
+      purchaseOrderLineCostRows.push(...(purchaseOrderLineCostsResult.data ?? []));
+    }
+  }
+
+  const purchasingModuleAvailable = purchasingEnabled
+    && !initialPurchasingFailure
+    && !purchasingHistoryFailure
+    && !goodsReceiptLinesFailure
+    && !purchaseOrderCostsFailure;
+  const storeNames = new Map(stores.map((store) => [store.id, store.name]));
+  const purchaseUnitsByProduct = new Map<string, Array<{ code: string; factorToBase: number; name: string }>>();
+  for (const productUnit of productUnits) {
+    if (!productUnit.is_purchase_unit && !productUnit.is_base) continue;
+    const configuredUnits = purchaseUnitsByProduct.get(productUnit.product_id) ?? [];
+    configuredUnits.push({
+      code: productUnit.unit_code,
+      factorToBase: Number(productUnit.factor_to_base),
+      name: productUnit.unit_name,
+    });
+    purchaseUnitsByProduct.set(productUnit.product_id, configuredUnits);
+  }
+  const availableStoresByProduct = new Map<string, string[]>();
+  for (const setting of settings) {
+    if (!setting.is_available || !storeNames.has(setting.store_id)) continue;
+    const availableStores = availableStoresByProduct.get(setting.product_id) ?? [];
+    availableStores.push(setting.store_id);
+    availableStoresByProduct.set(setting.product_id, availableStores);
+  }
+  const advancedItems: AdvancedInventoryItem[] = products.flatMap<AdvancedInventoryItem>((product) => {
+    const storeIds = availableStoresByProduct.get(product.id) ?? [];
+    const purchaseUnits = purchaseUnitsByProduct.get(product.id) ?? [{
+      code: product.unit.trim().toLowerCase(),
+      factorToBase: 1,
+      name: product.unit,
+    }];
+    if (product.product_type === "simple") {
+      return [{
+        productId: product.id,
+        variantId: null,
+        label: product.name,
+        unit: product.unit,
+        storeIds,
+        identifiers: [product.sku, product.barcode].filter((value): value is string => Boolean(value)),
+        purchaseUnits,
+        quantitiesByStore: {},
+      }];
+    }
+    return variants
+      .filter((variant) => variant.product_id === product.id)
+      .map((variant) => ({
+        productId: product.id,
+        variantId: variant.id,
+        label: `${product.name} / ${variant.name}`,
+        unit: product.unit,
+        storeIds,
+        identifiers: [variant.sku, variant.barcode].filter((value): value is string => Boolean(value)),
+        purchaseUnits,
+        quantitiesByStore: {},
+      }));
+  });
+  const supplierNames = new Map(suppliers.map((supplier) => [supplier.id, supplier.name]));
+  const purchaseOrderLineCostById = new Map(purchaseOrderLineCostRows.map((line) => [line.id, Number(line.unit_cost_minor)]));
+  const purchaseOrderLinesByOrder = new Map<string, typeof purchaseOrderLines>();
+  for (const line of purchaseOrderLines) {
+    const lines = purchaseOrderLinesByOrder.get(line.purchase_order_id) ?? [];
+    lines.push(line);
+    purchaseOrderLinesByOrder.set(line.purchase_order_id, lines);
+  }
+  const purchaseOrderHistory: AdvancedPurchaseOrder[] = purchaseOrders.map((order) => ({
+    id: order.id,
+    orderNumber: Number(order.order_number),
+    status: order.status as AdvancedPurchaseOrder["status"],
+    supplierName: supplierNames.get(order.supplier_id) ?? "Unavailable supplier",
+    storeName: storeNames.get(order.store_id) ?? "Inactive store",
+    expectedAt: order.expected_at,
+    createdAt: order.created_at,
+    totalCostMinor: (purchaseOrderLinesByOrder.get(order.id) ?? []).reduce(
+      (total, line) => total + Number(line.ordered_quantity) * (purchaseOrderLineCostById.get(line.id) ?? 0),
+      0,
+    ),
+    lines: (purchaseOrderLinesByOrder.get(order.id) ?? []).map((line) => ({
+      id: line.id,
+      label: `${line.product_name_snapshot}${line.variant_name_snapshot ? ` / ${line.variant_name_snapshot}` : ""}`,
+      unit: line.unit_snapshot,
+      orderedQuantity: Number(line.ordered_quantity),
+      receivedQuantity: Number(line.received_quantity),
+      unitCostMinor: purchaseOrderLineCostById.get(line.id) ?? 0,
+    })),
+  }));
+  const purchaseOrderLineById = new Map(purchaseOrderLines.map((line) => [line.id, line]));
+  const receiptLinesByReceipt = new Map<string, AdvancedGoodsReceipt["lines"]>();
+  for (const line of goodsReceiptLines) {
+    const purchaseOrderLine = purchaseOrderLineById.get(line.purchase_order_line_id);
+    if (!purchaseOrderLine) continue;
+    const receiptLines = receiptLinesByReceipt.get(line.goods_receipt_id) ?? [];
+    receiptLines.push({
+      label: `${purchaseOrderLine.product_name_snapshot}${purchaseOrderLine.variant_name_snapshot ? ` / ${purchaseOrderLine.variant_name_snapshot}` : ""}`,
+      quantity: Number(line.quantity_received),
+      unit: purchaseOrderLine.unit_snapshot,
+    });
+    receiptLinesByReceipt.set(line.goods_receipt_id, receiptLines);
+  }
+  const purchaseOrderNumberById = new Map(purchaseOrderHistory.map((order) => [order.id, order.orderNumber]));
+  const recentGoodsReceipts: AdvancedGoodsReceipt[] = goodsReceipts.map((receipt) => ({
+    id: receipt.id,
+    lines: receiptLinesByReceipt.get(receipt.id) ?? [],
+    note: receipt.note,
+    purchaseOrderId: receipt.purchase_order_id,
+    purchaseOrderNumber: purchaseOrderNumberById.get(receipt.purchase_order_id) ?? 0,
+    receiptNumber: Number(receipt.receipt_number),
+    receivedAt: receipt.received_at,
+    storeName: storeNames.get(receipt.store_id) ?? "Inactive store",
+  }));
+  const purchasingTabHref = (tab: PurchasingTab) =>
+    `/back-office/purchasing?tab=${tab}${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}`;
+  return (
+    <div className="space-y-8">
+      {header}
+
+      <InventoryWorkspaceNavigation
+        activeTab={activeTab}
+        canAdjust={false}
+        canCount={false}
+        canCreatePurchaseOrders={canCreatePurchaseOrders}
+        canManage={canManage}
+        canManageSuppliers={canManageSuppliers}
+        canReceivePurchaseOrders={canReceivePurchaseOrders}
+        canReturnToSupplier={canReturnToSupplier}
+        canTransfer={false}
+        canView={false}
+        canViewPurchasing={canViewPurchasing}
+        canViewValuation={false}
+        canUseProduction={false}
+        storeId={storeScope.selectedStoreId}
+        workspace="purchasing"
+      />
+
+      {!purchasingModuleAvailable ? (
+        <BackOfficeStateCard
+          description="Stock Control is still available, but the purchasing module could not be loaded. No purchasing action has been executed."
+          icon={<PackageOpen className="size-5" aria-hidden="true" />}
+          title="Purchasing temporarily unavailable"
+        />
+      ) : activeTab === "supplier-returns" ? (
+        <InventoryIntegrityWorkflows
+          stores={stores.map(({ id, name }) => ({ id, name }))}
+          items={advancedItems}
+          suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name, isActive: supplier.is_active }))}
+          policies={{}}
+          organizationDefaultPolicy="block"
+          canManageOrganizationDefault={false}
+          canPostSupplierReturns={canReturnToSupplier}
+          adjustmentReasons={[]}
+          inTransitTransfers={[]}
+          composites={[]}
+          sections={["supplier-returns"]}
+        />
+      ) : (
+        <AdvancedInventoryWorkflows
+          key={activeTab}
+          stores={stores.map(({ id, name }) => ({ id, name }))}
+          items={advancedItems}
+          suppliers={suppliers.map((supplier) => ({
+            id: supplier.id,
+            name: supplier.name,
+            contactName: supplier.contact_name,
+            email: supplier.email,
+            phone: supplier.phone,
+            address: supplier.address,
+            notes: supplier.notes,
+            isActive: supplier.is_active,
+          }))}
+          purchaseOrders={purchaseOrderHistory}
+          receipts={recentGoodsReceipts}
+          currencyCode={context.organization.currency_code}
+          canCreatePurchaseOrders={canCreatePurchaseOrders}
+          canManageSuppliers={canManageSuppliers}
+          canReceivePurchaseOrders={canReceivePurchaseOrders}
+          canUseLegacyCsvTools={canManage}
+          canViewCosts={canViewCosts}
+          initialReceiptOrderId={requestedPurchaseOrderId}
+          initialPurchasingSection={activeTab === "receiving" ? "receiving" : activeTab === "suppliers" ? "suppliers" : "orders"}
+          receivingHref={purchasingTabHref("receiving")}
+          showHeader={false}
+          showPurchasingTabs={false}
+          sections={["purchasing"]}
+        />
+      )}
+    </div>
   );
 }
 
@@ -519,6 +924,63 @@ export async function InventoryWorkspacePage({
   const canViewCosts = hasPermission(context, "products.view_cost");
   const selectedStoreId = storeScope.selectedStoreId;
   const scopedStoreIds = selectedStoreId ? [selectedStoreId] : storeScope.storeIds;
+  const dataNeeds = getInventoryWorkspaceDataNeeds({
+    workspace,
+    activeTab,
+    canCreatePurchaseOrders,
+    canReceivePurchaseOrders,
+    canManageSuppliers,
+    canReturnToSupplier,
+    canViewPurchasing,
+    canViewCosts,
+  });
+  const earlyPurchasingSectionLabels: Record<PurchasingTab, string> = {
+    "purchase-orders": "Purchase orders",
+    receiving: "Receiving",
+    suppliers: "Suppliers",
+    "supplier-returns": "Supplier returns",
+  };
+  const earlyPurchasingTabHref = (tab: PurchasingTab) =>
+    `/back-office/purchasing?tab=${tab}${storeScope.selectedStoreId ? `&store=${storeScope.selectedStoreId}` : ""}`;
+  const purchasingHeader = (
+    <PageHeader
+      eyebrow={workspace === "purchasing" ? "Purchasing" : "Stock control"}
+      title={workspace === "purchasing" ? "Purchasing" : "Stock Control"}
+      description={workspace === "purchasing"
+        ? "Manage suppliers, purchase orders, receiving, and supplier returns."
+        : "See stock health, investigate changes, and manage controlled stock operations."}
+      breadcrumbs={[
+        { href: "/back-office", label: "Back Office" },
+        { href: "/back-office/inventory?tab=overview", label: "Inventory" },
+        { href: earlyPurchasingTabHref("purchase-orders"), label: "Purchasing" },
+        { label: earlyPurchasingSectionLabels[activeTab as PurchasingTab] },
+      ]}
+    />
+  );
+  const renderWorkspace = workspace;
+
+  if (workspace === "purchasing") {
+    return renderPurchasingWorkspace({
+      activeTab: activeTab as PurchasingTab,
+      canCreatePurchaseOrders,
+      canManage,
+      canManageSuppliers,
+      canReceivePurchaseOrders,
+      canReturnToSupplier,
+      canViewCosts,
+      canViewPurchasing,
+      context,
+      dataNeeds,
+      header: purchasingHeader,
+      organizationId,
+      purchasingEnabled: inventoryModules.purchasing,
+      requestedPurchaseOrderId,
+      scopedStoreIds,
+      storeScope,
+      supabase,
+    });
+  }
+
   const settingsQuery = canReadOperationalStock
     ? supabase
         .from("product_store_settings")
@@ -1709,7 +2171,7 @@ export async function InventoryWorkspacePage({
     transfers: "Transfer orders",
     valuation: "Inventory valuation",
   };
-  const breadcrumbs = workspace === "purchasing"
+  const breadcrumbs = renderWorkspace === "purchasing"
     ? [
         { href: "/back-office", label: "Back Office" },
         { href: inventoryTabHref("overview"), label: "Inventory" },
@@ -2051,9 +2513,9 @@ export async function InventoryWorkspacePage({
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow={workspace === "purchasing" ? "Purchasing" : "Stock control"}
-        title={workspace === "purchasing" ? "Purchasing" : "Stock Control"}
-        description={workspace === "purchasing"
+        eyebrow={renderWorkspace === "purchasing" ? "Purchasing" : "Stock control"}
+        title={renderWorkspace === "purchasing" ? "Purchasing" : "Stock Control"}
+        description={renderWorkspace === "purchasing"
           ? "Manage suppliers, purchase orders, receiving, and supplier returns."
           : "See stock health, investigate changes, and manage controlled stock operations."}
         breadcrumbs={breadcrumbs}

@@ -80,7 +80,7 @@ export async function signInAction(
   const { data: membership, error: membershipError } = await supabase
     .from("employees")
     .select("id")
-    .eq("profile_id", data.user.id)
+    .eq("profile_id", provisioning.profileId)
     .limit(1)
     .maybeSingle();
 

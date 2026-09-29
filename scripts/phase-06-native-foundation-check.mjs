@@ -36,14 +36,14 @@ test("Phase 06 native foundation boundary", () => {
     );
   }
 
-  assert.match(
-    read("pnpm-workspace.yaml"),
-    /apps/*/,
+  assert.ok(
+    read("pnpm-workspace.yaml")
+      .includes("apps/*"),
   );
 
-  assert.match(
-    read("tsconfig.json"),
-    /apps/mobile/,
+  assert.ok(
+    read("tsconfig.json")
+      .includes("apps/mobile"),
   );
 
   const source =
@@ -57,7 +57,7 @@ test("Phase 06 native foundation boundary", () => {
   for (
     const token
     of [
-      "\/api\/pos\/v2\/bootstrap",
+      "/api/pos/v2/bootstrap",
       "Authorization",
       "Bearer",
       "x-tindio-organization-id",
@@ -65,9 +65,8 @@ test("Phase 06 native foundation boundary", () => {
       "PosBootstrapV2CoreResponse",
     ]
   ) {
-    assert.match(
-      source,
-      new RegExp(
+    assert.ok(
+      source.includes(
         token,
       ),
     );
@@ -95,19 +94,17 @@ test("Phase 06 native foundation boundary", () => {
       "apps/mobile/src/lib/secure-storage.ts",
     );
 
-  assert.doesNotMatch(
-    secureStorage,
-    /::/,
+  assert.equal(
+    secureStorage.includes("::"),
+    false,
     "Expo SecureStore keys must use only supported key characters.",
   );
 
-  assert.match(
-    secureStorage,
-    /\.__chunks/,
+  assert.ok(
+    secureStorage.includes(".__chunks"),
   );
 
-  assert.match(
-    secureStorage,
-    /\.__\$\{index\}/,
+  assert.ok(
+    secureStorage.includes("chunkKey"),
   );
 });

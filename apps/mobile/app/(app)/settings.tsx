@@ -14,6 +14,7 @@ import {
   saveStoreHubConfig,
 } from "../../src/features/store-hub/store-hub-config";
 import { probeStoreHub } from "../../src/features/store-hub/store-hub-client";
+import { canReleaseTransactionCustody } from "../../src/features/offline/transaction-custody";
 
 export default function SettingsScreen() {
   const { data } = useBusinessContext();
@@ -86,6 +87,17 @@ export default function SettingsScreen() {
   };
 
   const clearHub = async () => {
+    const custody = await canReleaseTransactionCustody(
+      core.organization.id,
+    );
+
+    if (!custody.ok) {
+      setMessage(
+        `${custody.message} Store Hub configuration is being retained as a recovery path.`,
+      );
+      return;
+    }
+
     await clearStoreHubConfig(
       core.organization.id,
     );
@@ -147,7 +159,11 @@ export default function SettingsScreen() {
 
       <Text>{message}</Text>
 
-      <Pressable onPress={() => void signOut()}>
+      <Pressable
+        onPress={() => void signOut().then((result) => {
+          if (!result.ok) setMessage(result.message);
+        })}
+      >
         <Text>Sign out</Text>
       </Pressable>
     </ScrollView>

@@ -66,6 +66,7 @@ export default function MobileHomeScreen() {
     ...(gates.shift ? ["/shift"] : []),
     "/sync-status",
     "/hardware",
+    "/offline-payments",
     "/settings",
     ...(gates.tickets ? ["/tickets"] : []),
     ...(gates.transfers ? ["/transfers"] : []),

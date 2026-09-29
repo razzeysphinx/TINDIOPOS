@@ -47,3 +47,27 @@ Added tenant/store-scoped server telemetry and a validated POS heartbeat endpoin
 Telemetry does not change sale or inventory authority.
 
 Phase 17 remains IMPLEMENTING.
+
+## Slice 02
+
+Native POS telemetry reporting is implemented.
+
+The mobile application reports observational sync health when cloud transport is available.
+
+The reporter includes:
+
+- authenticated employee identity
+- connection mode
+- app version through the enrolled device credential
+- last successful reconciliation time
+- local device checkpoint
+- known server checkpoint
+- unresolved queue depth
+- conflict/failed counts
+- preserved offline-since timestamp
+
+Heartbeat reporting is observational only and cannot break checkout, outbox, recovery, or inventory behavior.
+
+No customer/payment/card payload is included.
+
+Phase 17 remains IMPLEMENTING.

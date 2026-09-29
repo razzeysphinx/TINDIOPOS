@@ -578,3 +578,42 @@ export async function receivePosV2StockRequest(
     init: jsonPost(input),
   })).json() as Promise<TransferReceiveResult>;
 }
+
+export async function reportPosV2SyncTelemetry(
+  organizationId: string,
+  input: {
+    device: PosDeviceCredential;
+    employeeId: string;
+    employeeName: string;
+    connectionMode:
+      | "CLOUD_ONLINE"
+      | "STORE_LOCAL"
+      | "DEVICE_ISOLATED"
+      | "RECOVERING"
+      | "SYNC_REVIEW";
+    lastSuccessfulSyncAt: string | null;
+    deviceCheckpoint: number;
+    serverCheckpoint: number;
+    queueDepth: number;
+    conflictCount: number;
+    failedCount: number;
+    offlineSince: string | null;
+  },
+) {
+  return (
+    await request(
+      "/api/pos/v2/sync/telemetry",
+      {
+        organizationId,
+        init: jsonPost({
+          organizationId,
+          ...input,
+        }),
+      },
+    )
+  ).json() as Promise<{
+    ok: true;
+    deviceId: string;
+    heartbeatAt: string;
+  }>;
+}

@@ -13,6 +13,7 @@ export type PersistedConnectionMode =
 export type ConnectionModeState = {
   mode: PersistedConnectionMode;
   changedAt: string;
+  offlineSince: string | null;
 };
 
 const key = (organizationId: string) =>
@@ -30,7 +31,7 @@ export async function readConnectionModeState(
   try {
     const parsed = JSON.parse(
       row.value,
-    ) as ConnectionModeState;
+    ) as Partial<ConnectionModeState>;
 
     if (
       ![
@@ -39,7 +40,8 @@ export async function readConnectionModeState(
         "DEVICE_ISOLATED",
         "RECOVERING",
         "SYNC_REVIEW",
-      ].includes(parsed.mode)
+      ].includes(parsed.mode ?? "")
+      || !parsed.changedAt
       || !Number.isFinite(
         Date.parse(parsed.changedAt),
       )
@@ -47,7 +49,26 @@ export async function readConnectionModeState(
       return null;
     }
 
-    return parsed;
+    return {
+      mode:
+        parsed.mode
+        as PersistedConnectionMode,
+      changedAt:
+        parsed.changedAt,
+      offlineSince:
+        parsed.offlineSince
+        && Number.isFinite(
+          Date.parse(
+            parsed.offlineSince,
+          ),
+        )
+          ? parsed.offlineSince
+          : (
+              parsed.mode === "CLOUD_ONLINE"
+                ? null
+                : parsed.changedAt
+            ),
+    };
   } catch {
     return null;
   }
@@ -57,9 +78,29 @@ export async function writeConnectionModeState(
   organizationId: string,
   mode: PersistedConnectionMode,
 ) {
+  const previous =
+    await readConnectionModeState(
+      organizationId,
+    );
+
+  const now =
+    new Date().toISOString();
+
+  const offlineSince =
+    mode === "CLOUD_ONLINE"
+      ? null
+      : previous?.offlineSince
+        ?? (
+          previous?.mode
+          && previous.mode !== "CLOUD_ONLINE"
+            ? previous.changedAt
+            : now
+        );
+
   const state: ConnectionModeState = {
     mode,
-    changedAt: new Date().toISOString(),
+    changedAt: now,
+    offlineSince,
   };
 
   await writeLocalMetadata(

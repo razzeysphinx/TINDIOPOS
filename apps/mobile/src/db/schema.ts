@@ -1,0 +1,103 @@
+export const TINDIO_DATABASE_NAME = "tindio-mobile.db";
+export const TINDIO_LOCAL_SCHEMA_VERSION = 2;
+
+export type LocalMigration = {
+  version: number;
+  name: string;
+  sql: string;
+};
+
+export const LOCAL_MIGRATIONS: LocalMigration[] = [
+  {
+    version: 1,
+    name: "phase_07a_core",
+    sql: `CREATE TABLE IF NOT EXISTS local_metadata (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL, updated_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS business_context_snapshots (organization_id TEXT PRIMARY KEY NOT NULL, profile_id TEXT NOT NULL, employee_id TEXT NOT NULL, organization_json TEXT NOT NULL, employee_json TEXT NOT NULL, available_organizations_json TEXT NOT NULL, role_names_json TEXT NOT NULL, permissions_json TEXT NOT NULL, store_ids_json TEXT NOT NULL, stores_json TEXT NOT NULL, registers_json TEXT NOT NULL, features_json TEXT NOT NULL, active_shift_json TEXT, captured_at TEXT NOT NULL); CREATE INDEX IF NOT EXISTS idx_business_context_employee ON business_context_snapshots (employee_id);`,
+  },
+  {
+    version: 2,
+    name: "phase_07_complete_foundation",
+    sql: `
+      CREATE TABLE IF NOT EXISTS local_cache_state (
+        organization_id TEXT NOT NULL,
+        domain TEXT NOT NULL,
+        store_id TEXT NOT NULL DEFAULT '',
+        scope_key TEXT NOT NULL DEFAULT '',
+        source_version TEXT,
+        record_count INTEGER NOT NULL DEFAULT 0,
+        is_complete INTEGER NOT NULL DEFAULT 0 CHECK (is_complete IN (0, 1)),
+        captured_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, domain, store_id, scope_key)
+      );
+      CREATE TABLE IF NOT EXISTS reference_snapshots (
+        organization_id TEXT PRIMARY KEY NOT NULL,
+        reference_version TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        captured_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS catalog_items (
+        organization_id TEXT NOT NULL,
+        store_id TEXT NOT NULL,
+        item_key TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        variant_id TEXT,
+        category_id TEXT,
+        product_name TEXT NOT NULL,
+        variant_name TEXT,
+        sku TEXT,
+        barcode TEXT,
+        price_minor INTEGER NOT NULL,
+        unit TEXT NOT NULL,
+        image_url TEXT,
+        is_variable_price INTEGER NOT NULL CHECK (is_variable_price IN (0, 1)),
+        allow_fractional_quantity INTEGER NOT NULL CHECK (allow_fractional_quantity IN (0, 1)),
+        has_modifiers INTEGER NOT NULL CHECK (has_modifiers IN (0, 1)),
+        payload_json TEXT NOT NULL,
+        captured_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, store_id, item_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_catalog_lookup_barcode ON catalog_items (organization_id, store_id, barcode);
+      CREATE INDEX IF NOT EXISTS idx_catalog_lookup_sku ON catalog_items (organization_id, store_id, sku);
+      CREATE INDEX IF NOT EXISTS idx_catalog_category ON catalog_items (organization_id, store_id, category_id);
+      CREATE INDEX IF NOT EXISTS idx_catalog_product_name ON catalog_items (organization_id, store_id, product_name COLLATE NOCASE);
+      CREATE TABLE IF NOT EXISTS customer_cache (
+        organization_id TEXT NOT NULL,
+        store_id TEXT NOT NULL,
+        customer_id TEXT NOT NULL,
+        customer_number INTEGER NOT NULL,
+        loyalty_card_code TEXT NOT NULL,
+        full_name TEXT NOT NULL,
+        phone TEXT,
+        email TEXT,
+        loyalty_points INTEGER NOT NULL,
+        payload_json TEXT NOT NULL,
+        captured_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, store_id, customer_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_customer_number ON customer_cache (organization_id, store_id, customer_number);
+      CREATE INDEX IF NOT EXISTS idx_customer_loyalty_card ON customer_cache (organization_id, store_id, loyalty_card_code);
+      CREATE TABLE IF NOT EXISTS shift_snapshots (
+        organization_id TEXT NOT NULL,
+        store_id TEXT NOT NULL,
+        register_id TEXT NOT NULL,
+        shift_id TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        captured_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, store_id, register_id)
+      );
+      CREATE TABLE IF NOT EXISTS receipt_summaries (
+        organization_id TEXT NOT NULL,
+        receipt_id TEXT NOT NULL,
+        store_id TEXT NOT NULL,
+        register_id TEXT NOT NULL,
+        receipt_number INTEGER NOT NULL,
+        issued_at TEXT NOT NULL,
+        total_minor INTEGER NOT NULL,
+        currency_code TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        captured_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, receipt_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_receipt_store_number ON receipt_summaries (organization_id, store_id, receipt_number DESC);
+    `,
+  },
+];

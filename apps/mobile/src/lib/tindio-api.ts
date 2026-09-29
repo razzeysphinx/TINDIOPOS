@@ -1,5 +1,5 @@
 import "react-native-url-polyfill/auto";
-import type { PosBootstrapV2CoreResponse, PosCloseShiftV2Response, PosDeviceBinding, PosDeviceCredential, PosDeviceValidationResponse, PosLiveV2Response, PosOpenShiftV2Response } from "../../../../src/contracts/pos";
+import type { PosBootstrapV2CoreResponse, PosCatalogV2Response, PosCloseShiftV2Response, PosCustomerSearchResponse, PosDeviceBinding, PosDeviceCredential, PosDeviceValidationResponse, PosLiveV2Response, PosOpenShiftV2Response, PosReceiptListResponse, PosReferenceV2Response } from "../../../../src/contracts/pos";
 import { mobileEnvironment } from "./env";
 import { supabase } from "./supabase";
 
@@ -30,3 +30,21 @@ export async function validatePosV2Device(organizationId: string, credential: Po
 export async function fetchPosV2Live(organizationId: string, binding: PosDeviceBinding) { return (await request("/api/pos/v2/live", { organizationId, init: { headers: { [STORE_HEADER]: binding.storeId, [REGISTER_HEADER]: binding.registerId } } })).json() as Promise<PosLiveV2Response>; }
 export async function openPosV2Shift(organizationId: string, binding: PosDeviceBinding, credential: PosDeviceCredential, input: { openingCash: string; openingNote?: string }) { return (await request("/api/pos/v2/shifts/open", { organizationId, init: { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId: binding.storeId, registerId: binding.registerId, ...input, device: credential }) } })).json() as Promise<PosOpenShiftV2Response>; }
 export async function closePosV2Shift(organizationId: string, input: { shiftId: string; countedCash: string; closingNote?: string }) { return (await request("/api/pos/v2/shifts/close", { organizationId, init: { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) } })).json() as Promise<PosCloseShiftV2Response>; }
+export async function fetchPosV2Reference(organizationId: string) { return (await request("/api/pos/v2/reference", { organizationId })).json() as Promise<PosReferenceV2Response>; }
+export async function fetchPosV2CatalogPage(organizationId: string, storeId: string, options: { offset?: number; limit?: number; query?: string; category?: string } = {}) {
+  const params = new URLSearchParams({ store: storeId, offset: String(options.offset ?? 0), limit: String(options.limit ?? 24) });
+  if (options.query) params.set("query", options.query);
+  if (options.category) params.set("category", options.category);
+  return (await request(`/api/pos/v2/catalog?${params.toString()}`, { organizationId })).json() as Promise<PosCatalogV2Response>;
+}
+export async function fetchPosV2Customers(organizationId: string, storeId: string, query = "") {
+  const params = new URLSearchParams({ store: storeId });
+  if (query) params.set("q", query);
+  return (await request(`/api/pos/v2/customers?${params.toString()}`, { organizationId })).json() as Promise<PosCustomerSearchResponse>;
+}
+export async function fetchPosV2Receipts(organizationId: string, options: { query?: string; before?: number } = {}) {
+  const params = new URLSearchParams();
+  if (options.query) params.set("q", options.query);
+  if (options.before) params.set("before", String(options.before));
+  return (await request(`/api/pos/v2/receipts?${params.toString()}`, { organizationId })).json() as Promise<PosReceiptListResponse>;
+}

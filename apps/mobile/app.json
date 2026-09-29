@@ -11,6 +11,17 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.tindio.pos",
+      "versionCode": 1,
+      "allowBackup": false,
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_VIDEO"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -33,7 +44,12 @@
           "imageWidth": 76
         }
       ],
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true
+        }
+      ],
       "expo-sqlite",
       [
         "expo-camera",

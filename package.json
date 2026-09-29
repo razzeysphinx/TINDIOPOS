@@ -160,7 +160,9 @@
     "certify:phase-18:db": "node scripts/phase-18-certification-runner.mjs --db",
     "test:phase-22-performance": "node --test scripts/phase-22-performance-cost-check.mjs",
     "perf:phase-22:snapshot": "node scripts/phase-22-cost-snapshot.mjs",
-    "perf:phase-22:diff": "node scripts/phase-22-cost-diff.mjs"
+    "perf:phase-22:diff": "node scripts/phase-22-cost-diff.mjs",
+    "test:phase-23-android-hardening": "node --test scripts/phase-23-android-production-hardening-check.mjs",
+    "mobile:export:android": "pnpm --dir apps/mobile exec expo export --platform android"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

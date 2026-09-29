@@ -11,21 +11,31 @@ import {
   type PropsWithChildren,
 } from "react";
 import {
+  getOutboxSummary,
+} from "../../db/outbox";
+import {
   saveBusinessContextSnapshot,
 } from "../../db/business-context-cache";
 import {
   saveActiveShiftSnapshot,
 } from "../../db/shift-cache";
 import {
-  isExplicitAuthorizationDenial,
   fetchPosV2Core,
+  isExplicitAuthorizationDenial,
 } from "../../lib/tindio-api";
 import {
   loadMobileDeviceIdentity,
 } from "../device/device-store";
 import {
+  readConnectionModeState,
+  writeConnectionModeState,
+} from "../offline/connection-mode-state";
+import {
   evaluateOfflineReadiness,
 } from "../offline/offline-readiness";
+import {
+  recoverCloudConnection,
+} from "../offline/recover-cloud-connection";
 import {
   probeStoreHub,
 } from "../store-hub/store-hub-client";
@@ -39,7 +49,9 @@ import {
 export type MobileConnectionMode =
   | "CLOUD_ONLINE"
   | "STORE_LOCAL"
-  | "DEVICE_ISOLATED";
+  | "DEVICE_ISOLATED"
+  | "RECOVERING"
+  | "SYNC_REVIEW";
 
 type Value = {
   data: PosBootstrapV2CoreResponse | null;
@@ -74,109 +86,244 @@ export function BusinessContextProvider({
 
   const [data, setData] =
     useState<PosBootstrapV2CoreResponse | null>(null);
+
   const [loading, setLoading] =
     useState(true);
+
   const [error, setError] =
     useState<string | null>(null);
+
   const [mode, setMode] =
     useState<"online" | "offline">("online");
+
   const [connectionMode, setConnectionMode] =
-    useState<MobileConnectionMode>("CLOUD_ONLINE");
+    useState<MobileConnectionMode>(
+      "CLOUD_ONLINE",
+    );
 
-  const loadOffline = useCallback(async () => {
-    const readiness =
-      await evaluateOfflineReadiness();
+  const setPersistedMode =
+    useCallback(
+      async (
+        organizationId: string,
+        nextMode: MobileConnectionMode,
+      ) => {
+        setConnectionMode(nextMode);
 
-    if (!readiness.ok) {
-      setData(null);
-      setError(
-        "Offline access is not prepared for this terminal.",
-      );
-      return false;
-    }
+        try {
+          await writeConnectionModeState(
+            organizationId,
+            nextMode,
+          );
+        } catch {
+          // Runtime state remains valid even if diagnostics metadata cannot persist.
+        }
+      },
+      [],
+    );
 
-    const core = readiness.core;
+  const loadOffline =
+    useCallback(async () => {
+      const readiness =
+        await evaluateOfflineReadiness();
 
-    setData(cachedBootstrap(core));
-    setMode("offline");
-    setError(null);
-
-    const identity =
-      await loadMobileDeviceIdentity(
-        core.organization.id,
-      );
-
-    if (!identity?.binding) {
-      setConnectionMode("DEVICE_ISOLATED");
-      return true;
-    }
-
-    const hub = await probeStoreHub({
-      organizationId: core.organization.id,
-      storeId: identity.binding.storeId,
-    });
-
-    if (hub.ok) {
-      setConnectionMode("STORE_LOCAL");
-
-      void synchronizeWithStoreHub(
-        core.organization.id,
-      );
-
-      return true;
-    }
-
-    setConnectionMode("DEVICE_ISOLATED");
-    return true;
-  }, []);
-
-  const reload = useCallback(
-    async (organizationId?: string) => {
-      setLoading(true);
-      setError(null);
-
-      if (accessMode === "offline") {
-        await loadOffline();
-        setLoading(false);
-        return;
+      if (!readiness.ok) {
+        setData(null);
+        setError(
+          "Offline access is not prepared for this terminal.",
+        );
+        return false;
       }
 
-      try {
-        const next =
-          await fetchPosV2Core(organizationId);
+      const core = readiness.core;
+
+      setData(cachedBootstrap(core));
+      setMode("offline");
+      setError(null);
+
+      const identity =
+        await loadMobileDeviceIdentity(
+          core.organization.id,
+        );
+
+      if (!identity?.binding) {
+        await setPersistedMode(
+          core.organization.id,
+          "DEVICE_ISOLATED",
+        );
+        return true;
+      }
+
+      const hub = await probeStoreHub({
+        organizationId:
+          core.organization.id,
+        storeId:
+          identity.binding.storeId,
+      });
+
+      if (hub.ok) {
+        await setPersistedMode(
+          core.organization.id,
+          "STORE_LOCAL",
+        );
+
+        void synchronizeWithStoreHub(
+          core.organization.id,
+        );
+
+        return true;
+      }
+
+      await setPersistedMode(
+        core.organization.id,
+        "DEVICE_ISOLATED",
+      );
+
+      return true;
+    }, [setPersistedMode]);
+
+  const completeCloudEntry =
+    useCallback(
+      async (
+        next:
+          PosBootstrapV2CoreResponse,
+      ) => {
+        const organizationId =
+          next.core.organization.id;
 
         setData(next);
-        setMode("online");
-        setConnectionMode("CLOUD_ONLINE");
 
         try {
           await saveBusinessContextSnapshot(
             next.core,
           );
+
           await saveActiveShiftSnapshot(
-            next.core.organization.id,
+            organizationId,
             next.core.activeShift,
           );
         } catch {
           // Cloud response remains authoritative.
         }
-      } catch (caught) {
-        if (isExplicitAuthorizationDenial(caught)) {
-          setData(null);
-          setError(
-            "TINDIO requires online authorization.",
+
+        const [
+          previousMode,
+          outbox,
+        ] = await Promise.all([
+          readConnectionModeState(
+            organizationId,
+          ),
+          getOutboxSummary(
+            organizationId,
+          ),
+        ]);
+
+        const unresolved =
+          outbox.pending
+          + outbox.syncing
+          + outbox.conflict
+          + outbox.failed;
+
+        const needsRecovery =
+          unresolved > 0
+          || (
+            previousMode
+            && previousMode.mode
+            !== "CLOUD_ONLINE"
           );
-        } else if (!(await loadOffline())) {
-          setError(
-            "TINDIO could not load this business context.",
+
+        if (!needsRecovery) {
+          setMode("online");
+
+          await setPersistedMode(
+            organizationId,
+            "CLOUD_ONLINE",
           );
+
+          return;
         }
-      } finally {
-        setLoading(false);
-      }
-    },
-    [accessMode, loadOffline],
-  );
+
+        // Network is reachable, but business mutations remain safely gated
+        // until reconciliation is complete.
+        setMode("offline");
+
+        await setPersistedMode(
+          organizationId,
+          "RECOVERING",
+        );
+
+        const recovery =
+          await recoverCloudConnection(
+            organizationId,
+          );
+
+        if (recovery.ok) {
+          setMode("online");
+
+          await setPersistedMode(
+            organizationId,
+            "CLOUD_ONLINE",
+          );
+
+          return;
+        }
+
+        setMode("offline");
+
+        await setPersistedMode(
+          organizationId,
+          recovery.mode,
+        );
+      },
+      [setPersistedMode],
+    );
+
+  const reload =
+    useCallback(
+      async (
+        organizationId?: string,
+      ) => {
+        setLoading(true);
+        setError(null);
+
+        if (accessMode === "offline") {
+          await loadOffline();
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const next =
+            await fetchPosV2Core(
+              organizationId,
+            );
+
+          await completeCloudEntry(next);
+        } catch (caught) {
+          if (
+            isExplicitAuthorizationDenial(
+              caught,
+            )
+          ) {
+            setData(null);
+
+            setError(
+              "TINDIO requires online authorization.",
+            );
+          } else if (!(await loadOffline())) {
+            setError(
+              "TINDIO could not load this business context.",
+            );
+          }
+        } finally {
+          setLoading(false);
+        }
+      },
+      [
+        accessMode,
+        completeCloudEntry,
+        loadOffline,
+      ],
+    );
 
   useEffect(() => {
     const timer = setTimeout(
@@ -184,7 +331,8 @@ export function BusinessContextProvider({
       0,
     );
 
-    return () => clearTimeout(timer);
+    return () =>
+      clearTimeout(timer);
   }, [reload]);
 
   const value = useMemo(

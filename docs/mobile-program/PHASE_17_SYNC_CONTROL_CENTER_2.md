@@ -48,6 +48,32 @@ Telemetry does not change sale or inventory authority.
 
 Phase 17 remains IMPLEMENTING.
 
+## Slice 03
+
+Back Office `/back-office/offline-sync` is now Sync Control Center 2.0.
+
+It preserves the existing offline-event conflict review and adds device health visibility for:
+
+- store
+- register
+- device
+- employee
+- connection mode
+- app version
+- heartbeat
+- last successful sync
+- device checkpoint
+- server checkpoint
+- checkpoint gap
+- queue depth
+- conflicts
+- failures
+- offline duration
+
+The existing `devices.manage` permission and authorized store scope remain enforced.
+
+Phase 17 remains IMPLEMENTING.
+
 ## Slice 02
 
 Native POS telemetry reporting is implemented.

@@ -199,15 +199,42 @@ const UPDATE_COLUMNS: Record<keyof OutboxEventUpdate, string> = {
   officialReceiptNumber: "official_receipt_number",
 };
 
-export async function updateOutboxEvent(eventId: string, changes: OutboxEventUpdate) {
-  const entries = (Object.keys(changes) as Array<keyof OutboxEventUpdate>).filter(
-    (key) => changes[key] !== undefined,
-  );
-  if (entries.length === 0) return;
-  const assignments = entries.map((key) => `${UPDATE_COLUMNS[key]} = ?`).join(", ");
-  await (await getTindioDatabase()).runAsync(
-    `UPDATE outbox_events SET ${assignments}, updated_at = ? WHERE event_id = ?`,
-    ...entries.map((key) => changes[key] ?? null), new Date().toISOString(), eventId,
+export async function updateOutboxEvent(
+  organizationId: string,
+  eventId: string,
+  changes: OutboxEventUpdate,
+) {
+  const entries =
+    (
+      Object.keys(changes) as Array<keyof OutboxEventUpdate>
+    ).filter(
+      (key) =>
+        changes[key] !== undefined,
+    );
+
+  if (entries.length === 0) {
+    return;
+  }
+
+  const assignments =
+    entries
+      .map(
+        (key) =>
+          `${UPDATE_COLUMNS[key]} = ?`,
+      )
+      .join(", ");
+
+  await (
+    await getTindioDatabase()
+  ).runAsync(
+    `UPDATE outbox_events SET ${assignments}, updated_at = ? WHERE organization_id = ? AND event_id = ?`,
+    ...entries.map(
+      (key) =>
+        changes[key] ?? null,
+    ),
+    new Date().toISOString(),
+    organizationId,
+    eventId,
   );
 }
 

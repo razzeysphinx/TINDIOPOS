@@ -1,6 +1,10 @@
 import type {
   StoreHubChange,
 } from "../features/store-hub/store-hub-client";
+import {
+  assertOrganizationScope,
+  assertStoreScope,
+} from "../features/security/local-scope-guard";
 import { getTindioDatabase } from "./database";
 
 export type StoreHubState = {
@@ -114,12 +118,15 @@ export async function applyStoreHubChanges(
   await database.withExclusiveTransactionAsync(
     async (transaction) => {
       for (const change of changes) {
-        if (
-          change.event.organizationId !== organizationId
-          || change.event.storeId !== storeId
-        ) {
-          throw new Error("STORE_HUB_SCOPE_MISMATCH");
-        }
+        assertOrganizationScope(
+          organizationId,
+          change.event.organizationId,
+        );
+
+        assertStoreScope(
+          storeId,
+          change.event.storeId,
+        );
 
         await transaction.runAsync(
           "INSERT INTO store_hub_events (organization_id,store_id,event_id,device_id,device_sequence,hub_revision,event_type,created_at,cloud_synced_at,local_reference,items_json,received_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(organization_id,store_id,event_id) DO UPDATE SET device_id=excluded.device_id,device_sequence=excluded.device_sequence,hub_revision=MAX(store_hub_events.hub_revision,excluded.hub_revision),event_type=excluded.event_type,created_at=excluded.created_at,cloud_synced_at=excluded.cloud_synced_at,local_reference=excluded.local_reference,items_json=excluded.items_json,received_at=excluded.received_at",

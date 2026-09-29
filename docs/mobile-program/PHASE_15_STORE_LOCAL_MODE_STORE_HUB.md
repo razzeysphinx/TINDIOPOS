@@ -45,3 +45,24 @@ The Store Hub intentionally does not accept:
 - Supabase/auth session tokens
 
 Phase 15 remains IMPLEMENTING.
+
+## Slice 02
+
+Native mobile Store Hub configuration is now available.
+
+Security behavior:
+
+- Store Hub token is stored only in SecureStore.
+- Token is not persisted in SQLite.
+- Public internet hostnames are rejected.
+- Allowed Hub endpoints are private IPv4, localhost, or `.local`.
+- Hub health identity must match the enrolled organization and store.
+- Mobile cloud bearer/Supabase tokens are never forwarded to the Hub.
+
+Local SQLite schema version 7 adds:
+
+- `store_hub_state`
+- `store_hub_events`
+- `store_hub_publish_state`
+
+Phase 15 remains IMPLEMENTING.

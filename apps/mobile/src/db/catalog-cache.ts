@@ -62,3 +62,17 @@ export async function getCatalogItemCount(organizationId: string, storeId: strin
   );
   return row?.count ?? 0;
 }
+
+export async function replaceCompleteCatalogSnapshot(organizationId: string, storeId: string, items: PosCatalogItem[]) {
+  const database = await getTindioDatabase();
+  const capturedAt = new Date().toISOString();
+  await database.withExclusiveTransactionAsync(async (transaction) => {
+    await transaction.runAsync("DELETE FROM catalog_items WHERE organization_id = ? AND store_id = ?", organizationId, storeId);
+    for (const item of items) await transaction.runAsync(
+      "INSERT INTO catalog_items (organization_id,store_id,item_key,product_id,variant_id,category_id,product_name,variant_name,sku,barcode,price_minor,unit,image_url,is_variable_price,allow_fractional_quantity,has_modifiers,payload_json,captured_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      organizationId, storeId, itemKey(item), item.productId, item.variantId, item.categoryId, item.productName, item.variantName, item.sku, item.barcode, item.priceMinor, item.unit, item.imageUrl, item.isVariablePrice ? 1 : 0, item.allowFractionalQuantity ? 1 : 0, item.hasModifiers ? 1 : 0, JSON.stringify(item), capturedAt,
+    );
+  });
+  await saveLocalCacheState({ organizationId, domain: "catalog", storeId, scopeKey: "offline-prime", sourceVersion: null, recordCount: items.length, isComplete: true, capturedAt });
+  return { capturedAt, recordCount: items.length };
+}

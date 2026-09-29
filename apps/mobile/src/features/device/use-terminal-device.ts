@@ -1,77 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
-
 import { validatePosV2Device } from "../../lib/tindio-api";
-import {
-  loadMobileDeviceIdentity,
-  saveMobileDeviceIdentity,
-  type MobileDeviceIdentity,
-} from "./device-store";
+import { useSession } from "../session/session-provider";
+import { loadMobileDeviceIdentity, saveMobileDeviceIdentity, type MobileDeviceIdentity } from "./device-store";
 
 export function useTerminalDevice(organizationId: string | undefined) {
+  const { accessMode } = useSession();
   const [loading, setLoading] = useState(true);
   const [identity, setIdentity] = useState<MobileDeviceIdentity | null>(null);
   const [error, setError] = useState<string | null>(null);
-
   const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    if (!organizationId) {
-      setIdentity(null);
-      setLoading(false);
-      return;
-    }
-
+    setLoading(true); setError(null);
+    if (!organizationId) { setIdentity(null); setLoading(false); return; }
     const stored = await loadMobileDeviceIdentity(organizationId);
-
-    if (!stored) {
-      setIdentity(null);
-      setLoading(false);
-      return;
-    }
-
+    if (!stored) { setIdentity(null); setLoading(false); return; }
+    if (accessMode === "offline") { setIdentity(stored); setLoading(false); return; }
     try {
-      const result = await validatePosV2Device(
-        organizationId,
-        stored.credential,
-      );
-
-      if (!result.ok) {
-        setIdentity(null);
-        setError(result.message);
-        return;
-      }
-
-      const next: MobileDeviceIdentity = {
-        ...stored,
-        binding: result.device,
-        lastVerifiedAt: new Date().toISOString(),
-      };
-
-      await saveMobileDeviceIdentity(next);
-      setIdentity(next);
-    } catch {
-      setIdentity(null);
-      setError("TINDIO could not verify this POS device.");
-    } finally {
-      setLoading(false);
-    }
-  }, [organizationId]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      void reload();
-    }, 0);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [reload]);
-
-  return {
-    loading,
-    identity,
-    error,
-    reload,
-  };
+      const result = await validatePosV2Device(organizationId, stored.credential);
+      if (!result.ok) { setIdentity(null); setError(result.message); return; }
+      const next: MobileDeviceIdentity = { ...stored, binding: result.device, lastVerifiedAt: new Date().toISOString() };
+      await saveMobileDeviceIdentity(next); setIdentity(next);
+    } catch { setIdentity(stored); setError("TINDIO could not verify this POS device."); }
+    finally { setLoading(false); }
+  }, [organizationId, accessMode]);
+  useEffect(() => { const timer = setTimeout(() => void reload(), 0); return () => clearTimeout(timer); }, [reload]);
+  return { loading, identity, error, reload };
 }

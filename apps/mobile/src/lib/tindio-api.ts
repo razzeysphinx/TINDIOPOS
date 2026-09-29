@@ -9,6 +9,9 @@ const REGISTER_HEADER = "x-tindio-register-id";
 export class TindioApiError extends Error {
   constructor(message: string, readonly status: number, readonly reason: string, readonly requestId: string | null) { super(message); this.name = "TindioApiError"; }
 }
+export function isExplicitAuthorizationDenial(error: unknown) {
+  return error instanceof TindioApiError && (error.status === 401 || error.status === 403) && error.reason.startsWith("HTTP_");
+}
 const endpoint = (pathname: string) => new URL(pathname, `${mobileEnvironment.tindioApiUrl}/`).toString();
 async function token(refresh: boolean) {
   const result = refresh ? await supabase.auth.refreshSession() : await supabase.auth.getSession();

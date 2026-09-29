@@ -27,3 +27,12 @@ export async function saveReferenceSnapshot(response: PosReferenceV2Response) {
 
   return capturedAt;
 }
+
+export async function getReferenceSnapshot(organizationId: string) {
+  const row = await (await getTindioDatabase()).getFirstAsync<{ reference_version: string; payload_json: string; captured_at: string }>(
+    "SELECT reference_version,payload_json,captured_at FROM reference_snapshots WHERE organization_id = ?",
+    organizationId,
+  );
+  if (!row) return null;
+  try { return { organizationId, referenceVersion: row.reference_version, reference: JSON.parse(row.payload_json), capturedAt: row.captured_at }; } catch { return null; }
+}

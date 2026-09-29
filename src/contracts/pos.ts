@@ -13,6 +13,7 @@ import type {
 } from "@/features/customer-display/customer-display-types";
 import type {
   PosActiveShift,
+  PosCartLine,
   PosCatalogItem,
   PosCategory,
   PosCustomer,
@@ -502,6 +503,14 @@ export type {
   CheckoutSubmission,
   ValidateCartStockValues,
 } from "@/features/checkout/checkout-schema";
+
+export type {
+  ValidateCartStockActionResult,
+} from "@/features/checkout/checkout-types";
+
+export type {
+  PosCartLine,
+} from "@/features/pos/pos-types";
 
 export {
   posDeviceCredentialSchema,

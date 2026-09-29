@@ -78,8 +78,16 @@ function baseCartLine(item: PosCatalogItem): PosCartLine {
 export default function PosScreen() {
   const { data, mode } = useBusinessContext();
   const core = data?.core;
-  const terminal = useTerminalDevice(core?.organization.id);
-  const binding = terminal.identity?.binding;
+  const terminal =
+    useTerminalDevice(
+      core?.organization.id,
+    );
+
+  const identity =
+    terminal.identity;
+
+  const binding =
+    identity?.binding;
 
   const [query, setQuery] = useState("");
   const [lookup, setLookup] = useState("");
@@ -213,8 +221,16 @@ export default function PosScreen() {
     openTicketId: activeTicketId,
   });
 
-  if (!core || !binding || !terminal.identity) {
-    return <Text>Local catalog is not prepared.</Text>;
+  if (
+    !core
+    || !binding
+    || !identity
+  ) {
+    return (
+      <Text>
+        Local catalog is not prepared.
+      </Text>
+    );
   }
 
   const markCartChanged = () => {
@@ -362,7 +378,7 @@ export default function PosScreen() {
   };
 
   useEffect(() => {
-    if (!core || !binding || !terminal.identity) {
+    if (!core || !binding || !identity) {
       setCartInventoryIntelligence([]);
       return;
     }
@@ -372,7 +388,7 @@ export default function PosScreen() {
     void readCartOfflineInventoryIntelligence({
       organizationId: core.organization.id,
       storeId: binding.storeId,
-      deviceId: terminal.identity.credential.deviceId,
+      deviceId: identity.credential.deviceId,
       cart,
     }).then((next) => {
       if (active) setCartInventoryIntelligence(next);
@@ -387,7 +403,7 @@ export default function PosScreen() {
     binding,
     cart,
     core,
-    terminal.identity,
+    identity,
   ]);
 
   const find = async () => {
@@ -544,7 +560,7 @@ export default function PosScreen() {
         label: ticketLabel.trim(),
         note: ticketNote.trim(),
         cart,
-        device: terminal.identity.credential,
+        device: identity.credential,
       });
 
       setSaleMessage(result.message);
@@ -581,7 +597,7 @@ export default function PosScreen() {
       const result = await createOfflineCashSale({
         organizationId: core.organization.id,
         binding,
-        deviceId: terminal.identity.credential.deviceId,
+        deviceId: identity.credential.deviceId,
         cart,
         totals,
         discountId,

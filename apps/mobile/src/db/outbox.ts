@@ -56,37 +56,106 @@ function toEvent(row: OutboxRow): DurableOutboxEvent | null {
   }
 }
 
-export async function enqueueSaleCompletedEvent(input: NewDurableOutboxEvent) {
-  const database = await getTindioDatabase();
-  return database.withExclusiveTransactionAsync(async (transaction) => {
-    const existing = await transaction.getFirstAsync<OutboxRow>(
-      "SELECT * FROM outbox_events WHERE organization_id = ? AND idempotency_key = ?",
-      input.organizationId, input.idempotencyKey,
-    );
-    if (existing) return toEvent(existing);
+export async function enqueueSaleCompletedEvent(
+  input: NewDurableOutboxEvent,
+): Promise<DurableOutboxEvent | null> {
+  const database =
+    await getTindioDatabase();
 
-    const state = await ensureDeviceSyncState(transaction, input.organizationId, input.deviceId);
-    if (!state || !Number.isSafeInteger(state.next_sequence) || state.next_sequence < 1) throw new Error("Invalid device sequence state.");
-    const deviceSequence = state.next_sequence;
-    const payload = { ...input.payload, offline: { ...input.payload.offline, deviceSequence } };
+  let resolved:
+    DurableOutboxEvent | null = null;
 
-    await transaction.runAsync(
-      "INSERT INTO outbox_events (event_id,organization_id,store_id,register_id,device_id,device_sequence,shift_id,operation_type,idempotency_key,local_reference,payload_json,snapshot_json,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-      input.eventId, input.organizationId, input.storeId, input.registerId, input.deviceId,
-      deviceSequence, input.shiftId, "SALE_COMPLETED", input.idempotencyKey, input.localReference,
-      JSON.stringify(payload), JSON.stringify(input.snapshot), "LOCAL_PENDING",
-      input.createdAt, input.createdAt,
-    );
-    const increment = await transaction.runAsync(
-      "UPDATE device_sync_state SET next_sequence=next_sequence+1 WHERE organization_id=? AND device_id=? AND next_sequence=?",
-      input.organizationId, input.deviceId, deviceSequence,
-    );
-    if (increment.changes !== 1) throw new Error("Device sequence allocation could not be committed.");
-    const inserted = await transaction.getFirstAsync<OutboxRow>(
-      "SELECT * FROM outbox_events WHERE event_id = ?", input.eventId,
-    );
-    return inserted ? toEvent(inserted) : null;
-  });
+  await database.withExclusiveTransactionAsync(
+    async (transaction) => {
+      const existing =
+        await transaction.getFirstAsync<OutboxRow>(
+          "SELECT * FROM outbox_events WHERE organization_id = ? AND idempotency_key = ?",
+          input.organizationId,
+          input.idempotencyKey,
+        );
+
+      if (existing) {
+        resolved = toEvent(existing);
+        return;
+      }
+
+      const state =
+        await ensureDeviceSyncState(
+          transaction,
+          input.organizationId,
+          input.deviceId,
+        );
+
+      if (
+        !state
+        || !Number.isSafeInteger(
+          state.next_sequence,
+        )
+        || state.next_sequence < 1
+      ) {
+        throw new Error(
+          "Invalid device sequence state.",
+        );
+      }
+
+      const deviceSequence =
+        state.next_sequence;
+
+      const payload = {
+        ...input.payload,
+        offline: {
+          ...input.payload.offline,
+          deviceSequence,
+        },
+      };
+
+      await transaction.runAsync(
+        "INSERT INTO outbox_events (event_id,organization_id,store_id,register_id,device_id,device_sequence,shift_id,operation_type,idempotency_key,local_reference,payload_json,snapshot_json,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        input.eventId,
+        input.organizationId,
+        input.storeId,
+        input.registerId,
+        input.deviceId,
+        deviceSequence,
+        input.shiftId,
+        "SALE_COMPLETED",
+        input.idempotencyKey,
+        input.localReference,
+        JSON.stringify(payload),
+        JSON.stringify(input.snapshot),
+        "LOCAL_PENDING",
+        input.createdAt,
+        input.createdAt,
+      );
+
+      const increment =
+        await transaction.runAsync(
+          "UPDATE device_sync_state SET next_sequence=next_sequence+1 WHERE organization_id=? AND device_id=? AND next_sequence=?",
+          input.organizationId,
+          input.deviceId,
+          deviceSequence,
+        );
+
+      if (increment.changes !== 1) {
+        throw new Error(
+          "Device sequence allocation could not be committed.",
+        );
+      }
+
+      const inserted =
+        await transaction.getFirstAsync<OutboxRow>(
+          "SELECT * FROM outbox_events WHERE event_id = ?",
+          input.eventId,
+        );
+
+      resolved =
+        inserted
+          ? toEvent(inserted)
+          : null;
+    },
+  );
+
+  return resolved;
 }
 
 export async function listPendingOutboxEvents(organizationId: string, deviceId?: string) {

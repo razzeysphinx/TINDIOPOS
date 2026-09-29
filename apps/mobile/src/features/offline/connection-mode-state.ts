@@ -50,9 +50,7 @@ export async function readConnectionModeState(
     }
 
     return {
-      mode:
-        parsed.mode
-        as PersistedConnectionMode,
+      mode: parsed.mode as PersistedConnectionMode,
       changedAt:
         parsed.changedAt,
       offlineSince:

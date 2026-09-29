@@ -256,17 +256,11 @@ export default async function OfflineSyncPage({
   const selectedStoreId =
     scope.selectedStoreId;
 
-  const devices =
-    (devicesResult.data ?? [])
-      as DeviceRow[];
+  const devices = (devicesResult.data ?? []) as DeviceRow[];
 
-  const storeRows =
-    (storesResult.data ?? [])
-      as StoreRow[];
+  const storeRows = (storesResult.data ?? []) as StoreRow[];
 
-  const registerRows =
-    (registersResult.data ?? [])
-      as RegisterRow[];
+  const registerRows = (registersResult.data ?? []) as RegisterRow[];
 
   const deviceById =
     new Map(
@@ -298,12 +292,10 @@ export default async function OfflineSyncPage({
       ),
     );
 
-  const telemetry:
-    SyncControlDeviceItem[] =
-      (
-        (telemetryResult.data ?? [])
-        as TelemetryRow[]
-      )
+  const telemetryRows = (telemetryResult.data ?? []) as TelemetryRow[];
+
+  const telemetry: SyncControlDeviceItem[] =
+      telemetryRows
         .filter(
           (row) =>
             !selectedStoreId
@@ -375,9 +367,7 @@ export default async function OfflineSyncPage({
           id: event.id,
           localReceiptReference:
             event.local_receipt_reference,
-          state:
-            event.state
-            as OfflineSyncEventItem["state"],
+          state: event.state as OfflineSyncEventItem["state"],
           conflictType:
             event.conflict_type,
           failureMessage:

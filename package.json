@@ -153,7 +153,11 @@
     "certify:phase-02:bearer-auth": "node scripts/phase-02-bearer-auth-e2e.mjs",
     "typecheck": "tsc --noEmit --incremental false",
     "test:phase-16-isolated-device-mode": "node --test scripts/phase-16-isolated-device-mode-check.mjs",
-    "test:phase-17-sync-control-center": "node --test scripts/phase-17-sync-control-center-2-check.mjs"
+    "test:phase-17-sync-control-center": "node --test scripts/phase-17-sync-control-center-2-check.mjs",
+    "test:phase-18-disaster-model": "node --test scripts/phase-18-disaster-model-check.mjs",
+    "test:phase-18-production-contract": "node --test scripts/phase-18-production-failure-contract-check.mjs",
+    "certify:phase-18": "node scripts/phase-18-certification-runner.mjs",
+    "certify:phase-18:db": "node scripts/phase-18-certification-runner.mjs --db"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

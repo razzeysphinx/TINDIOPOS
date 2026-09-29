@@ -1,1 +1,29 @@
-import { getReferenceSnapshot } from "../../db/reference-cache";import { incrementLocalFirstMetric } from "./runtime-metrics";export async function getLocalReference(o:string){incrementLocalFirstMetric("sqliteReferenceReads");return getReferenceSnapshot(o);}export async function getLocalCategories(o:string){return (await getLocalReference(o))?.reference.categories??[];}export async function getLocalDiscounts(o:string){return (await getLocalReference(o))?.reference.discounts??[];}export async function getLocalTaxRates(o:string){return (await getLocalReference(o))?.reference.taxRates??[];}export async function getLocalPaymentMethods(o:string,s:string){return ((await getLocalReference(o))?.reference.paymentMethods??[]).filter(x=>x.storeId===s).sort((a,b)=>a.sortOrder-b.sortOrder);}
+import { getReferenceSnapshot } from "../../db/reference-cache";
+import { incrementLocalFirstMetric } from "./runtime-metrics";
+
+export async function getLocalReference(organizationId: string) {
+  incrementLocalFirstMetric("sqliteReferenceReads");
+  return getReferenceSnapshot(organizationId);
+}
+
+export async function getLocalCategories(organizationId: string) {
+  return (await getLocalReference(organizationId))?.reference.categories ?? [];
+}
+
+export async function getLocalDiscounts(organizationId: string) {
+  return (await getLocalReference(organizationId))?.reference.discounts ?? [];
+}
+
+export async function getLocalTaxRates(organizationId: string) {
+  return (await getLocalReference(organizationId))?.reference.taxRates ?? [];
+}
+
+export async function getLocalDiningOptions(organizationId: string) {
+  return (await getLocalReference(organizationId))?.reference.diningOptions ?? [];
+}
+
+export async function getLocalPaymentMethods(organizationId: string, storeId: string) {
+  return ((await getLocalReference(organizationId))?.reference.paymentMethods ?? [])
+    .filter((method) => method.storeId === storeId)
+    .sort((left, right) => left.sortOrder - right.sortOrder);
+}

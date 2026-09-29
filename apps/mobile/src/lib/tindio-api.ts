@@ -18,12 +18,16 @@ async function token(refresh: boolean) {
   if (result.error || !result.data.session) throw new TindioApiError("Sign in is required.", 401, "AUTH_REQUIRED", null);
   return result.data.session.access_token;
 }
-async function request(pathname: string, { organizationId, init = {} }: { organizationId?: string; init?: RequestInit } = {}) {
+export async function requestPosV2Raw(pathname: string, { organizationId, init = {} }: { organizationId?: string; init?: RequestInit } = {}) {
   const headers = new Headers({ Accept: "application/json", Authorization: `Bearer ${await token(false)}` });
   if (organizationId) headers.set(ORGANIZATION_HEADER, organizationId);
   for (const [key, value] of new Headers(init.headers).entries()) headers.set(key, value);
   let response = await fetch(endpoint(pathname), { ...init, method: init.method ?? "GET", headers });
   if (response.status === 401) { headers.set("Authorization", `Bearer ${await token(true)}`); response = await fetch(endpoint(pathname), { ...init, method: init.method ?? "GET", headers }); }
+  return response;
+}
+async function request(pathname: string, options: { organizationId?: string; init?: RequestInit } = {}) {
+  const response = await requestPosV2Raw(pathname, options);
   if (!response.ok) throw new TindioApiError(`HTTP_${response.status}`, response.status, `HTTP_${response.status}`, response.headers.get("x-tindio-request-id"));
   return response;
 }

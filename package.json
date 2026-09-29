@@ -21,6 +21,7 @@
     "test:phase-07-native-sqlite-complete": "node --test scripts/phase-07-native-sqlite-complete-check.mjs",
     "test:phase-08-cold-start-offline": "node --test scripts/phase-08-cold-start-offline-check.mjs",
     "test:phase-09-local-first": "node --test scripts/phase-09-local-first-check.mjs",
+    "test:phase-10-durable-outbox": "node --test scripts/phase-10-durable-outbox-check.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

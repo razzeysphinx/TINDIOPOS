@@ -37,7 +37,11 @@ import {
   getLocalPaymentMethods,
   getLocalTaxRates,
 } from "../../src/features/local-first/local-reference";
-import { readLocalStockEstimate } from "../../src/features/local-first/local-stock";
+import { refreshCartStockEstimates } from "../../src/features/local-first/local-stock";
+import {
+  readOfflineInventoryIntelligence,
+  type OfflineInventoryIntelligence,
+} from "../../src/features/inventory/offline-inventory-intelligence";
 import { createOfflineCashSale } from "../../src/features/outbox/create-offline-sale";
 import { syncOutboxEvents } from "../../src/features/outbox/outbox-sync";
 import {
@@ -90,7 +94,8 @@ export default function PosScreen() {
   const [taxId, setTaxId] = useState<string | null>(null);
   const [diningOptionId, setDiningOptionId] = useState<string | null>(null);
   const [cashTender, setCashTender] = useState("");
-  const [stock, setStock] = useState("UNKNOWN");
+  const [inventoryIntelligence, setInventoryIntelligence] =
+    useState<OfflineInventoryIntelligence | null>(null);
   const [saleMessage, setSaleMessage] = useState<string | null>(null);
   const [savingOffline, setSavingOffline] = useState(false);
   const [onlineCheckoutPending, setOnlineCheckoutPending] = useState(false);
@@ -336,17 +341,30 @@ export default function PosScreen() {
   const add = async (item: PosCatalogItem) => {
     await startConfigure(item);
 
-    const estimate = await readLocalStockEstimate(
-      core.organization.id,
-      binding.storeId,
-      item.productId,
-      item.variantId,
-    );
+    if (mode === "online") {
+      try {
+        await refreshCartStockEstimates(core.organization.id, {
+          storeId: binding.storeId,
+          registerId: binding.registerId,
+          items: [{
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: 1,
+          }],
+        });
+      } catch {
+        // A cached baseline can still provide honest offline inventory intelligence.
+      }
+    }
 
-    setStock(
-      estimate.status === "CACHED_ESTIMATE"
-        ? String(estimate.availableQuantity)
-        : "UNKNOWN",
+    setInventoryIntelligence(
+      await readOfflineInventoryIntelligence({
+        organizationId: core.organization.id,
+        storeId: binding.storeId,
+        deviceId: terminal.identity.credential.deviceId,
+        productId: item.productId,
+        variantId: item.variantId,
+      }),
     );
   };
 
@@ -744,7 +762,43 @@ export default function PosScreen() {
         {" — "}Total {formatMoney(totals.totalMinor, core.organization.currencyCode)}
       </Text>
 
-      <Text>Cached stock estimate: {stock}</Text>
+      <View>
+        <Text>INVENTORY INTELLIGENCE â€” ESTIMATE ONLY</Text>
+
+        {inventoryIntelligence ? (
+          <>
+            <Text>
+              Last confirmed cloud stock:{" "}
+              {inventoryIntelligence.lastConfirmedCloudStock ?? "UNKNOWN"}
+            </Text>
+            <Text>
+              Last confirmed at:{" "}
+              {inventoryIntelligence.lastConfirmedAt ?? "NO CLOUD BASELINE"}
+            </Text>
+            <Text>
+              Known synced activity from this terminal after baseline:{" "}
+              {inventoryIntelligence.knownSyncedActivityFromThisTerminal}
+            </Text>
+            <Text>
+              Device-only unsynced activity:{" "}
+              {inventoryIntelligence.deviceOnlyUnsyncedActivity}
+            </Text>
+            <Text>
+              Estimated available stock:{" "}
+              {inventoryIntelligence.estimatedAvailableStock ?? "UNKNOWN"}
+            </Text>
+            <Text>
+              Unresolved local sale events affecting this item:{" "}
+              {inventoryIntelligence.unresolvedEventCount}
+            </Text>
+            <Text>
+              Scope: CURRENT DEVICE ONLY. This value is not authoritative cloud stock.
+            </Text>
+          </>
+        ) : (
+          <Text>Select an item to calculate inventory intelligence.</Text>
+        )}
+      </View>
 
       {canApplyDiscounts ? (
         <>

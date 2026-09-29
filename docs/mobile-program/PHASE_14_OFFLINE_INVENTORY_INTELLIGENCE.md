@@ -1,74 +1,144 @@
 # Phase 14 â€” Offline Inventory Intelligence
 
-## Status
+## Implementation status
 
-IMPLEMENTING
+**IMPLEMENTATION COMPLETE**
 
-## Slice plan
+## Certification status
 
-- Slice 01 â€” honest local inventory read model
-- Slice 02 â€” cart-wide/local activity integration and stale-baseline handling
-- Slice 03 â€” sync-status visibility, hardening, documentation, deferred certification handoff
+**VALIDATING**
 
-## Slice 01
+Full runtime certification remains deferred by the user.
 
-Implemented inventory intelligence distinguishes:
+## Goal
 
-1. last confirmed cloud stock
-2. known synced sale activity from this terminal after the cloud baseline
-3. device-only unresolved sale activity
-4. estimated available stock
+Provide useful but honest inventory intelligence when a native POS device is offline or operating from cached state.
 
-The estimate is explicitly:
+## Implemented model
+
+TINDIO now distinguishes:
+
+1. **Last confirmed cloud stock**
+2. **Known synced activity from this terminal after that baseline**
+3. **Device-only unresolved sale activity**
+4. **Estimated available stock**
+5. **Current cart quantity**
+6. **Projected stock after the current cart**
+7. **Cloud baseline age**
+
+## Scope disclosure
+
+The local intelligence model is explicitly:
 
 ```text
 ESTIMATE ONLY
 CURRENT DEVICE ONLY
-NOT AUTHORITATIVE CLOUD STOCK
 ```
 
-The authoritative inventory ledger remains server-side.
+It does not claim to know unsynced activity from another isolated device.
 
-No direct stock mutation is performed by the device.
+That coordination problem belongs to:
 
-No server database migration is introduced.
+```text
+PHASE 15 â€” STORE LOCAL MODE / STORE HUB
+```
 
-No local SQLite schema migration is introduced.
+## Authoritative inventory
 
-The durable outbox remains:
+The server inventory ledger remains authoritative.
+
+The native client does not:
+
+- overwrite central stock
+- post local calculated stock as truth
+- create direct stock adjustments from the estimate
+- merge peer-device guesses into central inventory
+- discard unresolved local sales
+
+## Existing architecture reused
+
+Phase 14 reuses:
+
+- Phase 09 cached stock estimates
+- Phase 10 durable `SALE_COMPLETED` outbox
+- Phase 11 device identity and sequence
+- Phase 12 sync/reconciliation state
+
+## Database impact
+
+Server database migration:
+
+```text
+NONE
+```
+
+Local SQLite migration:
+
+```text
+NONE
+```
+
+Current local schema remains version 6.
+
+## Outbox impact
+
+Durable outbox remains:
 
 ```text
 SALE_COMPLETED
 ```
 
-Store-wide peer awareness is not claimed in Phase 14 Slice 01.
-That belongs to later Store Hub work in Phase 15.
+No new offline mutation type was introduced.
 
-## Certification
+## Cashier behavior
 
-Deferred until the dedicated certification sweep.
-
-Phase 14 remains IMPLEMENTING after Slice 01.
-
-## Slice 02
-
-Cart-wide inventory intelligence is now implemented.
-
-For every distinct cart saleable, TINDIO displays:
+The native POS can display for cart items:
 
 - last confirmed cloud stock
-- cloud baseline age in minutes
-- known synced activity from the current terminal after that baseline
-- unresolved device-only activity
-- estimated stock before the current cart
+- baseline age
+- current-terminal synced activity after that baseline
+- current-device unresolved activity
+- estimated available stock
 - current cart quantity
-- projected stock after the current cart
-- a local negative-stock warning when the projection falls below zero
+- projected available stock after the current cart
+- local negative-stock warning
 
-The UI explicitly states that other offline terminals are not represented.
+All displays identify the result as an estimate.
 
-No global/store-wide authority is inferred from one terminal.
+## Sync Status behavior
 
-No inventory mutation or database migration was introduced.
+Sync Status exposes:
 
-Phase 14 remains IMPLEMENTING until Slice 03 is finished.
+- number of cached cloud stock baselines
+- oldest/newest baseline timestamps
+- unresolved local sale count
+- number of affected saleables on the current device
+- server-ledger authority statement
+- current-device-only scope statement
+
+## Certification still required later
+
+- real Android runtime behavior
+- online â†’ offline transition
+- cold-start offline behavior
+- multiple queued offline sales
+- ambiguous network failures
+- post-sync baseline refresh behavior
+- multiple-device isolation scenarios
+- tenant/store isolation runtime checks
+- full Phase 08â€“14 certification sweep
+
+## Phase status
+
+```text
+PHASE 14
+IMPLEMENTATION COMPLETE
+STATUS: VALIDATING
+CERTIFICATION: DEFERRED
+```
+
+Next canonical phase after ChatGPT review:
+
+```text
+PHASE 15 â€” STORE LOCAL MODE / STORE HUB
+```

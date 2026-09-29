@@ -8,6 +8,10 @@ import { armPhase07RestartProof, getLocalDatabaseHealth, readPhase07RestartProof
 import { useBusinessContext } from "../../src/features/business/use-business-context";
 import { useTerminalDevice } from "../../src/features/device/use-terminal-device";
 import { getLocalFirstMetrics } from "../../src/features/local-first/runtime-metrics";
+import {
+  getOfflineInventoryDiagnostics,
+  type OfflineInventoryDiagnostics,
+} from "../../src/features/inventory/offline-inventory-diagnostics";
 import { clearOfflineAuthorizationGrant, readOfflineAuthorizationGrant, validateOfflineAuthorizationGrant, type OfflineAuthorizationGrant } from "../../src/features/offline/offline-authorization";
 import { prepareOfflineMode } from "../../src/features/offline/prepare-offline-mode";
 import { refreshDeviceCheckpoint } from "../../src/features/outbox/checkpoint-sync";
@@ -31,6 +35,8 @@ export default function SyncStatusScreen() {
   const [sequenceState, setSequenceState] = useState<DeviceSyncState | null>(null);
   const [remoteCheckpoint, setRemoteCheckpoint] = useState<number | null>(null);
   const [cursor, setCursor] = useState<SyncCursorState | null>(null);
+  const [inventoryDiagnostics, setInventoryDiagnostics] =
+    useState<OfflineInventoryDiagnostics | null>(null);
 
   const load = useCallback(async () => {
     setHealth(await getLocalDatabaseHealth()); setRestartProof(await readPhase07RestartProof());
@@ -42,8 +48,17 @@ export default function SyncStatusScreen() {
       setOutbox(await getSafeOutboxDiagnostics(organizationId));
       setSequenceState(deviceId ? await getDeviceSyncState(organizationId, deviceId) : null);
       setCursor(deviceId && terminal.identity?.binding ? await getSyncCursor(organizationId, deviceId, terminal.identity.binding.storeId) : null);
+      setInventoryDiagnostics(
+        deviceId && terminal.identity?.binding
+          ? await getOfflineInventoryDiagnostics({
+              organizationId,
+              storeId: terminal.identity.binding.storeId,
+              deviceId,
+            })
+          : null,
+      );
     }
-  }, [deviceId, organizationId]);
+  }, [deviceId, organizationId, terminal.identity?.binding]);
 
   useEffect(() => { const timer = setTimeout(() => void load(), 0); return () => clearTimeout(timer); }, [load]);
   const verify = useCallback(async () => { await verifyLocalPersistence(); await load(); }, [load]);
@@ -70,6 +85,15 @@ export default function SyncStatusScreen() {
     <Text>Durable Outbox: PHASE 10</Text><Text>Outbox pending / syncing / conflict / failed: {outbox?.summary.pending ?? 0} / {outbox?.summary.syncing ?? 0} / {outbox?.summary.conflict ?? 0} / {outbox?.summary.failed ?? 0}</Text><Text>Oldest unresolved: {outbox?.oldestUnresolved ? `${outbox.oldestUnresolved.localReference} — sequence ${outbox.oldestUnresolved.deviceSequence} — ${outbox.oldestUnresolved.state} — ${outbox.oldestUnresolved.totalMinor} ${outbox.oldestUnresolved.currencyCode}` : "NONE"}</Text><Pressable disabled={mode !== "online"} onPress={() => void syncOutbox()}><Text>Sync durable outbox now</Text></Pressable>
     <Text>PHASE 11 DEVICE SEQUENCE</Text><Text>Device: {deviceId ?? "NOT AVAILABLE"}</Text><Text>Next local sequence: {sequenceState?.nextSequence ?? "CHECK REQUIRED"}</Text><Text>Local known server checkpoint: {sequenceState?.serverCheckpoint ?? "CHECK REQUIRED"}</Text><Text>Remote server checkpoint: {remoteCheckpoint ?? "NOT CHECKED"}</Text><Text>Next expected server sequence: {sequenceState ? sequenceState.serverCheckpoint + 1 : "CHECK REQUIRED"}</Text><Text>Sequence health: {sequenceHealth}</Text><Pressable disabled={mode !== "online"} onPress={() => void refreshCheckpoint()}><Text>Refresh Server Checkpoint</Text></Pressable>
     <Text>PHASE 12 CLOUD RECONCILIATION</Text><Text>Delta sync: {cursor?.initialized ? "INITIALIZED" : "NOT INITIALIZED"}</Text><Text>Pull cursor: {cursor?.pullCursor ?? 0}</Text><Text>Last push: {cursor?.lastPushAt ?? "NEVER"}</Text><Text>Last pull: {cursor?.lastPullAt ?? "NEVER"}</Text><Text>Last reconciliation: {cursor?.lastReconcileAt ?? "NEVER"}</Text><Text>Last sync error: {cursor?.lastError ?? "NONE"}</Text><Text>Server changes remaining: UNKNOWN UNTIL RECONCILE</Text><Pressable disabled={mode !== "online"} onPress={() => void reconcile()}><Text>Reconcile With Cloud</Text></Pressable>
-    <Text>Delta Sync: NOT STARTED — PHASE 12</Text>
+    <Text>PHASE 14 OFFLINE INVENTORY INTELLIGENCE</Text>
+    <Text>Authority: {inventoryDiagnostics?.authority ?? "SERVER_LEDGER_AUTHORITATIVE"}</Text>
+    <Text>Local intelligence scope: {inventoryDiagnostics?.localScope ?? "CURRENT_DEVICE_ONLY"}</Text>
+    <Text>Cached cloud stock baselines: {inventoryDiagnostics?.baselineCount ?? 0}</Text>
+    <Text>Oldest stock baseline: {inventoryDiagnostics?.oldestBaselineAt ?? "NONE"}</Text>
+    <Text>Newest stock baseline: {inventoryDiagnostics?.newestBaselineAt ?? "NONE"}</Text>
+    <Text>Unresolved local sale events: {inventoryDiagnostics?.unresolvedSaleCount ?? 0}</Text>
+    <Text>Affected saleables on this device: {inventoryDiagnostics?.unresolvedAffectedSaleables ?? 0}</Text>
+    <Text>Other offline devices are intentionally UNKNOWN until later store-local coordination.</Text>
+    <Text>Phase 14 implementation: COMPLETE — CERTIFICATION DEFERRED</Text>
   </View>;
 }

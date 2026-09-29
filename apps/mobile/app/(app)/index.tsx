@@ -7,7 +7,7 @@ import { cashierFeatureGates } from "../../src/features/cashier/cashier-feature-
 
 export default function MobileHomeScreen() {
   const { signOut } = useSession();
-  const { data, loading, error, reload, mode, offlineExpiresAt } = useBusinessContext();
+  const { data, loading, error, reload, mode, connectionMode, offlineExpiresAt } = useBusinessContext();
 
   if (loading && !data) {
     return (
@@ -45,9 +45,11 @@ export default function MobileHomeScreen() {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}>
+      <Text>Connection mode: {connectionMode}</Text>
+
       {mode === "offline" ? (
         <View>
-          <Text>COLD-START OFFLINE MODE</Text>
+          <Text>{connectionMode === "STORE_LOCAL" ? "STORE LOCAL MODE" : "DEVICE ISOLATED MODE"}</Text>
           <Text>Cloud validation unavailable.</Text>
           <Text>Offline authorization expires: {offlineExpiresAt ?? "unknown"}</Text>
         </View>

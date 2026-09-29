@@ -18,9 +18,11 @@ import { refreshDeviceCheckpoint } from "../../src/features/outbox/checkpoint-sy
 import { getSafeOutboxDiagnostics } from "../../src/features/outbox/outbox-summary";
 import { syncOutboxEvents } from "../../src/features/outbox/outbox-sync";
 import { reconcileCloud } from "../../src/features/sync/reconcile-cloud";
+import { getStoreHubState, type StoreHubState } from "../../src/db/store-hub-cache";
+import { synchronizeWithStoreHub } from "../../src/features/store-hub/store-hub-sync";
 
 export default function SyncStatusScreen() {
-  const { data, reload, mode } = useBusinessContext();
+  const { data, reload, mode, connectionMode } = useBusinessContext();
   const organizationId = data?.core.organization.id;
   const terminal = useTerminalDevice(organizationId);
   const deviceId = terminal.identity?.credential.deviceId;
@@ -37,6 +39,8 @@ export default function SyncStatusScreen() {
   const [cursor, setCursor] = useState<SyncCursorState | null>(null);
   const [inventoryDiagnostics, setInventoryDiagnostics] =
     useState<OfflineInventoryDiagnostics | null>(null);
+  const [storeHubState, setStoreHubState] =
+    useState<StoreHubState | null>(null);
 
   const load = useCallback(async () => {
     setHealth(await getLocalDatabaseHealth()); setRestartProof(await readPhase07RestartProof());
@@ -51,6 +55,15 @@ export default function SyncStatusScreen() {
       setInventoryDiagnostics(
         deviceId && terminal.identity?.binding
           ? await getOfflineInventoryDiagnostics({
+              organizationId,
+              storeId: terminal.identity.binding.storeId,
+              deviceId,
+            })
+          : null,
+      );
+      setStoreHubState(
+        deviceId && terminal.identity?.binding
+          ? await getStoreHubState({
               organizationId,
               storeId: terminal.identity.binding.storeId,
               deviceId,
@@ -75,6 +88,18 @@ export default function SyncStatusScreen() {
     await load();
   }, [organizationId, mode, load]);
   const reconcile = useCallback(async () => { if (!organizationId || mode !== "online") return; setMessage("Reconciling cloud changes…"); const result = await reconcileCloud(organizationId); setMessage(result.ok ? `Cloud reconciliation complete: ${result.outboxAcked} ACKed, ${result.pullPages} pull pages.` : `Cloud reconciliation blocked: ${result.reason}`); await load(); }, [organizationId, mode, load]);
+  const syncStoreHub = useCallback(async () => {
+    if (!organizationId) return;
+    setMessage("Synchronizing with Store Hub…");
+    const result = await synchronizeWithStoreHub(organizationId);
+    setMessage(
+      result.ok
+        ? `Store Hub sync complete: ${result.published} published, ${result.pulled} pulled.`
+        : `Store Hub sync unavailable: ${result.reason}`,
+    );
+    await load();
+  }, [organizationId, load]);
+
   const sequenceHealth = !sequenceState ? "CHECK REQUIRED" : outbox?.oldestUnresolved && outbox.oldestUnresolved.deviceSequence > sequenceState.serverCheckpoint + 1 ? "GAP DETECTED" : "CONTIGUOUS";
 
   return <View>
@@ -85,6 +110,14 @@ export default function SyncStatusScreen() {
     <Text>Durable Outbox: PHASE 10</Text><Text>Outbox pending / syncing / conflict / failed: {outbox?.summary.pending ?? 0} / {outbox?.summary.syncing ?? 0} / {outbox?.summary.conflict ?? 0} / {outbox?.summary.failed ?? 0}</Text><Text>Oldest unresolved: {outbox?.oldestUnresolved ? `${outbox.oldestUnresolved.localReference} — sequence ${outbox.oldestUnresolved.deviceSequence} — ${outbox.oldestUnresolved.state} — ${outbox.oldestUnresolved.totalMinor} ${outbox.oldestUnresolved.currencyCode}` : "NONE"}</Text><Pressable disabled={mode !== "online"} onPress={() => void syncOutbox()}><Text>Sync durable outbox now</Text></Pressable>
     <Text>PHASE 11 DEVICE SEQUENCE</Text><Text>Device: {deviceId ?? "NOT AVAILABLE"}</Text><Text>Next local sequence: {sequenceState?.nextSequence ?? "CHECK REQUIRED"}</Text><Text>Local known server checkpoint: {sequenceState?.serverCheckpoint ?? "CHECK REQUIRED"}</Text><Text>Remote server checkpoint: {remoteCheckpoint ?? "NOT CHECKED"}</Text><Text>Next expected server sequence: {sequenceState ? sequenceState.serverCheckpoint + 1 : "CHECK REQUIRED"}</Text><Text>Sequence health: {sequenceHealth}</Text><Pressable disabled={mode !== "online"} onPress={() => void refreshCheckpoint()}><Text>Refresh Server Checkpoint</Text></Pressable>
     <Text>PHASE 12 CLOUD RECONCILIATION</Text><Text>Delta sync: {cursor?.initialized ? "INITIALIZED" : "NOT INITIALIZED"}</Text><Text>Pull cursor: {cursor?.pullCursor ?? 0}</Text><Text>Last push: {cursor?.lastPushAt ?? "NEVER"}</Text><Text>Last pull: {cursor?.lastPullAt ?? "NEVER"}</Text><Text>Last reconciliation: {cursor?.lastReconcileAt ?? "NEVER"}</Text><Text>Last sync error: {cursor?.lastError ?? "NONE"}</Text><Text>Server changes remaining: UNKNOWN UNTIL RECONCILE</Text><Pressable disabled={mode !== "online"} onPress={() => void reconcile()}><Text>Reconcile With Cloud</Text></Pressable>
+    <Text>PHASE 15 STORE LOCAL MODE / STORE HUB</Text>
+    <Text>Connection mode: {connectionMode}</Text>
+    <Text>Store Hub URL: {storeHubState?.hubUrl ?? "NOT CONFIGURED / NOT CONTACTED"}</Text>
+    <Text>Store Hub cursor: {storeHubState?.pullCursor ?? 0}</Text>
+    <Text>Store Hub last contact: {storeHubState?.lastContactAt ?? "NEVER"}</Text>
+    <Text>Store Hub last error: {storeHubState?.lastError ?? "NONE"}</Text>
+    <Pressable onPress={() => void syncStoreHub()}><Text>Synchronize With Store Hub</Text></Pressable>
+    <Text>Store Hub ACK never replaces cloud ACK.</Text>
     <Text>PHASE 14 OFFLINE INVENTORY INTELLIGENCE</Text>
     <Text>Authority: {inventoryDiagnostics?.authority ?? "SERVER_LEDGER_AUTHORITATIVE"}</Text>
     <Text>Local intelligence scope: {inventoryDiagnostics?.localScope ?? "CURRENT_DEVICE_ONLY"}</Text>

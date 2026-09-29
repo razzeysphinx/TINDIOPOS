@@ -1,91 +1,189 @@
-# Phase 15 â€” Store Local Mode / Store Hub
+# Phase 15 — Store Local Mode / Store Hub
 
-## Status
+## Implementation status
 
-IMPLEMENTING
+**IMPLEMENTATION COMPLETE**
 
-## Slice plan
+## Certification status
 
-1. Durable Store Hub service foundation
-2. Secure mobile Hub configuration + local cache
-3. Device publish/pull coordination + peer inventory awareness
-4. Store-local connection mode + diagnostics + implementation close
+**VALIDATING**
 
-## Architecture
+Full runtime certification is deferred by the user.
+
+## Goal
+
+Allow terminals in one physical store to coordinate over the store LAN when cloud internet is unavailable.
+
+## Connection modes introduced
 
 ```text
-POS A â”€â”
-POS B â”€â”¼â”€â”€ TINDIO STORE HUB
-POS C â”€â”˜
+CLOUD_ONLINE
+STORE_LOCAL
+DEVICE_ISOLATED
 ```
 
-The Store Hub is not the authoritative business database.
+When cloud access fails but the Store Hub is reachable, native mobile enters:
 
-The cloud/Neon inventory ledger remains authoritative.
+```text
+STORE_LOCAL
+```
 
-## Slice 01
+When both cloud and Store Hub are unavailable, the device is identified as:
 
-Implemented a LAN Store Hub service with:
+```text
+DEVICE_ISOLATED
+```
 
-- store-scoped Bearer authentication
-- organization/store scope enforcement
-- durable append-only JSONL journal
-- fsync on accepted journal writes
-- idempotent event replay by `eventId`
-- immutable event identity conflict detection
-- Hub revision/cursor feed
-- minimal `SALE_COMPLETED` activity metadata only
+Full isolated-device behavior is Phase 16.
 
-The Store Hub intentionally does not accept:
+## Store Hub architecture
 
-- customer information
-- payment information
-- card information
+```text
+POS A ─┐
+POS B ─┼── TINDIO STORE HUB
+POS C ─┘
+```
+
+The Hub is a dedicated LAN coordination process.
+
+It is not the authoritative business database.
+
+## Security
+
+The Hub requires:
+
+- explicit organization scope
+- explicit store scope
+- 32+ character store-scoped token
+- matching organization/store event scope
+
+Native mobile:
+
+- stores the Hub token only in SecureStore
+- rejects public internet Hub URLs
+- accepts private IPv4, localhost, or `.local`
+- never stores the Hub token in SQLite
+- never forwards cloud/Supabase access tokens to the Hub
+
+## Data minimization
+
+The Hub journal stores only minimal sale awareness:
+
+- event ID
+- organization ID
+- store ID
+- device ID
+- device sequence
+- local reference
+- product/variant IDs
+- quantities
+- local created time
+- later cloud-synced timestamp
+
+The Hub does not store:
+
+- customer data
+- payment data
+- card data
 - receipts
-- Supabase/auth session tokens
+- authentication session tokens
 
-Phase 15 remains IMPLEMENTING.
+## Durability
 
-## Slice 02
+The Store Hub uses an append-only JSONL journal.
 
-Native mobile Store Hub configuration is now available.
+Accepted journal writes are fsynced.
 
-Security behavior:
+Event replay is idempotent by `eventId`.
 
-- Store Hub token is stored only in SecureStore.
-- Token is not persisted in SQLite.
-- Public internet hostnames are rejected.
-- Allowed Hub endpoints are private IPv4, localhost, or `.local`.
-- Hub health identity must match the enrolled organization and store.
-- Mobile cloud bearer/Supabase tokens are never forwarded to the Hub.
+Immutable identity mismatches are rejected.
 
-Local SQLite schema version 7 adds:
+Updates such as later `cloudSyncedAt` receive a new Hub revision.
 
-- `store_hub_state`
-- `store_hub_events`
-- `store_hub_publish_state`
-
-Phase 15 remains IMPLEMENTING.
-
-
-## Slice 03
-
-Store Hub device coordination is implemented.
+## Mobile coordination
 
 Each terminal can:
 
-- publish minimal metadata for its durable `SALE_COMPLETED` events
-- publish later cloud-sync status updates for the same event identity
-- pull Store Hub changes by Hub revision
-- persist peer event awareness locally
-- include known peer sale activity in inventory estimates
+- publish its local durable sale metadata
+- update the Hub after cloud sync later succeeds
+- pull peer events by Hub revision cursor
+- cache peer event state in SQLite
+- use known peer activity for local stock estimates
 
-Critical rule:
+## Acknowledgement rule
 
 ```text
 STORE HUB ACK != CLOUD ACK
 ```
 
-A Hub acknowledgement never marks the cloud durable outbox event as synced.
+A Store Hub acknowledgement never marks the cloud outbox event synced.
 
-Inventory remains an estimate and the Neon/server ledger remains authoritative.
+Only authoritative server/cloud acknowledgement may do that.
+
+## Inventory rule
+
+Store-local inventory awareness remains:
+
+```text
+ESTIMATE ONLY
+```
+
+The server/Neon inventory ledger remains authoritative.
+
+The Hub does not overwrite central stock.
+
+## SQLite
+
+Phase 15 adds local schema version 7:
+
+- `store_hub_state`
+- `store_hub_events`
+- `store_hub_publish_state`
+
+Store Hub tokens are not stored in SQLite.
+
+## Current supported Hub coordination
+
+Implemented:
+
+- local acknowledgements
+- minimal store event coordination
+- peer sale awareness
+- store-local inventory awareness
+
+Not yet implemented here:
+
+- KDS coordination
+- local printing
+- hardware discovery
+- automatic Hub deployment
+- Phase 16 isolated-device recovery hardening
+
+## Certification still required later
+
+- real multi-device LAN runtime
+- router/internet outage
+- Store Hub restart
+- journal restart recovery
+- duplicate publish
+- Hub unavailable fallback
+- cloud return after Store Local operation
+- peer event update after cloud ACK
+- cross-store denial
+- cross-tenant denial
+- Android runtime behavior
+
+## Phase status
+
+```text
+PHASE 15
+IMPLEMENTATION COMPLETE
+STATUS: VALIDATING
+CERTIFICATION: DEFERRED
+```
+
+Next canonical phase after ChatGPT review:
+
+```text
+PHASE 16 — ISOLATED DEVICE MODE
+```

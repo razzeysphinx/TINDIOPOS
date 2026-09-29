@@ -18,6 +18,7 @@
     "test:phase-06-device-enrollment": "node --test scripts/phase-06-device-enrollment-check.mjs",
     "test:phase-06-native-shells": "node --test scripts/phase-06-native-shells-check.mjs",
     "test:phase-07-native-sqlite-foundation": "node --test scripts/phase-07-native-sqlite-foundation-check.mjs",
+    "test:phase-07-native-sqlite-complete": "node --test scripts/phase-07-native-sqlite-complete-check.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

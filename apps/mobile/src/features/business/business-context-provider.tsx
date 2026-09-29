@@ -11,6 +11,7 @@ import {
 
 import { fetchPosV2Core } from "../../lib/tindio-api";
 import { saveBusinessContextSnapshot } from "../../db/business-context-cache";
+import { saveActiveShiftSnapshot } from "../../db/shift-cache";
 
 type Value = {
   data: PosBootstrapV2CoreResponse | null;
@@ -36,7 +37,10 @@ export function BusinessContextProvider({
       const next = await fetchPosV2Core(organizationId);
       setData(next);
       try {
-        await saveBusinessContextSnapshot(next.core);
+        await Promise.all([
+          saveBusinessContextSnapshot(next.core),
+          saveActiveShiftSnapshot(next.core.organization.id, next.core.activeShift),
+        ]);
       } catch {
         // Online context remains usable if the local diagnostic cache fails.
       }

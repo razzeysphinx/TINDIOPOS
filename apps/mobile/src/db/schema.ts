@@ -1,5 +1,5 @@
 export const TINDIO_DATABASE_NAME = "tindio-mobile.db";
-export const TINDIO_LOCAL_SCHEMA_VERSION = 2;
+export const TINDIO_LOCAL_SCHEMA_VERSION = 3;
 
 export type LocalMigration = {
   version: number;
@@ -100,4 +100,5 @@ export const LOCAL_MIGRATIONS: LocalMigration[] = [
       CREATE INDEX IF NOT EXISTS idx_receipt_store_number ON receipt_summaries (organization_id, store_id, receipt_number DESC);
     `,
   },
+  { version: 3, name: "phase_09_local_first", sql: `ALTER TABLE catalog_items ADD COLUMN search_text TEXT NOT NULL DEFAULT ''; UPDATE catalog_items SET search_text = lower(trim(coalesce(product_name,'') || ' ' || coalesce(variant_name,'') || ' ' || coalesce(sku,'') || ' ' || coalesce(barcode,''))); CREATE INDEX IF NOT EXISTS idx_catalog_search_text ON catalog_items (organization_id,store_id,search_text); CREATE TABLE IF NOT EXISTS modifier_snapshots (organization_id TEXT NOT NULL,store_id TEXT NOT NULL,product_id TEXT NOT NULL,payload_json TEXT NOT NULL,captured_at TEXT NOT NULL,PRIMARY KEY (organization_id,store_id,product_id)); CREATE TABLE IF NOT EXISTS stock_estimates (organization_id TEXT NOT NULL,store_id TEXT NOT NULL,product_id TEXT NOT NULL,variant_id TEXT NOT NULL DEFAULT '',available_quantity REAL NOT NULL,checked_at TEXT NOT NULL,source TEXT NOT NULL CHECK (source IN ('server-stock-validation')),PRIMARY KEY (organization_id,store_id,product_id,variant_id)); CREATE INDEX IF NOT EXISTS idx_stock_estimates_checked ON stock_estimates (organization_id,store_id,checked_at DESC);` },
 ];

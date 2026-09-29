@@ -1,5 +1,5 @@
 import "react-native-url-polyfill/auto";
-import type { PosBootstrapV2CoreResponse, PosCatalogV2Response, PosCloseShiftV2Response, PosCustomerSearchResponse, PosDeviceBinding, PosDeviceCredential, PosDeviceValidationResponse, PosLiveV2Response, PosOpenShiftV2Response, PosReceiptListResponse, PosReferenceV2Response } from "../../../../src/contracts/pos";
+import type { PosBootstrapV2CoreResponse, PosCatalogV2Response, PosCloseShiftV2Response, PosCustomerSearchResponse, PosDeviceBinding, PosDeviceCredential, PosDeviceValidationResponse, PosLiveV2Response, PosModifiersV2Response, PosOpenShiftV2Response, PosReceiptListResponse, PosReferenceV2Response, ValidateCartStockActionResult, ValidateCartStockValues } from "../../../../src/contracts/pos";
 import { mobileEnvironment } from "./env";
 import { supabase } from "./supabase";
 
@@ -51,3 +51,5 @@ export async function fetchPosV2Receipts(organizationId: string, options: { quer
   if (options.before) params.set("before", String(options.before));
   return (await request(`/api/pos/v2/receipts?${params.toString()}`, { organizationId })).json() as Promise<PosReceiptListResponse>;
 }
+export async function fetchPosV2Modifiers(organizationId:string,storeId:string,productId:string){const params=new URLSearchParams({store:storeId,product:productId});return (await request(`/api/pos/v2/modifiers?${params.toString()}`,{organizationId})).json() as Promise<PosModifiersV2Response>;}
+export async function validatePosV2CartStock(organizationId:string,input:ValidateCartStockValues){return (await request("/api/pos/v2/cart/validate-stock",{organizationId,init:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(input)}})).json() as Promise<ValidateCartStockActionResult>;}

@@ -1,16 +1,24 @@
 # Phase 17 — Sync Control Center 2.0
 
-## Status
+## Implementation status
 
-IMPLEMENTING
+**IMPLEMENTATION COMPLETE**
+
+## Certification status
+
+**VALIDATING**
+
+Full runtime certification remains deferred by the user.
 
 ## Source-of-Truth goal
 
-Upgrade the existing Back Office Offline Sync Center so synchronization problems cannot silently remain invisible.
+Upgrade the Back Office Sync Center so sync problems cannot silently remain invisible.
 
-Required visibility:
+## Implemented device visibility
 
-- organization
+Sync Control Center 2.0 displays:
+
+- organization-scoped terminal telemetry
 - store
 - register
 - device
@@ -21,79 +29,132 @@ Required visibility:
 - last successful sync
 - device checkpoint
 - server checkpoint
-- queue depth
-- conflicts
-- offline duration
-
-Required modes:
-
-- CLOUD_ONLINE
-- STORE_LOCAL
-- DEVICE_ISOLATED
-- RECOVERING
-- SYNC_REVIEW
-
-## Slice plan
-
-1. Server telemetry contract and heartbeat API
-2. Native heartbeat/telemetry reporter
-3. Back Office Sync Control Center 2.0 UI
-4. Attention classification, hardening and implementation close
-
-## Slice 01
-
-Added tenant/store-scoped server telemetry and a validated POS heartbeat endpoint.
-
-Telemetry does not change sale or inventory authority.
-
-Phase 17 remains IMPLEMENTING.
-
-## Slice 03
-
-Back Office `/back-office/offline-sync` is now Sync Control Center 2.0.
-
-It preserves the existing offline-event conflict review and adds device health visibility for:
-
-- store
-- register
-- device
-- employee
-- connection mode
-- app version
-- heartbeat
-- last successful sync
-- device checkpoint
-- server checkpoint
 - checkpoint gap
 - queue depth
-- conflicts
-- failures
+- conflict count
+- failed count
 - offline duration
 
-The existing `devices.manage` permission and authorized store scope remain enforced.
+## Connection modes
 
-Phase 17 remains IMPLEMENTING.
+The center understands:
 
-## Slice 02
+```text
+CLOUD_ONLINE
+STORE_LOCAL
+DEVICE_ISOLATED
+RECOVERING
+SYNC_REVIEW
+```
 
-Native POS telemetry reporting is implemented.
+## Attention classification
 
-The mobile application reports observational sync health when cloud transport is available.
+Device health is visibly classified as:
 
-The reporter includes:
+```text
+HEALTHY
+CHECK REQUIRED
+ATTENTION REQUIRED
+```
 
-- authenticated employee identity
-- connection mode
-- app version through the enrolled device credential
-- last successful reconciliation time
-- local device checkpoint
-- known server checkpoint
+Examples that surface attention:
+
+- `SYNC_REVIEW`
+- durable conflicts
+- failed durable events
 - unresolved queue depth
-- conflict/failed counts
-- preserved offline-since timestamp
+- recovering device
+- stale heartbeat
 
-Heartbeat reporting is observational only and cannot break checkout, outbox, recovery, or inventory behavior.
+This is observability, not automatic destructive repair.
 
-No customer/payment/card payload is included.
+## Existing offline-event review
 
-Phase 17 remains IMPLEMENTING.
+The previous offline sale outcome/conflict review remains available below device health.
+
+Existing durable event review behavior is preserved.
+
+## Security
+
+Back Office telemetry requires:
+
+```text
+devices.manage
+```
+
+and remains restricted by:
+
+- organization context
+- authorized Back Office store scope
+- device identity
+- device/store/register binding
+- authenticated employee identity
+
+## Telemetry minimization
+
+The telemetry channel contains operational health only.
+
+It does not send:
+
+- sale payload JSON
+- customer details
+- payment details
+- card data
+- Store Hub token
+- Supabase/cloud access token
+
+## Authority
+
+Telemetry is observational.
+
+It does not:
+
+- acknowledge a durable sale
+- change outbox state
+- change inventory
+- replace device validation
+- replace cloud reconciliation
+- replace Store Hub coordination
+
+## Database impact
+
+Server migration:
+
+```text
+pos_device_sync_telemetry
+```
+
+No additional mobile SQLite schema migration is required.
+
+## Certification still required later
+
+- real Android heartbeat
+- device disappears from network
+- stale heartbeat classification
+- cloud-online healthy terminal
+- Store Local reported after reconnect
+- isolated device reported after reconnect
+- recovering device
+- sync-review device
+- queue/conflict/failed counts
+- checkpoint gap display
+- store filter isolation
+- cross-tenant denial
+- `devices.manage` denial
+- telemetry outage does not break checkout
+- Phase 08–17 certification sweep
+
+## Phase status
+
+```text
+PHASE 17
+IMPLEMENTATION COMPLETE
+STATUS: VALIDATING
+CERTIFICATION: DEFERRED
+```
+
+Next canonical phase after ChatGPT review:
+
+```text
+PHASE 18 — DISASTER RECOVERY + OFFLINE TORTURE TESTING
+```

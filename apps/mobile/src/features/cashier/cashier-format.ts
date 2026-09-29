@@ -1,0 +1,1 @@
+export function formatMoney(minor:number,currency:string){try{return new Intl.NumberFormat(undefined,{style:"currency",currency}).format(minor/100);}catch{return `${currency} ${(minor/100).toFixed(2)}`;}}

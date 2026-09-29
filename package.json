@@ -24,6 +24,7 @@
     "test:phase-10-durable-outbox": "node --test scripts/phase-10-durable-outbox-check.mjs",
     "test:phase-11-device-sequence-checkpoints": "node --test scripts/phase-11-device-sequence-checkpoints-check.mjs",
     "test:phase-12-delta-sync-reconciliation": "node --test scripts/phase-12-delta-sync-reconciliation-check.mjs",
+    "test:phase-13-native-cashier-parity": "node --test scripts/phase-13-native-cashier-parity-check.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

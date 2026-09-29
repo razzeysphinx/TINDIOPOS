@@ -9,6 +9,8 @@ import { calculateLocalCartTotals } from "../../src/features/local-first/local-c
 import { readLocalStockEstimate } from "../../src/features/local-first/local-stock";
 import { createOfflineCashSale } from "../../src/features/outbox/create-offline-sale";
 import { syncOutboxEvents } from "../../src/features/outbox/outbox-sync";
+import { checkoutPosV2 } from "../../src/lib/tindio-api";
+import * as Crypto from "expo-crypto";
 
 function parseMoneyToMinor(value: string) {
   const match = value.trim().match(/^(\d{1,10})(?:\.(\d{1,2}))?$/);
@@ -38,6 +40,7 @@ export default function PosScreen() {
   const [stock, setStock] = useState("UNKNOWN");
   const [saleMessage, setSaleMessage] = useState<string | null>(null);
   const [savingOffline, setSavingOffline] = useState(false);
+  const [onlineCheckoutPending, setOnlineCheckoutPending] = useState(false);
 
   const load = useCallback(async () => {
     if (!core || !binding) return;
@@ -102,6 +105,7 @@ export default function PosScreen() {
       setSavingOffline(false);
     }
   };
+  const completeOnlineCashSale = async () => { if (onlineCheckoutPending || mode !== "online" || tenderedMinor === null || tenderedMinor < totals.totalMinor) return; setOnlineCheckoutPending(true); try { const result = await checkoutPosV2(core.organization.id,{storeId:binding.storeId,registerId:binding.registerId,idempotencyKey:Crypto.randomUUID(),customerId:null,loyaltyRedemptionPoints:0,discountId,taxRateId:taxId,diningOptionId:null,openTicketId:null,items:cart.map(line=>({productId:line.productId,variantId:line.variantId,quantity:line.quantity,unitPriceMinor:line.manualPriceMinor,modifierOptionIds:line.modifierOptionIds,itemNote:line.itemNote??null})),payments:[{paymentMethodId:"CASH",tenderedAmount:cashTender,referenceNumber:"",note:""}]});if(result.ok){setCart([]);setCashTender("");setSaleMessage(`SERVER RECEIPT #${result.data.receiptNumber}`);void syncOutboxEvents(core.organization.id);}else setSaleMessage(result.retryable?"Checkout not confirmed. Check Recent Receipts before retrying.":result.message);}finally{setOnlineCheckoutPending(false);} };
 
   return <View>
     <Text>LOCAL-FIRST POS</Text><Text>Catalog source: SQLite</Text>
@@ -122,6 +126,7 @@ export default function PosScreen() {
     <TextInput value={cashTender} onChangeText={setCashTender} keyboardType="decimal-pad" placeholder="Cash tendered, e.g. 20.00" />
     <Text>Cash change preview: {changeMinor ?? "Enter a valid tender"}</Text>
     <Pressable disabled={savingOffline || cart.length === 0 || tenderedMinor === null || tenderedMinor < totals.totalMinor} onPress={() => void saveOfflineCashSale()}><Text>{savingOffline ? "Saving locally…" : "SAVE OFFLINE CASH SALE"}</Text></Pressable>
+    <Pressable disabled={mode !== "online" || onlineCheckoutPending || cart.length === 0 || tenderedMinor === null || tenderedMinor < totals.totalMinor} onPress={() => void completeOnlineCashSale()}><Text>{onlineCheckoutPending ? "Processing server checkout…" : "COMPLETE ONLINE CASH CHECKOUT"}</Text></Pressable>
     {saleMessage ? <Text>{saleMessage}</Text> : null}
   </View>;
 }

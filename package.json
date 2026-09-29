@@ -22,6 +22,7 @@
     "test:phase-08-cold-start-offline": "node --test scripts/phase-08-cold-start-offline-check.mjs",
     "test:phase-09-local-first": "node --test scripts/phase-09-local-first-check.mjs",
     "test:phase-10-durable-outbox": "node --test scripts/phase-10-durable-outbox-check.mjs",
+    "test:phase-11-device-sequence-checkpoints": "node --test scripts/phase-11-device-sequence-checkpoints-check.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

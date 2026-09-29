@@ -5,11 +5,13 @@ import {
   recoverInterruptedOutboxEvents,
   updateOutboxEvent,
 } from "../../db/outbox";
+import { getDeviceSyncState, recordServerCheckpoint } from "../../db/device-sync-state";
 import { TindioApiError, requestPosV2Raw } from "../../lib/tindio-api";
 import { loadMobileDeviceIdentity } from "../device/device-store";
 import { nextOutboxRetryAt } from "./retry-policy";
 import type { DurableOutboxEvent, OutboxSummary } from "./outbox-types";
 import { getOutboxSummary } from "../../db/outbox";
+import { refreshDeviceCheckpoint } from "./checkpoint-sync";
 
 export type OutboxSyncReport = OutboxSummary & { completed: number; recovered: number };
 
@@ -25,7 +27,7 @@ export async function syncPosV2OfflineCheckout(
     init: {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ checkout: event.payload.checkout, device: credential, offline: event.payload.offline }),
+      body: JSON.stringify({ checkout: event.payload.checkout, device: credential, offline: { ...event.payload.offline, deviceSequence: event.deviceSequence } }),
     },
   });
 }
@@ -36,6 +38,11 @@ function retryMessage() {
 
 function isCheckoutFailure(result: CheckoutSaleActionResult | null): result is Extract<CheckoutSaleActionResult, { ok: false }> {
   return result !== null && !result.ok;
+}
+
+function checkpointFromResult(result: CheckoutSaleActionResult | null) {
+  const sync = result && "sync" in result ? result.sync : undefined;
+  return sync && Number.isSafeInteger(sync.serverCheckpoint) ? sync : null;
 }
 
 async function markRetryable(event: DurableOutboxEvent, attempts: number, message: string) {
@@ -64,6 +71,8 @@ async function syncOneEvent(organizationId: string, event: DurableOutboxEvent) {
     }
     const response = await syncPosV2OfflineCheckout(organizationId, event, identity.credential);
     const result = await response.json().catch(() => null) as CheckoutSaleActionResult | null;
+    const checkpoint = checkpointFromResult(result);
+    if (checkpoint) await recordServerCheckpoint({ organizationId, deviceId: event.deviceId, serverCheckpoint: checkpoint.serverCheckpoint, status: checkpoint.status });
     if (response.ok && result?.ok) {
       await updateOutboxEvent(event.eventId, {
         state: "SYNCED", lastError: null, conflictType: null, nextRetryAt: null,
@@ -76,10 +85,12 @@ async function syncOneEvent(organizationId: string, event: DurableOutboxEvent) {
       await markRetryable(event, attempts, isCheckoutFailure(result) ? result.message : retryMessage());
       return "stopped" as const;
     }
+    const failureCode = isCheckoutFailure(result) ? result.failureCode : undefined;
+    const sequenceFailure = ["SEQUENCE_GAP", "SEQUENCE_CONFLICT", "SEQUENCE_OUT_OF_ORDER"].includes(failureCode ?? "");
     await updateOutboxEvent(event.eventId, {
       state: response.status === 401 || response.status === 403 ? "FAILED" : "CONFLICT",
       lastError: isCheckoutFailure(result) ? result.message : "This saved sale requires review before it can be posted.",
-      conflictType: response.status === 401 || response.status === 403 ? "AUTHORIZATION_CHANGED" : "SERVER_REJECTED",
+      conflictType: sequenceFailure ? failureCode! : response.status === 401 || response.status === 403 ? "AUTHORIZATION_CHANGED" : "SERVER_REJECTED",
       nextRetryAt: null,
     });
     return "stopped" as const;
@@ -97,11 +108,34 @@ async function syncOneEvent(organizationId: string, event: DurableOutboxEvent) {
 }
 
 async function synchronize(organizationId: string): Promise<OutboxSyncReport> {
-  const recovery = await recoverInterruptedOutboxEvents(organizationId);
-  const events = await listPendingOutboxEvents(organizationId);
+  let identity: Awaited<ReturnType<typeof loadMobileDeviceIdentity>>;
+  try {
+    identity = await loadMobileDeviceIdentity(organizationId);
+  } catch {
+    return { ...(await getOutboxSummary(organizationId)), completed: 0, recovered: 0 };
+  }
+  if (!identity) return { ...(await getOutboxSummary(organizationId)), completed: 0, recovered: 0 };
+  const deviceId = identity.credential.deviceId;
+  const recovery = await recoverInterruptedOutboxEvents(organizationId, Date.now(), deviceId);
+  const events = await listPendingOutboxEvents(organizationId, deviceId);
   let completed = 0;
   for (const event of events) {
     if (event.nextRetryAt !== null && event.nextRetryAt > new Date().toISOString()) break;
+    let state = await getDeviceSyncState(organizationId, event.deviceId);
+    if (state && event.deviceSequence > state.serverCheckpoint + 1) {
+      let refreshed: Awaited<ReturnType<typeof refreshDeviceCheckpoint>>;
+      try { refreshed = await refreshDeviceCheckpoint(organizationId); }
+      catch { refreshed = { ok: false, reason: "CHECKPOINT_REFRESH_UNAVAILABLE" }; }
+      if (!refreshed.ok) {
+        await updateOutboxEvent(event.eventId, { state: "LOCAL_PENDING", lastError: "Server checkpoint must be checked before this later sequence can sync.", nextRetryAt: nextOutboxRetryAt(event.attempts + 1) });
+        break;
+      }
+      state = await getDeviceSyncState(organizationId, event.deviceId);
+      if (!state || event.deviceSequence > state.serverCheckpoint + 1) {
+        await updateOutboxEvent(event.eventId, { state: "CONFLICT", conflictType: "LOCAL_SEQUENCE_GAP", lastError: "A required earlier device sequence is missing. This sale was not sent.", nextRetryAt: null });
+        break;
+      }
+    }
     const result = await syncOneEvent(organizationId, event);
     if (result !== "completed") break;
     completed += 1;

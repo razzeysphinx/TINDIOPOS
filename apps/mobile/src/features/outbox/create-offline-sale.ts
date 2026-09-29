@@ -6,7 +6,7 @@ import { getActiveShiftSnapshot } from "../../db/shift-cache";
 import { getLocalPaymentMethods } from "../local-first/local-reference";
 import { validateOfflineAuthorizationGrant } from "../offline/offline-authorization";
 import type { LocalCartTotals } from "../local-first/local-cart";
-import type { DurableOutboxEvent, DurableSaleSnapshot, SaleCompletedOutboxPayload } from "./outbox-types";
+import type { DurableOutboxEvent, DurableSaleSnapshot, SaleCompletedOutboxPayloadBeforeSequence } from "./outbox-types";
 
 export type OfflineSaleAcceptanceInput = {
   organizationId: string;
@@ -89,7 +89,7 @@ export async function createOfflineCashSale(input: OfflineSaleAcceptanceInput): 
       referenceNumber: "", note: "",
     }],
   };
-  const payload: SaleCompletedOutboxPayload = {
+  const payload: SaleCompletedOutboxPayloadBeforeSequence = {
     checkout,
     offline: { localReceiptReference: localReference, createdAt, shiftId: grant.shiftId, deviceId: input.deviceId },
   };

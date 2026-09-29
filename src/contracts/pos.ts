@@ -451,6 +451,28 @@ export type PosDeviceValidationResponse =
       message: string;
     };
 
+export type PosDeviceSequenceStatus =
+  | "ACCEPTED"
+  | "REPLAY"
+  | "GAP"
+  | "DUPLICATE_SEQUENCE"
+  | "OUT_OF_ORDER"
+  | "IDEMPOTENCY_SEQUENCE_MISMATCH";
+
+export type PosDeviceSyncCheckpoint = {
+  deviceId: string;
+  serverCheckpoint: number;
+  nextExpectedSequence: number;
+  updatedAt: string | null;
+};
+
+export type PosOfflineSequenceInfo = {
+  deviceSequence: number;
+  serverCheckpoint: number;
+  expectedSequence: number;
+  status: PosDeviceSequenceStatus;
+};
+
 export type PosCheckoutResponse =
   CheckoutSaleActionResult;
 

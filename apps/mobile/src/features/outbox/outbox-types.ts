@@ -31,7 +31,12 @@ export type SaleCompletedOutboxPayload = {
     createdAt: string;
     shiftId: string;
     deviceId: string;
+    deviceSequence: number;
   };
+};
+
+export type SaleCompletedOutboxPayloadBeforeSequence = Omit<SaleCompletedOutboxPayload, "offline"> & {
+  offline: Omit<SaleCompletedOutboxPayload["offline"], "deviceSequence">;
 };
 
 export type DurableOutboxEvent = {
@@ -40,6 +45,7 @@ export type DurableOutboxEvent = {
   storeId: string;
   registerId: string;
   deviceId: string;
+  deviceSequence: number;
   shiftId: string;
   operationType: OutboxOperationType;
   idempotencyKey: string;
@@ -69,10 +75,9 @@ export type NewDurableOutboxEvent = Pick<
   | "shiftId"
   | "idempotencyKey"
   | "localReference"
-  | "payload"
   | "snapshot"
   | "createdAt"
->;
+> & { payload: SaleCompletedOutboxPayloadBeforeSequence };
 
 export type OutboxSummary = {
   pending: number;
@@ -85,5 +90,5 @@ export type OutboxSummary = {
 
 export type SafeOutboxEventSummary = Pick<
   DurableOutboxEvent,
-  "eventId" | "localReference" | "state" | "createdAt" | "lastError" | "conflictType"
+  "eventId" | "localReference" | "state" | "createdAt" | "lastError" | "conflictType" | "deviceSequence"
 > & Pick<DurableSaleSnapshot, "currencyCode" | "totalMinor" | "itemCount">;

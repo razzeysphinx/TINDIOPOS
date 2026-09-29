@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { fetchPosV2Core } from "../../lib/tindio-api";
+import { saveBusinessContextSnapshot } from "../../db/business-context-cache";
 
 type Value = {
   data: PosBootstrapV2CoreResponse | null;
@@ -32,7 +33,13 @@ export function BusinessContextProvider({
     setError(null);
 
     try {
-      setData(await fetchPosV2Core(organizationId));
+      const next = await fetchPosV2Core(organizationId);
+      setData(next);
+      try {
+        await saveBusinessContextSnapshot(next.core);
+      } catch {
+        // Online context remains usable if the local diagnostic cache fails.
+      }
     } catch {
       setError("TINDIO could not load this business context.");
     } finally {

@@ -1,12 +1,18 @@
-# Phase 16 â€” Isolated Device Mode
+# Phase 16 — Isolated Device Mode
 
-## Status
+## Implementation status
 
-IMPLEMENTING
+**IMPLEMENTATION COMPLETE**
+
+## Certification status
+
+**VALIDATING**
+
+Full runtime certification remains deferred by the user.
 
 ## Goal
 
-Allow an enrolled POS to continue safe permitted operation when:
+Allow an enrolled native POS to preserve safe permitted operation when both:
 
 ```text
 cloud unavailable
@@ -14,67 +20,19 @@ cloud unavailable
 Store Hub unavailable
 ```
 
-while protecting every durable transaction for later recovery.
-
-## Slice plan
-
-1. Transaction custody and destructive-action guards
-2. Recovery state machine
-3. Isolated runtime/recovery diagnostics
-4. Final hardening and implementation close
-
-## Slice 01
-
-Transaction custody is now protected.
-
-When unresolved durable outbox events exist, TINDIO blocks:
-
-- sign out
-- organization switching
-- Store Hub configuration removal
-
-This prevents unresolved local business transactions from being stranded by destructive context changes.
-
-No outbox data is deleted.
-
-The durable outbox remains `SALE_COMPLETED`.
-
-Phase 16 remains IMPLEMENTING.
-
-## Slice 03
-
-Native isolated/recovery diagnostics are implemented.
-
-Sync Status now shows:
-
-- persisted connection mode
-- last mode transition time
-- unresolved durable transaction count
-- pending/syncing/conflict/failed counts
-- oldest unresolved local reference
-- next local device sequence
-- last known server checkpoint
-- delta pull cursor
-- last cloud reconciliation time
-- offline authorization validity
-- whether local state is currently safe to declare `CLOUD_ONLINE`
-
-Home UI now distinguishes:
+Each isolated device continues through:
 
 ```text
-DEVICE ISOLATED MODE
-STORE LOCAL MODE
-RECOVERING
-SYNC REVIEW REQUIRED
+SQLite
++
+Durable outbox
++
+Local runtime
 ```
 
-Phase 16 remains IMPLEMENTING.
+## Connection states
 
-## Slice 02
-
-Deterministic connection recovery is now implemented.
-
-Connection states are persisted through local metadata:
+TINDIO now models:
 
 ```text
 CLOUD_ONLINE
@@ -84,29 +42,152 @@ RECOVERING
 SYNC_REVIEW
 ```
 
-When cloud connectivity returns after offline/local operation, TINDIO does not immediately report online.
+## Recovery path
 
-It enters:
+Locked recovery behavior:
 
 ```text
+DEVICE_ISOLATED
+↓
+STORE_LOCAL
+↓
 RECOVERING
+↓
+CLOUD_ONLINE
 ```
 
-and runs cloud reconciliation.
+When peer/local coordination is not available, the device may recover directly from `DEVICE_ISOLATED` into `RECOVERING` when cloud connectivity returns.
 
-`CLOUD_ONLINE` is allowed only when:
+TINDIO does not report `CLOUD_ONLINE` immediately after connectivity returns.
 
-- reconciliation succeeds
-- no server delta pages remain
-- no pending/syncing durable sales remain
-- no failed/conflict durable sales require review
+It first runs reconciliation.
 
-If conflict/failed events remain:
+## CLOUD_ONLINE gate
+
+`CLOUD_ONLINE` requires:
+
+- cloud business context reachable
+- durable outbox reconciliation
+- no remaining server delta pages
+- no pending outbox events
+- no syncing outbox events
+- no failed outbox events
+- no conflict outbox events
+
+If durable events require operator attention:
 
 ```text
 SYNC_REVIEW
 ```
 
-During recovery/review, the business provider intentionally keeps mutation mode offline so online-only workflows stay gated.
+If synchronization is incomplete but retryable:
 
-Phase 16 remains IMPLEMENTING.
+```text
+RECOVERING
+```
+
+## Transaction custody protection
+
+Unresolved durable transactions block:
+
+- sign out
+- organization switching
+- Store Hub removal
+
+This prevents local transactions from being stranded by context-changing actions.
+
+## Idempotency
+
+Existing durable sale identity is preserved.
+
+Offline sales continue to use stable:
+
+- event ID
+- idempotency key
+- device sequence
+- local receipt reference
+
+Recovery reuses the existing durable outbox and server idempotency handling.
+
+## Data safety
+
+Phase 16 does not:
+
+- delete unresolved outbox events
+- overwrite authoritative stock
+- treat Store Hub ACK as cloud ACK
+- expand the durable outbox operation type set
+- create a second mobile business engine
+
+## Offline authorization
+
+Isolated mutation capability continues to depend on the existing offline authorization grant, cached business/store/register/device identity, active cached shift, reference snapshot, and complete cached catalog.
+
+If that authorization expires, the device may retain/recover its durable transactions but may not silently continue unauthorized offline mutation.
+
+## Diagnostics
+
+Native Sync Status exposes:
+
+- persisted connection mode
+- mode transition time
+- unresolved transaction count
+- pending/syncing/conflict/failed counts
+- oldest unresolved local reference
+- device sequence
+- server checkpoint
+- pull cursor
+- last reconciliation
+- offline authorization state
+- cloud-online recovery safety
+
+## Database impact
+
+Server DB migration:
+
+```text
+NONE
+```
+
+Additional local SQLite schema migration:
+
+```text
+NONE
+```
+
+Phase 16 reuses the Phase 15 local schema.
+
+## Certification still required later
+
+- app kill while isolated
+- phone reboot while isolated
+- multiple isolated cash sales
+- Store Hub disappearance
+- Store Hub return
+- cloud return without Hub
+- cloud return after Store Local operation
+- missing ACK
+- duplicate retry
+- conflict creation
+- failed authorization
+- offline authorization expiry
+- organization switch protection
+- sign-out protection
+- deterministic cloud recovery
+- Android runtime testing
+- Phase 08–16 certification sweep
+
+## Phase status
+
+```text
+PHASE 16
+IMPLEMENTATION COMPLETE
+STATUS: VALIDATING
+CERTIFICATION: DEFERRED
+```
+
+Next canonical phase after ChatGPT review:
+
+```text
+PHASE 17 — SYNC CONTROL CENTER 2.0
+```

@@ -151,7 +151,8 @@
     "test:phase-05-purchasing-data-needs": "node --test scripts/phase-05-purchasing-data-needs-check.mjs",
     "test:provider-neutral-time-clock-runtime": "node --test scripts/provider-neutral-time-clock-runtime-check.mjs",
     "certify:phase-02:bearer-auth": "node scripts/phase-02-bearer-auth-e2e.mjs",
-    "typecheck": "tsc --noEmit --incremental false"
+    "typecheck": "tsc --noEmit --incremental false",
+    "test:phase-16-isolated-device-mode": "node --test scripts/phase-16-isolated-device-mode-check.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

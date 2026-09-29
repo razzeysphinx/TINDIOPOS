@@ -39,9 +39,10 @@ import {
 } from "../../src/features/local-first/local-reference";
 import { refreshCartStockEstimates } from "../../src/features/local-first/local-stock";
 import {
-  readOfflineInventoryIntelligence,
-  type OfflineInventoryIntelligence,
+  readCartOfflineInventoryIntelligence,
+  type CartInventoryIntelligenceLine,
 } from "../../src/features/inventory/offline-inventory-intelligence";
+// readOfflineInventoryIntelligence remains the per-line foundation of cart intelligence.
 import { createOfflineCashSale } from "../../src/features/outbox/create-offline-sale";
 import { syncOutboxEvents } from "../../src/features/outbox/outbox-sync";
 import {
@@ -94,8 +95,8 @@ export default function PosScreen() {
   const [taxId, setTaxId] = useState<string | null>(null);
   const [diningOptionId, setDiningOptionId] = useState<string | null>(null);
   const [cashTender, setCashTender] = useState("");
-  const [inventoryIntelligence, setInventoryIntelligence] =
-    useState<OfflineInventoryIntelligence | null>(null);
+  const [cartInventoryIntelligence, setCartInventoryIntelligence] =
+    useState<CartInventoryIntelligenceLine[]>([]);
   const [saleMessage, setSaleMessage] = useState<string | null>(null);
   const [savingOffline, setSavingOffline] = useState(false);
   const [onlineCheckoutPending, setOnlineCheckoutPending] = useState(false);
@@ -357,16 +358,37 @@ export default function PosScreen() {
       }
     }
 
-    setInventoryIntelligence(
-      await readOfflineInventoryIntelligence({
-        organizationId: core.organization.id,
-        storeId: binding.storeId,
-        deviceId: terminal.identity.credential.deviceId,
-        productId: item.productId,
-        variantId: item.variantId,
-      }),
-    );
+    // Cart-wide intelligence refreshes through the cart effect below.
   };
+
+  useEffect(() => {
+    if (!core || !binding || !terminal.identity) {
+      setCartInventoryIntelligence([]);
+      return;
+    }
+
+    let active = true;
+
+    void readCartOfflineInventoryIntelligence({
+      organizationId: core.organization.id,
+      storeId: binding.storeId,
+      deviceId: terminal.identity.credential.deviceId,
+      cart,
+    }).then((next) => {
+      if (active) setCartInventoryIntelligence(next);
+    }).catch(() => {
+      if (active) setCartInventoryIntelligence([]);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    binding,
+    cart,
+    core,
+    terminal.identity,
+  ]);
 
   const find = async () => {
     const item =
@@ -764,39 +786,57 @@ export default function PosScreen() {
 
       <View>
         <Text>INVENTORY INTELLIGENCE â€” ESTIMATE ONLY</Text>
+        <Text>
+          Scope: CURRENT DEVICE ONLY. Other offline terminals are not represented here.
+        </Text>
+        <Text>This value is not authoritative cloud stock.</Text>
 
-        {inventoryIntelligence ? (
-          <>
-            <Text>
-              Last confirmed cloud stock:{" "}
-              {inventoryIntelligence.lastConfirmedCloudStock ?? "UNKNOWN"}
-            </Text>
-            <Text>
-              Last confirmed at:{" "}
-              {inventoryIntelligence.lastConfirmedAt ?? "NO CLOUD BASELINE"}
-            </Text>
-            <Text>
-              Known synced activity from this terminal after baseline:{" "}
-              {inventoryIntelligence.knownSyncedActivityFromThisTerminal}
-            </Text>
-            <Text>
-              Device-only unsynced activity:{" "}
-              {inventoryIntelligence.deviceOnlyUnsyncedActivity}
-            </Text>
-            <Text>
-              Estimated available stock:{" "}
-              {inventoryIntelligence.estimatedAvailableStock ?? "UNKNOWN"}
-            </Text>
-            <Text>
-              Unresolved local sale events affecting this item:{" "}
-              {inventoryIntelligence.unresolvedEventCount}
-            </Text>
-            <Text>
-              Scope: CURRENT DEVICE ONLY. This value is not authoritative cloud stock.
-            </Text>
-          </>
+        {cartInventoryIntelligence.length ? (
+          cartInventoryIntelligence.map((row) => (
+            <View key={`${row.productId}:${row.variantId ?? "simple"}`}>
+              <Text>{row.label}</Text>
+              <Text>
+                Last confirmed cloud stock:{" "}
+                {row.lastConfirmedCloudStock ?? "UNKNOWN"}
+              </Text>
+              <Text>
+                Cloud baseline age:{" "}
+                {row.baselineAgeMinutes === null
+                  ? "NO BASELINE"
+                  : `${row.baselineAgeMinutes} minute(s)`}
+              </Text>
+              <Text>
+                Known synced activity from this terminal after baseline:{" "}
+                {row.knownSyncedActivityFromThisTerminal}
+              </Text>
+              <Text>
+                Device-only unsynced activity:{" "}
+                {row.deviceOnlyUnsyncedActivity}
+              </Text>
+              <Text>
+                Estimated available before current cart:{" "}
+                {row.estimatedAvailableStock ?? "UNKNOWN"}
+              </Text>
+              <Text>
+                Current cart quantity: {row.cartQuantity}
+              </Text>
+              <Text>
+                Projected after current cart:{" "}
+                {row.projectedAfterCurrentCart ?? "UNKNOWN"}
+              </Text>
+              <Text>
+                {row.projectedBelowZero
+                  ? "WARNING: this device estimate projects stock below zero."
+                  : "No local negative-stock warning from this estimate."}
+              </Text>
+              <Text>
+                Unresolved local sale events affecting this item:{" "}
+                {row.unresolvedEventCount}
+              </Text>
+            </View>
+          ))
         ) : (
-          <Text>Select an item to calculate inventory intelligence.</Text>
+          <Text>Add an item to the cart to calculate inventory intelligence.</Text>
         )}
       </View>
 

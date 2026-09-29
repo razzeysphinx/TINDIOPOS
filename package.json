@@ -157,7 +157,10 @@
     "test:phase-18-disaster-model": "node --test scripts/phase-18-disaster-model-check.mjs",
     "test:phase-18-production-contract": "node --test scripts/phase-18-production-failure-contract-check.mjs",
     "certify:phase-18": "node scripts/phase-18-certification-runner.mjs",
-    "certify:phase-18:db": "node scripts/phase-18-certification-runner.mjs --db"
+    "certify:phase-18:db": "node scripts/phase-18-certification-runner.mjs --db",
+    "test:phase-22-performance": "node --test scripts/phase-22-performance-cost-check.mjs",
+    "perf:phase-22:snapshot": "node scripts/phase-22-cost-snapshot.mjs",
+    "perf:phase-22:diff": "node scripts/phase-22-cost-diff.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

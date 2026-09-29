@@ -8,6 +8,7 @@ import { armPhase07RestartProof, getLocalDatabaseHealth, readPhase07RestartProof
 import { useBusinessContext } from "../../src/features/business/use-business-context";
 import { useTerminalDevice } from "../../src/features/device/use-terminal-device";
 import { getLocalFirstMetrics } from "../../src/features/local-first/runtime-metrics";
+import { getPerformanceMetrics, resetPerformanceMetrics } from "../../src/features/performance/performance-metrics";
 import {
   getOfflineInventoryDiagnostics,
   type OfflineInventoryDiagnostics,
@@ -114,6 +115,8 @@ export default function SyncStatusScreen() {
 
   const sequenceHealth = !sequenceState ? "CHECK REQUIRED" : outbox?.oldestUnresolved && outbox.oldestUnresolved.deviceSequence > sequenceState.serverCheckpoint + 1 ? "GAP DETECTED" : "CONTIGUOUS";
 
+  const performance = getPerformanceMetrics();
+
   return <View>
     <Text>Cloud Backend: {mode === "offline" ? "OFFLINE" : "CONNECTED / CHECK REQUIRED"}</Text><Text>Native SQLite: {health?.ready ? "READY — PHASE 07" : "CHECK REQUIRED"}</Text><Text>SQLite schema: {health?.schemaVersion ?? 0}/{health?.expectedSchemaVersion ?? 2}</Text><Text>SQLite integrity: {health?.integrity === "ok" ? "OK" : "CHECK REQUIRED"}</Text><Text>Business context cached: {cached === null ? "UNKNOWN" : cached ? "YES" : "NO"}</Text><Text>Business context rows: {stats?.businessContext ?? 0}</Text><Text>Reference snapshots: {stats?.reference ?? 0}</Text><Text>Catalog items: {stats?.catalog ?? 0}</Text><Text>Observed customers: {stats?.customers ?? 0}</Text><Text>Shift snapshots: {stats?.shifts ?? 0}</Text><Text>Receipt summaries: {stats?.receipts ?? 0}</Text><Text>Persistence verified: {health?.persistenceVerifiedAt ?? "NOT YET"}</Text><Text>Restart proof: {restartProof ? `${restartProof.organizationId} at ${restartProof.armedAt}` : "NOT ARMED"}</Text>
     <Text>Phase 08 Offline Authorization: {offlineState}</Text><Text>Offline authorization expires: {grant?.expiresAt ?? "NOT PREPARED"}</Text><Text>Offline organization: {grant?.organizationId ?? "—"}</Text><Text>Offline store / register: {grant ? `${grant.storeId} / ${grant.registerId}` : "—"}</Text><Text>Offline shift: {grant?.shiftId ?? "—"}</Text><Text>Complete catalog: {offlineState === "READY" ? "YES" : "NO"}</Text><Text>Cached catalog items: {stats?.catalog ?? 0}</Text><Text>Reference/configuration: {stats?.reference ? "READY" : "MISSING"}</Text>{message ? <Text>{message}</Text> : null}
@@ -152,5 +155,11 @@ export default function SyncStatusScreen() {
     <Text>Affected saleables on this device: {inventoryDiagnostics?.unresolvedAffectedSaleables ?? 0}</Text>
     <Text>Other offline devices are intentionally UNKNOWN until later store-local coordination.</Text>
     <Text>Phase 14 implementation: COMPLETE — CERTIFICATION DEFERRED</Text>
+    <Text>PHASE 22 PERFORMANCE + COST</Text>
+    <Text>API calls: {performance.apiCalls}</Text>
+    <Text>SQLite search latency avg / max ms: {performance.sqliteAverageLatencyMs.toFixed(1)} / {performance.sqliteMaxLatencyMs}</Text>
+    <Text>Sync throughput records/sec: {performance.syncThroughputPerSecond.toFixed(2)}</Text>
+    <Text>Recovery duration avg / max ms: {performance.recoveryAverageDurationMs.toFixed(1)} / {performance.recoveryMaxDurationMs}</Text>
+    <Pressable onPress={() => { resetPerformanceMetrics(); setMessage("Phase 22 performance window reset."); }}><Text>Reset Phase 22 performance window</Text></Pressable>
   </View>;
 }

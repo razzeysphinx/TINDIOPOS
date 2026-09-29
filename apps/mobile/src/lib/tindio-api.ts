@@ -29,6 +29,7 @@ import type {
 } from "../../../../src/contracts/pos";
 import type { CheckoutSaleActionResult } from "../../../../src/features/checkout/checkout-types";
 import { mobileEnvironment } from "./env";
+import { recordApiCall } from "../features/performance/performance-metrics";
 import { supabase } from "./supabase";
 
 const ORGANIZATION_HEADER = "x-tindio-organization-id";
@@ -105,6 +106,7 @@ export async function requestPosV2Raw(
     init?: RequestInit;
   } = {},
 ) {
+  const startedAt = Date.now();
   const headers = new Headers({
     Accept: "application/json",
     Authorization: `Bearer ${await token(false)}`,
@@ -131,6 +133,7 @@ export async function requestPosV2Raw(
     });
   }
 
+  recordApiCall({ durationMs: Date.now() - startedAt, responseBytes: Number(response.headers.get("content-length") ?? 0) || 0, retried: false, failed: !response.ok });
   return response;
 }
 

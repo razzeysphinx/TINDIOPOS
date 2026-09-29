@@ -6,6 +6,9 @@ import {
   updateOutboxEvent,
 } from "../../db/outbox";
 import { getDeviceSyncState, recordServerCheckpoint } from "../../db/device-sync-state";
+import {
+  recordRecoveryRun,
+} from "../performance/performance-metrics";
 import { TindioApiError, requestPosV2Raw } from "../../lib/tindio-api";
 import { loadMobileDeviceIdentity } from "../device/device-store";
 import { nextOutboxRetryAt } from "./retry-policy";
@@ -117,7 +120,20 @@ async function synchronize(organizationId: string): Promise<OutboxSyncReport> {
   }
   if (!identity) return { ...(await getOutboxSummary(organizationId)), completed: 0, recovered: 0 };
   const deviceId = identity.credential.deviceId;
-  const recovery = await recoverInterruptedOutboxEvents(organizationId, Date.now(), deviceId);
+  const recoveryStartedAt =
+    Date.now();
+
+  const recovery =
+    await recoverInterruptedOutboxEvents(
+      organizationId,
+      Date.now(),
+      deviceId,
+    );
+
+  recordRecoveryRun(
+    Date.now()
+    - recoveryStartedAt,
+  );
   const events = await listPendingOutboxEvents(organizationId, deviceId);
   let completed = 0;
   for (const event of events) {

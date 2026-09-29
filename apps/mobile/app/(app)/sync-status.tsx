@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { getOrganizationCacheStats, type OrganizationCacheStats } from "../../src/db/cache-stats";
 import { hasBusinessContextSnapshot } from "../../src/db/business-context-cache";
 import { getDeviceSyncState, type DeviceSyncState } from "../../src/db/device-sync-state";
+import { getSyncCursor, type SyncCursorState } from "../../src/db/sync-cursor";
 import { armPhase07RestartProof, getLocalDatabaseHealth, readPhase07RestartProof, type Phase07RestartProof, verifyLocalPersistence } from "../../src/db/health";
 import { useBusinessContext } from "../../src/features/business/use-business-context";
 import { useTerminalDevice } from "../../src/features/device/use-terminal-device";
@@ -12,6 +13,7 @@ import { prepareOfflineMode } from "../../src/features/offline/prepare-offline-m
 import { refreshDeviceCheckpoint } from "../../src/features/outbox/checkpoint-sync";
 import { getSafeOutboxDiagnostics } from "../../src/features/outbox/outbox-summary";
 import { syncOutboxEvents } from "../../src/features/outbox/outbox-sync";
+import { reconcileCloud } from "../../src/features/sync/reconcile-cloud";
 
 export default function SyncStatusScreen() {
   const { data, reload, mode } = useBusinessContext();
@@ -28,6 +30,7 @@ export default function SyncStatusScreen() {
   const [outbox, setOutbox] = useState<Awaited<ReturnType<typeof getSafeOutboxDiagnostics>> | null>(null);
   const [sequenceState, setSequenceState] = useState<DeviceSyncState | null>(null);
   const [remoteCheckpoint, setRemoteCheckpoint] = useState<number | null>(null);
+  const [cursor, setCursor] = useState<SyncCursorState | null>(null);
 
   const load = useCallback(async () => {
     setHealth(await getLocalDatabaseHealth()); setRestartProof(await readPhase07RestartProof());
@@ -38,6 +41,7 @@ export default function SyncStatusScreen() {
       setCached(await hasBusinessContextSnapshot(organizationId)); setStats(await getOrganizationCacheStats(organizationId));
       setOutbox(await getSafeOutboxDiagnostics(organizationId));
       setSequenceState(deviceId ? await getDeviceSyncState(organizationId, deviceId) : null);
+      setCursor(deviceId && terminal.identity?.binding ? await getSyncCursor(organizationId, deviceId, terminal.identity.binding.storeId) : null);
     }
   }, [deviceId, organizationId]);
 
@@ -55,6 +59,7 @@ export default function SyncStatusScreen() {
     else setMessage(`Checkpoint refresh blocked: ${result.reason}`);
     await load();
   }, [organizationId, mode, load]);
+  const reconcile = useCallback(async () => { if (!organizationId || mode !== "online") return; setMessage("Reconciling cloud changes…"); const result = await reconcileCloud(organizationId); setMessage(result.ok ? `Cloud reconciliation complete: ${result.outboxAcked} ACKed, ${result.pullPages} pull pages.` : `Cloud reconciliation blocked: ${result.reason}`); await load(); }, [organizationId, mode, load]);
   const sequenceHealth = !sequenceState ? "CHECK REQUIRED" : outbox?.oldestUnresolved && outbox.oldestUnresolved.deviceSequence > sequenceState.serverCheckpoint + 1 ? "GAP DETECTED" : "CONTIGUOUS";
 
   return <View>
@@ -64,6 +69,7 @@ export default function SyncStatusScreen() {
     <Text>Cold-start Offline: PHASE 08</Text><Text>Phase 09 Local-First: IMPLEMENTED</Text><Text>Catalog source: SQLite</Text><Text>Local-first metrics: SQLite catalog reads {getLocalFirstMetrics().sqliteCatalogReads}; SQLite barcode reads {getLocalFirstMetrics().sqliteBarcodeReads}; SQLite reference reads {getLocalFirstMetrics().sqliteReferenceReads}; modifier cache hits {getLocalFirstMetrics().modifierCacheHits}; modifier network fallbacks {getLocalFirstMetrics().modifierNetworkFallbacks}; cloud catalog searches {getLocalFirstMetrics().cloudCatalogSearches}</Text>
     <Text>Durable Outbox: PHASE 10</Text><Text>Outbox pending / syncing / conflict / failed: {outbox?.summary.pending ?? 0} / {outbox?.summary.syncing ?? 0} / {outbox?.summary.conflict ?? 0} / {outbox?.summary.failed ?? 0}</Text><Text>Oldest unresolved: {outbox?.oldestUnresolved ? `${outbox.oldestUnresolved.localReference} — sequence ${outbox.oldestUnresolved.deviceSequence} — ${outbox.oldestUnresolved.state} — ${outbox.oldestUnresolved.totalMinor} ${outbox.oldestUnresolved.currencyCode}` : "NONE"}</Text><Pressable disabled={mode !== "online"} onPress={() => void syncOutbox()}><Text>Sync durable outbox now</Text></Pressable>
     <Text>PHASE 11 DEVICE SEQUENCE</Text><Text>Device: {deviceId ?? "NOT AVAILABLE"}</Text><Text>Next local sequence: {sequenceState?.nextSequence ?? "CHECK REQUIRED"}</Text><Text>Local known server checkpoint: {sequenceState?.serverCheckpoint ?? "CHECK REQUIRED"}</Text><Text>Remote server checkpoint: {remoteCheckpoint ?? "NOT CHECKED"}</Text><Text>Next expected server sequence: {sequenceState ? sequenceState.serverCheckpoint + 1 : "CHECK REQUIRED"}</Text><Text>Sequence health: {sequenceHealth}</Text><Pressable disabled={mode !== "online"} onPress={() => void refreshCheckpoint()}><Text>Refresh Server Checkpoint</Text></Pressable>
+    <Text>PHASE 12 CLOUD RECONCILIATION</Text><Text>Delta sync: {cursor?.initialized ? "INITIALIZED" : "NOT INITIALIZED"}</Text><Text>Pull cursor: {cursor?.pullCursor ?? 0}</Text><Text>Last push: {cursor?.lastPushAt ?? "NEVER"}</Text><Text>Last pull: {cursor?.lastPullAt ?? "NEVER"}</Text><Text>Last reconciliation: {cursor?.lastReconcileAt ?? "NEVER"}</Text><Text>Last sync error: {cursor?.lastError ?? "NONE"}</Text><Text>Server changes remaining: UNKNOWN UNTIL RECONCILE</Text><Pressable disabled={mode !== "online"} onPress={() => void reconcile()}><Text>Reconcile With Cloud</Text></Pressable>
     <Text>Delta Sync: NOT STARTED — PHASE 12</Text>
   </View>;
 }

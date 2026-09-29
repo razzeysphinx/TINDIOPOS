@@ -7,6 +7,7 @@ import type {
   CheckoutSaleActionResult,
   ValidateCartStockActionResult,
 } from "@/features/checkout/checkout-types";
+import type { CheckoutSaleValues } from "@/features/checkout/checkout-schema";
 import type {
   PosCustomerDisplaySession,
 } from "@/features/customer-display/customer-display-types";
@@ -472,6 +473,16 @@ export type PosOfflineSequenceInfo = {
   expectedSequence: number;
   status: PosDeviceSequenceStatus;
 };
+
+export type PosSyncDomain = "CATALOG" | "REFERENCE" | "CUSTOMER" | "DEVICE" | "MODIFIERS";
+export type PosCatalogDelta = { revision: number; productId: string; storeId: string; items: PosCatalogItem[] };
+export type PosCustomerDelta = { revision: number; customerId: string; customer: PosCustomer | null };
+export type PosDeviceDelta = { revision: number; deviceId: string; status: string; storeId: string; registerId: string; deviceName: string; appVersion: string; lastSeenAt: string | null };
+export type PosSyncBaselineResponse = { ok: true; serverRevision: number; organizationId: string; deviceId: string; storeId: string };
+export type PosSyncPullResponse = { ok: true; version: 1; organizationId: string; deviceId: string; storeId: string; fromCursor: number; nextCursor: number; serverRevision: number; hasMore: boolean; catalog: PosCatalogDelta[]; reference: { revision: number; snapshot: PosReferenceV2Response } | null; customers: PosCustomerDelta[]; device: PosDeviceDelta | null; invalidateModifiers: boolean };
+export type PosSyncPushEvent = { eventId: string; operationType: "SALE_COMPLETED"; checkout: CheckoutSaleValues; offline: { localReceiptReference: string; createdAt: string; shiftId: string; deviceId: string; deviceSequence: number } };
+export type PosSyncPushAck = { eventId: string; deviceSequence: number; status: "SYNCED" | "RETRY" | "CONFLICT" | "FAILED"; httpStatus: number; result: CheckoutSaleActionResult };
+export type PosSyncPushResponse = { ok: true; version: 1; organizationId: string; deviceId: string; acks: PosSyncPushAck[]; stoppedEarly: boolean };
 
 export type PosCheckoutResponse =
   CheckoutSaleActionResult;

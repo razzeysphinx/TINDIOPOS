@@ -12,6 +12,7 @@ import { nextOutboxRetryAt } from "./retry-policy";
 import type { DurableOutboxEvent, OutboxSummary } from "./outbox-types";
 import { getOutboxSummary } from "../../db/outbox";
 import { refreshDeviceCheckpoint } from "./checkpoint-sync";
+import { pushPosV2SyncBatch } from "../../lib/tindio-api";
 
 export type OutboxSyncReport = OutboxSummary & { completed: number; recovered: number };
 
@@ -151,4 +152,26 @@ export function syncOutboxEvents(organizationId: string): Promise<OutboxSyncRepo
   activeSyncs.set(organizationId, sync);
   void sync.finally(() => activeSyncs.delete(organizationId));
   return sync;
+}
+
+/** Phase 12 ordered batch delivery; ACKs are the only authority for local terminal states. */
+export async function syncOutboxBatches(organizationId: string, maxBatches = 10) {
+  const identity = await loadMobileDeviceIdentity(organizationId);
+  if (!identity?.binding) return { completed: 0, batches: 0, stopped: true };
+  let completed = 0; let batches = 0; let stopped = false;
+  while (batches < maxBatches) {
+    const events = (await listPendingOutboxEvents(organizationId, identity.credential.deviceId)).filter((event) => event.nextRetryAt === null || event.nextRetryAt <= new Date().toISOString()).slice(0, 20);
+    if (!events.length) break;
+    const response = await pushPosV2SyncBatch(organizationId, identity.credential, events.map((event) => ({ eventId: event.eventId, operationType: "SALE_COMPLETED", checkout: event.payload.checkout, offline: { ...event.payload.offline, deviceSequence: event.deviceSequence } })));
+    batches += 1;
+    for (const ack of response.acks) {
+      const event = events.find((candidate) => candidate.eventId === ack.eventId); if (!event) { stopped = true; break; }
+      if (ack.status === "SYNCED" && ack.result.ok) { await updateOutboxEvent(event.eventId, { state: "SYNCED", syncedAt: new Date().toISOString(), nextRetryAt: null, lastError: null, conflictType: null, serverSaleId: ack.result.data.saleId, officialReceiptNumber: ack.result.data.receiptNumber }); completed += 1; continue; }
+      if (ack.status === "RETRY") await markRetryable(event, event.attempts + 1, !ack.result.ok ? ack.result.message : retryMessage());
+      else await updateOutboxEvent(event.eventId, { state: ack.status === "FAILED" ? "FAILED" : "CONFLICT", nextRetryAt: null, lastError: !ack.result.ok ? ack.result.message : "Server did not acknowledge this saved sale.", conflictType: !ack.result.ok ? ack.result.failureCode ?? "SERVER_REJECTED" : "SERVER_REJECTED" });
+      stopped = true; break;
+    }
+    if (stopped || response.stoppedEarly || response.acks.length < events.length) { stopped = true; break; }
+  }
+  return { completed, batches, stopped };
 }

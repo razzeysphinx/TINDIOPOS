@@ -3,7 +3,8 @@ import { replaceCompleteCatalogSnapshot } from "../../db/catalog-cache";
 import { saveBusinessContextSnapshot } from "../../db/business-context-cache";
 import { saveReferenceSnapshot } from "../../db/reference-cache";
 import { saveActiveShiftSnapshot } from "../../db/shift-cache";
-import { fetchPosV2CatalogPage, fetchPosV2Core, fetchPosV2Reference, validatePosV2Device } from "../../lib/tindio-api";
+import { initializeSyncCursor } from "../../db/sync-cursor";
+import { fetchPosV2CatalogPage, fetchPosV2Core, fetchPosV2Reference, fetchPosV2SyncBaseline, validatePosV2Device } from "../../lib/tindio-api";
 import { loadMobileDeviceIdentity, saveMobileDeviceIdentity } from "../device/device-store";
 import { saveOfflineAuthorizationGrant } from "./offline-authorization";
 
@@ -24,6 +25,9 @@ export async function prepareOfflineMode(organizationId: string): Promise<Offlin
   if (!validation.ok) return { ok: false, reason: "DEVICE_REJECTED" };
   if (validation.device.deviceId !== stored.credential.deviceId || validation.device.storeId !== stored.binding.storeId || validation.device.registerId !== stored.binding.registerId) return { ok: false, reason: "DEVICE_BINDING_CHANGED" };
   const binding = validation.device;
+  let baseline;
+  try { baseline = await fetchPosV2SyncBaseline(organizationId, stored.credential); } catch { return { ok: false, reason: "SYNC_BASELINE_UNAVAILABLE" }; }
+  if (baseline.organizationId !== organizationId || baseline.deviceId !== stored.credential.deviceId || baseline.storeId !== binding.storeId) return { ok: false, reason: "SYNC_BASELINE_SCOPE_MISMATCH" };
   const shift = core.activeShift;
   if (!shift) return { ok: false, reason: "ACTIVE_SHIFT_REQUIRED" };
   if (shift.storeId !== binding.storeId || shift.registerId !== binding.registerId) return { ok: false, reason: "SHIFT_TERMINAL_MISMATCH" };
@@ -52,6 +56,7 @@ export async function prepareOfflineMode(organizationId: string): Promise<Offlin
     await saveReferenceSnapshot(reference);
     await replaceCompleteCatalogSnapshot(organizationId, binding.storeId, items);
     await saveMobileDeviceIdentity({ ...stored, binding, lastVerifiedAt: new Date().toISOString() });
+    await initializeSyncCursor(organizationId, stored.credential.deviceId, binding.storeId, baseline.serverRevision);
   } catch { return { ok: false, reason: "CACHE_PERSISTENCE_FAILED" }; }
 
   try {

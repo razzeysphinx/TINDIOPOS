@@ -162,7 +162,14 @@
     "perf:phase-22:snapshot": "node scripts/phase-22-cost-snapshot.mjs",
     "perf:phase-22:diff": "node scripts/phase-22-cost-diff.mjs",
     "test:phase-23-android-hardening": "node --test scripts/phase-23-android-production-hardening-check.mjs",
-    "mobile:export:android": "pnpm --dir apps/mobile exec expo export --platform android"
+    "mobile:export:android": "pnpm --dir apps/mobile exec expo export --platform android",
+    "test:phase-24-google-play": "node --test scripts/phase-24-google-play-config-check.mjs scripts/phase-24-release-evidence-check.mjs",
+    "gate:phase-24:production": "node scripts/phase-24-production-release-gate.mjs",
+    "mobile:build:android:store": "cd apps/mobile && pnpm dlx eas-cli@latest build --platform android --profile production",
+    "mobile:submit:android:internal": "cd apps/mobile && pnpm dlx eas-cli@latest submit --platform android --profile internal",
+    "mobile:submit:android:closed": "cd apps/mobile && pnpm dlx eas-cli@latest submit --platform android --profile closed",
+    "mobile:submit:android:pilot": "cd apps/mobile && pnpm dlx eas-cli@latest submit --platform android --profile pilot",
+    "mobile:submit:android:production-draft": "cd apps/mobile && pnpm dlx eas-cli@latest submit --platform android --profile production"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

@@ -24,6 +24,9 @@ import {
 import { useBusinessContext } from "../../src/features/business/use-business-context";
 import { useTerminalDevice } from "../../src/features/device/use-terminal-device";
 import {
+  CameraBarcodeScanner,
+} from "../../src/features/hardware/camera-barcode-scanner";
+import {
   lookupLocalBarcode,
   lookupLocalSku,
   searchLocalCatalog,
@@ -91,6 +94,10 @@ export default function PosScreen() {
 
   const [query, setQuery] = useState("");
   const [lookup, setLookup] = useState("");
+  const [
+    cameraScannerOpen,
+    setCameraScannerOpen,
+  ] = useState(false);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [items, setItems] = useState<PosCatalogItem[]>([]);
   const [cart, setCart] = useState<PosCartLine[]>([]);
@@ -406,18 +413,67 @@ export default function PosScreen() {
     identity,
   ]);
 
-  const find = async () => {
+  const findLookupValue = async (
+    value: string,
+  ) => {
+    const normalized =
+      value.trim();
+
+    if (!normalized) {
+      return;
+    }
+
     const item =
-      await lookupLocalBarcode(core.organization.id, binding.storeId, lookup)
-      ?? await lookupLocalSku(core.organization.id, binding.storeId, lookup);
+      await lookupLocalBarcode(
+        core.organization.id,
+        binding.storeId,
+        normalized,
+      )
+      ?? await lookupLocalSku(
+        core.organization.id,
+        binding.storeId,
+        normalized,
+      );
 
     if (item) {
       await add(item);
       setLookup("");
-    } else {
-      setSaleMessage("No local barcode/SKU match.");
+      setSaleMessage(null);
+      return;
     }
+
+    setSaleMessage(
+      "No local barcode/SKU match.",
+    );
   };
+
+  const find = async () => {
+    await findLookupValue(lookup);
+  };
+
+  const acceptCameraBarcode =
+    async (barcode: string) => {
+      setCameraScannerOpen(false);
+      setLookup(barcode);
+
+      const item =
+        await lookupLocalBarcode(
+          core.organization.id,
+          binding.storeId,
+          barcode,
+        );
+
+      if (item) {
+        await add(item);
+        setLookup("");
+        setSaleMessage(null);
+        return;
+      }
+
+      setSaleMessage(
+        `No local barcode match for ${barcode}.`,
+      );
+    };
 
   const setLineQuantity = (line: PosCartLine, quantity: number) => {
     if (!canEditQuantity) return;
@@ -688,6 +744,19 @@ export default function PosScreen() {
     }
   };
 
+  if (cameraScannerOpen) {
+    return (
+      <CameraBarcodeScanner
+        onScanned={
+          acceptCameraBarcode
+        }
+        onClose={() =>
+          setCameraScannerOpen(false)
+        }
+      />
+    );
+  }
+
   if (configureState) {
     return (
       <VariablePriceEditor
@@ -740,8 +809,28 @@ export default function PosScreen() {
       <TextInput
         value={lookup}
         onChangeText={setLookup}
+        onSubmitEditing={() =>
+          void find()
+        }
         placeholder="Barcode or SKU"
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="search"
       />
+
+      <Text>
+        USB/Bluetooth scanners configured as keyboard/HID wedges can scan into this field and submit Enter.
+      </Text>
+
+      <Pressable
+        onPress={() =>
+          setCameraScannerOpen(true)
+        }
+      >
+        <Text>
+          Scan barcode with camera
+        </Text>
+      </Pressable>
 
       <Pressable onPress={() => void find()}>
         <Text>Find local barcode/SKU</Text>

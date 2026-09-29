@@ -23,6 +23,13 @@ type StateRow = {
   last_error: string | null;
 };
 
+type PeerEventRow = {
+  device_id: string;
+  cloud_synced_at: string | null;
+  items_json: string;
+  received_at: string;
+};
+
 function toState(row: StateRow): StoreHubState {
   return {
     organizationId: row.organization_id,
@@ -132,4 +139,113 @@ export async function applyStoreHubChanges(
       }
     },
   );
+}
+
+export async function getStoreHubPublishSignature(input: {
+  organizationId: string;
+  storeId: string;
+  eventId: string;
+}) {
+  return (await getTindioDatabase()).getFirstAsync<{
+    outbox_state: string;
+    cloud_synced_at: string | null;
+  }>(
+    "SELECT outbox_state,cloud_synced_at FROM store_hub_publish_state WHERE organization_id=? AND store_id=? AND event_id=?",
+    input.organizationId,
+    input.storeId,
+    input.eventId,
+  );
+}
+
+export async function saveStoreHubPublishSignature(input: {
+  organizationId: string;
+  storeId: string;
+  eventId: string;
+  outboxState: string;
+  cloudSyncedAt: string | null;
+}) {
+  await (await getTindioDatabase()).runAsync(
+    "INSERT INTO store_hub_publish_state (organization_id,store_id,event_id,outbox_state,cloud_synced_at,published_at) VALUES (?,?,?,?,?,?) ON CONFLICT(organization_id,store_id,event_id) DO UPDATE SET outbox_state=excluded.outbox_state,cloud_synced_at=excluded.cloud_synced_at,published_at=excluded.published_at",
+    input.organizationId,
+    input.storeId,
+    input.eventId,
+    input.outboxState,
+    input.cloudSyncedAt,
+    new Date().toISOString(),
+  );
+}
+
+export async function readPeerStoreLocalInventoryActivity(input: {
+  organizationId: string;
+  storeId: string;
+  currentDeviceId: string;
+  productId: string;
+  variantId: string | null;
+  baselineCheckedAt: string | null;
+}) {
+  const rows = await (await getTindioDatabase())
+    .getAllAsync<PeerEventRow>(
+      "SELECT device_id,cloud_synced_at,items_json,received_at FROM store_hub_events WHERE organization_id=? AND store_id=? AND device_id<>? AND event_type='SALE_COMPLETED'",
+      input.organizationId,
+      input.storeId,
+      input.currentDeviceId,
+    );
+
+  const devices = new Set<string>();
+  let quantity = 0;
+  let affectingEvents = 0;
+  let newestReceivedAt: string | null = null;
+
+  for (const row of rows) {
+    if (
+      row.cloud_synced_at
+      && input.baselineCheckedAt
+      && row.cloud_synced_at <= input.baselineCheckedAt
+    ) {
+      continue;
+    }
+
+    let items: Array<{
+      productId: string;
+      variantId: string | null;
+      quantity: number;
+    }>;
+
+    try {
+      items = JSON.parse(row.items_json);
+    } catch {
+      continue;
+    }
+
+    const eventQuantity = items.reduce(
+      (total, item) =>
+        item.productId === input.productId
+        && (item.variantId ?? "") === (input.variantId ?? "")
+        && Number.isFinite(item.quantity)
+        && item.quantity > 0
+          ? total + item.quantity
+          : total,
+      0,
+    );
+
+    if (eventQuantity <= 0) continue;
+
+    devices.add(row.device_id);
+    quantity += eventQuantity;
+    affectingEvents += 1;
+
+    if (
+      !newestReceivedAt
+      || row.received_at > newestReceivedAt
+    ) {
+      newestReceivedAt = row.received_at;
+    }
+  }
+
+  return {
+    peerDeviceCount: devices.size,
+    affectingEvents,
+    activityDelta: -quantity,
+    newestReceivedAt,
+  };
 }

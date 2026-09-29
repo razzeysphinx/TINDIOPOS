@@ -1,6 +1,10 @@
 import type { PosCartLine } from "../../../../../src/contracts/pos";
 import { getTindioDatabase } from "../../db/database";
 import { getCachedStockEstimate } from "../../db/stock-estimate-cache";
+import {
+  getStoreHubState,
+  readPeerStoreLocalInventoryActivity,
+} from "../../db/store-hub-cache";
 import type { OutboxState } from "../outbox/outbox-types";
 
 type OutboxInventoryRow = {
@@ -18,24 +22,29 @@ type CheckoutInventoryLine = {
 export type OfflineInventoryIntelligence = {
   status: "ESTIMATED" | "NO_CLOUD_BASELINE";
   authority: "ESTIMATE_ONLY";
-  scope: "CURRENT_DEVICE_ONLY";
+  scope: "STORE_LOCAL_AWARE" | "CURRENT_DEVICE_ONLY";
   lastConfirmedCloudStock: number | null;
   lastConfirmedAt: string | null;
   baselineAgeMinutes: number | null;
   knownSyncedActivityFromThisTerminal: number;
   deviceOnlyUnsyncedActivity: number;
+  peerStoreLocalActivity: number;
+  peerDeviceCount: number;
+  peerAffectingEventCount: number;
+  storeHubLastContactAt: string | null;
   estimatedAvailableStock: number | null;
   unresolvedEventCount: number;
 };
 
-export type CartInventoryIntelligenceLine = OfflineInventoryIntelligence & {
-  productId: string;
-  variantId: string | null;
-  label: string;
-  cartQuantity: number;
-  projectedAfterCurrentCart: number | null;
-  projectedBelowZero: boolean;
-};
+export type CartInventoryIntelligenceLine =
+  OfflineInventoryIntelligence & {
+    productId: string;
+    variantId: string | null;
+    label: string;
+    cartQuantity: number;
+    projectedAfterCurrentCart: number | null;
+    projectedBelowZero: boolean;
+  };
 
 function normalizedVariant(value: string | null | undefined) {
   return value ?? "";
@@ -48,7 +57,10 @@ function baselineAgeMinutes(checkedAt: string | null) {
 
   if (!Number.isFinite(parsed)) return null;
 
-  return Math.max(0, Math.floor((Date.now() - parsed) / 60_000));
+  return Math.max(
+    0,
+    Math.floor((Date.now() - parsed) / 60_000),
+  );
 }
 
 function quantityForSaleable(
@@ -64,13 +76,13 @@ function quantityForSaleable(
     };
 
     const items = payload.checkout?.items;
-
     if (!Array.isArray(items)) return 0;
 
     return items.reduce((total, item) => {
       if (
         item.productId !== productId
-        || normalizedVariant(item.variantId) !== normalizedVariant(variantId)
+        || normalizedVariant(item.variantId)
+          !== normalizedVariant(variantId)
         || !Number.isFinite(item.quantity)
         || item.quantity <= 0
       ) {
@@ -98,12 +110,13 @@ export async function readOfflineInventoryIntelligence(input: {
     input.variantId,
   );
 
-  const rows = await (await getTindioDatabase()).getAllAsync<OutboxInventoryRow>(
-    "SELECT state,synced_at,payload_json FROM outbox_events WHERE organization_id=? AND store_id=? AND device_id=? AND operation_type='SALE_COMPLETED' ORDER BY device_sequence ASC",
-    input.organizationId,
-    input.storeId,
-    input.deviceId,
-  );
+  const rows = await (await getTindioDatabase())
+    .getAllAsync<OutboxInventoryRow>(
+      "SELECT state,synced_at,payload_json FROM outbox_events WHERE organization_id=? AND store_id=? AND device_id=? AND operation_type='SALE_COMPLETED' ORDER BY device_sequence ASC",
+      input.organizationId,
+      input.storeId,
+      input.deviceId,
+    );
 
   let syncedQuantityAfterBaseline = 0;
   let unresolvedQuantity = 0;
@@ -134,16 +147,42 @@ export async function readOfflineInventoryIntelligence(input: {
     unresolvedEventCount += 1;
   }
 
+  const [hubState, peers] = await Promise.all([
+    getStoreHubState({
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      deviceId: input.deviceId,
+    }),
+    readPeerStoreLocalInventoryActivity({
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      currentDeviceId: input.deviceId,
+      productId: input.productId,
+      variantId: input.variantId,
+      baselineCheckedAt:
+        baseline?.checked_at ?? null,
+    }),
+  ]);
+
+  const scope =
+    hubState?.lastContactAt
+      ? "STORE_LOCAL_AWARE" as const
+      : "CURRENT_DEVICE_ONLY" as const;
+
   if (!baseline) {
     return {
       status: "NO_CLOUD_BASELINE",
       authority: "ESTIMATE_ONLY",
-      scope: "CURRENT_DEVICE_ONLY",
+      scope,
       lastConfirmedCloudStock: null,
       lastConfirmedAt: null,
       baselineAgeMinutes: null,
       knownSyncedActivityFromThisTerminal: 0,
       deviceOnlyUnsyncedActivity: -unresolvedQuantity,
+      peerStoreLocalActivity: peers.activityDelta,
+      peerDeviceCount: peers.peerDeviceCount,
+      peerAffectingEventCount: peers.affectingEvents,
+      storeHubLastContactAt: hubState?.lastContactAt ?? null,
       estimatedAvailableStock: null,
       unresolvedEventCount,
     };
@@ -152,16 +191,28 @@ export async function readOfflineInventoryIntelligence(input: {
   return {
     status: "ESTIMATED",
     authority: "ESTIMATE_ONLY",
-    scope: "CURRENT_DEVICE_ONLY",
+    scope,
     lastConfirmedCloudStock: baseline.available_quantity,
     lastConfirmedAt: baseline.checked_at,
-    baselineAgeMinutes: baselineAgeMinutes(baseline.checked_at),
-    knownSyncedActivityFromThisTerminal: -syncedQuantityAfterBaseline,
-    deviceOnlyUnsyncedActivity: -unresolvedQuantity,
+    baselineAgeMinutes:
+      baselineAgeMinutes(baseline.checked_at),
+    knownSyncedActivityFromThisTerminal:
+      -syncedQuantityAfterBaseline,
+    deviceOnlyUnsyncedActivity:
+      -unresolvedQuantity,
+    peerStoreLocalActivity:
+      peers.activityDelta,
+    peerDeviceCount:
+      peers.peerDeviceCount,
+    peerAffectingEventCount:
+      peers.affectingEvents,
+    storeHubLastContactAt:
+      hubState?.lastContactAt ?? null,
     estimatedAvailableStock:
       baseline.available_quantity
       - syncedQuantityAfterBaseline
-      - unresolvedQuantity,
+      - unresolvedQuantity
+      + peers.activityDelta,
     unresolvedEventCount,
   };
 }
@@ -183,7 +234,8 @@ export async function readCartOfflineInventoryIntelligence(input: {
   >();
 
   for (const line of input.cart) {
-    const key = `${line.productId}:${line.variantId ?? "simple"}`;
+    const key =
+      `${line.productId}:${line.variantId ?? "simple"}`;
     const existing = uniqueLines.get(key);
 
     if (existing) {
@@ -204,18 +256,20 @@ export async function readCartOfflineInventoryIntelligence(input: {
   const rows: CartInventoryIntelligenceLine[] = [];
 
   for (const line of uniqueLines.values()) {
-    const intelligence = await readOfflineInventoryIntelligence({
-      organizationId: input.organizationId,
-      storeId: input.storeId,
-      deviceId: input.deviceId,
-      productId: line.productId,
-      variantId: line.variantId,
-    });
+    const intelligence =
+      await readOfflineInventoryIntelligence({
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        deviceId: input.deviceId,
+        productId: line.productId,
+        variantId: line.variantId,
+      });
 
     const projectedAfterCurrentCart =
       intelligence.estimatedAvailableStock === null
         ? null
-        : intelligence.estimatedAvailableStock - line.quantity;
+        : intelligence.estimatedAvailableStock
+          - line.quantity;
 
     rows.push({
       ...intelligence,

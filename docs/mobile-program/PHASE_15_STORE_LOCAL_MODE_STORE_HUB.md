@@ -66,3 +66,26 @@ Local SQLite schema version 7 adds:
 - `store_hub_publish_state`
 
 Phase 15 remains IMPLEMENTING.
+
+
+## Slice 03
+
+Store Hub device coordination is implemented.
+
+Each terminal can:
+
+- publish minimal metadata for its durable `SALE_COMPLETED` events
+- publish later cloud-sync status updates for the same event identity
+- pull Store Hub changes by Hub revision
+- persist peer event awareness locally
+- include known peer sale activity in inventory estimates
+
+Critical rule:
+
+```text
+STORE HUB ACK != CLOUD ACK
+```
+
+A Hub acknowledgement never marks the cloud durable outbox event as synced.
+
+Inventory remains an estimate and the Neon/server ledger remains authoritative.

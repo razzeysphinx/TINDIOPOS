@@ -787,7 +787,8 @@ export default function PosScreen() {
       <View>
         <Text>INVENTORY INTELLIGENCE â€” ESTIMATE ONLY</Text>
         <Text>
-          Scope: CURRENT DEVICE ONLY. Other offline terminals are not represented here.
+          Scope is CURRENT_DEVICE_ONLY until a Store Hub sync succeeds.
+          STORE_LOCAL_AWARE includes known peer terminal activity from the local Hub.
         </Text>
         <Text>This value is not authoritative cloud stock.</Text>
 
@@ -812,6 +813,19 @@ export default function PosScreen() {
               <Text>
                 Device-only unsynced activity:{" "}
                 {row.deviceOnlyUnsyncedActivity}
+              </Text>
+              <Text>
+                Store-local peer activity:{" "}
+                {row.peerStoreLocalActivity}
+                {" — "}
+                {row.peerDeviceCount} peer device(s)
+              </Text>
+              <Text>
+                Store Hub last contact:{" "}
+                {row.storeHubLastContactAt ?? "NOT AVAILABLE"}
+              </Text>
+              <Text>
+                Intelligence scope: {row.scope}
               </Text>
               <Text>
                 Estimated available before current cart:{" "}

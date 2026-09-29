@@ -118,7 +118,11 @@ export default function MobileHomeScreen() {
           <Text>
             {connectionMode === "STORE_LOCAL"
               ? "STORE LOCAL MODE"
-              : "DEVICE ISOLATED MODE"}
+              : connectionMode === "RECOVERING"
+                ? "RECOVERING — CLOUD RETURNED, RECONCILIATION IN PROGRESS"
+                : connectionMode === "SYNC_REVIEW"
+                  ? "SYNC REVIEW REQUIRED"
+                  : "DEVICE ISOLATED MODE"}
           </Text>
           <Text>
             Cloud validation unavailable.

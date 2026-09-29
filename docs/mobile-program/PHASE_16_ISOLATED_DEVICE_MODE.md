@@ -41,6 +41,35 @@ The durable outbox remains `SALE_COMPLETED`.
 
 Phase 16 remains IMPLEMENTING.
 
+## Slice 03
+
+Native isolated/recovery diagnostics are implemented.
+
+Sync Status now shows:
+
+- persisted connection mode
+- last mode transition time
+- unresolved durable transaction count
+- pending/syncing/conflict/failed counts
+- oldest unresolved local reference
+- next local device sequence
+- last known server checkpoint
+- delta pull cursor
+- last cloud reconciliation time
+- offline authorization validity
+- whether local state is currently safe to declare `CLOUD_ONLINE`
+
+Home UI now distinguishes:
+
+```text
+DEVICE ISOLATED MODE
+STORE LOCAL MODE
+RECOVERING
+SYNC REVIEW REQUIRED
+```
+
+Phase 16 remains IMPLEMENTING.
+
 ## Slice 02
 
 Deterministic connection recovery is now implemented.

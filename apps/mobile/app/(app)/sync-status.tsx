@@ -20,6 +20,7 @@ import { syncOutboxEvents } from "../../src/features/outbox/outbox-sync";
 import { reconcileCloud } from "../../src/features/sync/reconcile-cloud";
 import { getStoreHubState, type StoreHubState } from "../../src/db/store-hub-cache";
 import { synchronizeWithStoreHub } from "../../src/features/store-hub/store-hub-sync";
+import { getIsolatedRuntimeDiagnostics } from "../../src/features/offline/isolated-runtime-diagnostics";
 
 export default function SyncStatusScreen() {
   const { data, reload, mode, connectionMode } = useBusinessContext();
@@ -41,6 +42,8 @@ export default function SyncStatusScreen() {
     useState<OfflineInventoryDiagnostics | null>(null);
   const [storeHubState, setStoreHubState] =
     useState<StoreHubState | null>(null);
+  const [isolatedDiagnostics, setIsolatedDiagnostics] =
+    useState<Awaited<ReturnType<typeof getIsolatedRuntimeDiagnostics>> | null>(null);
 
   const load = useCallback(async () => {
     setHealth(await getLocalDatabaseHealth()); setRestartProof(await readPhase07RestartProof());
@@ -64,6 +67,15 @@ export default function SyncStatusScreen() {
       setStoreHubState(
         deviceId && terminal.identity?.binding
           ? await getStoreHubState({
+              organizationId,
+              storeId: terminal.identity.binding.storeId,
+              deviceId,
+            })
+          : null,
+      );
+      setIsolatedDiagnostics(
+        deviceId && terminal.identity?.binding
+          ? await getIsolatedRuntimeDiagnostics({
               organizationId,
               storeId: terminal.identity.binding.storeId,
               deviceId,
@@ -110,6 +122,18 @@ export default function SyncStatusScreen() {
     <Text>Durable Outbox: PHASE 10</Text><Text>Outbox pending / syncing / conflict / failed: {outbox?.summary.pending ?? 0} / {outbox?.summary.syncing ?? 0} / {outbox?.summary.conflict ?? 0} / {outbox?.summary.failed ?? 0}</Text><Text>Oldest unresolved: {outbox?.oldestUnresolved ? `${outbox.oldestUnresolved.localReference} — sequence ${outbox.oldestUnresolved.deviceSequence} — ${outbox.oldestUnresolved.state} — ${outbox.oldestUnresolved.totalMinor} ${outbox.oldestUnresolved.currencyCode}` : "NONE"}</Text><Pressable disabled={mode !== "online"} onPress={() => void syncOutbox()}><Text>Sync durable outbox now</Text></Pressable>
     <Text>PHASE 11 DEVICE SEQUENCE</Text><Text>Device: {deviceId ?? "NOT AVAILABLE"}</Text><Text>Next local sequence: {sequenceState?.nextSequence ?? "CHECK REQUIRED"}</Text><Text>Local known server checkpoint: {sequenceState?.serverCheckpoint ?? "CHECK REQUIRED"}</Text><Text>Remote server checkpoint: {remoteCheckpoint ?? "NOT CHECKED"}</Text><Text>Next expected server sequence: {sequenceState ? sequenceState.serverCheckpoint + 1 : "CHECK REQUIRED"}</Text><Text>Sequence health: {sequenceHealth}</Text><Pressable disabled={mode !== "online"} onPress={() => void refreshCheckpoint()}><Text>Refresh Server Checkpoint</Text></Pressable>
     <Text>PHASE 12 CLOUD RECONCILIATION</Text><Text>Delta sync: {cursor?.initialized ? "INITIALIZED" : "NOT INITIALIZED"}</Text><Text>Pull cursor: {cursor?.pullCursor ?? 0}</Text><Text>Last push: {cursor?.lastPushAt ?? "NEVER"}</Text><Text>Last pull: {cursor?.lastPullAt ?? "NEVER"}</Text><Text>Last reconciliation: {cursor?.lastReconcileAt ?? "NEVER"}</Text><Text>Last sync error: {cursor?.lastError ?? "NONE"}</Text><Text>Server changes remaining: UNKNOWN UNTIL RECONCILE</Text><Pressable disabled={mode !== "online"} onPress={() => void reconcile()}><Text>Reconcile With Cloud</Text></Pressable>
+    <Text>PHASE 16 ISOLATED DEVICE MODE</Text>
+    <Text>Persisted mode: {isolatedDiagnostics?.connectionMode ?? "UNKNOWN"}</Text>
+    <Text>Mode changed at: {isolatedDiagnostics?.connectionChangedAt ?? "UNKNOWN"}</Text>
+    <Text>Unresolved transactions: {isolatedDiagnostics?.unresolvedTransactions ?? 0}</Text>
+    <Text>Pending / syncing / conflict / failed: {isolatedDiagnostics?.pendingTransactions ?? 0} / {isolatedDiagnostics?.syncingTransactions ?? 0} / {isolatedDiagnostics?.conflictTransactions ?? 0} / {isolatedDiagnostics?.failedTransactions ?? 0}</Text>
+    <Text>Oldest unresolved: {isolatedDiagnostics?.oldestUnresolvedReference ?? "NONE"} / {isolatedDiagnostics?.oldestUnresolvedState ?? "—"}</Text>
+    <Text>Next device sequence: {isolatedDiagnostics?.nextDeviceSequence ?? "UNKNOWN"}</Text>
+    <Text>Server checkpoint: {isolatedDiagnostics?.serverCheckpoint ?? "UNKNOWN"}</Text>
+    <Text>Pull cursor: {isolatedDiagnostics?.pullCursor ?? "UNKNOWN"}</Text>
+    <Text>Last cloud reconcile: {isolatedDiagnostics?.lastReconcileAt ?? "NEVER"}</Text>
+    <Text>Offline authorization: {isolatedDiagnostics?.offlineAuthorization ?? "UNKNOWN"}</Text>
+    <Text>Recovery safe for CLOUD_ONLINE: {isolatedDiagnostics?.recoverySafeForCloudOnline ? "YES" : "NO"}</Text>
     <Text>PHASE 15 STORE LOCAL MODE / STORE HUB</Text>
     <Text>Connection mode: {connectionMode}</Text>
     <Text>Store Hub URL: {storeHubState?.hubUrl ?? "NOT CONFIGURED / NOT CONTACTED"}</Text>

@@ -601,6 +601,16 @@ export async function reportPosV2SyncTelemetry(
     conflictCount: number;
     failedCount: number;
     offlineSince: string | null;
+    crashCount: number;
+    crashWindowStartedAt: string | null;
+    lastCrashAt: string | null;
+    apiAverageLatencyMs: number;
+    apiMaxLatencyMs: number;
+    apiFailureCount: number;
+    syncAverageLatencyMs: number;
+    syncMaxLatencyMs: number;
+    localDatabaseHealth: "HEALTHY" | "CHECK_REQUIRED" | "UNAVAILABLE" | "UNKNOWN";
+    localSchemaVersion: number;
   },
 ) {
   return (

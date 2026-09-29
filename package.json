@@ -170,7 +170,8 @@
     "mobile:submit:android:closed": "cd apps/mobile && pnpm dlx eas-cli@latest submit --platform android --profile closed",
     "mobile:submit:android:pilot": "cd apps/mobile && pnpm dlx eas-cli@latest submit --platform android --profile pilot",
     "mobile:submit:android:production-draft": "cd apps/mobile && pnpm dlx eas-cli@latest submit --platform android --profile production",
-    "test:phase-25-device-fleet": "node --test scripts/phase-25-device-fleet-check.mjs"
+    "test:phase-25-device-fleet": "node --test scripts/phase-25-device-fleet-check.mjs",
+    "test:phase-26-observability": "node --test scripts/phase-26-production-observability-check.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

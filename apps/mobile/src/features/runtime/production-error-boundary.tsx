@@ -9,6 +9,9 @@ import {
   Text,
   View,
 } from "react-native";
+import {
+  recordProductionCrash,
+} from "../observability/production-crash-state";
 
 type State = {
   failed: boolean;
@@ -33,6 +36,11 @@ export class ProductionErrorBoundary
     error: Error,
     _info: ErrorInfo,
   ) {
+    void recordProductionCrash()
+      .catch(
+        () => undefined,
+      );
+
     console.error(
       "[TINDIO_RUNTIME_ERROR]",
       error.name,

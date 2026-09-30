@@ -136,3 +136,22 @@ R1 active local migration count:
 The migration is NOT applied to current live Neon during R1.
 
 R2 will absorb the final intended function into the canonical baseline rather than carrying repair noise.
+
+RECOVERY STATUS:
+
+R0: COMPLETE
+R1: COMPLETE
+R2: NOT STARTED
+
+R1 final generated DB type contract: CURRENT
+Historical migration immutability: PASS
+Dynamic recovery forward migration tracking: PASS
+Full DB certification: PASS
+Static certification: PASS
+Lint: PASS
+Root typecheck: PASS
+Mobile typecheck: PASS
+Build: PASS
+R1 drift regenerated: PASS
+FunctionPrivileges captured: PASS
+Live Neon writes during R1: NO

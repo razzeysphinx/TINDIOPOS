@@ -39,6 +39,8 @@ type ServerSupabaseClient =
 type RpcError = {
   code?: string;
   message?: string;
+  details?: string;
+  hint?: string;
 };
 
 type RawRpcResult = {
@@ -204,6 +206,8 @@ export function reportInventoryModuleFailure(
     module,
     code: error.code ?? null,
     message: error.message ?? "Unknown inventory error",
+    details: error.details ?? null,
+    hint: error.hint ?? null,
   });
 
   return {

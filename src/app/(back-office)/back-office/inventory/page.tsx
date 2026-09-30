@@ -30,6 +30,19 @@ type InventorySaleableItem = {
   storeIds: string[];
   identifiers?: string[];
 };
+
+type InventoryCountWorkspaceRow = Pick<TableRow<"inventory_counts">, "id" | "count_number" | "store_id" | "status" | "note" | "started_at" | "started_by_employee_id" | "completed_at" | "updated_at" | "count_mode" | "scope_type" | "scope_reference_id" | "sort_mode" | "include_zero_stock">;
+type InventoryCountLineWorkspaceRow = Pick<TableRow<"inventory_count_lines">, "id" | "inventory_count_id" | "product_id" | "variant_id" | "expected_quantity" | "reconciled_expected_quantity" | "counted_quantity" | "counted_at" | "product_name_snapshot" | "variant_name_snapshot" | "category_name_snapshot" | "sku_snapshot" | "barcode_snapshot" | "unit_snapshot" | "line_sort_order">;
+type InventoryCountBatchWorkspaceRow = Pick<TableRow<"inventory_count_batches">, "id" | "batch_number" | "name" | "note" | "created_at" | "updated_at">;
+type InventoryCountBatchDocumentWorkspaceRow = Pick<TableRow<"inventory_count_batch_documents">, "inventory_count_batch_id" | "inventory_count_id" | "store_id">;
+type InventoryCountReadError = { code?: string; message?: string; details?: string; hint?: string };
+type InventoryCountReadResult<T> = { data: T[] | null; error: InventoryCountReadError | null };
+type InventoryCountReadClient = {
+  rpc(name: "get_inventory_counts_workspace_v2", args: { target_organization_id: string; target_store_ids: string[] | null; target_limit: number }): PromiseLike<InventoryCountReadResult<InventoryCountWorkspaceRow>>;
+  rpc(name: "get_inventory_count_lines_workspace_v2", args: { target_organization_id: string; target_inventory_count_ids: string[] }): PromiseLike<InventoryCountReadResult<InventoryCountLineWorkspaceRow>>;
+  rpc(name: "get_inventory_count_batches_workspace_v2", args: { target_organization_id: string; target_limit: number }): PromiseLike<InventoryCountReadResult<InventoryCountBatchWorkspaceRow>>;
+  rpc(name: "get_inventory_count_batch_documents_workspace_v2", args: { target_organization_id: string; target_inventory_count_batch_ids: string[] }): PromiseLike<InventoryCountReadResult<InventoryCountBatchDocumentWorkspaceRow>>;
+};
 import {
   RECEIVABLE_TRANSFER_QUERY_STATUSES,
   isReceivableTransferState,
@@ -885,6 +898,7 @@ export async function InventoryWorkspacePage({
   }
 
   const supabase = await createClient();
+  const inventoryCountReadClient = supabase as unknown as InventoryCountReadClient;
   const organizationId = context.organization.id;
   const inventorySchema =
     await loadInventorySchemaContract(
@@ -1111,21 +1125,10 @@ export async function InventoryWorkspacePage({
     recentMovementsQuery?.limit(30);
   }
   const inventoryCountsQuery = canCount && ["overview", "counts"].includes(activeTab)
-    ? supabase
-        .from("inventory_counts")
-        .select("id, count_number, store_id, status, note, started_at, started_by_employee_id, completed_at, updated_at, count_mode, scope_type, scope_reference_id, sort_mode, include_zero_stock")
-        .eq("organization_id", organizationId)
-        .in("status", ["draft", "in_progress", "ready_for_review", "posted", "cancelled", "open", "completed"])
-        .order("started_at", { ascending: false })
-        .limit(100)
+    ? inventoryCountReadClient.rpc("get_inventory_counts_workspace_v2", { target_organization_id: organizationId, target_store_ids: scopedStoreIds, target_limit: 100 })
     : null;
   const inventoryCountBatchesQuery = canCount && activeTab === "counts" && inventoryModules.count_batches
-    ? supabase
-        .from("inventory_count_batches")
-        .select("id, batch_number, name, note, created_at, updated_at")
-        .eq("organization_id", organizationId)
-        .order("created_at", { ascending: false })
-        .limit(25)
+    ? inventoryCountReadClient.rpc("get_inventory_count_batches_workspace_v2", { target_organization_id: organizationId, target_limit: 25 })
     : null;
   const countAwarenessQuery = workspace === "control" && activeTab === "overview"
     ? supabase.rpc("get_inventory_health_awareness", { target_organization_id: organizationId })
@@ -1150,7 +1153,6 @@ export async function InventoryWorkspacePage({
     openPurchaseOrdersCountQuery?.in("store_id", scopedStoreIds);
     inventoryPoliciesQuery?.in("store_id", scopedStoreIds);
     recentMovementsQuery?.in("store_id", scopedStoreIds);
-    inventoryCountsQuery?.in("store_id", scopedStoreIds);
   }
 
   const [
@@ -1268,7 +1270,7 @@ export async function InventoryWorkspacePage({
       : Promise.resolve({ data: [], error: null }),
     replenishmentRulesQuery ?? Promise.resolve({ data: [], error: null }),
     inventoryCountsQuery ?? Promise.resolve({
-      data: [] as Array<Pick<TableRow<"inventory_counts">, "id" | "count_number" | "store_id" | "status" | "note" | "started_at" | "started_by_employee_id" | "completed_at" | "updated_at" | "count_mode" | "scope_type" | "scope_reference_id" | "sort_mode" | "include_zero_stock">>,
+      data: [] as InventoryCountWorkspaceRow[],
       error: null,
     }),
     inventoryCountBatchesQuery ?? Promise.resolve({ data: [], error: null }),
@@ -1410,12 +1412,8 @@ export async function InventoryWorkspacePage({
     : [];
   const inventoryCountBatchIds = inventoryCountBatches.map((batch) => batch.id);
   const inventoryCountBatchDocumentsResult = inventoryCountBatchIds.length
-    ? await supabase
-        .from("inventory_count_batch_documents")
-        .select("inventory_count_batch_id, inventory_count_id, store_id")
-        .eq("organization_id", organizationId)
-        .in("inventory_count_batch_id", inventoryCountBatchIds)
-    : { data: [], error: null };
+    ? await inventoryCountReadClient.rpc("get_inventory_count_batch_documents_workspace_v2", { target_organization_id: organizationId, target_inventory_count_batch_ids: inventoryCountBatchIds })
+    : { data: [] as InventoryCountBatchDocumentWorkspaceRow[], error: null };
   const countBatchDocumentsFailure = inventoryCountBatchDocumentsResult.error
     ? reportInventoryModuleFailure(
         "count_batches",
@@ -1448,13 +1446,8 @@ export async function InventoryWorkspacePage({
           .limit(50)
       : Promise.resolve({ data: [], error: null }),
     countIds.length
-      ? supabase
-          .from("inventory_count_lines")
-          .select("id, inventory_count_id, product_id, variant_id, expected_quantity, reconciled_expected_quantity, counted_quantity, counted_at, product_name_snapshot, variant_name_snapshot, category_name_snapshot, sku_snapshot, barcode_snapshot, unit_snapshot, line_sort_order")
-          .eq("organization_id", organizationId)
-          .in("inventory_count_id", countIds)
-          .order("line_sort_order", { ascending: true })
-      : Promise.resolve({ data: [], error: null }),
+      ? inventoryCountReadClient.rpc("get_inventory_count_lines_workspace_v2", { target_organization_id: organizationId, target_inventory_count_ids: countIds })
+      : Promise.resolve({ data: [] as InventoryCountLineWorkspaceRow[], error: null }),
   ]);
 
   const purchasingHistoryError = [purchaseOrderLinesResult, goodsReceiptsResult].find((result) => result.error)?.error;

@@ -42,6 +42,7 @@ const eslintConfig = defineConfig([
       // convention but which carry "import \"server-only\"":
       "src/features/reports/reporting.ts",
       "src/features/checkout/checkout-service.ts",
+      "src/features/offline/pos-v2-offline-checkout-service.ts",
     ],
     rules: {
       "@typescript-eslint/no-restricted-imports": [

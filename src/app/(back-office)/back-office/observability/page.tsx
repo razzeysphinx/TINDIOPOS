@@ -9,15 +9,25 @@ import { createClient } from "@/lib/supabase/server";
 export const metadata = { title: "Production Observability" };
 type Query = { select: (columns: string) => { eq: (column: string, value: string) => { order: (column: string, options: { ascending: boolean }) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } } };
 
+async function measureDatabaseProbe<T>(request: () => Promise<T>) {
+  const startedAt = Date.now();
+  const result = await request();
+
+  return {
+    result,
+    latencyMs: Math.max(0, Date.now() - startedAt),
+  };
+}
+
 export default async function ObservabilityPage({ searchParams }: { searchParams: Promise<{ store?: string }> }) {
   const context = await requireBackOfficePermission("devices.manage");
   if (!hasPermission(context, "devices.manage")) redirect("/back-office");
   const scope = resolveBackOfficeStoreScope(context, await searchParams);
   if (scope.invalidSelection) notFound();
   const supabase = await createClient();
-  const probeStartedAt = Date.now();
-  const probe = await supabase.from("organizations").select("id").eq("id", context.organization.id).maybeSingle();
-  const serverDatabaseProbeLatencyMs = Math.max(0, Date.now() - probeStartedAt);
+  const { result: probe, latencyMs: serverDatabaseProbeLatencyMs } = await measureDatabaseProbe(
+    () => supabase.from("organizations").select("id").eq("id", context.organization.id).maybeSingle(),
+  );
   const database = supabase as unknown as { from: (table: string) => Query };
   const [telemetryResult, devicesResult, storesResult, registersResult, filterStores] = await Promise.all([
     database.from("pos_device_sync_telemetry").select("device_id,store_id,register_id,employee_name_snapshot,connection_mode,app_version,last_heartbeat_at,last_successful_sync_at,device_checkpoint,server_checkpoint,queue_depth,conflict_count,failed_count,offline_since,crash_count,crash_window_started_at,last_crash_at,api_average_latency_ms,api_max_latency_ms,api_failure_count,sync_average_latency_ms,sync_max_latency_ms,local_database_health,local_schema_version").eq("organization_id", context.organization.id).order("last_heartbeat_at", { ascending: false }),

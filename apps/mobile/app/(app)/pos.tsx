@@ -17,7 +17,6 @@ import { cashierFeatureGates } from "../../src/features/cashier/cashier-feature-
 import { formatMoney } from "../../src/features/cashier/cashier-format";
 import {
   cartSupportsDurableOfflineCash,
-  minorToMoney,
   sameConfiguration,
   sameSaleable,
 } from "../../src/features/cashier/cashier-validation";
@@ -228,6 +227,27 @@ export default function PosScreen() {
     openTicketId: activeTicketId,
   });
 
+  useEffect(() => {
+    if (!core || !binding || !identity) return;
+
+    let active = true;
+
+    void readCartOfflineInventoryIntelligence({
+      organizationId: core.organization.id,
+      storeId: binding.storeId,
+      deviceId: identity.credential.deviceId,
+      cart,
+    }).then((next) => {
+      if (active) setCartInventoryIntelligence(next);
+    }).catch(() => {
+      if (active) setCartInventoryIntelligence([]);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [binding, cart, core, identity]);
+
   if (
     !core
     || !binding
@@ -383,35 +403,6 @@ export default function PosScreen() {
 
     // Cart-wide intelligence refreshes through the cart effect below.
   };
-
-  useEffect(() => {
-    if (!core || !binding || !identity) {
-      setCartInventoryIntelligence([]);
-      return;
-    }
-
-    let active = true;
-
-    void readCartOfflineInventoryIntelligence({
-      organizationId: core.organization.id,
-      storeId: binding.storeId,
-      deviceId: identity.credential.deviceId,
-      cart,
-    }).then((next) => {
-      if (active) setCartInventoryIntelligence(next);
-    }).catch(() => {
-      if (active) setCartInventoryIntelligence([]);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [
-    binding,
-    cart,
-    core,
-    identity,
-  ]);
 
   const findLookupValue = async (
     value: string,
@@ -869,7 +860,7 @@ export default function PosScreen() {
 
       {cart.map((line) => (
         <CashierCartLine
-          key={posItemKey(line)}
+          key={`${posItemKey(line)}:${line.quantity}:${line.itemNote ?? ""}`}
           line={line}
           currencyCode={core.organization.currencyCode}
           canEditQuantity={canEditQuantity}

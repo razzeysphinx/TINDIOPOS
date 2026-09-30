@@ -46,14 +46,6 @@ export default function Tickets() {
     return () => clearTimeout(timer);
   }, [enabled, load]);
 
-  if (!enabled) {
-    return <Text>Tickets disabled by feature or permission.</Text>;
-  }
-
-  if (!core || !binding || !credential) {
-    return <Text>Ticket operations require an enrolled terminal.</Text>;
-  }
-
   const source = tickets.find((ticket) => ticket.id === sourceId) ?? null;
 
   const selectedLines = useMemo(
@@ -68,6 +60,14 @@ export default function Tickets() {
       ),
     [selectedLineIds, source],
   );
+
+  if (!enabled) {
+    return <Text>Tickets disabled by feature or permission.</Text>;
+  }
+
+  if (!core || !binding || !credential) {
+    return <Text>Ticket operations require an enrolled terminal.</Text>;
+  }
 
   const toggleLine = (ticketLineId: string) => {
     setSelectedLineIds((current) =>

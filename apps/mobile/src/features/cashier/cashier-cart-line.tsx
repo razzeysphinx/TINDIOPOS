@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import type { PosCartLine } from "../../../../../src/contracts/pos";
 import { formatMoney } from "./cashier-format";
@@ -25,9 +25,6 @@ export function CashierCartLine({
 }) {
   const [quantity, setQuantity] = useState(String(line.quantity));
   const [note, setNote] = useState(line.itemNote ?? "");
-
-  useEffect(() => setQuantity(String(line.quantity)), [line.quantity]);
-  useEffect(() => setNote(line.itemNote ?? ""), [line.itemNote]);
 
   const baseMinor = line.manualPriceMinor ?? line.priceMinor;
   const modifierMinor = (line.modifiers ?? []).reduce((sum, modifier) => sum + modifier.priceMinor, 0);

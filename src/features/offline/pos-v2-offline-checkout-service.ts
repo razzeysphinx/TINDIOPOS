@@ -1,3 +1,5 @@
+import "server-only";
+
 import { checkoutSubmissionSchema } from "@/features/checkout/checkout-schema";
 import { completeCheckout } from "@/features/checkout/checkout-service";
 import type { CheckoutSaleActionResult, CheckoutSequenceInfo } from "@/features/checkout/checkout-types";

@@ -27,7 +27,9 @@ export default function SyncStatusScreen() {
   const { data, reload, mode, connectionMode } = useBusinessContext();
   const organizationId = data?.core.organization.id;
   const terminal = useTerminalDevice(organizationId);
-  const deviceId = terminal.identity?.credential.deviceId;
+  const identity = terminal.identity;
+  const binding = identity?.binding;
+  const deviceId = identity?.credential.deviceId;
   const [health, setHealth] = useState<Awaited<ReturnType<typeof getLocalDatabaseHealth>> | null>(null);
   const [cached, setCached] = useState<boolean | null>(null);
   const [stats, setStats] = useState<OrganizationCacheStats | null>(null);
@@ -55,36 +57,36 @@ export default function SyncStatusScreen() {
       setCached(await hasBusinessContextSnapshot(organizationId)); setStats(await getOrganizationCacheStats(organizationId));
       setOutbox(await getSafeOutboxDiagnostics(organizationId));
       setSequenceState(deviceId ? await getDeviceSyncState(organizationId, deviceId) : null);
-      setCursor(deviceId && terminal.identity?.binding ? await getSyncCursor(organizationId, deviceId, terminal.identity.binding.storeId) : null);
+      setCursor(deviceId && binding ? await getSyncCursor(organizationId, deviceId, binding.storeId) : null);
       setInventoryDiagnostics(
-        deviceId && terminal.identity?.binding
+        deviceId && binding
           ? await getOfflineInventoryDiagnostics({
               organizationId,
-              storeId: terminal.identity.binding.storeId,
+              storeId: binding.storeId,
               deviceId,
             })
           : null,
       );
       setStoreHubState(
-        deviceId && terminal.identity?.binding
+        deviceId && binding
           ? await getStoreHubState({
               organizationId,
-              storeId: terminal.identity.binding.storeId,
+              storeId: binding.storeId,
               deviceId,
             })
           : null,
       );
       setIsolatedDiagnostics(
-        deviceId && terminal.identity?.binding
+        deviceId && binding
           ? await getIsolatedRuntimeDiagnostics({
               organizationId,
-              storeId: terminal.identity.binding.storeId,
+              storeId: binding.storeId,
               deviceId,
             })
           : null,
       );
     }
-  }, [deviceId, organizationId, terminal.identity?.binding]);
+  }, [binding, deviceId, organizationId]);
 
   useEffect(() => { const timer = setTimeout(() => void load(), 0); return () => clearTimeout(timer); }, [load]);
   const verify = useCallback(async () => { await verifyLocalPersistence(); await load(); }, [load]);

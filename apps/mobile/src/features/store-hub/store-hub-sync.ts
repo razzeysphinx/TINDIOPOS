@@ -153,7 +153,7 @@ export async function synchronizeWithStoreHub(
       published += 1;
     }
 
-    let state = await getStoreHubState(scope);
+    const state = await getStoreHubState(scope);
     let cursor = state?.pullCursor ?? 0;
     let pulled = 0;
 

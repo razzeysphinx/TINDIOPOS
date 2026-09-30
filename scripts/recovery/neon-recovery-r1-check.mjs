@@ -29,7 +29,13 @@ test("R1 compares schema metadata without live mutation helpers", () => {
 });
 
 test("R1 captures all core schema object classes", () => {
-  for (const name of ["tables", "columns", "constraints", "functions", "indexes", "policies", "triggers", "sequences", "extensions"]) {
+  for (const name of ["tables", "columns", "constraints", "functions", "functionPrivileges", "indexes", "policies", "triggers", "sequences", "extensions"]) {
     assert.match(r1, new RegExp(`${name}:`));
   }
+});
+
+test("R1 captures function EXECUTE privilege parity", () => {
+  assert.match(r1, /functionPrivileges/);
+  assert.match(r1, /aclexplode/);
+  assert.match(r1, /privilege_type/);
 });

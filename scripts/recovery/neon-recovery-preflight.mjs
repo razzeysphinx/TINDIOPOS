@@ -7,6 +7,10 @@ import process from "node:process";
 const ROOT = process.cwd();
 const EXPECTED_ANCESTOR = "2d48e2ead33d783aef6c61dedb661ba74714ea9a";
 const EXPECTED_BRANCH = "recovery/neon-canonical-rebuild";
+const AUDITED_HISTORICAL_MIGRATION_COUNT = 211;
+const RECOVERY_FORWARD_MIGRATION_COUNT = 1;
+const EXPECTED_MIGRATION_COUNT =
+  AUDITED_HISTORICAL_MIGRATION_COUNT + RECOVERY_FORWARD_MIGRATION_COUNT;
 
 function git(args) {
   return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
@@ -29,7 +33,7 @@ assert.ok(parsed.hostname.toLowerCase().endsWith(".neon.tech"), "DATABASE_URL_UN
 assert.ok(!parsed.hostname.toLowerCase().includes("-pooler"), "DATABASE_URL_UNPOOLED must use the direct/unpooled migration endpoint.");
 
 const migrationFiles = readdirSync(path.join(ROOT, "supabase", "migrations")).filter((name) => name.endsWith(".sql")).sort();
-assert.equal(migrationFiles.length, 211, "R1 expects the audited 211-file historical migration set. Re-audit before continuing if this changed.");
+assert.equal(migrationFiles.length, EXPECTED_MIGRATION_COUNT, "Recovery migration count changed unexpectedly. Re-audit before continuing.");
 
 console.log("TINDIO NEON RECOVERY PREFLIGHT: PASS");
-console.log(JSON.stringify({ branch, head: git(["rev-parse", "HEAD"]), auditedAncestor: EXPECTED_ANCESTOR, migrationCount: migrationFiles.length, databaseProvider: "neon", liveTarget: "DIRECT_NEON", stagedEnvFiles: 0 }, null, 2));
+console.log(JSON.stringify({ branch, head: git(["rev-parse", "HEAD"]), auditedAncestor: EXPECTED_ANCESTOR, historicalMigrationCount: AUDITED_HISTORICAL_MIGRATION_COUNT, recoveryForwardMigrationCount: RECOVERY_FORWARD_MIGRATION_COUNT, migrationCount: migrationFiles.length, databaseProvider: "neon", liveTarget: "DIRECT_NEON", stagedEnvFiles: 0 }, null, 2));

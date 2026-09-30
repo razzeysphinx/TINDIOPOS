@@ -83,3 +83,26 @@ Business SQL must use TINDIO identity/RBAC boundary.
 
 ROLLBACK RULE:
 Current Neon remains rollback source until clean branch is certified.
+
+R1 GATE REPAIR
+
+The original audited historical migration set contains 211 migrations.
+
+R1 discovered one real privilege defect:
+open_tickets RLS depends on private.has_active_pos_shift_access(), but authenticated EXECUTE had been revoked.
+
+One forward-only recovery migration was added to repair that privilege contract locally:
+
+20260930111500_recovery_r1_pos_shift_rls_execute_grant.sql
+
+Therefore during R1 completion:
+
+211 historical migrations
++ 1 recovery forward migration
+= 212 active local migrations
+
+Historical migrations remain unmodified.
+
+This recovery migration is NOT automatically applied to current live Neon during R1.
+
+The canonical R2 baseline will absorb the final intended privilege state instead of preserving migration noise.

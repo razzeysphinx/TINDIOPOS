@@ -34,7 +34,8 @@ create temporary table pos_test_context (
   register_id uuid not null,
   category_id uuid,
   simple_product_id uuid,
-  variable_product_id uuid
+  variable_product_id uuid,
+  shift_id uuid
 );
 
 grant select, insert, update on table pos_test_context to authenticated;
@@ -167,6 +168,31 @@ set variable_product_id = public.create_catalog_product(
 )
 where label = 'pos';
 
+update pos_test_context
+set shift_id = (
+  select opened.shift_id
+  from public.open_register_shift(
+    (
+      select organization_id
+      from pos_test_context
+      where label = 'pos'
+    ),
+    (
+      select store_id
+      from pos_test_context
+      where label = 'pos'
+    ),
+    (
+      select register_id
+      from pos_test_context
+      where label = 'pos'
+    ),
+    0,
+    null
+  ) opened
+)
+where label = 'pos';
+
 select is(
   (
     select count(*)
@@ -259,21 +285,82 @@ reset role;
 set local role authenticated;
 set local request.jwt.claim.sub = '88888888-8888-4888-8888-888888888888';
 
-select is(
-  (
-    select count(*)
-    from public.search_pos_catalog(
-      (select organization_id from pos_test_context where label = 'pos'),
-      (select store_id from pos_test_context where label = 'pos')
+select throws_ok(
+  format(
+    $$select * from public.search_pos_catalog(%L, %L)$$,
+    (
+      select organization_id
+      from pos_test_context
+      where label = 'pos'
+    ),
+    (
+      select store_id
+      from pos_test_context
+      where label = 'pos'
     )
   ),
-  0::bigint,
+  '42501',
+  'POS access is required.',
   'another organization cannot search this POS catalogue'
 );
 
 reset role;
 set local role authenticated;
+set local request.jwt.claim.sub =
+  '77777777-7777-4777-8777-777777777777';
+
+do $$
+begin
+  perform *
+  from public.close_register_shift(
+    (
+      select organization_id
+      from pos_test_context
+      where label = 'pos'
+    ),
+    (
+      select shift_id
+      from pos_test_context
+      where label = 'pos'
+    ),
+    0,
+    null
+  );
+end;
+$$;
+
+update pos_test_context
+set shift_id = null
+where label = 'pos';
+
+reset role;
+set local role authenticated;
 set local request.jwt.claim.sub = '99999999-9999-4999-8999-999999999999';
+
+update pos_test_context
+set shift_id = (
+  select opened.shift_id
+  from public.open_register_shift(
+    (
+      select organization_id
+      from pos_test_context
+      where label = 'pos'
+    ),
+    (
+      select store_id
+      from pos_test_context
+      where label = 'pos'
+    ),
+    (
+      select register_id
+      from pos_test_context
+      where label = 'pos'
+    ),
+    0,
+    null
+  ) opened
+)
+where label = 'pos';
 
 select is(
   (
@@ -291,31 +378,41 @@ reset role;
 set local role authenticated;
 set local request.jwt.claim.sub = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
-select is(
-  (
-    select count(*)
-    from public.search_pos_catalog(
-      (select organization_id from pos_test_context where label = 'pos'),
-      (select store_id from pos_test_context where label = 'pos')
+select throws_ok(
+  format(
+    $$select * from public.search_pos_catalog(%L, %L)$$,
+    (
+      select organization_id
+      from pos_test_context
+      where label = 'pos'
+    ),
+    (
+      select store_id
+      from pos_test_context
+      where label = 'pos'
     )
   ),
-  0::bigint,
+  '42501',
+  'The selected store is not assigned to this employee.',
   'cashier without a store assignment cannot browse that store catalogue'
 );
 
-select is(
-  (
-    select count(*)
-    from public.search_pos_catalog(
-      (select organization_id from pos_test_context where label = 'pos'),
-      (select store_id from pos_test_context where label = 'pos'),
-      null,
-      null,
-      0,
-      49
+select throws_ok(
+  format(
+    $$select * from public.search_pos_catalog(%L, %L, null, null, 0, 49)$$,
+    (
+      select organization_id
+      from pos_test_context
+      where label = 'pos'
+    ),
+    (
+      select store_id
+      from pos_test_context
+      where label = 'pos'
     )
   ),
-  0::bigint,
+  '22023',
+  'Invalid POS catalog page.',
   'catalogue search rejects oversized page requests'
 );
 

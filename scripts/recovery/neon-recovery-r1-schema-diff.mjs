@@ -71,6 +71,31 @@ from pg_catalog.pg_proc p
 join pg_catalog.pg_namespace n on n.oid = p.pronamespace
 where n.nspname in ('public', 'private');`,
 
+  functionPrivileges: `
+select coalesce(
+  jsonb_agg(
+    jsonb_build_object(
+      'schema', n.nspname,
+      'name', p.proname,
+      'arguments', pg_get_function_identity_arguments(p.oid),
+      'grantee', case when acl.grantee = 0 then 'PUBLIC' else grantee.rolname end,
+      'privilege', acl.privilege_type,
+      'grantable', acl.is_grantable
+    )
+    order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid),
+      case when acl.grantee = 0 then 'PUBLIC' else grantee.rolname end,
+      acl.privilege_type
+  ),
+  '[]'::jsonb
+)::text
+from pg_catalog.pg_proc p
+join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+cross join lateral pg_catalog.aclexplode(
+  coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))
+) acl
+left join pg_catalog.pg_roles grantee on grantee.oid = acl.grantee
+where n.nspname in ('public', 'private');`,
+
   indexes: `
 select coalesce(jsonb_agg(jsonb_build_object('schema', i.schemaname, 'table', i.tablename, 'name', i.indexname, 'definitionHash', md5(i.indexdef)) order by i.schemaname, i.tablename, i.indexname), '[]'::jsonb)::text
 from pg_catalog.pg_indexes i
@@ -109,6 +134,7 @@ function stableKey(category, value) {
     case "columns": return `${value.schema}.${value.table}.${value.column}`;
     case "constraints": return `${value.schema}.${value.table}.${value.name}`;
     case "functions": return `${value.schema}.${value.name}(${value.arguments})`;
+    case "functionPrivileges": return [value.schema, `${value.name}(${value.arguments})`, value.grantee, value.privilege].join("|");
     case "indexes": return `${value.schema}.${value.table}.${value.name}`;
     case "policies": return `${value.schema}.${value.table}.${value.name}`;
     case "triggers": return `${value.schema}.${value.table}.${value.name}`;
@@ -127,6 +153,7 @@ function comparableHash(category, value) {
     case "policies":
     case "triggers": return value.definitionHash;
     case "functions": return JSON.stringify({ securityDefiner: value.securityDefiner, definitionHash: value.definitionHash });
+    case "functionPrivileges": return JSON.stringify({ grantable: value.grantable });
     case "sequences": return value.dataType;
     case "extensions": return JSON.stringify({ schema: value.schema, version: value.version });
     default: throw new Error(`Unknown manifest category: ${category}`);

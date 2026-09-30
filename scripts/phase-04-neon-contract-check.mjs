@@ -173,9 +173,9 @@ test(
       /auth\.user_id\(\)/,
     );
 
-    assert.match(
+    assert.doesNotMatch(
       identityProvider,
-      /auth\.uid\(\)/,
+      /\bauth\.uid\s*\(/,
     );
 
     assert.match(

@@ -94,9 +94,7 @@ test(
       const helper
       of [
         "auth.user_id()",
-        "auth.uid()",
         "auth.jwt()",
-        "auth.session()",
       ]
     ) {
       assert.match(
@@ -111,6 +109,12 @@ test(
         `${helper} must be verified by the Neon provider adapter`,
       );
     }
+
+    assert.doesNotMatch(
+      identity,
+      /\bauth\.uid\s*\(/i,
+      "R3 keeps auth.uid() isolated to the local provider adapter.",
+    );
 
     assert.match(
       identity,

@@ -5,6 +5,21 @@
 create schema if not exists private;
 revoke all on schema private from public;
 
+CREATE FUNCTION "private"."current_identity_email"()
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+  select null::text;
+$function$;
+
+
+revoke execute on function private.current_identity_email() from public;
+
+
+
 --
 -- PostgreSQL database dump
 --
@@ -51,8 +66,8 @@ CREATE OR REPLACE FUNCTION "private"."accept_employee_invitation"("invitation_to
     SET "search_path" TO ''
     AS $_$
 declare
-  current_user_id uuid := (select auth.uid());
-  current_user_email text := lower(coalesce((select auth.jwt() ->> 'email'), ''));
+  current_user_id uuid := (select private.current_profile_id());
+  current_user_email text := lower(coalesce((select private.current_identity_email()), ''));
   invitation public.employee_invitations%rowtype;
   new_employee_id uuid;
 begin
@@ -255,7 +270,7 @@ declare
   next_quantity numeric(14, 3);
   new_movement_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
     raise exception 'Inventory management permission is required.' using errcode = '42501';
   end if;
@@ -280,7 +295,7 @@ begin
   into actor_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active'
   limit 1;
 
@@ -638,7 +653,7 @@ begin
   if transfer.id is null or transfer.stock_request_id is not null then
     raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514';
   end if;
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
     raise exception 'Transfer send permission is required.' using errcode = '42501';
   end if;
@@ -843,7 +858,7 @@ CREATE OR REPLACE FUNCTION "private"."approve_stock_request"("target_organizatio
     AS $_$
 declare request_row public.stock_requests%rowtype; actor_id uuid; line jsonb; request_line public.stock_request_lines%rowtype; warehouse_store_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or (
        not (select private.has_permission(target_organization_id, 'inventory.manage'))
        and not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send'))
@@ -1515,7 +1530,7 @@ CREATE OR REPLACE FUNCTION "private"."can_access_kitchen_realtime_topic"("target
     SET "search_path" TO ''
     AS $$
   select coalesce(
-    (select auth.uid()) is not null
+    (select private.current_profile_id()) is not null
     and exists (
       select 1
       from public.employees employee
@@ -1528,7 +1543,7 @@ CREATE OR REPLACE FUNCTION "private"."can_access_kitchen_realtime_topic"("target
       join public.role_permissions role_permission
         on role_permission.role_id = employee_role.role_id
        and role_permission.organization_id = employee_role.organization_id
-      where employee.profile_id = (select auth.uid())
+      where employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
         and role_permission.permission_code in ('kitchen.view', 'kitchen.manage')
         and target_topic = private.kitchen_realtime_topic(
@@ -1549,7 +1564,7 @@ CREATE OR REPLACE FUNCTION "private"."can_grant_role"("target_organization_id" "
     SET "search_path" TO ''
     AS $$
   select
-    (select auth.uid()) is not null
+    (select private.current_profile_id()) is not null
     and (select private.has_permission(
       target_organization_id,
       'employees.manage'
@@ -1687,7 +1702,7 @@ begin
   if transfer.id is null or transfer.stock_request_id is not null then
     raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514';
   end if;
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (
        (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.create'))
        or (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send'))
@@ -1752,7 +1767,7 @@ CREATE OR REPLACE FUNCTION "private"."cancel_open_ticket"("target_organization_i
 declare
   target_ticket public.open_tickets%rowtype;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -1795,7 +1810,7 @@ declare
   actor_id uuid;
   normalized_note text;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.po.create'))) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -2070,7 +2085,7 @@ begin
   if target_organization_id is null or target_store_id is null or target_register_id is null or target_idempotency_key is null then
     raise exception 'A store, register, and checkout key are required.' using errcode = '23514';
   end if;
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'sales.create')) then
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
   if target_items is null or jsonb_typeof(target_items) <> 'array' or jsonb_array_length(target_items) not between 1 and 100
@@ -2084,7 +2099,7 @@ begin
   select employee.id into actor_employee_id from public.employees employee
   join public.employee_stores es on es.employee_id = employee.id and es.organization_id = employee.organization_id and es.store_id = target_store_id
   join public.registers register on register.id = target_register_id and register.organization_id = employee.organization_id and register.store_id = target_store_id and register.is_active
-  where employee.organization_id = target_organization_id and employee.profile_id = (select auth.uid()) and employee.status = 'active';
+  where employee.organization_id = target_organization_id and employee.profile_id = (select private.current_profile_id()) and employee.status = 'active';
   if actor_employee_id is null then raise exception 'An active assigned employee and register are required.' using errcode = '42501'; end if;
 
   request_payload := jsonb_build_object('items', target_items, 'payments', target_payments, 'store_id', target_store_id, 'register_id', target_register_id, 'customer_id', target_customer_id, 'loyalty_redemption_points', coalesce(target_loyalty_redemption_points, 0), 'discount_id', target_discount_id, 'tax_rate_id', target_tax_rate_id, 'dining_option_id', target_dining_option_id, 'open_ticket_id', target_open_ticket_id);
@@ -2327,7 +2342,7 @@ begin
     or jsonb_array_length(target_payments) <> 1 then
     raise exception 'Special catalogue checkout requires valid items and one internal payment.' using errcode = '23514';
   end if;
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -2363,7 +2378,7 @@ begin
    and register.is_active
   join public.profiles profile on profile.id = employee.profile_id
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -2683,7 +2698,7 @@ begin
       using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -2705,7 +2720,7 @@ begin
    and register.organization_id = store.organization_id
    and register.is_active
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -3186,7 +3201,7 @@ begin
       using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -3224,7 +3239,7 @@ begin
   join public.profiles profile
     on profile.id = employee.profile_id
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -3741,7 +3756,7 @@ begin
     organization_id, operation_id, command, normalized_payload, result_unit_id, actor_profile_id
   ) values (
     target_organization_id, target_operation_id, target_command, target_payload,
-    target_result_unit_id, (select auth.uid())
+    target_result_unit_id, (select private.current_profile_id())
   );
   return null;
 end;
@@ -4235,7 +4250,7 @@ begin
       using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'shifts.close')) then
     raise exception 'Shift closing permission is required.' using errcode = '42501';
   end if;
@@ -4267,7 +4282,7 @@ begin
    and employee_store.organization_id = employee.organization_id
    and employee_store.store_id = target_shift.store_id
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -4315,7 +4330,7 @@ CREATE OR REPLACE FUNCTION "private"."complete_inventory_count"("target_organiza
     AS $_$
 declare actor_id uuid; count_id uuid; line jsonb; expected numeric(14,3); counted numeric(14,3); target_line_product_id uuid; target_line_variant_id uuid;
 begin
- if (select auth.uid()) is null or not (select private.has_permission(target_organization_id,'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode='42501'; end if;
+ if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id,'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode='42501'; end if;
  if target_lines is null or jsonb_typeof(target_lines) <> 'array' or jsonb_array_length(target_lines) not between 1 and 500 then raise exception 'A count needs one to 500 items.' using errcode='23514'; end if;
  perform private.inventory_count_actor(target_organization_id, target_store_id, array['inventory.count.create', 'inventory.count.finalize']::text[]);
   actor_id := private.inventory_actor(target_organization_id, target_store_id); if actor_id is null then raise exception 'An assigned employee is required for this store.' using errcode='42501'; end if;
@@ -4659,7 +4674,7 @@ declare
   valid_store_count integer;
   variant_count integer;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -4853,7 +4868,7 @@ declare
   persisted_lines jsonb;
   transfer_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.create'))
      or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
     raise exception 'Transfer create and send permissions are required.' using errcode = '42501';
@@ -4948,7 +4963,7 @@ CREATE OR REPLACE FUNCTION "private"."create_inventory_adjustment_reason"("targe
     AS $$
 declare reason_id uuid;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
   insert into public.inventory_adjustment_reasons (organization_id, code, name, movement_type)
   values (target_organization_id, upper(btrim(target_code)), btrim(target_name), target_movement_type)
   returning id into reason_id;
@@ -5245,7 +5260,7 @@ declare
   transfer_id uuid;
   transfer_number bigint;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.create')) then
     raise exception 'Transfer creation permission is required.' using errcode = '42501';
   end if;
@@ -5462,7 +5477,7 @@ declare
   requested_lines jsonb;
   persisted_lines jsonb;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.po.create'))) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -5661,7 +5676,7 @@ declare
   requested_lines jsonb;
   persisted_lines jsonb;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or (
        not (select private.has_permission(target_organization_id, 'inventory.manage'))
        and not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.create'))
@@ -5877,7 +5892,7 @@ CREATE OR REPLACE FUNCTION "private"."create_supplier"("target_organization_id" 
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$ declare supplier_id uuid; begin
- if (select auth.uid()) is null or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.suppliers.manage'))) then raise exception 'Inventory permission is required.' using errcode='42501'; end if;
+ if (select private.current_profile_id()) is null or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.suppliers.manage'))) then raise exception 'Inventory permission is required.' using errcode='42501'; end if;
  insert into public.suppliers (organization_id,name,contact_name,email,phone,address,notes) values (target_organization_id,nullif(btrim(target_name),''),nullif(btrim(target_contact_name),''),nullif(btrim(target_email),''),nullif(btrim(target_phone),''),nullif(btrim(target_address),''),nullif(btrim(target_notes),'')) returning id into supplier_id; return supplier_id; end; $$;
 
 --
@@ -5890,7 +5905,7 @@ CREATE OR REPLACE FUNCTION "private"."create_supply_chain_warehouse"("target_org
     AS $_$
 declare actor_id uuid; warehouse_id uuid;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
   if target_code is null or upper(btrim(target_code)) !~ '^[A-Z][A-Z0-9_-]{1,39}$'
@@ -5936,12 +5951,15 @@ $$;
 -- Name: current_identity_subject(); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
-CREATE OR REPLACE FUNCTION "private"."current_identity_subject"() RETURNS "text"
-    LANGUAGE "sql" STABLE SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-  select (select auth.uid())::text;
-$$;
+CREATE FUNCTION "private"."current_identity_subject"()
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+  select null::text;
+$function$;
 
 --
 -- Name: current_organization_member_employee_id("uuid"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -6149,7 +6167,7 @@ declare
   existing_status text;
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -6335,7 +6353,7 @@ declare transfer public.stock_transfers%rowtype;
 begin
   select * into transfer from public.stock_transfers where organization_id = target_organization_id and id = target_stock_transfer_id;
   if transfer.id is null or transfer.stock_request_id is not null then raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514'; end if;
-  if (select auth.uid()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
+  if (select private.current_profile_id()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
     raise exception 'Transfer send permission is required.' using errcode = '42501';
   end if;
   return private.dispatch_inventory_transfer_core(target_organization_id, target_stock_transfer_id, target_note, target_operation_id, false);
@@ -6438,7 +6456,7 @@ declare
   create_payload jsonb; transition_payload jsonb;
   submit_id uuid; approve_id uuid; dispatch_id uuid;
 begin
-  if (select auth.uid()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
+  if (select private.current_profile_id()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
     raise exception 'Transfer send permission is required.' using errcode = '42501';
   end if;
   if target_operation_id is null then raise exception 'A stable transfer-dispatch operation ID is required.' using errcode = '23514'; end if;
@@ -6677,8 +6695,8 @@ begin
   end if;
 
   -- Internal database maintenance has no Supabase user context. Every client
-  -- request has auth.uid() and must satisfy the full POS ticket capability.
-  if (select auth.uid()) is not null then
+  -- request has private.current_profile_id() and must satisfy the full POS ticket capability.
+  if (select private.current_profile_id()) is not null then
     perform private.require_pos_capabilities(
       target_organization_id,
       array['pos.access', 'sales.create', 'tickets.manage']
@@ -6869,7 +6887,7 @@ CREATE OR REPLACE FUNCTION "private"."get_catalog_costs"("target_organization_id
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(
       target_organization_id,
       'products.view_cost'
@@ -6907,7 +6925,7 @@ CREATE OR REPLACE FUNCTION "private"."get_checkout_stock_warning"("target_organi
 declare
   negative_item_count integer;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -6939,7 +6957,7 @@ CREATE OR REPLACE FUNCTION "private"."get_checkout_stock_warning"("target_organi
 declare
   negative_item_count integer;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (
       select private.has_permission(target_organization_id, 'sales.create')
     ) then
@@ -7101,7 +7119,7 @@ CREATE OR REPLACE FUNCTION "private"."get_customer_display_management_sessions"(
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'registers.manage')) then
     raise exception 'Register management permission is required.' using errcode = '42501';
   end if;
@@ -7216,7 +7234,7 @@ CREATE OR REPLACE FUNCTION "private"."get_inventory_count_awareness"("target_org
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null or not (
+  if (select private.current_profile_id()) is null or not (
     (select private.has_permission(target_organization_id, 'inventory.view'))
     or (select private.has_permission(target_organization_id, 'inventory.count'))
     or (select private.has_permission(target_organization_id, 'inventory.manage'))
@@ -7276,7 +7294,7 @@ CREATE OR REPLACE FUNCTION "private"."get_kitchen_orders"("target_organization_i
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (
       (select private.has_permission(target_organization_id, 'kitchen.view'))
       or (select private.has_permission(target_organization_id, 'kitchen.manage'))
@@ -7336,7 +7354,7 @@ begin
         on employee_store.employee_id = employee.id
        and employee_store.organization_id = employee.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
         and employee_store.store_id = kitchen_order.store_id
     )
@@ -7375,7 +7393,7 @@ CREATE OR REPLACE FUNCTION "private"."get_kitchen_station_routes"("target_organi
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'kitchen.manage')) then
     raise exception 'Kitchen order management access is required.' using errcode = '42501';
   end if;
@@ -7401,7 +7419,7 @@ CREATE OR REPLACE FUNCTION "private"."get_pos_customer_display_sessions"("target
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -7418,7 +7436,7 @@ begin
         on employee_store.employee_id = employee.id
        and employee_store.organization_id = employee.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
         and employee_store.store_id = display.store_id
     );
@@ -7434,7 +7452,7 @@ CREATE OR REPLACE FUNCTION "private"."get_pos_customer_display_sessions_with_ids
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -7451,7 +7469,7 @@ begin
         on employee_store.employee_id = employee.id
        and employee_store.organization_id = employee.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
         and employee_store.store_id = display.store_id
     );
@@ -7472,7 +7490,7 @@ declare
   period_end timestamptz;
   can_view_cost boolean;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or target_required_permission not in ('dashboard.view', 'reports.view')
      or not (select private.has_permission(target_organization_id, target_required_permission)) then
     raise exception 'Reporting access is required.' using errcode = '42501';
@@ -7802,7 +7820,7 @@ CREATE OR REPLACE FUNCTION "private"."get_scoped_reporting_snapshot"("target_org
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or target_required_permission not in ('dashboard.view', 'reports.view')
      or not (select private.has_permission(target_organization_id, target_required_permission)) then
     raise exception 'Reporting access is required.' using errcode = '42501';
@@ -7822,7 +7840,7 @@ begin
         on assignment.employee_id = employee.id
        and assignment.organization_id = employee.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
         and assignment.store_id = target_store_id
     ) then
@@ -8012,7 +8030,7 @@ CREATE OR REPLACE FUNCTION "private"."guard_employee_lifecycle_transition"() RET
     AS $$
 begin
   if (new.status is distinct from old.status or new.archived_at is distinct from old.archived_at)
-    and (select auth.uid()) is not null
+    and (select private.current_profile_id()) is not null
     and coalesce(current_setting('tindio.employee_lifecycle_change', true), '') <> 'authorized' then
     raise exception 'Use the controlled employee lifecycle workflow to change status.' using errcode = '42501';
   end if;
@@ -8561,12 +8579,12 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_membership"("target_organ
     SET "search_path" TO ''
     AS $$
   select coalesce(
-    (select auth.uid()) is not null
+    (select private.current_profile_id()) is not null
     and exists (
       select 1
       from public.employees employee
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
     ), false);
 $$;
@@ -8783,7 +8801,7 @@ CREATE OR REPLACE FUNCTION "private"."has_shift_access"("target_organization_id"
     SET "search_path" TO ''
     AS $$
   select
-    (select auth.uid()) is not null
+    (select private.current_profile_id()) is not null
     and (
       (select private.has_permission(target_organization_id, 'settings.manage'))
       or exists (
@@ -8794,7 +8812,7 @@ CREATE OR REPLACE FUNCTION "private"."has_shift_access"("target_organization_id"
          and employee_store.organization_id = employee.organization_id
          and employee_store.store_id = target_store_id
         where employee.organization_id = target_organization_id
-          and employee.profile_id = (select auth.uid())
+          and employee.profile_id = (select private.current_profile_id())
           and employee.status = 'active'
           and (
             (select private.has_permission(target_organization_id, 'shifts.open'))
@@ -8930,7 +8948,7 @@ declare
   row_category_id uuid; row_unit text; row_price_minor bigint; row_cost_minor bigint;
   row_price_override_minor bigint; row_product_id uuid; seen_skus text[] := '{}'; seen_barcodes text[] := '{}'; imported_count integer := 0;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id,'products.manage')) then raise exception 'Product management permission is required.' using errcode='42501'; end if;
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id,'products.manage')) then raise exception 'Product management permission is required.' using errcode='42501'; end if;
   if jsonb_typeof(target_rows)<>'array' or jsonb_array_length(target_rows) not between 1 and 500 then raise exception 'Import between 1 and 500 product rows at a time.' using errcode='22023'; end if;
   if target_store_ids is null or cardinality(target_store_ids) not between 1 and 100 or cardinality(target_store_ids)<>(select count(distinct id) from unnest(target_store_ids) id) then raise exception 'Choose unique stores for this import.' using errcode='22023'; end if;
   if exists(select 1 from unnest(target_store_ids) id where not private.has_store_read_scope(target_organization_id,id))
@@ -8991,7 +9009,7 @@ declare
   seen_cards text[] := '{}';
   imported_count integer := 0;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -9004,7 +9022,7 @@ begin
   select employee.id into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active'
   limit 1;
 
@@ -9114,7 +9132,7 @@ declare
   seen_items text[] := '{}';
   imported_count integer := 0;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory management permission is required.' using errcode = '42501'; end if;
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory management permission is required.' using errcode = '42501'; end if;
   if jsonb_typeof(target_rows) <> 'array' or jsonb_array_length(target_rows) not between 1 and 500 then raise exception 'Import between 1 and 500 adjustment rows at a time.' using errcode = '22023'; end if;
   actor_employee_id := private.inventory_actor(target_organization_id, target_store_id);
   if actor_employee_id is null then raise exception 'An assigned employee is required for this store.' using errcode = '42501'; end if;
@@ -9168,7 +9186,7 @@ declare
   row_quantity numeric(14,3);
   row_note text;
 begin
-  if (select auth.uid()) is null or target_operation_id is null then
+  if (select private.current_profile_id()) is null or target_operation_id is null then
     raise exception 'Inventory adjustment permission and operation identity are required.' using errcode = '42501';
   end if;
   if coalesce(jsonb_typeof(target_rows), '') <> 'array'
@@ -9444,14 +9462,14 @@ declare
   seen_names text[] := '{}';
   imported_count integer := 0;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.suppliers.manage'))) then
     raise exception 'Inventory management permission is required.' using errcode = '42501';
   end if;
   if jsonb_typeof(target_rows) <> 'array' or jsonb_array_length(target_rows) not between 1 and 500 then
     raise exception 'Import between 1 and 500 supplier rows at a time.' using errcode = '22023';
   end if;
-  select employee.id into actor_employee_id from public.employees employee where employee.organization_id = target_organization_id and employee.profile_id = (select auth.uid()) and employee.status = 'active' limit 1;
+  select employee.id into actor_employee_id from public.employees employee where employee.organization_id = target_organization_id and employee.profile_id = (select private.current_profile_id()) and employee.status = 'active' limit 1;
 
   for import_row in select value, ordinality from jsonb_array_elements(target_rows) with ordinality loop
     row_json := import_row.value;
@@ -9650,7 +9668,7 @@ CREATE OR REPLACE FUNCTION "private"."inventory_organization_actor"("target_orga
   select employee.id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active'
   limit 1;
 $$;
@@ -10315,7 +10333,7 @@ begin
       using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'shifts.open')) then
     raise exception 'Shift opening permission is required.' using errcode = '42501';
   end if;
@@ -10335,7 +10353,7 @@ begin
    and employee_store.organization_id = employee.organization_id
    and employee_store.store_id = target_store_id
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active'
   for update of employee;
 
@@ -10971,7 +10989,7 @@ declare
   actor_employee_id uuid;
   new_session_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'registers.manage')) then
     raise exception 'Register management permission is required.' using errcode = '42501';
   end if;
@@ -10996,7 +11014,7 @@ begin
   into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -11320,7 +11338,7 @@ begin
   select * into transfer from public.stock_transfers where organization_id = target_organization_id and id = target_stock_transfer_id;
   if transfer.id is null then raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514'; end if;
   if transfer.stock_request_id is not null then raise exception 'Receive replenishment transfers from the stock request workflow so shortages stay traceable.' using errcode = '23514'; end if;
-  if (select auth.uid()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive')) then
+  if (select private.current_profile_id()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive')) then
     raise exception 'Transfer receive permission is required.' using errcode = '42501';
   end if;
   return private.receive_inventory_transfer_core(target_organization_id, target_stock_transfer_id, target_lines, target_note, target_operation_id, false);
@@ -11448,7 +11466,7 @@ declare
   requested_lines jsonb;
   persisted_lines jsonb;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.receive'))) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -11693,7 +11711,7 @@ declare
   received_now numeric(14,3); short_now numeric(14,3); total_remaining numeric(14,3); has_shortage boolean;
   normalized_note text := nullif(btrim(target_note), ''); normalized_lines jsonb;
 begin
-  if (select auth.uid()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive')) then
+  if (select private.current_profile_id()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive')) then
     raise exception 'Transfer receive permission is required.' using errcode = '42501';
   end if;
   if target_operation_id is null then raise exception 'A stable transfer-receipt operation ID is required.' using errcode = '23514'; end if;
@@ -11827,7 +11845,7 @@ begin
     else 'cash.pay_out'
   end;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, required_permission)) then
     raise exception 'Cash movement permission is required.' using errcode = '42501';
   end if;
@@ -11858,7 +11876,7 @@ begin
    and employee_store.organization_id = employee.organization_id
    and employee_store.store_id = target_shift.store_id
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -12011,7 +12029,7 @@ declare
   resolved_note text;
   expected_payload jsonb;
 begin
-  if (select auth.uid()) is null then
+  if (select private.current_profile_id()) is null then
     raise exception 'Inventory adjustment permission is required.' using errcode = '42501';
   end if;
 
@@ -12082,7 +12100,7 @@ declare
   movement_id uuid;
   resolved_note text;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -12196,7 +12214,7 @@ begin
     raise exception 'A sale and refund key are required.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.refund')) then
     raise exception 'Sales refund permission is required.' using errcode = '42501';
   end if;
@@ -12260,7 +12278,7 @@ begin
    and store.organization_id = original_sale.organization_id
    and store.is_active
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -12612,7 +12630,7 @@ declare
   actor_id uuid;
   removed_policy text;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -12688,7 +12706,7 @@ declare
   existing_request public.approval_requests%rowtype;
   normalized_reason text;
 begin
-  if (select auth.uid()) is null then
+  if (select private.current_profile_id()) is null then
     raise exception 'Sign in is required.' using errcode = '42501';
   end if;
 
@@ -13012,7 +13030,7 @@ CREATE OR REPLACE FUNCTION "private"."require_attendance_terminal"("target_organ
 declare
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'attendance.use')) then
     raise exception 'Attendance access is required.' using errcode = '42501';
   end if;
@@ -13065,7 +13083,7 @@ CREATE OR REPLACE FUNCTION "private"."require_employee_manager_target"("target_o
 declare
   actor_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'employees.manage')) then
     raise exception 'Employee-management permission is required.' using errcode = '42501';
   end if;
@@ -13095,7 +13113,7 @@ CREATE OR REPLACE FUNCTION "private"."require_pos_capabilities"("target_organiza
 declare
   missing_permission_code text;
 begin
-  if (select auth.uid()) is null then
+  if (select private.current_profile_id()) is null then
     raise exception 'An authenticated employee is required.' using errcode = '42501';
   end if;
 
@@ -13429,7 +13447,7 @@ declare
   normalized_lines jsonb;
   persisted_lines jsonb;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or (
        not (select private.has_permission(target_organization_id, 'inventory.manage'))
        and not (select private.has_inventory_capability(target_organization_id, 'purchasing.return'))
@@ -13864,7 +13882,7 @@ declare
   normalized_note text := nullif(btrim(coalesce(target_note, '')), '');
   normalized_cart jsonb;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -14206,7 +14224,7 @@ declare
   existing_status text;
   next_status text := case when target_is_archived then 'archived' else 'active' end;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -14338,7 +14356,7 @@ declare
   manageable_store_ids uuid[];
   selected_store_ids uuid[];
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -14414,7 +14432,7 @@ declare
   resolved_register_id uuid;
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -14439,7 +14457,7 @@ begin
   into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null or not exists (
@@ -14554,7 +14572,7 @@ CREATE OR REPLACE FUNCTION "private"."set_kitchen_order_priority"("target_organi
 declare
   resolved_store_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'kitchen.manage')) then
     raise exception 'Kitchen order management access is required.' using errcode = '42501';
   end if;
@@ -14580,7 +14598,7 @@ begin
       on employee_store.employee_id = employee.id
      and employee_store.organization_id = employee.organization_id
     where employee.organization_id = target_organization_id
-      and employee.profile_id = (select auth.uid())
+      and employee.profile_id = (select private.current_profile_id())
       and employee.status = 'active'
       and employee_store.store_id = resolved_store_id
   ) then
@@ -14607,7 +14625,7 @@ CREATE OR REPLACE FUNCTION "private"."set_kitchen_station_category_route"("targe
 declare
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'kitchen.manage')) then
     raise exception 'Kitchen order management access is required.' using errcode = '42501';
   end if;
@@ -14619,7 +14637,7 @@ begin
   select employee.id into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null or not exists (
@@ -14727,7 +14745,7 @@ CREATE OR REPLACE FUNCTION "private"."ship_stock_transfer"("target_organization_
     AS $_$
 declare actor_id uuid; transfer_id uuid; line jsonb; source_level public.inventory_levels%rowtype; line_quantity numeric(14,3);
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
   if target_source_store_id = target_destination_store_id or target_lines is null or jsonb_typeof(target_lines) <> 'array' or jsonb_array_length(target_lines) not between 1 and 100 then raise exception 'Choose two stores and one to 100 transfer items.' using errcode = '23514'; end if;
   if exists (select 1 from jsonb_array_elements(target_lines) requested(value) where jsonb_typeof(requested.value) <> 'object' or coalesce(requested.value->>'product_id','') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' or (requested.value ? 'variant_id' and requested.value->'variant_id' <> 'null'::jsonb and coalesce(requested.value->>'variant_id','') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') or coalesce(requested.value->>'quantity','') !~ '^\d+(\.\d{1,3})?$' or (requested.value->>'quantity')::numeric <= 0) then raise exception 'Transfer lines must contain valid items and positive quantities.' using errcode = '23514'; end if;
   if (select count(*) from jsonb_array_elements(target_lines)) <> (select count(distinct (value->>'product_id') || ':' || coalesce(value->>'variant_id','')) from jsonb_array_elements(target_lines)) then raise exception 'Each transfer item can appear only once.' using errcode = '23514'; end if;
@@ -14853,7 +14871,7 @@ CREATE OR REPLACE FUNCTION "private"."start_stock_request_picking"("target_organ
     AS $$
 declare request_row public.stock_requests%rowtype; actor_id uuid; warehouse_store_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or (
        not (select private.has_permission(target_organization_id, 'inventory.manage'))
        and not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send'))
@@ -14937,7 +14955,7 @@ begin
   if transfer.id is null or transfer.stock_request_id is not null then
     raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514';
   end if;
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.create')) then
     raise exception 'Transfer creation permission is required.' using errcode = '42501';
   end if;
@@ -15159,7 +15177,7 @@ CREATE OR REPLACE FUNCTION "private"."transfer_stock"("target_organization_id" "
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $_$ declare actor_id uuid; transfer_id uuid; line jsonb; source_quantity numeric(14,3); begin
- if (select auth.uid()) is null
+ if (select private.current_profile_id()) is null
      or (
        not (select private.has_permission(target_organization_id, 'inventory.manage'))
        and not (select private.has_all_inventory_capabilities(
@@ -15254,7 +15272,7 @@ declare
   previous_feature_settings jsonb;
   current_feature_settings jsonb;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Business profile permission is required.' using errcode = '42501';
   end if;
@@ -15375,7 +15393,7 @@ declare
   existing_unit text;
   effective_cost_minor bigint;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -15467,7 +15485,7 @@ declare
   valid_role_count integer;
   valid_store_count integer;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'employees.manage')) then
     raise exception 'Employee management permission is required.' using errcode = '42501';
   end if;
@@ -15489,7 +15507,7 @@ begin
   into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   select employee.profile_id, employee.status
@@ -15512,7 +15530,7 @@ begin
   into requested_role_ids
   from unnest(target_role_ids) as requested_role_id;
 
-  if target_profile_id = (select auth.uid()) then
+  if target_profile_id = (select private.current_profile_id()) then
     if not (select private.has_permission(target_organization_id, 'organization.manage')) then
       raise exception 'Only organization managers can update their own employee record.' using errcode = '42501';
     end if;
@@ -15659,7 +15677,7 @@ CREATE OR REPLACE FUNCTION "private"."update_inventory_policy"("target_organizat
 declare
   actor_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -15730,7 +15748,7 @@ declare
   resolved_store_id uuid;
   resolved_order_status text;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'kitchen.manage')) then
     raise exception 'Kitchen order management access is required.' using errcode = '42501';
   end if;
@@ -15760,7 +15778,7 @@ begin
       on employee_store.employee_id = employee.id
      and employee_store.organization_id = employee.organization_id
     where employee.organization_id = target_organization_id
-      and employee.profile_id = (select auth.uid())
+      and employee.profile_id = (select private.current_profile_id())
       and employee.status = 'active'
       and employee_store.store_id = resolved_store_id
   ) then
@@ -15829,7 +15847,7 @@ declare
   current_status text;
   resolved_store_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'kitchen.manage')) then
     raise exception 'Kitchen order management access is required.' using errcode = '42501';
   end if;
@@ -15856,7 +15874,7 @@ begin
       on employee_store.employee_id = employee.id
      and employee_store.organization_id = employee.organization_id
     where employee.organization_id = target_organization_id
-      and employee.profile_id = (select auth.uid())
+      and employee.profile_id = (select private.current_profile_id())
       and employee.status = 'active'
       and employee_store.store_id = resolved_store_id
   ) then
@@ -15904,7 +15922,7 @@ CREATE OR REPLACE FUNCTION "private"."update_organization_inventory_policy"("tar
 declare
   actor_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'inventory.manage'))
     or not (select private.has_permission(target_organization_id, 'stores.manage')) then
     raise exception 'Organization-wide inventory policy permission is required.' using errcode = '42501';
@@ -15971,7 +15989,7 @@ begin
     raise exception 'Choose a cash-close visibility setting.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required.' using errcode = '42501';
   end if;
@@ -15998,10 +16016,10 @@ CREATE OR REPLACE FUNCTION "private"."update_supplier_lead_time"("target_organiz
     AS $$
 declare actor_id uuid;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
   if target_lead_time_days is null or target_lead_time_days not between 0 and 365 then raise exception 'Supplier lead time must be between zero and 365 days.' using errcode = '23514'; end if;
   if not exists (select 1 from public.suppliers supplier where supplier.id = target_supplier_id and supplier.organization_id = target_organization_id) then raise exception 'Choose a supplier in this organization.' using errcode = '23514'; end if;
-  select employee.id into actor_id from public.employees employee where employee.organization_id = target_organization_id and employee.profile_id = (select auth.uid()) and employee.status = 'active' order by employee.created_at limit 1;
+  select employee.id into actor_id from public.employees employee where employee.organization_id = target_organization_id and employee.profile_id = (select private.current_profile_id()) and employee.status = 'active' order by employee.created_at limit 1;
   if actor_id is null then raise exception 'An active employee record is required.' using errcode = '42501'; end if;
   update public.suppliers set lead_time_days = target_lead_time_days where id = target_supplier_id and organization_id = target_organization_id;
   perform private.write_audit_log(target_organization_id, 'SUPPLIER_LEAD_TIME_UPDATED', 'inventory.manage', actor_id, null, null, null, null, null, null, jsonb_build_object('supplier_id', target_supplier_id, 'lead_time_days', target_lead_time_days));
@@ -16018,7 +16036,7 @@ CREATE OR REPLACE FUNCTION "private"."upsert_inventory_replenishment_rule"("targ
     AS $$
 declare actor_id uuid; rule_id uuid; warehouse_store_id uuid;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
   if target_reorder_point is null or target_target_stock is null or target_reorder_point < 0 or target_target_stock <= 0 or target_target_stock < target_reorder_point or target_reorder_point <> round(target_reorder_point, 3) or target_target_stock <> round(target_target_stock, 3) then raise exception 'Reorder point and target stock must be valid quantities.' using errcode = '23514'; end if;
   actor_id := private.inventory_actor(target_organization_id, target_store_id);
   if actor_id is null then raise exception 'An assigned employee is required for the requesting store.' using errcode = '42501'; end if;
@@ -16144,7 +16162,7 @@ begin
    and register.store_id = target_store_id
    and register.is_active
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -16769,7 +16787,7 @@ declare
   resolved_store_id uuid;
   resolved_register_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (
       (select private.has_permission(target_organization_id, 'customers.manage'))
       or (select private.has_permission(target_organization_id, 'sales.create'))
@@ -16918,7 +16936,7 @@ declare
   created_transaction_id uuid;
   updated_balance integer;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -17093,7 +17111,7 @@ CREATE OR REPLACE FUNCTION "public"."bootstrap_organization"("organization_name"
     SET "search_path" TO ''
     AS $_$
 declare
-  current_user_id uuid := (select auth.uid());
+  current_user_id uuid := (select public.current_profile_id());
   normalized_organization_name text := btrim(organization_name);
   normalized_store_name text := btrim(store_name);
   normalized_register_name text := btrim(register_name);
@@ -17545,7 +17563,7 @@ declare
   resolved_store_id uuid;
   resolved_register_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (
       (select private.has_permission(target_organization_id, 'customers.manage'))
       or (select private.has_permission(target_organization_id, 'sales.create'))
@@ -17912,7 +17930,7 @@ declare
   normalized_description text := nullif(btrim(role_description), '');
   new_role_id uuid;
 begin
-  if (select auth.uid()) is null then
+  if (select public.current_profile_id()) is null then
     raise exception 'Authentication is required.' using errcode = '42501';
   end if;
 
@@ -17980,7 +17998,7 @@ declare
   normalized_description text := nullif(btrim(coalesce(target_description, '')), '');
   created_segment_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -18109,7 +18127,7 @@ declare
   replay_id uuid;
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -18178,7 +18196,7 @@ declare
   was_existing boolean;
   actor_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (
        (select private.has_permission(target_organization_id, 'inventory.manage'))
        or (select private.has_inventory_capability(target_organization_id, 'purchasing.po.create'))
@@ -18273,7 +18291,7 @@ begin
       using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required to configure payment methods.' using errcode = '42501';
   end if;
@@ -18439,7 +18457,7 @@ declare
   old_values jsonb;
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -18515,7 +18533,7 @@ begin
     else 'products.manage'
   end;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, required_permission)) then
     raise exception 'You do not have permission to permanently delete this record.' using errcode = '42501';
   end if;
@@ -18524,7 +18542,7 @@ begin
   into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   case target_record_type
@@ -19183,7 +19201,7 @@ CREATE OR REPLACE FUNCTION "public"."get_customer_loyalty_card_events"("target_o
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -19220,7 +19238,7 @@ CREATE OR REPLACE FUNCTION "public"."get_customer_loyalty_cards"("target_organiz
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -19256,7 +19274,7 @@ begin
     raise exception 'Purchase history limit must be between 1 and 100.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -19290,7 +19308,7 @@ CREATE OR REPLACE FUNCTION "public"."get_customer_summary"("target_organization_
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -19356,7 +19374,7 @@ declare
   can_team boolean;
   can_tickets boolean;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_permission(target_organization_id, 'dashboard.view')) then
     raise exception 'Dashboard access is required.' using errcode = '42501';
   end if;
@@ -19392,7 +19410,7 @@ begin
         on assignment.employee_id = employee.id
        and assignment.organization_id = employee.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
         and assignment.store_id = target_store_id
     ) then
@@ -19869,7 +19887,7 @@ CREATE OR REPLACE FUNCTION "public"."get_inventory_movement_costs"("target_organ
     AS $$
   select movement.id, movement.unit_cost_minor, movement.value_delta_minor
   from public.inventory_movements movement
-  where (select auth.uid()) is not null
+  where (select private.current_profile_id()) is not null
     and cardinality(requested_movement_ids) between 1 and 100
     and movement.id = any(requested_movement_ids)
     and movement.organization_id = target_organization_id
@@ -20012,7 +20030,7 @@ declare
   can_read_cost boolean := false;
   can_manage_reorder boolean := false;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_any_inventory_capability(
       target_organization_id,
       array[
@@ -20346,7 +20364,7 @@ CREATE OR REPLACE FUNCTION "public"."get_inventory_valuation"("target_organizati
       else null::bigint
     end as value_minor
   from public.inventory_levels level
-  where (select auth.uid()) is not null
+  where (select private.current_profile_id()) is not null
     and level.organization_id = target_organization_id
     and (select private.has_permission(target_organization_id, 'products.view_cost'))
     and (select private.has_inventory_capability(target_organization_id, 'inventory.valuation.view'))
@@ -21453,7 +21471,7 @@ CREATE OR REPLACE FUNCTION "public"."get_pos_incoming_stock_transfers"("target_o
   join public.products product on product.id = transfer_line.product_id and product.organization_id = transfer_line.organization_id
   left join public.product_variants variant on variant.id = transfer_line.variant_id and variant.product_id = transfer_line.product_id
     and variant.organization_id = transfer_line.organization_id
-  where (select auth.uid()) is not null
+  where (select private.current_profile_id()) is not null
     and exists (select 1 from public.organizations organization where organization.id = target_organization_id and organization.status = 'active')
     and (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive'))
     and exists (select 1 from public.organization_features feature where feature.organization_id = target_organization_id
@@ -22096,7 +22114,7 @@ CREATE OR REPLACE FUNCTION "public"."get_pos_product_modifiers"("target_organiza
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select public.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -22211,7 +22229,7 @@ begin
     raise exception 'The POS receipt request is invalid.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create'))
     or not (select private.has_permission(target_organization_id, 'receipts.view')) then
     raise exception 'Receipt permission is required to view POS receipts.' using errcode = '42501';
@@ -22379,7 +22397,7 @@ begin
     raise exception 'The POS receipt request is invalid.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create'))
     or not (select private.has_permission(target_organization_id, 'receipts.view')) then
     raise exception 'Receipt permission is required to view POS receipts.' using errcode = '42501';
@@ -22902,7 +22920,7 @@ begin
     raise exception 'The POS shift summary request is invalid.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null then
+  if (select private.current_profile_id()) is null then
     raise exception 'Sign in is required to view a shift summary.' using errcode = '42501';
   end if;
 
@@ -23259,7 +23277,7 @@ CREATE OR REPLACE FUNCTION "public"."get_purchase_order_line_costs"("target_orga
   join public.purchase_orders purchase
     on purchase.id = line.purchase_order_id
    and purchase.organization_id = line.organization_id
-  where (select auth.uid()) is not null
+  where (select private.current_profile_id()) is not null
     and cardinality(requested_purchase_order_line_ids) between 1 and 100
     and line.id = any(requested_purchase_order_line_ids)
     and line.organization_id = target_organization_id
@@ -23308,7 +23326,7 @@ begin
     raise exception 'The shift audit history request is invalid.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null then
+  if (select private.current_profile_id()) is null then
     raise exception 'Sign in is required to view shift history.' using errcode = '42501';
   end if;
 
@@ -23376,7 +23394,7 @@ begin
     raise exception 'The shift audit report request is invalid.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null then
+  if (select private.current_profile_id()) is null then
     raise exception 'Sign in is required to view a shift audit report.' using errcode = '42501';
   end if;
 
@@ -23445,7 +23463,7 @@ begin
     raise exception 'The shift audit report request is invalid.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null then
+  if (select private.current_profile_id()) is null then
     raise exception 'Sign in is required to view a shift audit report.' using errcode = '42501';
   end if;
 
@@ -23860,7 +23878,7 @@ declare
   existing_card public.loyalty_cards%rowtype;
   issued_card public.loyalty_cards%rowtype;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -24007,7 +24025,7 @@ begin
     or target_replacement_receipt_number is null
     or target_replacement_receipt_number <= 0
     or target_idempotency_key is null
-    or (select auth.uid()) is null
+    or (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.refund'))
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales and refund permission are required to record an exchange.' using errcode = '42501';
@@ -24017,7 +24035,7 @@ begin
   into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active'
   order by employee.created_at
   limit 1;
@@ -24388,7 +24406,7 @@ declare
   output_unit_cost bigint;
   components_cost_known boolean := true;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -24741,7 +24759,7 @@ declare
   new_delivery_id uuid;
 begin
   if target_organization_id is null or target_receipt_id is null or target_idempotency_key is null
-    or (select auth.uid()) is null
+    or (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'receipts.reprint')) then
     raise exception 'Receipt reprint permission is required.' using errcode = '42501';
   end if;
@@ -24988,7 +25006,7 @@ begin
     raise exception 'The offline synchronization event is invalid.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required to report offline synchronization.' using errcode = '42501';
   end if;
@@ -25002,7 +25020,7 @@ begin
    and employee_store.employee_id = employee.id
    and employee_store.store_id = target_store_id
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -25467,7 +25485,7 @@ begin
     raise exception 'Choose the organization for this payment preset.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required to restore payment presets.' using errcode = '42501';
   end if;
@@ -25619,7 +25637,7 @@ declare
   normalized_reason text := btrim(coalesce(target_reason, ''));
   card_record public.loyalty_cards%rowtype;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -25749,7 +25767,7 @@ declare
   normalized_reason text := btrim(coalesce(target_reason, ''));
   card_record public.loyalty_cards%rowtype;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -25900,7 +25918,7 @@ begin
     raise exception 'Choose an active store for this Smart Menu.' using errcode = 'P0002';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required to configure Smart Menu.' using errcode = '42501';
   end if;
@@ -26273,7 +26291,7 @@ begin
     target_store_id
   );
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create'))
     or not exists (
       select 1
@@ -26283,7 +26301,7 @@ begin
        and employee_store.organization_id = employee.organization_id
        and employee_store.store_id = target_store_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
     ) then
     raise exception 'POS customer access requires an active store assignment.' using errcode = '42501';
@@ -26371,7 +26389,7 @@ CREATE OR REPLACE FUNCTION "public"."set_catalog_product_store_configuration_v3"
     AS $$
 declare actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'products.manage')) then
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
   if not (select private.has_store_read_scope(target_organization_id, target_store_id)) then
@@ -26469,7 +26487,7 @@ begin
     raise exception 'Choose a valid offline payment policy.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required to change offline payment policies.'
       using errcode = '42501';
@@ -26630,7 +26648,7 @@ begin
     raise exception 'Choose a payment method, active store, and availability setting.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required to configure payment methods.' using errcode = '42501';
   end if;
@@ -26961,7 +26979,7 @@ declare
   normalized_description text := nullif(btrim(role_description), '');
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'roles.manage')) then
     raise exception 'Role management permission is required.' using errcode = '42501';
   end if;
@@ -27020,7 +27038,7 @@ begin
   into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   update public.roles
@@ -27089,7 +27107,7 @@ declare
   normalized_loyalty_card_code text := nullif(btrim(coalesce(target_loyalty_card_code, '')), '');
   normalized_segment_ids uuid[] := coalesce(target_segment_ids, '{}'::uuid[]);
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -27271,7 +27289,7 @@ begin
     raise exception 'Enter valid payment method settings.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required to configure payment methods.' using errcode = '42501';
   end if;
@@ -27316,7 +27334,7 @@ declare
   old_values jsonb;
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -27458,7 +27476,7 @@ declare
   normalized_footer_message text;
 begin
   if target_organization_id is null
-    or (select auth.uid()) is null
+    or (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required.' using errcode = '42501';
   end if;
@@ -27551,7 +27569,7 @@ declare
   normalized_email text := nullif(btrim(target_email), '');
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.suppliers.manage'))) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -27576,7 +27594,7 @@ begin
   into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   update public.suppliers supplier
@@ -42970,4 +42988,3 @@ GRANT SELECT ON TABLE "public"."time_clock_entries" TO "authenticated";
 --
 -- PostgreSQL database dump complete
 --
-

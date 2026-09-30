@@ -2,13 +2,12 @@ begin;
 
 do $$
 begin
-  if to_regprocedure('auth.user_id()') is null then
-    raise exception
-      'Neon auth.user_id() is unavailable. Enable Neon Data API external authentication.';
+  if to_regprocedure('auth.uid()') is null then
+    raise exception 'Local/Supabase auth.uid() is unavailable.';
   end if;
 
   if to_regprocedure('auth.jwt()') is null then
-    raise exception 'Neon auth.jwt() is unavailable.';
+    raise exception 'Local/Supabase auth.jwt() is unavailable.';
   end if;
 end;
 $$;
@@ -20,7 +19,7 @@ stable
 security definer
 set search_path = ''
 as $$
-  select nullif(auth.user_id()::text, '');
+  select nullif(auth.uid()::text, '');
 $$;
 
 create or replace function private.current_identity_email()

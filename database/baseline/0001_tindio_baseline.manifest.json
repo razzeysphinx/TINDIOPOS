@@ -3,9 +3,9 @@
   "source": "CERTIFIED_LOCAL_SUPABASE_POSTGRESQL",
   "targetPurpose": "R2_CANONICAL_TINDIO_SCHEMA_SNAPSHOT",
   "historicalAncestor": "2d48e2ead33d783aef6c61dedb661ba74714ea9a",
-  "baselineSha256": "c2c8183c6f02327e80e561b4b2b504887140586b0d5d03e068ae97132e18ef46",
-  "baselineBytes": 1975098,
-  "baselineLines": 42974,
+  "baselineSha256": "2a43bafc014116efde776ee1b66c9e9426c2a6b5fd4c56ffc013f37354e47d43",
+  "baselineBytes": 1978314,
+  "baselineLines": 42991,
   "migrationEvidence": {
     "historicalMigrationCount": 211,
     "recoveryForwardMigrationCount": 2,
@@ -32,12 +32,30 @@
     "providerCoupledPolicies": 10
   },
   "baselinePortabilityInventory": {
-    "authUidReferences": 167,
+    "authUidReferences": 0,
     "authUserIdReferences": 0,
     "providerRoleReferences": 698,
     "postgrestReloadReferences": 0,
-    "authSchemaReferences": 169,
+    "authSchemaReferences": 1,
     "storageSchemaReferences": 0,
-    "realtimeSchemaReferences": 1
+    "realtimeSchemaReferences": 1,
+    "authJwtReferences": 0,
+    "authRoleReferences": 1
+  },
+  "r3ProviderNeutralIdentity": {
+    "status": "COMPLETE",
+    "r2BaselineSha256": "c2c8183c6f02327e80e561b4b2b504887140586b0d5d03e068ae97132e18ef46",
+    "sourceDirectAuthUidFunctions": 132,
+    "sourceAuthUidReferences": 167,
+    "businessFunctionsRewritten": 131,
+    "baselineAuthUidReferencesAfter": 0,
+    "baselineAuthUserIdReferencesAfter": 0,
+    "baselineAuthJwtReferencesAfter": 0,
+    "baselineAuthRoleReferencesDeferredToR4": 1,
+    "canonicalMigration": "database/migrations/0002_provider_neutral_business_identity.sql",
+    "providerAdapters": [
+      "database/provider/local/01_identity.sql",
+      "database/provider/neon/01_identity.sql"
+    ]
   }
 }

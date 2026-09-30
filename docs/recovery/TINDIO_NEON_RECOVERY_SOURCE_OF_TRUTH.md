@@ -208,3 +208,56 @@ R0: COMPLETE
 R1: COMPLETE
 R2: COMPLETE
 R3: NOT STARTED
+
+R3 — PROVIDER-NEUTRAL SQL REWRITE
+
+STATUS: COMPLETE
+
+Input:
+132 auth.uid-coupled functions
+167 auth.uid references
+
+Provider boundary:
+private.current_identity_subject()
+private.current_identity_email()
+
+Business functions rewritten:
+131
+
+Canonical business identity:
+private.current_profile_id()
+
+The three existing public invoker RPCs retain their invoker security model and
+resolve through the already authenticated-only public.current_profile_id()
+wrapper; private.current_profile_id() remains inaccessible to every client role.
+
+Local provider adapter:
+database/provider/local/01_identity.sql
+
+Neon provider adapter:
+database/provider/neon/01_identity.sql
+
+Canonical migration:
+database/migrations/0002_provider_neutral_business_identity.sql
+
+Canonical baseline after R3:
+auth.uid = 0
+auth.user_id = 0
+auth.jwt = 0
+
+Deferred to R4:
+auth.role = 1
+provider role dependencies
+provider-coupled RLS policies
+
+Historical 211 migrations unchanged.
+Live Neon writes during R3: NO.
+
+R3 BASELINE SHA256:
+2a43bafc014116efde776ee1b66c9e9426c2a6b5fd4c56ffc013f37354e47d43
+
+R0 COMPLETE
+R1 COMPLETE
+R2 COMPLETE
+R3 COMPLETE
+R4 NOT STARTED

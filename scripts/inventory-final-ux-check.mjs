@@ -42,7 +42,8 @@ test("Phase 10 applies employee store assignments before Inventory data is displ
   assert.match(inventoryPage, /settingsQuery\?\.in\("store_id", scopedStoreIds\)/);
   assert.match(inventoryPage, /levelsQuery\?\.in\("store_id", scopedStoreIds\)/);
   assert.match(inventoryPage, /recentMovementsQuery\?\.in\("store_id", scopedStoreIds\)/);
-  assert.match(inventoryPage, /inventoryCountsQuery\?\.in\("store_id", scopedStoreIds\)/);
+  assert.match(inventoryPage, /get_inventory_counts_workspace_v2/);
+  assert.match(inventoryPage, /target_store_ids: scopedStoreIds/);
   assert.match(inventoryPage, /purchaseOrdersQuery\?\.in\("store_id", scopedStoreIds\)/);
   assert.match(inventoryPage, /inventoryPoliciesQuery\?\.in\("store_id", scopedStoreIds\)/);
   assert.match(inventoryPage, /const visibleStore = \(storeId: string\) => scopedStoreIds === null \|\| scopedStoreIds\.includes\(storeId\)/);

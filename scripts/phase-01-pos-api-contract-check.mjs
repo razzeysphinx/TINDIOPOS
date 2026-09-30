@@ -120,7 +120,8 @@ test("protected checkout and inventory architecture remains authoritative", asyn
   const offlineRoute = await text("src/app/api/pos/v2/offline-checkout/route.ts");
   const transferService = await text("src/features/inventory/pos-transfer-service.ts");
   assert.match(checkoutRoute, /@\/features\/checkout\/checkout-service/);
-  assert.match(offlineRoute, /@\/features\/checkout\/checkout-service/);
+  assert.match(offlineRoute, /@\/features\/offline\/pos-v2-offline-checkout-service/);
+  assert.match(await text("src/features/offline/pos-v2-offline-checkout-service.ts"), /@\/features\/checkout\/checkout-service/);
   assert.doesNotMatch(transferService, /supabase\/migrations|checkout_advanced_sale/);
   assert.match(transferService, /receive_stock_transfer/);
   assert.match(transferService, /receive_stock_request/);

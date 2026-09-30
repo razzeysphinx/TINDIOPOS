@@ -44,6 +44,7 @@ const [
   posCustomersRoute,
   posCustomerDisplayRoute,
   offlineCheckoutRoute,
+  offlineCheckoutService,
   reportsExportRoute,
   catalogExportRoute,
   customersExportRoute,
@@ -87,6 +88,7 @@ const [
   source("../src/app/api/pos/v2/customers/route.ts"),
   source("../src/app/api/pos/v2/customer-display/route.ts"),
   source("../src/app/api/pos/v2/offline-checkout/route.ts"),
+  source("../src/features/offline/pos-v2-offline-checkout-service.ts"),
   source("../src/app/api/reports/export/route.ts"),
   source("../src/app/api/catalog/export/route.ts"),
   source("../src/app/api/customers/export/route.ts"),
@@ -217,11 +219,8 @@ test("every authenticated export and offline API has its capability or service a
     /getPosV2BusinessContext\(\s*request\s*,?\s*\)/,
     "offline checkout resolves the authenticated POS V2 business context",
   );
-  assert.match(
-    offlineCheckoutRoute,
-    /completeCheckout\(\s*context\s*,\s*input\s*,\s*\{\s*guardOfflineTotal:\s*true\s*,?\s*\}\s*,?\s*\)/,
-    "offline checkout keeps the authoritative total guard enabled",
-  );
+  assert.match(offlineCheckoutRoute, /processPosV2OfflineCheckout/);
+  assert.match(offlineCheckoutService, /completeCheckout\(context,input,\{guardOfflineTotal:true\}\)/, "offline checkout keeps the authoritative total guard enabled");
 
   for (const [name, content, capability] of [
     ["report export", reportsExportRoute, "reports.view"],

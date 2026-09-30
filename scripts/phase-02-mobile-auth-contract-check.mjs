@@ -65,7 +65,7 @@ const contextClientFiles = [
   "src/app/api/pos/v2/customers/route.ts",
   "src/app/api/pos/v2/customer-display/route.ts",
   "src/app/api/pos/v2/device/route.ts",
-  "src/app/api/pos/v2/offline-checkout/route.ts",
+  "src/features/offline/pos-v2-offline-checkout-service.ts",
 ];
 
 test(

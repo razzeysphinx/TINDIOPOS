@@ -81,7 +81,7 @@ test(
     assert.match(inventoryPage, /loadedMovements\.slice\(0, INVENTORY_ACTIVITY_PAGE_SIZE\)/);
     assert.match(inventoryPage, /loadedMovements\.length > INVENTORY_ACTIVITY_PAGE_SIZE/);
     assert.match(inventoryPage, /const countAwarenessQuery = workspace === "control" && activeTab === "overview"/);
-    assert.match(inventoryPage, /\.in\("inventory_count_batch_id", inventoryCountBatchIds\)/);
+    assert.match(inventoryPage, /get_inventory_count_batch_documents_workspace_v2/);
     assert.match(inventoryPage, /\.in\("stock_transfer_id", openStockTransferIds\)/);
     assert.doesNotMatch(inventoryPage, /inventoryCountBatchDocumentsQuery/);
   },

@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 export const metadata = { title: "Production Observability" };
 type Query = { select: (columns: string) => { eq: (column: string, value: string) => { order: (column: string, options: { ascending: boolean }) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } } };
 
-async function measureDatabaseProbe<T>(request: () => Promise<T>) {
+async function measureDatabaseProbe<T>(request: () => T) {
   const startedAt = Date.now();
   const result = await request();
 

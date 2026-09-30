@@ -106,3 +106,33 @@ Historical migrations remain unmodified.
 This recovery migration is NOT automatically applied to current live Neon during R1.
 
 The canonical R2 baseline will absorb the final intended privilege state instead of preserving migration noise.
+
+R1 FINAL GATE REPAIR
+
+R1 local database lint detected SQLSTATE 42702 in:
+
+public.get_pos_device_sync_checkpoint(uuid, uuid)
+
+Cause:
+The RPC RETURNS TABLE exposes device_id as a PL/pgSQL OUT variable while its INSERT used device_id in an unqualified ON CONFLICT column inference list.
+
+Resolution:
+A second recovery-only forward migration replaces only this function and uses:
+
+ON CONFLICT ON CONSTRAINT pos_device_sync_checkpoints_pkey
+
+Public RPC shape, authorization, checkpoint semantics, and authenticated-only execution remain unchanged.
+
+Recovery migration:
+
+20260930113000_recovery_r1_device_checkpoint_ambiguity_repair.sql
+
+R1 active local migration count:
+
+211 historical
++ 2 recovery forward
+= 213
+
+The migration is NOT applied to current live Neon during R1.
+
+R2 will absorb the final intended function into the canonical baseline rather than carrying repair noise.

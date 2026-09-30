@@ -174,6 +174,9 @@
     "test:phase-26-observability": "node --test scripts/phase-26-production-observability-check.mjs",
     "test:neon-pos-workspace-auth-repair": "node --test scripts/neon-pos-workspace-auth-boundary-check.mjs",
     "apply:neon-pos-workspace-auth-repair": "node scripts/apply-neon-pos-workspace-auth-boundary-repair.mjs",
+    "recovery:neon:preflight": "node scripts/recovery/neon-recovery-preflight.mjs",
+    "recovery:neon:r1": "node scripts/recovery/neon-recovery-r1-schema-diff.mjs",
+    "test:recovery:neon-r1": "node --test scripts/recovery/neon-recovery-r1-check.mjs",
     "test:neon-inventory-count-runtime-repair": "node --test scripts/neon-inventory-count-runtime-boundary-check.mjs",
     "apply:neon-inventory-count-runtime-repair": "node scripts/apply-neon-inventory-count-runtime-boundary-repair.mjs"
   },

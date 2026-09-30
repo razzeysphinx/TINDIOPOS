@@ -18,6 +18,10 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function canonicalMigrationText(value) {
+  return value.replace(/\r\n/g, "\n");
+}
+
 function historicalMigrationPaths() {
   const output = git([
     "ls-tree",
@@ -51,8 +55,8 @@ function assertHistoricalMigrationsImmutable() {
     );
     const currentBytes = readFileSync(path.join(ROOT, file), "utf8");
     assert.equal(
-      sha256(currentBytes),
-      sha256(historicalBytes),
+      sha256(canonicalMigrationText(currentBytes)),
+      sha256(canonicalMigrationText(historicalBytes)),
       `Historical migration was modified: ${file}`,
     );
   }

@@ -13,6 +13,7 @@ test("recovery preflight verifies historical migration bytes", () => {
   assert.match(source, /git[\s\S]*show/);
   assert.match(source, /sha256/);
   assert.match(source, /Historical migration was modified/);
+  assert.match(source, /canonicalMigrationText/);
 });
 
 test("recovery preflight allows dynamic forward recovery migrations", () => {

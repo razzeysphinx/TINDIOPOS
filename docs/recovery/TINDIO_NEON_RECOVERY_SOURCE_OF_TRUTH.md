@@ -261,3 +261,61 @@ R1 COMPLETE
 R2 COMPLETE
 R3 COMPLETE
 R4 NOT STARTED
+
+R4 — ROLES / RLS / SECURITY NORMALIZATION
+
+STATUS: COMPLETE
+
+INPUT:
+R3 canonical baseline.
+
+AUDIT CORRECTION:
+The original audit reported 10 provider-coupled policies because it searched auth.uid/auth.user_id. R4 found 11 when auth.jwt was included.
+
+CANONICAL ACCESS CLASSES:
+tindio_anon
+tindio_authenticated
+tindio_service
+
+PROVIDER ROLE ADAPTERS:
+database/provider/local/00_roles.sql
+database/provider/neon/00_roles.sql
+
+CANONICAL MIGRATION:
+database/migrations/0003_provider_neutral_roles_rls.sql
+
+R4 SOURCE EVIDENCE:
+149 policies
+141 provider-authenticated policies
+11 provider-auth-helper policies
+532 direct provider ACL grant statements
+682 quoted provider-role identifiers
+
+R4 CANONICAL RESULT:
+provider-role identifiers = 0
+provider-auth policy calls = 0
+auth.role() = 0
+provider-coupled policies = 0
+service worker protected by tindio_service EXECUTE only
+
+Provider runtime roles are mapped through adapters:
+authenticated → tindio_authenticated
+anon → tindio_anon
+service_role → tindio_service
+
+The local Supabase runtime manages its reserved provider roles, so the local
+adapter verifies their existence and establishes only the canonical membership
+mapping; certification verifies their inherited role state.
+
+Historical 211 migrations remain unchanged.
+Current live Neon received zero R4 writes.
+
+R4 BASELINE SHA256:
+b3a0fd6bac3f670b251680698c315e229eff940e05fc1370f5f392b198d50a87
+
+R0 COMPLETE
+R1 COMPLETE
+R2 COMPLETE
+R3 COMPLETE
+R4 COMPLETE
+R5 NOT STARTED

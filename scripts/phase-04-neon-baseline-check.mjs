@@ -193,12 +193,12 @@ test(
   () => {
     assert.match(
       baseline,
-      /\bTO\s+"?authenticated"?\b/i,
+      /\bTO\s+"?tindio_authenticated"?\b/i,
     );
 
     assert.match(
       baseline,
-      /\bTO\s+"?service_role"?\b/i,
+      /\bTO\s+"?tindio_service"?\b/i,
     );
 
     assert.match(

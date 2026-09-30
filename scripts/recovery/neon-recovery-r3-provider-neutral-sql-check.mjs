@@ -14,7 +14,21 @@ test("canonical business SQL has no direct identity-provider primitive", () => {
   assert.equal(n(baseline, /\bauth\.uid\s*\(/gi), 0);
   assert.equal(n(baseline, /\bauth\.user_id\s*\(/gi), 0);
   assert.equal(n(baseline, /\bauth\.jwt\s*\(/gi), 0);
-  assert.equal(n(baseline, /\bauth\.role\s*\(/gi), 1);
+  const r4Complete =
+    manifest
+      .r4RoleSecurityNormalization
+      ?.status
+    === "COMPLETE";
+
+  assert.equal(
+    n(
+      baseline,
+      /\bauth\.role\s*\(/gi,
+    ),
+    r4Complete
+      ? 0
+      : 1,
+  );
 });
 test("canonical R3 migration contains all complete rewritten definitions", () => {
   assert.equal(n(migration, /\bauth\.uid\s*\(/gi), 0);

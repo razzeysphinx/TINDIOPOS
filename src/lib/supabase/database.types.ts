@@ -3167,6 +3167,208 @@ export type Database = {
         }
         Relationships: []
       }
+      pos_device_sequence_receipts: {
+        Row: {
+          device_id: string
+          device_sequence: number
+          finalized_at: string | null
+          first_seen_at: string
+          idempotency_key: string
+          local_receipt_reference: string
+          organization_id: string
+          register_id: string
+          state: string
+          store_id: string
+        }
+        Insert: {
+          device_id: string
+          device_sequence: number
+          finalized_at?: string | null
+          first_seen_at?: string
+          idempotency_key: string
+          local_receipt_reference: string
+          organization_id: string
+          register_id: string
+          state: string
+          store_id: string
+        }
+        Update: {
+          device_id?: string
+          device_sequence?: number
+          finalized_at?: string | null
+          first_seen_at?: string
+          idempotency_key?: string
+          local_receipt_reference?: string
+          organization_id?: string
+          register_id?: string
+          state?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_device_sequence_receipts_device_org_fkey"
+            columns: ["device_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "pos_devices"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "pos_device_sequence_receipts_register_org_fkey"
+            columns: ["register_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "registers"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "pos_device_sequence_receipts_store_org_fkey"
+            columns: ["store_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      pos_device_sync_checkpoints: {
+        Row: {
+          device_id: string
+          organization_id: string
+          server_checkpoint: number
+          updated_at: string
+        }
+        Insert: {
+          device_id: string
+          organization_id: string
+          server_checkpoint?: number
+          updated_at?: string
+        }
+        Update: {
+          device_id?: string
+          organization_id?: string
+          server_checkpoint?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_device_sync_checkpoints_device_org_fkey"
+            columns: ["device_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "pos_devices"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
+      pos_device_sync_telemetry: {
+        Row: {
+          api_average_latency_ms: number
+          api_failure_count: number
+          api_max_latency_ms: number
+          app_version: string
+          conflict_count: number
+          connection_mode: string
+          crash_count: number
+          crash_window_started_at: string | null
+          device_checkpoint: number
+          device_id: string
+          employee_id: string
+          employee_name_snapshot: string
+          failed_count: number
+          last_crash_at: string | null
+          last_heartbeat_at: string
+          last_successful_sync_at: string | null
+          local_database_health: string
+          local_schema_version: number
+          offline_since: string | null
+          organization_id: string
+          queue_depth: number
+          register_id: string
+          server_checkpoint: number
+          store_id: string
+          sync_average_latency_ms: number
+          sync_max_latency_ms: number
+          updated_at: string
+        }
+        Insert: {
+          api_average_latency_ms?: number
+          api_failure_count?: number
+          api_max_latency_ms?: number
+          app_version: string
+          conflict_count?: number
+          connection_mode: string
+          crash_count?: number
+          crash_window_started_at?: string | null
+          device_checkpoint?: number
+          device_id: string
+          employee_id: string
+          employee_name_snapshot: string
+          failed_count?: number
+          last_crash_at?: string | null
+          last_heartbeat_at?: string
+          last_successful_sync_at?: string | null
+          local_database_health?: string
+          local_schema_version?: number
+          offline_since?: string | null
+          organization_id: string
+          queue_depth?: number
+          register_id: string
+          server_checkpoint?: number
+          store_id: string
+          sync_average_latency_ms?: number
+          sync_max_latency_ms?: number
+          updated_at?: string
+        }
+        Update: {
+          api_average_latency_ms?: number
+          api_failure_count?: number
+          api_max_latency_ms?: number
+          app_version?: string
+          conflict_count?: number
+          connection_mode?: string
+          crash_count?: number
+          crash_window_started_at?: string | null
+          device_checkpoint?: number
+          device_id?: string
+          employee_id?: string
+          employee_name_snapshot?: string
+          failed_count?: number
+          last_crash_at?: string | null
+          last_heartbeat_at?: string
+          last_successful_sync_at?: string | null
+          local_database_health?: string
+          local_schema_version?: number
+          offline_since?: string | null
+          organization_id?: string
+          queue_depth?: number
+          register_id?: string
+          server_checkpoint?: number
+          store_id?: string
+          sync_average_latency_ms?: number
+          sync_max_latency_ms?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_device_sync_telemetry_device_org_fkey"
+            columns: ["device_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "pos_devices"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "pos_device_sync_telemetry_register_org_fkey"
+            columns: ["register_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "registers"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "pos_device_sync_telemetry_store_org_fkey"
+            columns: ["store_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id", "organization_id"]
+          },
+        ]
+      }
       pos_devices: {
         Row: {
           app_version: string
@@ -3320,6 +3522,51 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "product_variants"
             referencedColumns: ["id", "product_id", "organization_id"]
+          },
+        ]
+      }
+      pos_sync_changes: {
+        Row: {
+          changed_at: string
+          domain: string
+          entity_id: string | null
+          operation: string
+          organization_id: string
+          revision: number
+          store_id: string | null
+        }
+        Insert: {
+          changed_at?: string
+          domain: string
+          entity_id?: string | null
+          operation: string
+          organization_id: string
+          revision?: never
+          store_id?: string | null
+        }
+        Update: {
+          changed_at?: string
+          domain?: string
+          entity_id?: string | null
+          operation?: string
+          organization_id?: string
+          revision?: never
+          store_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_sync_changes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_sync_changes_store_id_organization_id_fkey"
+            columns: ["store_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id", "organization_id"]
           },
         ]
       }
@@ -6875,6 +7122,18 @@ export type Database = {
         Args: { target_email: string; target_full_name?: string }
         Returns: string
       }
+      finalize_pos_device_sequence: {
+        Args: {
+          target_device_id: string
+          target_device_sequence: number
+          target_final_state: string
+          target_idempotency_key: string
+          target_organization_id: string
+        }
+        Returns: {
+          server_checkpoint: number
+        }[]
+      }
       generate_catalog_identifiers: {
         Args: { target_organization_id: string; target_product_name: string }
         Returns: {
@@ -7037,11 +7296,79 @@ export type Database = {
           variant_id: string
         }[]
       }
+      get_inventory_count_batch_documents_workspace_v2: {
+        Args: {
+          target_inventory_count_batch_ids: string[]
+          target_organization_id: string
+        }
+        Returns: {
+          inventory_count_batch_id: string
+          inventory_count_id: string
+          store_id: string
+        }[]
+      }
+      get_inventory_count_batches_workspace_v2: {
+        Args: { target_limit?: number; target_organization_id: string }
+        Returns: {
+          batch_number: number
+          created_at: string
+          id: string
+          name: string
+          note: string
+          updated_at: string
+        }[]
+      }
+      get_inventory_count_lines_workspace_v2: {
+        Args: {
+          target_inventory_count_ids: string[]
+          target_organization_id: string
+        }
+        Returns: {
+          barcode_snapshot: string
+          category_name_snapshot: string
+          counted_at: string
+          counted_quantity: number
+          expected_quantity: number
+          id: string
+          inventory_count_id: string
+          line_sort_order: number
+          product_id: string
+          product_name_snapshot: string
+          reconciled_expected_quantity: number
+          sku_snapshot: string
+          unit_snapshot: string
+          variant_id: string
+          variant_name_snapshot: string
+        }[]
+      }
       get_inventory_count_suppliers: {
         Args: { target_organization_id: string }
         Returns: {
           id: string
           name: string
+        }[]
+      }
+      get_inventory_counts_workspace_v2: {
+        Args: {
+          target_limit?: number
+          target_organization_id: string
+          target_store_ids?: string[]
+        }
+        Returns: {
+          completed_at: string
+          count_mode: string
+          count_number: number
+          id: string
+          include_zero_stock: boolean
+          note: string
+          scope_reference_id: string
+          scope_type: string
+          sort_mode: string
+          started_at: string
+          started_by_employee_id: string
+          status: string
+          store_id: string
+          updated_at: string
         }[]
       }
       get_inventory_health_awareness: {
@@ -7175,6 +7502,14 @@ export type Database = {
         Args: { target_organization_id?: string }
         Returns: Json
       }
+      get_pos_catalog_product_v2: {
+        Args: {
+          target_organization_id: string
+          target_product_id: string
+          target_store_id: string
+        }
+        Returns: Json
+      }
       get_pos_catalog_v2: {
         Args: {
           target_category_id?: string
@@ -7200,6 +7535,15 @@ export type Database = {
           realtime_topic: string
           register_id: string
           session_id: string
+        }[]
+      }
+      get_pos_device_sync_checkpoint: {
+        Args: { target_device_id: string; target_organization_id: string }
+        Returns: {
+          device_id: string
+          next_expected_sequence: number
+          server_checkpoint: number
+          updated_at: string
         }[]
       }
       get_pos_favorite_items: {
@@ -7355,6 +7699,35 @@ export type Database = {
       get_pos_shift_operational_summary: {
         Args: { target_organization_id: string; target_shift_id: string }
         Returns: Json
+      }
+      get_pos_sync_change_window: {
+        Args: {
+          target_after_revision: number
+          target_device_id: string
+          target_limit: number
+          target_organization_id: string
+        }
+        Returns: {
+          domain: string
+          entity_id: string
+          operation: string
+          revision: number
+          store_id: string
+        }[]
+      }
+      get_pos_sync_customer: {
+        Args: {
+          target_customer_id: string
+          target_device_id: string
+          target_organization_id: string
+        }
+        Returns: Json
+      }
+      get_pos_sync_revision: {
+        Args: { target_device_id: string; target_organization_id: string }
+        Returns: {
+          current_revision: number
+        }[]
       }
       get_pos_ticket_assignees: {
         Args: { target_organization_id: string; target_store_id: string }
@@ -7735,6 +8108,39 @@ export type Database = {
         Args: { target_organization_id: string; target_store_id: string }
         Returns: undefined
       }
+      report_pos_device_sync_telemetry: {
+        Args: {
+          target_api_average_latency_ms?: number
+          target_api_failure_count?: number
+          target_api_max_latency_ms?: number
+          target_app_version: string
+          target_conflict_count: number
+          target_connection_mode: string
+          target_crash_count?: number
+          target_crash_window_started_at?: string
+          target_device_checkpoint: number
+          target_device_id: string
+          target_employee_id: string
+          target_employee_name: string
+          target_failed_count: number
+          target_last_crash_at?: string
+          target_last_successful_sync_at: string
+          target_local_database_health?: string
+          target_local_schema_version?: number
+          target_offline_since: string
+          target_organization_id: string
+          target_queue_depth: number
+          target_register_id: string
+          target_server_checkpoint: number
+          target_store_id: string
+          target_sync_average_latency_ms?: number
+          target_sync_max_latency_ms?: number
+        }
+        Returns: {
+          device_id: string
+          heartbeat_at: string
+        }[]
+      }
       request_manager_approval: {
         Args: {
           target_operation_code: string
@@ -7747,6 +8153,22 @@ export type Database = {
           decision: string
           expires_at: string
           message: string
+        }[]
+      }
+      reserve_pos_device_sequence: {
+        Args: {
+          target_device_id: string
+          target_device_sequence: number
+          target_idempotency_key: string
+          target_local_receipt_reference: string
+          target_organization_id: string
+          target_register_id: string
+          target_store_id: string
+        }
+        Returns: {
+          expected_sequence: number
+          server_checkpoint: number
+          status: string
         }[]
       }
       restore_tindio_payment_preset: {

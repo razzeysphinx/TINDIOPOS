@@ -155,3 +155,56 @@ Build: PASS
 R1 drift regenerated: PASS
 FunctionPrivileges captured: PASS
 Live Neon writes during R1: NO
+
+R2 — CANONICAL BASELINE CONSTRUCTION
+
+STATUS:
+COMPLETE
+
+SOURCE:
+Certified clean local Supabase/PostgreSQL schema after R1.
+
+INPUT HISTORY:
+211 immutable historical migrations
++ 2 recovery-forward migrations
+
+OUTPUT:
+database/baseline/0001_tindio_baseline.sql
+database/baseline/0001_tindio_baseline.manifest.json
+
+BASELINE CHARACTERISTICS:
+- schema-only
+- TINDIO-owned public/private objects
+- provider-owned auth/storage/realtime schemas excluded
+- source ownership/session metadata removed
+- provider administrative ACL metadata removed
+- protected business schema captured
+- current R1 winning definitions captured
+- deterministic two-capture SHA256 verified
+
+IMPORTANT:
+R2 is a final-state snapshot, not yet the final provider-neutral installation.
+
+Remaining direct provider identity, provider role, and PostgREST coupling are explicitly inventoried for R3/R4.
+
+Historical supabase/migrations remain untouched and active until later cleanup.
+
+Current live Neon remains authoritative and received zero R2 writes.
+
+R2 BASELINE EVIDENCE:
+- SHA256: c2c8183c6f02327e80e561b4b2b504887140586b0d5d03e068ae97132e18ef46
+- bytes: 1975098
+- lines: 42974
+- active migrations: 213
+- recovery-forward migrations: 2
+- local source objects: 100 public tables, 7 private tables, 196 public functions, 257 private functions, 409 public indexes, 149 public policies, 204 public triggers, 2 private triggers, 0 public sequences, 10 private sequences
+- auth.uid references in baseline: 167
+- auth.user_id references in baseline: 0
+- provider-role references: 698
+- provider-coupled policies: 10
+
+RECOVERY STATUS:
+R0: COMPLETE
+R1: COMPLETE
+R2: COMPLETE
+R3: NOT STARTED

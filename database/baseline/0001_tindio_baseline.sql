@@ -9,8 +9,6 @@ revoke all on schema private from public;
 -- PostgreSQL database dump
 --
 
--- \restrict mqL9jxPOMwNPGpdodmePZtwgwr3Dz990eXXoqyFOoFNktVSH7gemc4AuwN8GZ2B
-
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
 
@@ -4342,6 +4340,7 @@ declare
   export_session public.organization_export_sessions%rowtype;
   actor_employee_id uuid;
   delivery_completed_at timestamptz := clock_timestamp();
+  current_profile_id uuid := private.current_profile_id();
 begin
   if target_record_count not between 1 and 50000000
     or jsonb_typeof(target_manifest) <> 'object'
@@ -4354,7 +4353,7 @@ begin
   into export_session
   from public.organization_export_sessions session
   where session.id = target_export_session_id
-    and session.profile_id = (select auth.uid())
+    and session.profile_id = current_profile_id
     and session.expires_at > now()
   for update;
 
@@ -4382,7 +4381,9 @@ begin
     delivery_manifest = target_manifest
   where session.id = export_session.id;
 
-  actor_employee_id := private.current_organization_member_employee_id(export_session.organization_id);
+  actor_employee_id := private.current_organization_member_employee_id(
+    export_session.organization_id
+  );
 
   perform private.write_audit_log(
     export_session.organization_id,
@@ -4512,18 +4513,20 @@ CREATE OR REPLACE FUNCTION "private"."consume_organization_rate_limit"("target_o
 declare
   normalized_action_code text :=
     lower(btrim(coalesce(target_action_code, '')));
-
   configured_limit integer;
-
+  current_profile_id uuid := private.current_profile_id();
   current_window_start timestamptz :=
     date_trunc('hour', clock_timestamp());
-
   current_window_ends_at timestamptz;
-
   observed_request_count integer;
-
   request_was_allowed boolean := false;
 begin
+  if current_profile_id is null then
+    raise exception
+      'An authenticated TINDIO profile is required.'
+      using errcode = '42501';
+  end if;
+
   case normalized_action_code
     when 'organization.export' then
       configured_limit := 3;
@@ -4582,7 +4585,7 @@ begin
   )
   values (
     target_organization_id,
-    (select auth.uid()),
+    current_profile_id,
     normalized_action_code,
     current_window_start,
     1
@@ -4611,7 +4614,7 @@ begin
     into observed_request_count
     from public.organization_rate_limit_windows rate_window
     where rate_window.organization_id = target_organization_id
-      and rate_window.profile_id = (select auth.uid())
+      and rate_window.profile_id = current_profile_id
       and rate_window.action_code = normalized_action_code
       and rate_window.window_started_at = current_window_start;
 
@@ -4623,30 +4626,15 @@ begin
   end if;
 
   return jsonb_build_object(
-    'allowed',
-      request_was_allowed,
-
-    'limit',
-      configured_limit,
-
-    'remaining',
-      greatest(
-        configured_limit - observed_request_count,
-        0
-      ),
-
-    'retry_after_seconds',
-      greatest(
-        floor(
-          extract(
-            epoch
-            from (
-              current_window_ends_at - clock_timestamp()
-            )
-          )
-        )::integer,
-        0
-      )
+    'allowed', request_was_allowed,
+    'limit', configured_limit,
+    'remaining', greatest(configured_limit - observed_request_count, 0),
+    'retry_after_seconds', greatest(
+      floor(extract(
+        epoch from (current_window_ends_at - clock_timestamp())
+      ))::integer,
+      0
+    )
   );
 end;
 $$;
@@ -5966,7 +5954,7 @@ CREATE OR REPLACE FUNCTION "private"."current_organization_member_employee_id"("
   select employee.id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = private.current_profile_id()
     and employee.status = 'active'
   order by employee.created_at
   limit 1;
@@ -8262,36 +8250,69 @@ CREATE OR REPLACE FUNCTION "private"."has_active_pos_shift_access"("target_organ
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select
-    (select auth.uid()) is not null
-    and (select private.has_permission(target_organization_id, 'sales.create'))
+  select coalesce(
+    target_organization_id is not null
+    and target_store_id is not null
+    and target_register_id is not null
+
+    and private.current_profile_id()
+      is not null
+
+    and private.has_permission(
+      target_organization_id,
+      'sales.create'
+    )
+
+    and private.has_store_read_scope(
+      target_organization_id,
+      target_store_id
+    )
+
     and exists (
       select 1
       from public.employees employee
-      join public.employee_stores employee_store
-        on employee_store.employee_id = employee.id
-       and employee_store.organization_id = employee.organization_id
-       and employee_store.store_id = target_store_id
       join public.stores store
-        on store.id = employee_store.store_id
-       and store.organization_id = employee_store.organization_id
+        on store.organization_id =
+          employee.organization_id
+       and store.id =
+          target_store_id
        and store.is_active
       join public.registers register
-        on register.id = target_register_id
-       and register.organization_id = employee.organization_id
-       and register.store_id = target_store_id
+        on register.organization_id =
+          employee.organization_id
+       and register.id =
+          target_register_id
+       and register.store_id =
+          target_store_id
        and register.is_active
       join public.shifts shift
-        on shift.organization_id = employee.organization_id
-       and shift.store_id = target_store_id
-       and shift.register_id = target_register_id
-       and shift.opened_by_employee_id = employee.id
-       and shift.status = 'open'
-      where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
-        and employee.status = 'active'
-    );
+        on shift.organization_id =
+          employee.organization_id
+       and shift.store_id =
+          target_store_id
+       and shift.register_id =
+          target_register_id
+       and shift.opened_by_employee_id =
+          employee.id
+       and shift.status =
+          'open'
+      where employee.organization_id =
+          target_organization_id
+        and employee.profile_id =
+          private.current_profile_id()
+        and employee.status =
+          'active'
+    ),
+
+    false
+  );
 $$;
+
+--
+-- Name: FUNCTION "has_active_pos_shift_access"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid"); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."has_active_pos_shift_access"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") IS 'RLS-safe active POS drawer predicate. EXECUTE is intentionally limited to authenticated because open_tickets RLS evaluates this helper for authenticated users. The function remains SECURITY DEFINER and independently validates TINDIO identity, sales permission, store scope, employee status, register scope, and owned open-shift state.';
 
 --
 -- Name: has_all_inventory_capabilities("uuid", "text"[]); Type: FUNCTION; Schema: private; Owner: postgres
@@ -8478,8 +8499,8 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_export_access"("target_or
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select
-    (select auth.uid()) is not null
+  select coalesce(
+    private.current_profile_id() is not null
     and exists (
       select 1
       from public.employees employee
@@ -8490,10 +8511,12 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_export_access"("target_or
         on role_permission.role_id = employee_role.role_id
        and role_permission.organization_id = employee_role.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = private.current_profile_id()
         and employee.status = 'active'
         and role_permission.permission_code = 'organization.export'
-    );
+    ),
+    false
+  );
 $$;
 
 --
@@ -8504,8 +8527,8 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_lifecycle_access"("target
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select
-    (select auth.uid()) is not null
+  select coalesce(
+    private.current_profile_id() is not null
     and exists (
       select 1
       from public.employees employee
@@ -8516,12 +8539,17 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_lifecycle_access"("target
         on role_permission.role_id = employee_role.role_id
        and role_permission.organization_id = employee_role.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = private.current_profile_id()
         and employee.status = 'active'
-        and role_permission.permission_code in ('organization.archive', 'organization.lifecycle')
+        and role_permission.permission_code in (
+          'organization.archive',
+          'organization.lifecycle'
+        )
       group by employee.id
       having count(distinct role_permission.permission_code) = 2
-    );
+    ),
+    false
+  );
 $$;
 
 --
@@ -8552,7 +8580,7 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_recovery_manage_access"("
     SET "search_path" TO ''
     AS $$
   select coalesce(
-    (select auth.uid()) is not null
+    private.current_profile_id() is not null
     and exists (
       select 1
       from public.employees employee
@@ -8563,7 +8591,7 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_recovery_manage_access"("
         on role_permission.role_id = employee_role.role_id
        and role_permission.organization_id = employee_role.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = private.current_profile_id()
         and employee.status = 'active'
         and role_permission.permission_code = 'recovery.manage'
     ),
@@ -8580,7 +8608,7 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_recovery_view_access"("ta
     SET "search_path" TO ''
     AS $$
   select coalesce(
-    (select auth.uid()) is not null
+    private.current_profile_id() is not null
     and exists (
       select 1
       from public.employees employee
@@ -8591,10 +8619,11 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_recovery_view_access"("ta
         on role_permission.role_id = employee_role.role_id
        and role_permission.organization_id = employee_role.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = private.current_profile_id()
         and employee.status = 'active'
         and role_permission.permission_code in (
-          'recovery.view', 'recovery.manage'
+          'recovery.view',
+          'recovery.manage'
         )
     ),
     false
@@ -9582,11 +9611,7 @@ CREATE OR REPLACE FUNCTION "private"."inventory_count_actor"("target_organizatio
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select private.inventory_count_actor(
-    target_organization_id,
-    target_store_id,
-    array['inventory.count.create']::text[]
-  );
+  select private.inventory_count_actor(target_organization_id,target_store_id,array['inventory.count.create']::text[]);
 $$;
 
 --
@@ -9597,31 +9622,22 @@ CREATE OR REPLACE FUNCTION "private"."inventory_count_actor"("target_organizatio
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-declare
-  actor_id uuid;
+declare actor_profile_id uuid; actor_id uuid;
 begin
-  if (select auth.uid()) is null
-    or coalesce(cardinality(requested_capabilities), 0) = 0
-    or not (select private.has_all_inventory_capabilities(target_organization_id, requested_capabilities)) then
-    raise exception 'Inventory count permission is required.' using errcode = '42501';
+  actor_profile_id := private.current_profile_id();
+  if actor_profile_id is null or coalesce(cardinality(requested_capabilities),0)=0
+    or not private.has_all_inventory_capabilities(target_organization_id, requested_capabilities) then
+    raise exception 'Inventory count permission is required.' using errcode='42501';
   end if;
-  if not (select private.has_store_read_scope(target_organization_id, target_store_id)) then
-    raise exception 'Store access is required for this inventory count.' using errcode = '42501';
+  if not private.has_store_read_scope(target_organization_id,target_store_id) then
+    raise exception 'Store access is required for this inventory count.' using errcode='42501';
   end if;
-
-  actor_id := private.current_employee_id(target_organization_id);
-  if actor_id is null or not exists (
-    select 1
-    from public.employees employee
-    where employee.id = actor_id
-      and employee.organization_id = target_organization_id
-      and employee.status = 'active'
-  ) then
-    raise exception 'An active employee record is required.' using errcode = '42501';
-  end if;
+  select employee.id into actor_id from public.employees employee
+  where employee.organization_id=target_organization_id and employee.profile_id=actor_profile_id and employee.status='active'
+  order by employee.created_at, employee.id limit 1;
+  if actor_id is null then raise exception 'An active employee record is required.' using errcode='42501'; end if;
   return actor_id;
-end;
-$$;
+end; $$;
 
 --
 -- Name: inventory_organization_actor("uuid"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -9896,14 +9912,15 @@ begin
     raise exception 'Organization was not found.' using errcode = 'P0002';
   end if;
 
-  select employee.id
-  into actor_employee_id
-  from public.employees employee
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active'
-  order by employee.created_at
-  limit 1;
+  actor_employee_id := private.current_organization_member_employee_id(
+    target_organization_id
+  );
+
+  if actor_employee_id is null then
+    raise exception
+      'An active organization employee is required.'
+      using errcode = '42501';
+  end if;
 
   if normalized_action in ('SUSPEND', 'REQUEST_ARCHIVE')
     and (normalized_reason is null or char_length(normalized_reason) not between 3 and 500) then
@@ -10744,6 +10761,7 @@ declare
   rate_limit_result jsonb;
   export_session_id uuid;
   actor_employee_id uuid;
+  current_profile_id uuid := private.current_profile_id();
 begin
   rate_limit_result := private.consume_organization_rate_limit(
     target_organization_id,
@@ -10757,18 +10775,22 @@ begin
   delete from public.organization_export_sessions session
   where session.expires_at <= now();
 
-  insert into public.organization_export_sessions (organization_id, profile_id, expires_at)
-  values (target_organization_id, (select auth.uid()), now() + interval '1 hour')
+  insert into public.organization_export_sessions (
+    organization_id,
+    profile_id,
+    expires_at
+  )
+  values (
+    target_organization_id,
+    current_profile_id,
+    now() + interval '1 hour'
+  )
   returning id into export_session_id;
 
-  select employee.id
-  into actor_employee_id
-  from public.employees employee
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active'
-  order by employee.created_at
-  limit 1;
+  actor_employee_id :=
+    private.current_organization_member_employee_id(
+      target_organization_id
+    );
 
   perform private.write_audit_log(
     target_organization_id,
@@ -12118,6 +12140,26 @@ end;
 $$;
 
 --
+-- Name: record_pos_sync_change(); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."record_pos_sync_change"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare payload jsonb; operation_value text; store_value uuid; entity_value uuid;
+begin
+  payload := case when TG_OP='DELETE' then to_jsonb(OLD) else to_jsonb(NEW) end;
+  operation_value := case when TG_ARGV[3]='INVALIDATE' then 'INVALIDATE' when TG_OP='DELETE' then 'DELETE' else 'UPSERT' end;
+  entity_value := nullif(payload ->> TG_ARGV[1], '')::uuid;
+  store_value := case when coalesce(TG_ARGV[2],'')='' then null else nullif(payload ->> TG_ARGV[2], '')::uuid end;
+  insert into public.pos_sync_changes(organization_id,store_id,domain,entity_id,operation)
+  values ((payload ->> 'organization_id')::uuid,store_value,TG_ARGV[0],entity_value,operation_value);
+  return coalesce(NEW, OLD);
+end;
+$$;
+
+--
 -- Name: refund_sale("uuid", "uuid", "uuid", "uuid", "text", "text", "jsonb"); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -12859,64 +12901,99 @@ CREATE OR REPLACE FUNCTION "private"."require_active_pos_shift"("target_organiza
     SET "search_path" TO ''
     AS $$
 declare
+  actor_profile_id uuid;
   actor_employee_id uuid;
   active_shift_id uuid;
 begin
   if target_organization_id is null
     or target_store_id is null
-    or target_register_id is null then
-    raise exception 'A store and register are required for POS activity.' using errcode = '23514';
+    or target_register_id is null
+  then
+    raise exception
+      'A store and register are required for POS activity.'
+      using errcode = '23514';
   end if;
 
-  perform private.require_active_pos_device(
-    target_organization_id,
-    target_store_id,
-    target_register_id
-  );
+  actor_profile_id :=
+    private.current_profile_id();
 
-  if (select auth.uid()) is null
-    or not (select private.has_permission(target_organization_id, 'sales.create')) then
-    raise exception 'Sales permission is required.' using errcode = '42501';
+  if actor_profile_id is null
+    or not private.has_permission(
+      target_organization_id,
+      'sales.create'
+    )
+  then
+    raise exception
+      'Sales permission is required.'
+      using errcode = '42501';
+  end if;
+
+  if not private.has_store_read_scope(
+    target_organization_id,
+    target_store_id
+  )
+  then
+    raise exception
+      'An active employee assignment, store, and register are required.'
+      using errcode = '42501';
   end if;
 
   select employee.id
   into actor_employee_id
   from public.employees employee
-  join public.employee_stores employee_store
-    on employee_store.employee_id = employee.id
-   and employee_store.organization_id = employee.organization_id
-   and employee_store.store_id = target_store_id
   join public.stores store
-    on store.id = employee_store.store_id
-   and store.organization_id = employee_store.organization_id
+    on store.organization_id =
+      employee.organization_id
+   and store.id =
+      target_store_id
    and store.is_active
   join public.registers register
-    on register.id = target_register_id
-   and register.organization_id = employee.organization_id
-   and register.store_id = target_store_id
+    on register.organization_id =
+      employee.organization_id
+   and register.id =
+      target_register_id
+   and register.store_id =
+      target_store_id
    and register.is_active
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active'
-  for key share of employee, store, register;
+  where employee.organization_id =
+      target_organization_id
+    and employee.profile_id =
+      actor_profile_id
+    and employee.status =
+      'active'
+  order by
+    employee.created_at,
+    employee.id
+  limit 1
+  for key share
+  of employee, store, register;
 
-  if actor_employee_id is null then
-    raise exception 'An active employee assignment, store, and register are required.'
+  if actor_employee_id is null
+  then
+    raise exception
+      'An active employee assignment, store, and register are required.'
       using errcode = '42501';
   end if;
 
   select shift.id
   into active_shift_id
   from public.shifts shift
-  where shift.organization_id = target_organization_id
-    and shift.store_id = target_store_id
-    and shift.register_id = target_register_id
-    and shift.opened_by_employee_id = actor_employee_id
-    and shift.status = 'open'
+  where shift.organization_id =
+      target_organization_id
+    and shift.store_id =
+      target_store_id
+    and shift.register_id =
+      target_register_id
+    and shift.opened_by_employee_id =
+      actor_employee_id
+    and shift.status =
+      'open'
   for update;
 
-  if active_shift_id is null then
-    raise exception 'Open your register shift before using transactional POS features.'
+  if active_shift_id is null
+  then
+    raise exception
+      'Open your register shift before using transactional POS features.'
       using errcode = '42501';
   end if;
 
@@ -12967,25 +13044,12 @@ CREATE OR REPLACE FUNCTION "private"."require_device_manager"("target_organizati
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-declare
-  actor_employee_id uuid;
+declare actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
-    or not (select private.has_permission(target_organization_id, 'devices.manage')) then
+  actor_employee_id := private.current_employee_id(target_organization_id);
+  if actor_employee_id is null or not (select private.has_permission(target_organization_id, 'devices.manage')) then
     raise exception 'Device-management permission is required.' using errcode = '42501';
   end if;
-
-  select employee.id
-  into actor_employee_id
-  from public.employees employee
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active';
-
-  if actor_employee_id is null then
-    raise exception 'An active employee membership is required.' using errcode = '42501';
-  end if;
-
   return actor_employee_id;
 end;
 $$;
@@ -13055,6 +13119,49 @@ $$;
 COMMENT ON FUNCTION "private"."require_pos_capabilities"("target_organization_id" "uuid", "required_permission_codes" "text"[]) IS 'Shared permission-only POS capability guard. Preset and customer-created roles use the same role_permissions rows.';
 
 --
+-- Name: require_pos_sequence_access("uuid", "uuid", "uuid", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."require_pos_sequence_access"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare actor_employee_id uuid;
+begin
+  actor_employee_id := private.current_employee_id(target_organization_id);
+  if actor_employee_id is null or not (select private.has_permission(target_organization_id, 'sales.create')) then
+    raise exception 'Sales permission is required.' using errcode = '42501';
+  end if;
+  if not exists (
+    select 1 from public.pos_devices device
+    join public.employee_stores assignment on assignment.organization_id=device.organization_id and assignment.employee_id=actor_employee_id and assignment.store_id=device.store_id
+    join public.stores store on store.id=device.store_id and store.organization_id=device.organization_id and store.is_active
+    join public.registers register on register.id=device.register_id and register.organization_id=device.organization_id and register.store_id=device.store_id and register.is_active
+    where device.organization_id=target_organization_id and device.id=target_device_id
+      and device.store_id=target_store_id and device.register_id=target_register_id and device.status='active'
+  ) then
+    raise exception 'An active device, register, and employee store assignment are required.' using errcode = '42501';
+  end if;
+end;
+$$;
+
+--
+-- Name: require_pos_sync_access("uuid", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."require_pos_sync_access"("target_organization_id" "uuid", "target_device_id" "uuid") RETURNS TABLE("store_id" "uuid", "register_id" "uuid")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare selected_store_id uuid; selected_register_id uuid;
+begin
+  select device.store_id,device.register_id into selected_store_id,selected_register_id from public.pos_devices device where device.organization_id=target_organization_id and device.id=target_device_id;
+  perform private.require_pos_sequence_access(target_organization_id,target_device_id,selected_store_id,selected_register_id);
+  return query select selected_store_id,selected_register_id;
+end;
+$$;
+
+--
 -- Name: require_pos_workspace_access("uuid", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -13063,45 +13170,89 @@ CREATE OR REPLACE FUNCTION "private"."require_pos_workspace_access"("target_orga
     SET "search_path" TO ''
     AS $$
 declare
+  actor_profile_id uuid;
   actor_employee_id uuid;
 begin
-  if target_organization_id is null or target_store_id is null then
-    raise exception 'Organization and store are required.' using errcode = '22023';
+  if target_organization_id is null
+    or target_store_id is null
+  then
+    raise exception
+      'Organization and store are required.'
+      using errcode = '22023';
   end if;
 
-  if (select auth.uid()) is null
-    or not (select private.has_permission(target_organization_id, 'sales.create')) then
-    raise exception 'POS access is required.' using errcode = '42501';
+  actor_profile_id :=
+    private.current_profile_id();
+
+  if actor_profile_id is null
+    or not private.has_permission(
+      target_organization_id,
+      'sales.create'
+    )
+  then
+    raise exception
+      'POS access is required.'
+      using errcode = '42501';
+  end if;
+
+  if not private.has_store_read_scope(
+    target_organization_id,
+    target_store_id
+  )
+  then
+    raise exception
+      'The selected store is not assigned to this employee.'
+      using errcode = '42501';
   end if;
 
   select employee.id
   into actor_employee_id
   from public.employees employee
-  join public.employee_stores employee_store
-    on employee_store.employee_id = employee.id
-   and employee_store.organization_id = employee.organization_id
+  join public.organizations organization
+    on organization.id =
+      employee.organization_id
+   and organization.status =
+      'active'
   join public.stores store
-    on store.id = employee_store.store_id
-   and store.organization_id = employee_store.organization_id
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active'
-    and employee_store.store_id = target_store_id
-    and store.is_active;
+    on store.organization_id =
+      employee.organization_id
+   and store.id =
+      target_store_id
+   and store.is_active
+  where employee.organization_id =
+      target_organization_id
+    and employee.profile_id =
+      actor_profile_id
+    and employee.status =
+      'active'
+  order by
+    employee.created_at,
+    employee.id
+  limit 1;
 
-  if actor_employee_id is null then
-    raise exception 'The selected store is not assigned to this employee.' using errcode = '42501';
+  if actor_employee_id is null
+  then
+    raise exception
+      'An active employee is required for this POS workspace.'
+      using errcode = '42501';
   end if;
 
   if not exists (
     select 1
     from public.shifts shift
-    where shift.organization_id = target_organization_id
-      and shift.store_id = target_store_id
-      and shift.opened_by_employee_id = actor_employee_id
-      and shift.status = 'open'
-  ) then
-    raise exception 'Open a register shift before using the POS workspace.' using errcode = '42501';
+    where shift.organization_id =
+        target_organization_id
+      and shift.store_id =
+        target_store_id
+      and shift.opened_by_employee_id =
+        actor_employee_id
+      and shift.status =
+        'open'
+  )
+  then
+    raise exception
+      'Open a register shift before using the POS workspace.'
+      using errcode = '42501';
   end if;
 
   return actor_employee_id;
@@ -18755,6 +18906,36 @@ $$;
 COMMENT ON FUNCTION "public"."ensure_current_identity_profile"("target_email" "text", "target_full_name" "text") IS 'Ensures the current externally authenticated Supabase subject has a permanent TINDIO profile and identity link. Used during the Neon database migration while Supabase Auth remains authoritative.';
 
 --
+-- Name: finalize_pos_device_sequence("uuid", "uuid", bigint, "uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."finalize_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_final_state" "text") RETURNS TABLE("server_checkpoint" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare receipt public.pos_device_sequence_receipts%rowtype; current_checkpoint bigint; normalized_state text; device_store_id uuid; device_register_id uuid;
+begin
+  normalized_state := upper(nullif(btrim(coalesce(target_final_state,'')),''));
+  if normalized_state not in ('APPLIED','CONFLICT') then raise exception 'The sequence finalization state is invalid.' using errcode='23514'; end if;
+  select device.store_id,device.register_id into device_store_id,device_register_id from public.pos_devices device where device.organization_id=target_organization_id and device.id=target_device_id;
+  perform private.require_pos_sequence_access(target_organization_id,target_device_id,device_store_id,device_register_id);
+  select checkpoint.server_checkpoint into current_checkpoint from public.pos_device_sync_checkpoints checkpoint where checkpoint.organization_id=target_organization_id and checkpoint.device_id=target_device_id for update;
+  select * into receipt from public.pos_device_sequence_receipts candidate where candidate.organization_id=target_organization_id and candidate.device_id=target_device_id and candidate.device_sequence=target_device_sequence for update;
+  if receipt.idempotency_key is null or receipt.idempotency_key <> target_idempotency_key then raise exception 'The sequence receipt does not match this checkout.' using errcode='23514'; end if;
+  if receipt.state='RECEIVED' then
+    update public.pos_device_sequence_receipts set state=normalized_state,finalized_at=now()
+      where organization_id=target_organization_id and device_id=target_device_id and device_sequence=target_device_sequence;
+  end if;
+  if target_device_sequence=current_checkpoint+1 then
+    update public.pos_device_sync_checkpoints set server_checkpoint=target_device_sequence,updated_at=now()
+      where organization_id=target_organization_id and device_id=target_device_id;
+    current_checkpoint := target_device_sequence;
+  end if;
+  server_checkpoint := current_checkpoint; return next;
+end;
+$$;
+
+--
 -- Name: generate_catalog_identifiers("uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -19563,27 +19744,88 @@ $$;
 COMMENT ON FUNCTION "public"."get_inventory_count_awareness"("target_organization_id" "uuid") IS 'Returns the latest completed physical-count fact for each authorized active tracked stock position. It is read-only awareness and does not enforce count frequency.';
 
 --
+-- Name: get_inventory_count_batch_documents_workspace_v2("uuid", "uuid"[]); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_inventory_count_batch_documents_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_batch_ids" "uuid"[]) RETURNS TABLE("inventory_count_batch_id" "uuid", "inventory_count_id" "uuid", "store_id" "uuid")
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if target_organization_id is null or target_inventory_count_batch_ids is null or cardinality(target_inventory_count_batch_ids) not between 1 and 50 then raise exception 'Choose between one and fifty count batches.' using errcode='22023'; end if;
+  if private.current_profile_id() is null or not private.has_any_inventory_capability(target_organization_id,array['inventory.count.create','inventory.count.finalize']::text[]) then raise exception 'Inventory count access is required.' using errcode='42501'; end if;
+  return query select d.inventory_count_batch_id,d.inventory_count_id,d.store_id from public.inventory_count_batch_documents d
+  where d.organization_id=target_organization_id and d.inventory_count_batch_id=any(target_inventory_count_batch_ids) and private.has_store_read_scope(target_organization_id,d.store_id)
+  order by d.inventory_count_batch_id,d.store_id,d.inventory_count_id;
+end; $$;
+
+--
+-- Name: get_inventory_count_batches_workspace_v2("uuid", integer); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_inventory_count_batches_workspace_v2"("target_organization_id" "uuid", "target_limit" integer DEFAULT 25) RETURNS TABLE("id" "uuid", "batch_number" bigint, "name" "text", "note" "text", "created_at" timestamp with time zone, "updated_at" timestamp with time zone)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if target_organization_id is null or target_limit is null or target_limit not between 1 and 50 then raise exception 'Invalid inventory count batch request.' using errcode='22023'; end if;
+  if private.current_profile_id() is null or not private.has_any_inventory_capability(target_organization_id,array['inventory.count.create','inventory.count.finalize']::text[]) then raise exception 'Inventory count access is required.' using errcode='42501'; end if;
+  return query select b.id,b.batch_number,b.name,b.note,b.created_at,b.updated_at from public.inventory_count_batches b
+  where b.organization_id=target_organization_id and exists (select 1 from public.inventory_count_batch_documents d join public.inventory_counts c on c.organization_id=d.organization_id and c.id=d.inventory_count_id where d.organization_id=b.organization_id and d.inventory_count_batch_id=b.id and private.has_store_read_scope(target_organization_id,c.store_id))
+  order by b.created_at desc,b.id desc limit target_limit;
+end; $$;
+
+--
+-- Name: get_inventory_count_lines_workspace_v2("uuid", "uuid"[]); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_inventory_count_lines_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_ids" "uuid"[]) RETURNS TABLE("id" "uuid", "inventory_count_id" "uuid", "product_id" "uuid", "variant_id" "uuid", "expected_quantity" numeric, "reconciled_expected_quantity" numeric, "counted_quantity" numeric, "counted_at" timestamp with time zone, "product_name_snapshot" "text", "variant_name_snapshot" "text", "category_name_snapshot" "text", "sku_snapshot" "text", "barcode_snapshot" "text", "unit_snapshot" "text", "line_sort_order" integer)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if target_organization_id is null or target_inventory_count_ids is null or cardinality(target_inventory_count_ids) not between 1 and 100 then raise exception 'Choose between one and one hundred inventory counts.' using errcode='22023'; end if;
+  if private.current_profile_id() is null or not private.has_any_inventory_capability(target_organization_id,array['inventory.count.create','inventory.count.finalize']::text[]) then raise exception 'Inventory count access is required.' using errcode='42501'; end if;
+  return query select l.id,l.inventory_count_id,l.product_id,l.variant_id,l.expected_quantity,l.reconciled_expected_quantity,l.counted_quantity,l.counted_at,l.product_name_snapshot,l.variant_name_snapshot,l.category_name_snapshot,l.sku_snapshot,l.barcode_snapshot,l.unit_snapshot,l.line_sort_order
+  from public.inventory_count_lines l join public.inventory_counts c on c.organization_id=l.organization_id and c.id=l.inventory_count_id
+  where l.organization_id=target_organization_id and l.inventory_count_id=any(target_inventory_count_ids) and private.has_store_read_scope(target_organization_id,c.store_id)
+  order by l.inventory_count_id,l.line_sort_order,l.id;
+end; $$;
+
+--
 -- Name: get_inventory_count_suppliers("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
 CREATE OR REPLACE FUNCTION "public"."get_inventory_count_suppliers"("target_organization_id" "uuid") RETURNS TABLE("id" "uuid", "name" "text")
-    LANGUAGE "plpgsql" SECURITY DEFINER
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
-    or not (select private.has_inventory_capability(target_organization_id, 'inventory.count.create')) then
-    raise exception 'Inventory count creation permission is required.' using errcode = '42501';
+  if private.current_profile_id() is null or not private.has_inventory_capability(target_organization_id,'inventory.count.create') then
+    raise exception 'Inventory count creation permission is required.' using errcode='42501';
   end if;
+  return query select supplier.id,supplier.name from public.suppliers supplier
+    where supplier.organization_id=target_organization_id and supplier.is_active order by lower(supplier.name),supplier.id;
+end; $$;
 
-  return query
-  select supplier.id, supplier.name
-  from public.suppliers supplier
-  where supplier.organization_id = target_organization_id
-    and supplier.is_active
-  order by lower(supplier.name), supplier.id;
-end;
-$$;
+--
+-- Name: get_inventory_counts_workspace_v2("uuid", "uuid"[], integer); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_inventory_counts_workspace_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[] DEFAULT NULL::"uuid"[], "target_limit" integer DEFAULT 100) RETURNS TABLE("id" "uuid", "count_number" bigint, "store_id" "uuid", "status" "text", "note" "text", "started_at" timestamp with time zone, "started_by_employee_id" "uuid", "completed_at" timestamp with time zone, "updated_at" timestamp with time zone, "count_mode" "text", "scope_type" "text", "scope_reference_id" "uuid", "sort_mode" "text", "include_zero_stock" boolean)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if target_organization_id is null or target_limit is null or target_limit not between 1 and 100 then raise exception 'Invalid inventory count workspace request.' using errcode='22023'; end if;
+  if private.current_profile_id() is null or not private.has_any_inventory_capability(target_organization_id,array['inventory.count.create','inventory.count.finalize']::text[]) then raise exception 'Inventory count access is required.' using errcode='42501'; end if;
+  return query select c.id,c.count_number,c.store_id,c.status,c.note,c.started_at,c.started_by_employee_id,c.completed_at,c.updated_at,c.count_mode,c.scope_type,c.scope_reference_id,c.sort_mode,c.include_zero_stock
+  from public.inventory_counts c where c.organization_id=target_organization_id
+    and c.status in ('draft','in_progress','ready_for_review','posted','cancelled','open','completed')
+    and (target_store_ids is null or c.store_id=any(target_store_ids))
+    and private.has_store_read_scope(target_organization_id,c.store_id)
+  order by c.started_at desc,c.id desc limit target_limit;
+end; $$;
 
 --
 -- Name: get_inventory_health_awareness("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -20154,12 +20396,13 @@ declare
   source_predicate text;
   export_rows jsonb;
   next_after_id uuid;
+  current_profile_id uuid := private.current_profile_id();
 begin
   select session.*
   into export_session
   from public.organization_export_sessions session
   where session.id = target_export_session_id
-    and session.profile_id = (select auth.uid())
+    and session.profile_id = current_profile_id
     and session.expires_at > now();
 
   if not found then
@@ -20431,6 +20674,614 @@ end;
 $$;
 
 --
+-- Name: get_pos_bootstrap_core_v2("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_bootstrap_core_v2"("target_organization_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_profile_id uuid;
+  selected_organization_id uuid;
+  selected_employee_id uuid;
+  selected_employee_number text;
+  selected_job_title text;
+
+  permissions text[] := '{}'::text[];
+  role_names text[] := '{}'::text[];
+  effective_store_ids uuid[] := '{}'::uuid[];
+
+  organization_record record;
+  profile_record record;
+  active_shift_record record;
+
+  available_organizations jsonb := '[]'::jsonb;
+  stores_json jsonb := '[]'::jsonb;
+  registers_json jsonb := '[]'::jsonb;
+  features_json jsonb := '{}'::jsonb;
+begin
+  actor_profile_id :=
+    private.current_profile_id();
+
+  if actor_profile_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'IDENTITY_UNMAPPED'
+    );
+  end if;
+
+  select
+    profile.full_name,
+    profile.email
+  into profile_record
+  from public.profiles profile
+  where profile.id = actor_profile_id;
+
+  if profile_record is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'PROFILE_NOT_FOUND'
+    );
+  end if;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', organization.id,
+          'name', organization.name,
+          'status', organization.status
+        )
+        order by
+          case when organization.status = 'active' then 0 else 1 end,
+          lower(organization.name),
+          organization.id
+      ),
+      '[]'::jsonb
+    )
+  into available_organizations
+  from public.employees employee
+  join public.organizations organization
+    on organization.id = employee.organization_id
+  where employee.profile_id = actor_profile_id
+    and employee.status = 'active';
+
+  if jsonb_array_length(available_organizations) = 0 then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'NO_ACTIVE_EMPLOYEE'
+    );
+  end if;
+
+  if target_organization_id is not null then
+    select employee.organization_id
+    into selected_organization_id
+    from public.employees employee
+    where employee.profile_id = actor_profile_id
+      and employee.organization_id = target_organization_id
+      and employee.status = 'active'
+    limit 1;
+
+    if selected_organization_id is null then
+      return jsonb_build_object(
+        'ok', false,
+        'reason', 'ORGANIZATION_FORBIDDEN'
+      );
+    end if;
+  else
+    select employee.organization_id
+    into selected_organization_id
+    from public.employees employee
+    join public.organizations organization
+      on organization.id = employee.organization_id
+    where employee.profile_id = actor_profile_id
+      and employee.status = 'active'
+    order by
+      case when organization.status = 'active' then 0 else 1 end,
+      employee.created_at,
+      employee.id
+    limit 1;
+  end if;
+
+  select
+    employee.id,
+    employee.employee_number,
+    employee.job_title
+  into
+    selected_employee_id,
+    selected_employee_number,
+    selected_job_title
+  from public.employees employee
+  where employee.profile_id = actor_profile_id
+    and employee.organization_id = selected_organization_id
+    and employee.status = 'active'
+  order by employee.created_at, employee.id
+  limit 1;
+
+  if selected_employee_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'NO_ACTIVE_EMPLOYEE'
+    );
+  end if;
+
+  select organization.*
+  into organization_record
+  from public.organizations organization
+  where organization.id = selected_organization_id;
+
+  if organization_record is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'ORGANIZATION_NOT_FOUND'
+    );
+  end if;
+
+  select
+    coalesce(
+      array_agg(distinct role.name order by role.name),
+      '{}'::text[]
+    )
+  into role_names
+  from public.employee_roles employee_role
+  join public.roles role
+    on role.organization_id = employee_role.organization_id
+    and role.id = employee_role.role_id
+  where employee_role.organization_id = selected_organization_id
+    and employee_role.employee_id = selected_employee_id;
+
+  select
+    coalesce(
+      array_agg(
+        distinct role_permission.permission_code
+        order by role_permission.permission_code
+      ),
+      '{}'::text[]
+    )
+  into permissions
+  from public.employee_roles employee_role
+  join public.role_permissions role_permission
+    on role_permission.organization_id = employee_role.organization_id
+    and role_permission.role_id = employee_role.role_id
+  where employee_role.organization_id = selected_organization_id
+    and employee_role.employee_id = selected_employee_id;
+
+  if 'stores.manage' = any(permissions) then
+    select
+      coalesce(
+        array_agg(store.id order by store.created_at, store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.stores store
+    where store.organization_id = selected_organization_id
+      and store.is_active;
+  else
+    select
+      coalesce(
+        array_agg(distinct store.id order by store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.employee_stores assignment
+    join public.stores store
+      on store.organization_id = assignment.organization_id
+      and store.id = assignment.store_id
+      and store.is_active
+    where assignment.organization_id = selected_organization_id
+      and assignment.employee_id = selected_employee_id;
+  end if;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', store.id,
+          'name', store.name
+        )
+        order by store.created_at, store.id
+      ),
+      '[]'::jsonb
+    )
+  into stores_json
+  from public.stores store
+  where store.organization_id = selected_organization_id
+    and store.id = any(effective_store_ids)
+    and store.is_active;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', register.id,
+          'storeId', register.store_id,
+          'name', register.name,
+          'code', register.code
+        )
+        order by register.name, register.id
+      ),
+      '[]'::jsonb
+    )
+  into registers_json
+  from public.registers register
+  where register.organization_id = selected_organization_id
+    and register.store_id = any(effective_store_ids)
+    and register.is_active;
+
+  select
+    coalesce(
+      jsonb_object_agg(
+        feature.feature_key,
+        feature.is_enabled
+      ),
+      '{}'::jsonb
+    )
+  into features_json
+  from public.organization_features feature
+  where feature.organization_id = selected_organization_id;
+
+  select
+    shift.id,
+    shift.store_id,
+    shift.register_id,
+    shift.opening_cash_minor,
+    shift.opened_at
+  into active_shift_record
+  from public.shifts shift
+  where shift.organization_id = selected_organization_id
+    and shift.opened_by_employee_id = selected_employee_id
+    and shift.status = 'open'
+    and shift.store_id = any(effective_store_ids)
+  order by shift.opened_at desc, shift.id
+  limit 1;
+
+  return jsonb_build_object(
+    'ok', true,
+
+    'profileId',
+      actor_profile_id,
+
+    'organization',
+      jsonb_build_object(
+        'id', organization_record.id,
+        'name', organization_record.name,
+        'currencyCode', organization_record.currency_code,
+        'timezone', organization_record.timezone,
+        'status', organization_record.status,
+        'businessType', organization_record.business_type,
+        'deviceManagementEnabled',
+          organization_record.device_management_enabled
+      ),
+
+    'employee',
+      jsonb_build_object(
+        'id', selected_employee_id,
+        'employeeNumber', selected_employee_number,
+        'jobTitle', selected_job_title,
+        'name',
+          coalesce(
+            nullif(profile_record.full_name, ''),
+            profile_record.email,
+            selected_employee_number
+          )
+      ),
+
+    'availableOrganizations',
+      available_organizations,
+
+    'roleNames',
+      to_jsonb(role_names),
+
+    'permissions',
+      to_jsonb(permissions),
+
+    'storeIds',
+      to_jsonb(effective_store_ids),
+
+    'stores',
+      stores_json,
+
+    'registers',
+      registers_json,
+
+    'features',
+      features_json,
+
+    'activeShift',
+      case
+        when active_shift_record.id is null
+          then null
+        else jsonb_build_object(
+          'id', active_shift_record.id,
+          'storeId', active_shift_record.store_id,
+          'registerId', active_shift_record.register_id,
+          'openingCashMinor', active_shift_record.opening_cash_minor,
+          'openedAt', active_shift_record.opened_at
+        )
+      end
+  );
+end;
+$$;
+
+--
+-- Name: FUNCTION "get_pos_bootstrap_core_v2"("target_organization_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."get_pos_bootstrap_core_v2"("target_organization_id" "uuid") IS 'POS V2 core bootstrap. Resolves provider-neutral identity, organization membership, RBAC, effective store scope, stores, registers, organization features, and active shift in one read-only RPC. Caller cannot provide profile or employee identity.';
+
+--
+-- Name: get_pos_catalog_product_v2("uuid", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_catalog_product_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare access_store_id uuid; catalog jsonb;
+begin
+  select access.store_id into access_store_id from private.require_pos_sync_access(target_organization_id,(current_setting('request.headers',true)::jsonb ->> 'x-tindio-pos-device-id')::uuid) access;
+  if access_store_id is null or access_store_id<>target_store_id then raise exception 'Store access is required.' using errcode='42501'; end if;
+  select coalesce(jsonb_agg(jsonb_build_object('productId',item.product_id,'variantId',item.variant_id,'categoryId',item.category_id,'productName',item.product_name,'variantName',item.variant_name,'sku',item.sku,'barcode',item.barcode,'priceMinor',item.price_minor,'unit',item.unit,'imageUrl',item.image_url,'isVariablePrice',item.is_variable_price,'allowFractionalQuantity',item.allow_fractional_quantity,'hasModifiers',exists(select 1 from public.product_modifier_groups assignment where assignment.organization_id=target_organization_id and assignment.product_id=item.product_id))),'[]'::jsonb) into catalog from public.search_pos_catalog(target_organization_id,target_store_id,'',null,0,10000) item where item.product_id=target_product_id;
+  return jsonb_build_object('organizationId',target_organization_id,'storeId',target_store_id,'productId',target_product_id,'items',catalog);
+end;
+$$;
+
+--
+-- Name: get_pos_catalog_v2("uuid", "uuid", "text", "text", "uuid", integer, integer); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_catalog_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_mode" "text" DEFAULT 'search'::"text", "target_query" "text" DEFAULT NULL::"text", "target_category_id" "uuid" DEFAULT NULL::"uuid", "target_offset" integer DEFAULT 0, "target_limit" integer DEFAULT 24) RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_profile_id uuid;
+  selected_employee_id uuid;
+  permissions text[] := '{}'::text[];
+  effective_store_ids uuid[] := '{}'::uuid[];
+  modifiers_enabled boolean := false;
+  raw_items_json jsonb := '[]'::jsonb;
+  items_json jsonb := '[]'::jsonb;
+  has_more boolean := false;
+begin
+  if target_mode is null
+    or target_mode not in ('search', 'favorites', 'recent') then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'CATALOG_MODE_INVALID'
+    );
+  end if;
+
+  if target_offset is null
+    or target_offset < 0
+    or target_offset > 10000
+    or target_limit is null
+    or target_limit < 1
+    or target_limit > 24 then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'CATALOG_PAGE_INVALID'
+    );
+  end if;
+
+  actor_profile_id := private.current_profile_id();
+
+  if actor_profile_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'IDENTITY_UNMAPPED'
+    );
+  end if;
+
+  select employee.id
+  into selected_employee_id
+  from public.employees employee
+  where employee.profile_id = actor_profile_id
+    and employee.organization_id = target_organization_id
+    and employee.status = 'active'
+  order by employee.created_at, employee.id
+  limit 1;
+
+  if selected_employee_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'ORGANIZATION_FORBIDDEN'
+    );
+  end if;
+
+  select
+    coalesce(
+      array_agg(
+        distinct role_permission.permission_code
+        order by role_permission.permission_code
+      ),
+      '{}'::text[]
+    )
+  into permissions
+  from public.employee_roles employee_role
+  join public.role_permissions role_permission
+    on role_permission.organization_id = employee_role.organization_id
+    and role_permission.role_id = employee_role.role_id
+  where employee_role.organization_id = target_organization_id
+    and employee_role.employee_id = selected_employee_id;
+
+  if not (
+    'pos.access' = any(permissions)
+    and 'sales.create' = any(permissions)
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'POS_ACCESS_FORBIDDEN'
+    );
+  end if;
+
+  if 'stores.manage' = any(permissions) then
+    select
+      coalesce(
+        array_agg(store.id order by store.created_at, store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.stores store
+    where store.organization_id = target_organization_id
+      and store.is_active;
+  else
+    select
+      coalesce(
+        array_agg(distinct store.id order by store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.employee_stores assignment
+    join public.stores store
+      on store.organization_id = assignment.organization_id
+      and store.id = assignment.store_id
+      and store.is_active
+    where assignment.organization_id = target_organization_id
+      and assignment.employee_id = selected_employee_id;
+  end if;
+
+  if target_store_id is null
+    or not target_store_id = any(effective_store_ids) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'STORE_FORBIDDEN'
+    );
+  end if;
+
+  if not exists (
+    select 1
+    from public.shifts shift
+    where shift.organization_id = target_organization_id
+      and shift.store_id = target_store_id
+      and shift.opened_by_employee_id = selected_employee_id
+      and shift.status = 'open'
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'ACTIVE_SHIFT_REQUIRED'
+    );
+  end if;
+
+  select
+    coalesce(
+      bool_or(feature.is_enabled)
+        filter (where feature.feature_key = 'modifiers'),
+      false
+    )
+  into modifiers_enabled
+  from public.organization_features feature
+  where feature.organization_id = target_organization_id;
+
+  if target_mode = 'search' then
+    select
+      coalesce(
+        jsonb_agg(to_jsonb(catalog_item)),
+        '[]'::jsonb
+      )
+    into raw_items_json
+    from public.search_pos_catalog(
+      target_organization_id,
+      target_store_id,
+      target_query,
+      target_category_id,
+      target_offset,
+      target_limit + 1
+    ) catalog_item;
+  elsif target_mode = 'favorites' then
+    select
+      coalesce(
+        jsonb_agg(to_jsonb(catalog_item)),
+        '[]'::jsonb
+      )
+    into raw_items_json
+    from (
+      select *
+      from public.get_pos_favorite_items(
+        target_organization_id,
+        target_store_id
+      )
+      offset target_offset
+      limit target_limit + 1
+    ) catalog_item;
+  else
+    select
+      coalesce(
+        jsonb_agg(to_jsonb(catalog_item)),
+        '[]'::jsonb
+      )
+    into raw_items_json
+    from (
+      select *
+      from public.get_pos_recent_items(
+        target_organization_id,
+        target_store_id,
+        least(target_offset + target_limit + 1, 24)
+      )
+      offset target_offset
+      limit target_limit + 1
+    ) catalog_item;
+  end if;
+
+  has_more := jsonb_array_length(raw_items_json) > target_limit;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'productId', item.value -> 'product_id',
+          'variantId', item.value -> 'variant_id',
+          'categoryId', item.value -> 'category_id',
+          'productName', item.value -> 'product_name',
+          'variantName', item.value -> 'variant_name',
+          'sku', item.value -> 'sku',
+          'barcode', item.value -> 'barcode',
+          'priceMinor', item.value -> 'price_minor',
+          'unit', item.value -> 'unit',
+          'imageUrl', item.value -> 'image_url',
+          'isVariablePrice', item.value -> 'is_variable_price',
+          'allowFractionalQuantity',
+            item.value -> 'allow_fractional_quantity',
+          'hasModifiers',
+            modifiers_enabled
+            and exists (
+              select 1
+              from public.product_modifier_groups assignment
+              where assignment.organization_id = target_organization_id
+                and assignment.product_id =
+                  (item.value ->> 'product_id')::uuid
+            )
+        )
+        order by item.ordinality
+      ),
+      '[]'::jsonb
+    )
+  into items_json
+  from jsonb_array_elements(raw_items_json)
+    with ordinality as item(value, ordinality)
+  where item.ordinality <= target_limit;
+
+  return jsonb_build_object(
+    'ok', true,
+    'organizationId', target_organization_id,
+    'storeId', target_store_id,
+    'mode', target_mode,
+    'offset', target_offset,
+    'limit', target_limit,
+    'items', items_json,
+    'hasMore', has_more
+  );
+end;
+$$;
+
+--
+-- Name: FUNCTION "get_pos_catalog_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_mode" "text", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."get_pos_catalog_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_mode" "text", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer) IS 'POS V2 catalog wrapper. Resolves provider-neutral identity, POS scope, active shift, modifiers feature availability, and returns catalog items in the V2 camelCase contract.';
+
+--
 -- Name: get_pos_customer_display_sessions("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -20457,6 +21308,69 @@ $_$;
 --
 
 COMMENT ON FUNCTION "public"."get_pos_customer_display_sessions_with_ids"("target_organization_id" "uuid") IS 'Returns active customer-display session IDs and scoped Realtime topics only to authorized POS users assigned to each store.';
+
+--
+-- Name: get_pos_device_sync_checkpoint("uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_device_sync_checkpoint"("target_organization_id" "uuid", "target_device_id" "uuid") RETURNS TABLE("device_id" "uuid", "server_checkpoint" bigint, "next_expected_sequence" bigint, "updated_at" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  device_store_id uuid;
+  device_register_id uuid;
+begin
+  select
+    device.store_id,
+    device.register_id
+  into
+    device_store_id,
+    device_register_id
+  from public.pos_devices device
+  where device.organization_id =
+      target_organization_id
+    and device.id =
+      target_device_id;
+
+  perform private.require_pos_sequence_access(
+    target_organization_id,
+    target_device_id,
+    device_store_id,
+    device_register_id
+  );
+
+  insert into public.pos_device_sync_checkpoints (
+    organization_id,
+    device_id
+  )
+  values (
+    target_organization_id,
+    target_device_id
+  )
+  on conflict on constraint
+    pos_device_sync_checkpoints_pkey
+  do nothing;
+
+  return query
+  select
+    checkpoint.device_id,
+    checkpoint.server_checkpoint,
+    checkpoint.server_checkpoint + 1,
+    checkpoint.updated_at
+  from public.pos_device_sync_checkpoints checkpoint
+  where checkpoint.organization_id =
+      target_organization_id
+    and checkpoint.device_id =
+      target_device_id;
+end;
+$$;
+
+--
+-- Name: FUNCTION "get_pos_device_sync_checkpoint"("target_organization_id" "uuid", "target_device_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."get_pos_device_sync_checkpoint"("target_organization_id" "uuid", "target_device_id" "uuid") IS 'Returns the durable sequence checkpoint for one authorized POS device. Recovery R1 uses the named checkpoint primary-key constraint to avoid PL/pgSQL OUT-parameter ambiguity without changing the RPC contract.';
 
 --
 -- Name: get_pos_favorite_items("uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -20558,6 +21472,562 @@ $$;
 --
 
 COMMENT ON FUNCTION "public"."get_pos_incoming_stock_transfers"("target_organization_id" "uuid") IS 'Returns destination-scoped canonical dispatched and partially received physical transfers for authorized POS receivers.';
+
+--
+-- Name: get_pos_live_state_v2("uuid", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_live_state_v2"("target_organization_id" "uuid", "target_store_id" "uuid" DEFAULT NULL::"uuid", "target_register_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_profile_id uuid;
+  selected_employee_id uuid;
+
+  permissions text[] := '{}'::text[];
+  effective_store_ids uuid[] := '{}'::uuid[];
+
+  time_clock_enabled boolean := false;
+  customer_display_enabled boolean := false;
+  inventory_enabled boolean := false;
+  transfers_enabled boolean := false;
+  open_tickets_feature_enabled boolean := false;
+  incoming_transfers_enabled boolean := false;
+  open_tickets_enabled boolean := false;
+  ticket_assignees_enabled boolean := false;
+  active_shift_matches_target boolean := false;
+
+  time_clock_entry_json jsonb := 'null'::jsonb;
+  customer_display_sessions_json jsonb := '[]'::jsonb;
+  incoming_transfers_raw_json jsonb := '[]'::jsonb;
+  open_tickets_raw_json jsonb := '[]'::jsonb;
+  ticket_assignees_json jsonb := '[]'::jsonb;
+begin
+  actor_profile_id := private.current_profile_id();
+
+  if actor_profile_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'IDENTITY_UNMAPPED'
+    );
+  end if;
+
+  select employee.id
+  into selected_employee_id
+  from public.employees employee
+  where employee.profile_id = actor_profile_id
+    and employee.organization_id = target_organization_id
+    and employee.status = 'active'
+  order by employee.created_at, employee.id
+  limit 1;
+
+  if selected_employee_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'ORGANIZATION_FORBIDDEN'
+    );
+  end if;
+
+  select
+    coalesce(
+      array_agg(
+        distinct role_permission.permission_code
+        order by role_permission.permission_code
+      ),
+      '{}'::text[]
+    )
+  into permissions
+  from public.employee_roles employee_role
+  join public.role_permissions role_permission
+    on role_permission.organization_id = employee_role.organization_id
+    and role_permission.role_id = employee_role.role_id
+  where employee_role.organization_id = target_organization_id
+    and employee_role.employee_id = selected_employee_id;
+
+  if not (
+    'pos.access' = any(permissions)
+    and 'sales.create' = any(permissions)
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'POS_ACCESS_FORBIDDEN'
+    );
+  end if;
+
+  if 'stores.manage' = any(permissions) then
+    select
+      coalesce(
+        array_agg(store.id order by store.created_at, store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.stores store
+    where store.organization_id = target_organization_id
+      and store.is_active;
+  else
+    select
+      coalesce(
+        array_agg(distinct store.id order by store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.employee_stores assignment
+    join public.stores store
+      on store.organization_id = assignment.organization_id
+      and store.id = assignment.store_id
+      and store.is_active
+    where assignment.organization_id = target_organization_id
+      and assignment.employee_id = selected_employee_id;
+  end if;
+
+  if (
+    target_store_id is not null
+    and not target_store_id = any(effective_store_ids)
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'STORE_FORBIDDEN'
+    );
+  end if;
+
+  if target_register_id is not null then
+    if target_store_id is null then
+      return jsonb_build_object(
+        'ok', false,
+        'reason', 'STORE_REQUIRED_FOR_REGISTER'
+      );
+    end if;
+
+    if not exists (
+      select 1
+      from public.registers register
+      where register.organization_id = target_organization_id
+        and register.id = target_register_id
+        and register.store_id = target_store_id
+        and register.is_active
+    ) then
+      return jsonb_build_object(
+        'ok', false,
+        'reason', 'REGISTER_FORBIDDEN'
+      );
+    end if;
+  end if;
+
+  select
+    coalesce(
+      bool_or(feature.is_enabled)
+        filter (
+          where feature.feature_key = 'time_clock'
+        ),
+      false
+    ),
+    coalesce(
+      bool_or(feature.is_enabled)
+        filter (
+          where feature.feature_key = 'customer_display'
+        ),
+      false
+    ),
+    coalesce(
+      bool_or(feature.is_enabled)
+        filter (
+          where feature.feature_key = 'inventory'
+        ),
+      false
+    ),
+    coalesce(
+      bool_or(feature.is_enabled)
+        filter (
+          where feature.feature_key = 'transfers'
+        ),
+      false
+    ),
+    coalesce(
+      bool_or(feature.is_enabled)
+        filter (
+          where feature.feature_key = 'open_tickets'
+        ),
+      false
+    )
+  into
+    time_clock_enabled,
+    customer_display_enabled,
+    inventory_enabled,
+    transfers_enabled,
+    open_tickets_feature_enabled
+  from public.organization_features feature
+  where feature.organization_id = target_organization_id;
+
+  incoming_transfers_enabled :=
+    inventory_enabled
+    and transfers_enabled
+    and 'inventory.transfer.receive' = any(permissions);
+
+  open_tickets_enabled :=
+    open_tickets_feature_enabled
+    and 'tickets.manage' = any(permissions);
+
+  ticket_assignees_enabled :=
+    open_tickets_enabled
+    and 'employees.manage' = any(permissions);
+
+  if time_clock_enabled then
+    select
+      jsonb_build_object(
+        'id', entry.entry_id,
+        'employeeId', selected_employee_id,
+        'employeeName',
+          coalesce(
+            nullif(btrim(profile.full_name), ''),
+            profile.email,
+            employee.employee_number
+          ),
+        'storeId', entry.store_id,
+        'storeName', store.name,
+        'clockedInAt', entry.clocked_in_at
+      )
+    into time_clock_entry_json
+    from public.get_current_time_clock_entry(
+      target_organization_id
+    ) entry
+    join public.stores store
+      on store.organization_id = target_organization_id
+      and store.id = entry.store_id
+    join public.employees employee
+      on employee.organization_id = target_organization_id
+      and employee.id = selected_employee_id
+    left join public.profiles profile
+      on profile.id = employee.profile_id
+    where entry.store_id = any(effective_store_ids)
+    order by entry.clocked_in_at desc, entry.entry_id
+    limit 1;
+  end if;
+
+  if customer_display_enabled then
+    select
+      coalesce(
+        jsonb_agg(
+          jsonb_build_object(
+            'sessionId', session.session_id,
+            'registerId', session.register_id,
+            'realtimeTopic', session.realtime_topic
+          )
+          order by session.register_id, session.session_id
+        ),
+        '[]'::jsonb
+      )
+    into customer_display_sessions_json
+    from public.get_pos_customer_display_sessions_with_ids(
+      target_organization_id
+    ) session
+    join public.registers register
+      on register.organization_id = target_organization_id
+      and register.id = session.register_id
+      and register.is_active
+    where register.store_id = any(effective_store_ids);
+  end if;
+
+  if incoming_transfers_enabled then
+    select
+      coalesce(
+        jsonb_agg(
+          to_jsonb(transfer)
+          order by transfer.transfer_number desc, transfer.transfer_id
+        ),
+        '[]'::jsonb
+      )
+    into incoming_transfers_raw_json
+    from public.get_pos_incoming_stock_transfers(
+      target_organization_id
+    ) transfer
+    where transfer.destination_store_id = any(effective_store_ids);
+  end if;
+
+  if (
+    open_tickets_enabled
+    and target_store_id is not null
+    and target_register_id is not null
+  ) then
+    select exists (
+      select 1
+      from public.shifts shift
+      where shift.organization_id = target_organization_id
+        and shift.opened_by_employee_id = selected_employee_id
+        and shift.store_id = target_store_id
+        and shift.register_id = target_register_id
+        and shift.status = 'open'
+    )
+    into active_shift_matches_target;
+
+    if active_shift_matches_target then
+      select
+        coalesce(
+          jsonb_agg(
+            to_jsonb(ticket)
+            order by ticket.updated_at desc, ticket.ticket_id
+          ),
+          '[]'::jsonb
+        )
+      into open_tickets_raw_json
+      from public.get_pos_open_tickets(
+        target_organization_id,
+        target_store_id,
+        target_register_id
+      ) ticket;
+    end if;
+  end if;
+
+  if (
+    ticket_assignees_enabled
+    and target_store_id is not null
+  ) then
+    select
+      coalesce(
+        jsonb_agg(
+          jsonb_build_object(
+            'id', assignee.employee_id,
+            'fullName', assignee.full_name
+          )
+          order by assignee.full_name, assignee.employee_id
+        ),
+        '[]'::jsonb
+      )
+    into ticket_assignees_json
+    from public.get_pos_ticket_assignees(
+      target_organization_id,
+      target_store_id
+    ) assignee;
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'organizationId', target_organization_id,
+    'storeId', target_store_id,
+    'registerId', target_register_id,
+    'live', jsonb_build_object(
+      'timeClockEntry', time_clock_entry_json,
+      'customerDisplaySessions', customer_display_sessions_json,
+      'canReceiveIncomingTransfers', incoming_transfers_enabled,
+      'incomingTransfersRaw', incoming_transfers_raw_json,
+      'openTicketsRaw', open_tickets_raw_json,
+      'ticketAssignees', ticket_assignees_json
+    )
+  );
+end;
+$$;
+
+--
+-- Name: FUNCTION "get_pos_live_state_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."get_pos_live_state_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") IS 'POS V2 read-only live-state bundle. Resolves provider-neutral identity, active employee membership, POS permissions, organization features, and effective store/register scope server-side. Missing shifts return empty live ticket data rather than failing startup.';
+
+--
+-- Name: get_pos_modifiers_v2("uuid", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_modifiers_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_profile_id uuid;
+  selected_employee_id uuid;
+  permissions text[] := '{}'::text[];
+  effective_store_ids uuid[] := '{}'::uuid[];
+  modifiers_enabled boolean := false;
+  groups_json jsonb := '[]'::jsonb;
+begin
+  actor_profile_id := private.current_profile_id();
+
+  if actor_profile_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'IDENTITY_UNMAPPED'
+    );
+  end if;
+
+  select employee.id
+  into selected_employee_id
+  from public.employees employee
+  where employee.profile_id = actor_profile_id
+    and employee.organization_id = target_organization_id
+    and employee.status = 'active'
+  order by employee.created_at, employee.id
+  limit 1;
+
+  if selected_employee_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'ORGANIZATION_FORBIDDEN'
+    );
+  end if;
+
+  select
+    coalesce(
+      array_agg(
+        distinct role_permission.permission_code
+        order by role_permission.permission_code
+      ),
+      '{}'::text[]
+    )
+  into permissions
+  from public.employee_roles employee_role
+  join public.role_permissions role_permission
+    on role_permission.organization_id = employee_role.organization_id
+    and role_permission.role_id = employee_role.role_id
+  where employee_role.organization_id = target_organization_id
+    and employee_role.employee_id = selected_employee_id;
+
+  if not (
+    'pos.access' = any(permissions)
+    and 'sales.create' = any(permissions)
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'POS_ACCESS_FORBIDDEN'
+    );
+  end if;
+
+  if 'stores.manage' = any(permissions) then
+    select
+      coalesce(
+        array_agg(store.id order by store.created_at, store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.stores store
+    where store.organization_id = target_organization_id
+      and store.is_active;
+  else
+    select
+      coalesce(
+        array_agg(distinct store.id order by store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.employee_stores assignment
+    join public.stores store
+      on store.organization_id = assignment.organization_id
+      and store.id = assignment.store_id
+      and store.is_active
+    where assignment.organization_id = target_organization_id
+      and assignment.employee_id = selected_employee_id;
+  end if;
+
+  if target_store_id is null
+    or not target_store_id = any(effective_store_ids) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'STORE_FORBIDDEN'
+    );
+  end if;
+
+  if not exists (
+    select 1
+    from public.shifts shift
+    where shift.organization_id = target_organization_id
+      and shift.store_id = target_store_id
+      and shift.opened_by_employee_id = selected_employee_id
+      and shift.status = 'open'
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'ACTIVE_SHIFT_REQUIRED'
+    );
+  end if;
+
+  select
+    coalesce(
+      bool_or(feature.is_enabled)
+        filter (where feature.feature_key = 'modifiers'),
+      false
+    )
+  into modifiers_enabled
+  from public.organization_features feature
+  where feature.organization_id = target_organization_id;
+
+  if not modifiers_enabled then
+    return jsonb_build_object(
+      'ok', true,
+      'organizationId', target_organization_id,
+      'storeId', target_store_id,
+      'productId', target_product_id,
+      'groups', '[]'::jsonb
+    );
+  end if;
+
+  if not exists (
+    select 1
+    from public.products product
+    join public.product_store_settings setting
+      on setting.organization_id = product.organization_id
+      and setting.product_id = product.id
+      and setting.store_id = target_store_id
+      and setting.is_available
+    where product.organization_id = target_organization_id
+      and product.id = target_product_id
+      and product.status = 'active'
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'PRODUCT_FORBIDDEN'
+    );
+  end if;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', modifier_group.group_id,
+          'name', modifier_group.group_name,
+          'minSelections', modifier_group.min_selections,
+          'maxSelections', modifier_group.max_selections,
+          'options',
+            coalesce(
+              (
+                select jsonb_agg(
+                  jsonb_build_object(
+                    'id', modifier_option.value -> 'id',
+                    'name', modifier_option.value -> 'name',
+                    'priceMinor',
+                      modifier_option.value -> 'price_minor'
+                  )
+                  order by modifier_option.ordinality
+                )
+                from jsonb_array_elements(
+                  coalesce(modifier_group.options, '[]'::jsonb)
+                ) with ordinality as modifier_option(value, ordinality)
+              ),
+              '[]'::jsonb
+            )
+        )
+      ),
+      '[]'::jsonb
+    )
+  into groups_json
+  from public.get_pos_product_modifiers(
+    target_organization_id,
+    target_store_id,
+    target_product_id
+  ) modifier_group;
+
+  return jsonb_build_object(
+    'ok', true,
+    'organizationId', target_organization_id,
+    'storeId', target_store_id,
+    'productId', target_product_id,
+    'groups', groups_json
+  );
+end;
+$$;
+
+--
+-- Name: FUNCTION "get_pos_modifiers_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."get_pos_modifiers_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") IS 'POS V2 lazy modifier wrapper. Resolves provider-neutral identity, POS scope, active shift, modifiers feature availability, and returns one product''s modifier groups in the V2 camelCase contract.';
 
 --
 -- Name: get_pos_open_tickets("uuid", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -21102,6 +22572,313 @@ $$;
 COMMENT ON FUNCTION "public"."get_pos_recent_items"("target_organization_id" "uuid", "target_store_id" "uuid", "target_limit" integer) IS 'Returns current saleable items most recently completed at the caller’s assigned POS store.';
 
 --
+-- Name: get_pos_reference_bundle_v2("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_reference_bundle_v2"("target_organization_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_profile_id uuid;
+  selected_organization_id uuid;
+  selected_employee_id uuid;
+
+  permissions text[] := '{}'::text[];
+  effective_store_ids uuid[] := '{}'::uuid[];
+
+  categories_json jsonb := '[]'::jsonb;
+  payment_methods_json jsonb := '[]'::jsonb;
+  loyalty_program_json jsonb := 'null'::jsonb;
+  discounts_json jsonb := '[]'::jsonb;
+  tax_rates_json jsonb := '[]'::jsonb;
+  dining_options_json jsonb := '[]'::jsonb;
+  ticket_templates_json jsonb := '[]'::jsonb;
+  payload jsonb := '{}'::jsonb;
+begin
+  actor_profile_id := private.current_profile_id();
+
+  if actor_profile_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'IDENTITY_UNMAPPED'
+    );
+  end if;
+
+  if target_organization_id is not null then
+    select employee.organization_id
+    into selected_organization_id
+    from public.employees employee
+    where employee.profile_id = actor_profile_id
+      and employee.organization_id = target_organization_id
+      and employee.status = 'active'
+    limit 1;
+
+    if selected_organization_id is null then
+      return jsonb_build_object(
+        'ok', false,
+        'reason', 'ORGANIZATION_FORBIDDEN'
+      );
+    end if;
+  else
+    select employee.organization_id
+    into selected_organization_id
+    from public.employees employee
+    join public.organizations organization
+      on organization.id = employee.organization_id
+    where employee.profile_id = actor_profile_id
+      and employee.status = 'active'
+    order by
+      case when organization.status = 'active' then 0 else 1 end,
+      employee.created_at,
+      employee.id
+    limit 1;
+  end if;
+
+  if selected_organization_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'NO_ACTIVE_EMPLOYEE'
+    );
+  end if;
+
+  select employee.id
+  into selected_employee_id
+  from public.employees employee
+  where employee.profile_id = actor_profile_id
+    and employee.organization_id = selected_organization_id
+    and employee.status = 'active'
+  order by employee.created_at, employee.id
+  limit 1;
+
+  if selected_employee_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'NO_ACTIVE_EMPLOYEE'
+    );
+  end if;
+
+  select
+    coalesce(
+      array_agg(
+        distinct role_permission.permission_code
+        order by role_permission.permission_code
+      ),
+      '{}'::text[]
+    )
+  into permissions
+  from public.employee_roles employee_role
+  join public.role_permissions role_permission
+    on role_permission.organization_id = employee_role.organization_id
+    and role_permission.role_id = employee_role.role_id
+  where employee_role.organization_id = selected_organization_id
+    and employee_role.employee_id = selected_employee_id;
+
+  if not (
+    'pos.access' = any(permissions)
+    and 'sales.create' = any(permissions)
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'POS_ACCESS_FORBIDDEN'
+    );
+  end if;
+
+  if 'stores.manage' = any(permissions) then
+    select
+      coalesce(
+        array_agg(store.id order by store.created_at, store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.stores store
+    where store.organization_id = selected_organization_id
+      and store.is_active;
+  else
+    select
+      coalesce(
+        array_agg(distinct store.id order by store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.employee_stores assignment
+    join public.stores store
+      on store.organization_id = assignment.organization_id
+      and store.id = assignment.store_id
+      and store.is_active
+    where assignment.organization_id = selected_organization_id
+      and assignment.employee_id = selected_employee_id;
+  end if;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', category.id,
+          'name', category.name,
+          'color', category.color
+        )
+        order by category.sort_order, lower(category.name), category.id
+      ),
+      '[]'::jsonb
+    )
+  into categories_json
+  from public.categories category
+  where category.organization_id = selected_organization_id
+    and not category.is_archived;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', payment_method.id,
+          'storeId', store_payment_method.store_id,
+          'name', payment_method.name,
+          'code', payment_method.code,
+          'type', payment_method.payment_type,
+          'offlinePolicy', payment_method.offline_policy,
+          'requiresReference', payment_method.requires_reference,
+          'sortOrder', payment_method.sort_order
+        )
+        order by
+          store_payment_method.store_id,
+          payment_method.sort_order,
+          lower(payment_method.name),
+          payment_method.id
+      ),
+      '[]'::jsonb
+    )
+  into payment_methods_json
+  from public.store_payment_methods store_payment_method
+  join public.payment_methods payment_method
+    on payment_method.organization_id = store_payment_method.organization_id
+    and payment_method.id = store_payment_method.payment_method_id
+  where store_payment_method.organization_id = selected_organization_id
+    and store_payment_method.store_id = any(effective_store_ids)
+    and store_payment_method.is_enabled
+    and payment_method.is_enabled
+    and not payment_method.is_loyalty_redemption;
+
+  select
+    coalesce(
+      jsonb_build_object(
+        'isEnabled', loyalty_program.is_enabled,
+        'earnSpendMinor', loyalty_program.earn_spend_minor,
+        'earnPoints', loyalty_program.earn_points,
+        'redemptionValueMinor', loyalty_program.redemption_value_minor,
+        'minimumRedemptionPoints', loyalty_program.minimum_redemption_points
+      ),
+      'null'::jsonb
+    )
+  into loyalty_program_json
+  from public.loyalty_programs loyalty_program
+  where loyalty_program.organization_id = selected_organization_id;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', discount.id,
+          'name', discount.name,
+          'discountType', discount.discount_type,
+          'percentageBps', discount.percentage_bps,
+          'amountMinor', discount.amount_minor
+        )
+        order by discount.sort_order, lower(discount.name), discount.id
+      ),
+      '[]'::jsonb
+    )
+  into discounts_json
+  from public.discounts discount
+  where discount.organization_id = selected_organization_id
+    and discount.is_active;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', tax_rate.id,
+          'name', tax_rate.name,
+          'rateBps', tax_rate.rate_bps,
+          'isInclusive', tax_rate.is_inclusive,
+          'isDefault', tax_rate.is_default
+        )
+        order by lower(tax_rate.name), tax_rate.id
+      ),
+      '[]'::jsonb
+    )
+  into tax_rates_json
+  from public.tax_rates tax_rate
+  where tax_rate.organization_id = selected_organization_id
+    and tax_rate.is_active;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', dining_option.id,
+          'name', dining_option.name,
+          'isDefault', dining_option.is_default
+        )
+        order by
+          dining_option.sort_order,
+          lower(dining_option.name),
+          dining_option.id
+      ),
+      '[]'::jsonb
+    )
+  into dining_options_json
+  from public.dining_options dining_option
+  where dining_option.organization_id = selected_organization_id
+    and dining_option.is_active;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', ticket_template.id,
+          'label', ticket_template.label,
+          'note', ticket_template.note,
+          'diningOptionId', ticket_template.dining_option_id
+        )
+        order by
+          ticket_template.sort_order,
+          lower(ticket_template.label),
+          ticket_template.id
+      ),
+      '[]'::jsonb
+    )
+  into ticket_templates_json
+  from public.ticket_templates ticket_template
+  where ticket_template.organization_id = selected_organization_id
+    and ticket_template.is_active;
+
+  payload := jsonb_build_object(
+    'categories', categories_json,
+    'paymentMethods', payment_methods_json,
+    'loyaltyProgram', loyalty_program_json,
+    'discounts', discounts_json,
+    'taxRates', tax_rates_json,
+    'diningOptions', dining_options_json,
+    'ticketTemplates', ticket_templates_json
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'organizationId', selected_organization_id,
+    'referenceVersion', md5(payload::text),
+    'reference', payload
+  );
+end;
+$$;
+
+--
+-- Name: FUNCTION "get_pos_reference_bundle_v2"("target_organization_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."get_pos_reference_bundle_v2"("target_organization_id" "uuid") IS 'POS V2 read-only reference bundle. Resolves provider-neutral identity, active employee membership, POS permissions, and effective store scope server-side. Caller can select only a membership-validated organization.';
+
+--
 -- Name: get_pos_shift_operational_summary("uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -21221,6 +22998,52 @@ $$;
 --
 
 COMMENT ON FUNCTION "public"."get_pos_shift_operational_summary"("target_organization_id" "uuid", "target_shift_id" "uuid") IS 'Server-derived POS shift, cash-drawer, and sales summary for authorized assigned-store shift users. Blind cash remains hidden while a blind-count shift is open.';
+
+--
+-- Name: get_pos_sync_change_window("uuid", "uuid", bigint, integer); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_sync_change_window"("target_organization_id" "uuid", "target_device_id" "uuid", "target_after_revision" bigint, "target_limit" integer) RETURNS TABLE("revision" bigint, "domain" "text", "entity_id" "uuid", "operation" "text", "store_id" "uuid")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare selected_store_id uuid;
+begin
+  if target_after_revision is null or target_after_revision<0 or target_limit is null or target_limit not between 1 and 200 then raise exception 'Invalid sync cursor or limit.' using errcode='22023'; end if;
+  select access.store_id into selected_store_id from private.require_pos_sync_access(target_organization_id,target_device_id) access;
+  return query select change.revision,change.domain,change.entity_id,change.operation,change.store_id from public.pos_sync_changes change where change.organization_id=target_organization_id and change.revision>target_after_revision and (change.store_id is null or change.store_id=selected_store_id) order by change.revision asc limit target_limit+1;
+end;
+$$;
+
+--
+-- Name: get_pos_sync_customer("uuid", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_sync_customer"("target_organization_id" "uuid", "target_device_id" "uuid", "target_customer_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare customer jsonb;
+begin
+  perform private.require_pos_sync_access(target_organization_id,target_device_id);
+  select jsonb_build_object('id',row.id,'customerNumber',row.customer_number,'loyaltyCardCode',row.loyalty_card_code,'fullName',row.full_name,'phone',row.phone,'email',row.email,'loyaltyPoints',coalesce((select sum(transaction.points_delta) from public.loyalty_transactions transaction where transaction.organization_id=row.organization_id and transaction.customer_id=row.id),0)) into customer from public.customers row where row.organization_id=target_organization_id and row.id=target_customer_id and row.status='active';
+  return jsonb_build_object('customer',customer);
+end;
+$$;
+
+--
+-- Name: get_pos_sync_revision("uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_sync_revision"("target_organization_id" "uuid", "target_device_id" "uuid") RETURNS TABLE("current_revision" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  perform private.require_pos_sync_access(target_organization_id,target_device_id);
+  return query select coalesce(max(change.revision),0) from public.pos_sync_changes change where change.organization_id=target_organization_id;
+end;
+$$;
 
 --
 -- Name: get_pos_ticket_assignees("uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -23520,6 +25343,52 @@ CREATE OR REPLACE FUNCTION "public"."remove_inventory_policy_override"("target_o
 $$;
 
 --
+-- Name: report_pos_device_sync_telemetry("uuid", "uuid", "uuid", "uuid", "uuid", "text", "text", "text", timestamp with time zone, bigint, bigint, integer, integer, integer, timestamp with time zone, bigint, timestamp with time zone, timestamp with time zone, integer, integer, integer, integer, integer, "text", integer); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."report_pos_device_sync_telemetry"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_employee_id" "uuid", "target_employee_name" "text", "target_connection_mode" "text", "target_app_version" "text", "target_last_successful_sync_at" timestamp with time zone, "target_device_checkpoint" bigint, "target_server_checkpoint" bigint, "target_queue_depth" integer, "target_conflict_count" integer, "target_failed_count" integer, "target_offline_since" timestamp with time zone, "target_crash_count" bigint DEFAULT 0, "target_crash_window_started_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "target_last_crash_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "target_api_average_latency_ms" integer DEFAULT 0, "target_api_max_latency_ms" integer DEFAULT 0, "target_api_failure_count" integer DEFAULT 0, "target_sync_average_latency_ms" integer DEFAULT 0, "target_sync_max_latency_ms" integer DEFAULT 0, "target_local_database_health" "text" DEFAULT 'UNKNOWN'::"text", "target_local_schema_version" integer DEFAULT 0) RETURNS TABLE("device_id" "uuid", "heartbeat_at" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare actor_employee_id uuid; verified_store_id uuid; verified_register_id uuid;
+begin
+  actor_employee_id := private.current_employee_id(target_organization_id);
+  if actor_employee_id is null or actor_employee_id <> target_employee_id or not private.has_permission(target_organization_id, 'pos.access') then
+    raise exception 'POS telemetry requires an active POS employee.' using errcode = '42501';
+  end if;
+  if target_connection_mode not in ('CLOUD_ONLINE', 'STORE_LOCAL', 'DEVICE_ISOLATED', 'RECOVERING', 'SYNC_REVIEW')
+    or target_local_database_health not in ('HEALTHY', 'CHECK_REQUIRED', 'UNAVAILABLE', 'UNKNOWN') then
+    raise exception 'Invalid POS telemetry state.' using errcode = '23514';
+  end if;
+  if target_crash_count < 0 or target_api_average_latency_ms < 0 or target_api_max_latency_ms < 0 or target_api_failure_count < 0
+    or target_sync_average_latency_ms < 0 or target_sync_max_latency_ms < 0 or target_local_schema_version < 0
+    or target_device_checkpoint < 0 or target_server_checkpoint < 0 or target_queue_depth < 0 or target_conflict_count < 0 or target_failed_count < 0 then
+    raise exception 'Invalid POS telemetry counters.' using errcode = '23514';
+  end if;
+  select device.store_id, device.register_id into verified_store_id, verified_register_id
+  from public.pos_devices device where device.organization_id = target_organization_id and device.id = target_device_id and device.status = 'active';
+  if verified_store_id is null or verified_store_id <> target_store_id or verified_register_id <> target_register_id then
+    raise exception 'POS device telemetry binding mismatch.' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.employee_stores assignment where assignment.organization_id = target_organization_id and assignment.employee_id = actor_employee_id and assignment.store_id = target_store_id) then
+    raise exception 'POS employee is not assigned to this device store.' using errcode = '42501';
+  end if;
+  insert into public.pos_device_sync_telemetry (
+    organization_id,device_id,store_id,register_id,employee_id,employee_name_snapshot,connection_mode,app_version,last_heartbeat_at,last_successful_sync_at,device_checkpoint,server_checkpoint,queue_depth,conflict_count,failed_count,offline_since,
+    crash_count,crash_window_started_at,last_crash_at,api_average_latency_ms,api_max_latency_ms,api_failure_count,sync_average_latency_ms,sync_max_latency_ms,local_database_health,local_schema_version,updated_at
+  ) values (
+    target_organization_id,target_device_id,target_store_id,target_register_id,target_employee_id,left(trim(target_employee_name),160),target_connection_mode,left(trim(target_app_version),80),now(),target_last_successful_sync_at,target_device_checkpoint,target_server_checkpoint,target_queue_depth,target_conflict_count,target_failed_count,target_offline_since,
+    target_crash_count,target_crash_window_started_at,target_last_crash_at,target_api_average_latency_ms,target_api_max_latency_ms,target_api_failure_count,target_sync_average_latency_ms,target_sync_max_latency_ms,target_local_database_health,target_local_schema_version,now()
+  ) on conflict on constraint pos_device_sync_telemetry_pkey do update set
+    store_id=excluded.store_id, register_id=excluded.register_id, employee_id=excluded.employee_id, employee_name_snapshot=excluded.employee_name_snapshot,
+    connection_mode=excluded.connection_mode, app_version=excluded.app_version, last_heartbeat_at=excluded.last_heartbeat_at, last_successful_sync_at=excluded.last_successful_sync_at,
+    device_checkpoint=excluded.device_checkpoint, server_checkpoint=excluded.server_checkpoint, queue_depth=excluded.queue_depth, conflict_count=excluded.conflict_count, failed_count=excluded.failed_count, offline_since=excluded.offline_since,
+    crash_count=excluded.crash_count, crash_window_started_at=excluded.crash_window_started_at, last_crash_at=excluded.last_crash_at, api_average_latency_ms=excluded.api_average_latency_ms, api_max_latency_ms=excluded.api_max_latency_ms, api_failure_count=excluded.api_failure_count, sync_average_latency_ms=excluded.sync_average_latency_ms, sync_max_latency_ms=excluded.sync_max_latency_ms, local_database_health=excluded.local_database_health, local_schema_version=excluded.local_schema_version, updated_at=now();
+  return query select target_device_id, now();
+end;
+$$;
+
+--
 -- Name: request_manager_approval("uuid", "text", "text", "jsonb"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -23534,6 +25403,48 @@ CREATE OR REPLACE FUNCTION "public"."request_manager_approval"("target_organizat
     target_payload
   );
 $$;
+
+--
+-- Name: reserve_pos_device_sequence("uuid", "uuid", "uuid", "uuid", bigint, "uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."reserve_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_local_receipt_reference" "text") RETURNS TABLE("status" "text", "server_checkpoint" bigint, "expected_sequence" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+declare current_checkpoint bigint; existing_idempotency uuid; existing_sequence bigint;
+begin
+  if target_device_sequence is null or target_device_sequence <= 0 or target_idempotency_key is null
+    or target_local_receipt_reference !~ '^OFF-[A-Z0-9]{6,32}$' then
+    raise exception 'The device sequence reservation is invalid.' using errcode = '23514';
+  end if;
+  perform private.require_pos_sequence_access(target_organization_id,target_device_id,target_store_id,target_register_id);
+  insert into public.pos_device_sync_checkpoints (organization_id,device_id) values (target_organization_id,target_device_id)
+    on conflict (organization_id,device_id) do nothing;
+  select checkpoint.server_checkpoint into current_checkpoint from public.pos_device_sync_checkpoints checkpoint
+    where checkpoint.organization_id=target_organization_id and checkpoint.device_id=target_device_id for update;
+  select receipt.idempotency_key into existing_idempotency from public.pos_device_sequence_receipts receipt
+    where receipt.organization_id=target_organization_id and receipt.device_id=target_device_id and receipt.device_sequence=target_device_sequence for update;
+  if existing_idempotency is not null then
+    status := case when existing_idempotency=target_idempotency_key then 'REPLAY' else 'DUPLICATE_SEQUENCE' end;
+    server_checkpoint := current_checkpoint; expected_sequence := current_checkpoint+1; return next; return;
+  end if;
+  select receipt.device_sequence into existing_sequence from public.pos_device_sequence_receipts receipt
+    where receipt.organization_id=target_organization_id and receipt.idempotency_key=target_idempotency_key for update;
+  if existing_sequence is not null then
+    status := 'IDEMPOTENCY_SEQUENCE_MISMATCH'; server_checkpoint := current_checkpoint; expected_sequence := current_checkpoint+1; return next; return;
+  end if;
+  if target_device_sequence > current_checkpoint+1 then
+    status := 'GAP'; server_checkpoint := current_checkpoint; expected_sequence := current_checkpoint+1; return next; return;
+  end if;
+  if target_device_sequence < current_checkpoint+1 then
+    status := 'OUT_OF_ORDER'; server_checkpoint := current_checkpoint; expected_sequence := current_checkpoint+1; return next; return;
+  end if;
+  insert into public.pos_device_sequence_receipts (organization_id,device_id,store_id,register_id,device_sequence,idempotency_key,local_receipt_reference,state)
+    values (target_organization_id,target_device_id,target_store_id,target_register_id,target_device_sequence,target_idempotency_key,target_local_receipt_reference,'RECEIVED');
+  status := 'ACCEPTED'; server_checkpoint := current_checkpoint; expected_sequence := current_checkpoint+1; return next;
+end;
+$_$;
 
 --
 -- Name: restore_tindio_payment_preset("uuid", "text", "uuid"[]); Type: FUNCTION; Schema: public; Owner: postgres
@@ -24130,96 +26041,211 @@ $$;
 --
 
 CREATE OR REPLACE FUNCTION "public"."search_pos_catalog"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text" DEFAULT NULL::"text", "target_category_id" "uuid" DEFAULT NULL::"uuid", "target_offset" integer DEFAULT 0, "target_limit" integer DEFAULT 24) RETURNS TABLE("product_id" "uuid", "variant_id" "uuid", "category_id" "uuid", "product_name" "text", "variant_name" "text", "sku" "text", "barcode" "text", "price_minor" bigint, "unit" "text", "image_url" "text", "is_variable_price" boolean, "allow_fractional_quantity" boolean)
-    LANGUAGE "sql" STABLE
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  with scope as (
-    select target_organization_id organization_id, target_store_id store_id,
-      nullif(lower(btrim(coalesce(target_query, ''))), '') search_term,
-      target_category_id category_id, target_offset result_offset, target_limit result_limit
-    where target_offset >= 0 and target_limit between 1 and 48
-      and (select auth.uid()) is not null
-      and (select private.has_permission(target_organization_id, 'sales.create'))
-      and exists (
-        select 1 from public.employees employee
-        join public.employee_stores employee_store
-          on employee_store.employee_id = employee.id
-         and employee_store.organization_id = employee.organization_id
-        join public.stores store
-          on store.id = employee_store.store_id
-         and store.organization_id = employee_store.organization_id
-        where employee.organization_id = target_organization_id
-          and employee.profile_id = (select auth.uid())
-          and employee.status = 'active'
-          and employee_store.store_id = target_store_id
-          and store.is_active
+declare
+  search_term text :=
+    nullif(
+      lower(
+        btrim(
+          coalesce(
+            target_query,
+            ''
+          )
+        )
+      ),
+      ''
+    );
+begin
+  if target_offset < 0
+    or target_limit not between 1 and 48
+  then
+    raise exception
+      'Invalid POS catalog page.'
+      using errcode = '22023';
+  end if;
+
+  perform private.require_pos_workspace_access(
+    target_organization_id,
+    target_store_id
+  );
+
+  return query
+  with saleable_items as (
+    select
+      product.id as product_id,
+      null::uuid as variant_id,
+      product.category_id,
+      product.name as product_name,
+      null::text as variant_name,
+      product.sku,
+      product.barcode,
+      coalesce(
+        setting.price_override_minor,
+        product.price_minor
+      ) as price_minor,
+      product.unit,
+      product.image_url,
+      product.is_variable_price,
+      product.allow_fractional_quantity
+
+    from public.product_store_settings setting
+
+    join public.products product
+      on product.id =
+        setting.product_id
+     and product.organization_id =
+        setting.organization_id
+
+    where setting.organization_id =
+        target_organization_id
+      and setting.store_id =
+        target_store_id
+      and setting.is_available
+      and product.status =
+        'active'
+      and product.product_type in (
+        'simple',
+        'composite'
       )
-  ), saleable_items as (
-    select product.id product_id, null::uuid variant_id, product.category_id,
-      product.name product_name, null::text variant_name, product.sku, product.barcode,
-      coalesce(setting.price_override_minor, product.price_minor) price_minor, product.unit,
-      product.image_url, product.is_variable_price, product.allow_fractional_quantity,
-      scope.search_term, scope.result_offset, scope.result_limit
-    from scope
-    join public.product_store_settings setting
-      on setting.organization_id = scope.organization_id
-     and setting.store_id = scope.store_id
-     and setting.is_available
-    join public.products product
-      on product.id = setting.product_id
-     and product.organization_id = setting.organization_id
-    where product.status = 'active'
-      and product.product_type = 'simple'
-      and (scope.category_id is null or product.category_id = scope.category_id)
+      and (
+        target_category_id is null
+        or product.category_id =
+          target_category_id
+      )
+
     union all
-    select product.id, variant.id, product.category_id, product.name, variant.name,
-      variant.sku, variant.barcode, variant.price_minor, product.unit,
-      product.image_url, false, product.allow_fractional_quantity,
-      scope.search_term, scope.result_offset, scope.result_limit
-    from scope
-    join public.product_store_settings setting
-      on setting.organization_id = scope.organization_id
-     and setting.store_id = scope.store_id
-     and setting.is_available
+
+    select
+      product.id,
+      variant.id,
+      product.category_id,
+      product.name,
+      variant.name,
+      variant.sku,
+      variant.barcode,
+      variant.price_minor,
+      product.unit,
+      product.image_url,
+      false,
+      product.allow_fractional_quantity
+
+    from public.product_store_settings setting
+
     join public.products product
-      on product.id = setting.product_id
-     and product.organization_id = setting.organization_id
+      on product.id =
+        setting.product_id
+     and product.organization_id =
+        setting.organization_id
+
     join public.product_variants variant
-      on variant.product_id = product.id
-     and variant.organization_id = product.organization_id
+      on variant.product_id =
+        product.id
+     and variant.organization_id =
+        product.organization_id
      and variant.is_active
-    where product.status = 'active'
-      and product.product_type = 'variable'
-      and (scope.category_id is null or product.category_id = scope.category_id)
+
+    where setting.organization_id =
+        target_organization_id
+      and setting.store_id =
+        target_store_id
+      and setting.is_available
+      and product.status =
+        'active'
+      and product.product_type =
+        'variable'
+      and (
+        target_category_id is null
+        or product.category_id =
+          target_category_id
+      )
   )
-  select item.product_id, item.variant_id, item.category_id, item.product_name,
-    item.variant_name, item.sku, item.barcode, item.price_minor, item.unit,
-    item.image_url, item.is_variable_price, item.allow_fractional_quantity
+
+  select
+    item.product_id,
+    item.variant_id,
+    item.category_id,
+    item.product_name,
+    item.variant_name,
+    item.sku,
+    item.barcode,
+    item.price_minor,
+    item.unit,
+    item.image_url,
+    item.is_variable_price,
+    item.allow_fractional_quantity
+
   from saleable_items item
-  where item.search_term is null
-    or lower(item.barcode) = item.search_term
-    or lower(item.sku) = item.search_term
-    or lower(item.product_name) like '%' || item.search_term || '%'
-    or lower(coalesce(item.variant_name, '')) like '%' || item.search_term || '%'
+
+  where search_term is null
+    or lower(
+      coalesce(
+        item.barcode,
+        ''
+      )
+    ) = search_term
+    or lower(
+      coalesce(
+        item.sku,
+        ''
+      )
+    ) = search_term
+    or lower(
+      item.product_name
+    ) like '%' || search_term || '%'
+    or lower(
+      coalesce(
+        item.variant_name,
+        ''
+      )
+    ) like '%' || search_term || '%'
+
   order by
     case
-      when lower(item.barcode) = item.search_term then 0
-      when lower(item.sku) = item.search_term then 1
-      when lower(item.product_name) = item.search_term
-        or lower(coalesce(item.variant_name, '')) = item.search_term then 2
+      when lower(
+        coalesce(
+          item.barcode,
+          ''
+        )
+      ) = search_term
+      then 0
+
+      when lower(
+        coalesce(
+          item.sku,
+          ''
+        )
+      ) = search_term
+      then 1
+
+      when lower(
+        item.product_name
+      ) = search_term
+        or lower(
+          coalesce(
+            item.variant_name,
+            ''
+          )
+        ) = search_term
+      then 2
+
       else 3
     end,
+
     item.product_name,
     item.variant_name nulls first
-  limit coalesce((select result_limit from scope), 0)
-  offset coalesce((select result_offset from scope), 0);
+
+  limit target_limit
+  offset target_offset;
+end;
 $$;
 
 --
 -- Name: FUNCTION "search_pos_catalog"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer); Type: COMMENT; Schema: public; Owner: postgres
 --
 
-COMMENT ON FUNCTION "public"."search_pos_catalog"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer) IS 'Returns POS saleable items with current store price, image, manual-price, and fractional-quantity configuration.';
+COMMENT ON FUNCTION "public"."search_pos_catalog"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer) IS 'Provider-neutral legacy web POS catalog boundary. Uses TINDIO identity/store/shift authorization and no longer requires authenticated-role access to the provider-owned auth schema.';
 
 --
 -- Name: search_pos_customers("uuid", "uuid", "text", integer); Type: FUNCTION; Schema: public; Owner: postgres
@@ -25662,35 +27688,12 @@ CREATE OR REPLACE FUNCTION "public"."validate_pos_device"("target_organization_i
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
+declare actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
-    or not (select private.has_permission(target_organization_id, 'sales.create')) then
-    raise exception 'Sales permission is required.' using errcode = '42501';
-  end if;
-
-  return query
-  select verified.*
-  from private.verify_pos_device_credential(
-    target_organization_id,
-    target_device_id,
-    target_secret,
-    target_app_version
-  ) verified
-  where exists (
-    select 1
-    from public.employees employee
-    join public.employee_stores employee_store
-      on employee_store.employee_id = employee.id
-     and employee_store.organization_id = employee.organization_id
-     and employee_store.store_id = verified.store_id
-    where employee.organization_id = target_organization_id
-      and employee.profile_id = (select auth.uid())
-      and employee.status = 'active'
-  );
-
-  if not found then
-    raise exception 'You are not assigned to this device store.' using errcode = '42501';
-  end if;
+  actor_employee_id := private.current_employee_id(target_organization_id);
+  if actor_employee_id is null or not (select private.has_permission(target_organization_id, 'sales.create')) then raise exception 'Sales permission is required.' using errcode = '42501'; end if;
+  return query select verified.* from private.verify_pos_device_credential(target_organization_id, target_device_id, target_secret, target_app_version) verified where exists (select 1 from public.employee_stores employee_store where employee_store.organization_id = target_organization_id and employee_store.employee_id = actor_employee_id and employee_store.store_id = verified.store_id);
+  if not found then raise exception 'You are not assigned to this device store.' using errcode = '42501'; end if;
 end;
 $$;
 
@@ -27332,6 +29335,86 @@ CREATE TABLE IF NOT EXISTS "public"."permissions" (
 COMMENT ON CONSTRAINT "permissions_code_format" ON "public"."permissions" IS 'Permission codes use lowercase dot-separated namespaces with at least two segments, for example inventory.manage or inventory.transfer.create.';
 
 --
+-- Name: pos_device_sequence_receipts; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE IF NOT EXISTS "public"."pos_device_sequence_receipts" (
+    "organization_id" "uuid" NOT NULL,
+    "device_id" "uuid" NOT NULL,
+    "store_id" "uuid" NOT NULL,
+    "register_id" "uuid" NOT NULL,
+    "device_sequence" bigint NOT NULL,
+    "idempotency_key" "uuid" NOT NULL,
+    "local_receipt_reference" "text" NOT NULL,
+    "state" "text" NOT NULL,
+    "first_seen_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "finalized_at" timestamp with time zone,
+    CONSTRAINT "pos_device_sequence_receipts_device_sequence_check" CHECK (("device_sequence" > 0)),
+    CONSTRAINT "pos_device_sequence_receipts_local_receipt_reference_check" CHECK (("local_receipt_reference" ~ '^OFF-[A-Z0-9]{6,32}$'::"text")),
+    CONSTRAINT "pos_device_sequence_receipts_state_check" CHECK (("state" = ANY (ARRAY['RECEIVED'::"text", 'APPLIED'::"text", 'CONFLICT'::"text"])))
+);
+
+--
+-- Name: pos_device_sync_checkpoints; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE IF NOT EXISTS "public"."pos_device_sync_checkpoints" (
+    "organization_id" "uuid" NOT NULL,
+    "device_id" "uuid" NOT NULL,
+    "server_checkpoint" bigint DEFAULT 0 NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "pos_device_sync_checkpoints_server_checkpoint_check" CHECK (("server_checkpoint" >= 0))
+);
+
+--
+-- Name: pos_device_sync_telemetry; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE IF NOT EXISTS "public"."pos_device_sync_telemetry" (
+    "organization_id" "uuid" NOT NULL,
+    "device_id" "uuid" NOT NULL,
+    "store_id" "uuid" NOT NULL,
+    "register_id" "uuid" NOT NULL,
+    "employee_id" "uuid" NOT NULL,
+    "employee_name_snapshot" "text" NOT NULL,
+    "connection_mode" "text" NOT NULL,
+    "app_version" "text" NOT NULL,
+    "last_heartbeat_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "last_successful_sync_at" timestamp with time zone,
+    "device_checkpoint" bigint DEFAULT 0 NOT NULL,
+    "server_checkpoint" bigint DEFAULT 0 NOT NULL,
+    "queue_depth" integer DEFAULT 0 NOT NULL,
+    "conflict_count" integer DEFAULT 0 NOT NULL,
+    "failed_count" integer DEFAULT 0 NOT NULL,
+    "offline_since" timestamp with time zone,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "crash_count" bigint DEFAULT 0 NOT NULL,
+    "crash_window_started_at" timestamp with time zone,
+    "last_crash_at" timestamp with time zone,
+    "api_average_latency_ms" integer DEFAULT 0 NOT NULL,
+    "api_max_latency_ms" integer DEFAULT 0 NOT NULL,
+    "api_failure_count" integer DEFAULT 0 NOT NULL,
+    "sync_average_latency_ms" integer DEFAULT 0 NOT NULL,
+    "sync_max_latency_ms" integer DEFAULT 0 NOT NULL,
+    "local_database_health" "text" DEFAULT 'UNKNOWN'::"text" NOT NULL,
+    "local_schema_version" integer DEFAULT 0 NOT NULL,
+    CONSTRAINT "pos_device_sync_telemetry_api_average_latency_ms_check" CHECK (("api_average_latency_ms" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_api_failure_count_check" CHECK (("api_failure_count" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_api_max_latency_ms_check" CHECK (("api_max_latency_ms" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_conflict_count_check" CHECK (("conflict_count" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_connection_mode_check" CHECK (("connection_mode" = ANY (ARRAY['CLOUD_ONLINE'::"text", 'STORE_LOCAL'::"text", 'DEVICE_ISOLATED'::"text", 'RECOVERING'::"text", 'SYNC_REVIEW'::"text"]))),
+    CONSTRAINT "pos_device_sync_telemetry_crash_count_check" CHECK (("crash_count" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_device_checkpoint_check" CHECK (("device_checkpoint" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_failed_count_check" CHECK (("failed_count" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_local_database_health_check" CHECK (("local_database_health" = ANY (ARRAY['HEALTHY'::"text", 'CHECK_REQUIRED'::"text", 'UNAVAILABLE'::"text", 'UNKNOWN'::"text"]))),
+    CONSTRAINT "pos_device_sync_telemetry_local_schema_version_check" CHECK (("local_schema_version" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_queue_depth_check" CHECK (("queue_depth" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_server_checkpoint_check" CHECK (("server_checkpoint" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_sync_average_latency_ms_check" CHECK (("sync_average_latency_ms" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_sync_max_latency_ms_check" CHECK (("sync_max_latency_ms" >= 0))
+);
+
+--
 -- Name: pos_devices; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -27389,6 +29472,35 @@ CREATE TABLE IF NOT EXISTS "public"."pos_favorite_tiles" (
 --
 
 COMMENT ON TABLE "public"."pos_favorite_tiles" IS 'Manager-configured, store-scoped POS quick tiles; current saleable product values are resolved at read time.';
+
+--
+-- Name: pos_sync_changes; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE IF NOT EXISTS "public"."pos_sync_changes" (
+    "revision" bigint NOT NULL,
+    "organization_id" "uuid" NOT NULL,
+    "store_id" "uuid",
+    "domain" "text" NOT NULL,
+    "entity_id" "uuid",
+    "operation" "text" NOT NULL,
+    "changed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "pos_sync_changes_domain_check" CHECK (("domain" = ANY (ARRAY['CATALOG'::"text", 'REFERENCE'::"text", 'CUSTOMER'::"text", 'DEVICE'::"text", 'MODIFIERS'::"text"]))),
+    CONSTRAINT "pos_sync_changes_operation_check" CHECK (("operation" = ANY (ARRAY['UPSERT'::"text", 'DELETE'::"text", 'INVALIDATE'::"text"])))
+);
+
+--
+-- Name: pos_sync_changes_revision_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."pos_sync_changes" ALTER COLUMN "revision" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."pos_sync_changes_revision_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
 
 --
 -- Name: product_components; Type: TABLE; Schema: public; Owner: postgres
@@ -29392,6 +31504,34 @@ ALTER TABLE ONLY "public"."permissions"
     ADD CONSTRAINT "permissions_pkey" PRIMARY KEY ("code");
 
 --
+-- Name: pos_device_sequence_receipts pos_device_sequence_receipts_organization_id_idempotency_ke_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sequence_receipts"
+    ADD CONSTRAINT "pos_device_sequence_receipts_organization_id_idempotency_ke_key" UNIQUE ("organization_id", "idempotency_key");
+
+--
+-- Name: pos_device_sequence_receipts pos_device_sequence_receipts_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sequence_receipts"
+    ADD CONSTRAINT "pos_device_sequence_receipts_pkey" PRIMARY KEY ("organization_id", "device_id", "device_sequence");
+
+--
+-- Name: pos_device_sync_checkpoints pos_device_sync_checkpoints_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sync_checkpoints"
+    ADD CONSTRAINT "pos_device_sync_checkpoints_pkey" PRIMARY KEY ("organization_id", "device_id");
+
+--
+-- Name: pos_device_sync_telemetry pos_device_sync_telemetry_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sync_telemetry"
+    ADD CONSTRAINT "pos_device_sync_telemetry_pkey" PRIMARY KEY ("organization_id", "device_id");
+
+--
 -- Name: pos_devices pos_devices_id_organization_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -29425,6 +31565,13 @@ ALTER TABLE ONLY "public"."pos_favorite_tiles"
 
 ALTER TABLE ONLY "public"."pos_favorite_tiles"
     ADD CONSTRAINT "pos_favorite_tiles_position_unique" UNIQUE ("organization_id", "store_id", "position");
+
+--
+-- Name: pos_sync_changes pos_sync_changes_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_sync_changes"
+    ADD CONSTRAINT "pos_sync_changes_pkey" PRIMARY KEY ("revision");
 
 --
 -- Name: product_components product_components_identity_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -30759,6 +32906,30 @@ CREATE INDEX "payments_method_created_idx" ON "public"."payments" USING "btree" 
 CREATE INDEX "payments_sale_id_idx" ON "public"."payments" USING "btree" ("sale_id");
 
 --
+-- Name: pos_device_sequence_receipts_checkpoint_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "pos_device_sequence_receipts_checkpoint_idx" ON "public"."pos_device_sequence_receipts" USING "btree" ("organization_id", "device_id", "state", "device_sequence");
+
+--
+-- Name: pos_device_sequence_receipts_idempotency_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "pos_device_sequence_receipts_idempotency_idx" ON "public"."pos_device_sequence_receipts" USING "btree" ("organization_id", "idempotency_key");
+
+--
+-- Name: pos_device_sync_telemetry_attention_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "pos_device_sync_telemetry_attention_idx" ON "public"."pos_device_sync_telemetry" USING "btree" ("organization_id", "connection_mode", "queue_depth", "conflict_count", "failed_count");
+
+--
+-- Name: pos_device_sync_telemetry_org_store_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "pos_device_sync_telemetry_org_store_idx" ON "public"."pos_device_sync_telemetry" USING "btree" ("organization_id", "store_id", "last_heartbeat_at" DESC);
+
+--
 -- Name: pos_devices_organization_register_status_idx; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -30775,6 +32946,18 @@ CREATE INDEX "pos_devices_organization_status_seen_idx" ON "public"."pos_devices
 --
 
 CREATE INDEX "pos_favorite_tiles_store_position_idx" ON "public"."pos_favorite_tiles" USING "btree" ("organization_id", "store_id", "position");
+
+--
+-- Name: pos_sync_changes_org_revision_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "pos_sync_changes_org_revision_idx" ON "public"."pos_sync_changes" USING "btree" ("organization_id", "revision");
+
+--
+-- Name: pos_sync_changes_org_store_revision_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "pos_sync_changes_org_store_revision_idx" ON "public"."pos_sync_changes" USING "btree" ("organization_id", "store_id", "revision");
 
 --
 -- Name: product_components_component_idx; Type: INDEX; Schema: public; Owner: postgres
@@ -32167,6 +34350,102 @@ CREATE OR REPLACE TRIGGER "phase16_organization_operational_guard" BEFORE INSERT
 --
 
 CREATE OR REPLACE TRIGGER "pos_devices_set_updated_at" BEFORE UPDATE ON "public"."pos_devices" FOR EACH ROW EXECUTE FUNCTION "private"."set_updated_at"();
+
+--
+-- Name: categories pos_sync_categories; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_categories" AFTER INSERT OR DELETE OR UPDATE ON "public"."categories" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'id', '', 'UPSERT');
+
+--
+-- Name: customers pos_sync_customers; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_customers" AFTER INSERT OR DELETE OR UPDATE ON "public"."customers" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('CUSTOMER', 'id', '', 'UPSERT');
+
+--
+-- Name: pos_devices pos_sync_devices; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_devices" AFTER INSERT OR DELETE OR UPDATE ON "public"."pos_devices" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('DEVICE', 'id', 'store_id', 'UPSERT');
+
+--
+-- Name: dining_options pos_sync_dining_options; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_dining_options" AFTER INSERT OR DELETE OR UPDATE ON "public"."dining_options" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'id', '', 'UPSERT');
+
+--
+-- Name: discounts pos_sync_discounts; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_discounts" AFTER INSERT OR DELETE OR UPDATE ON "public"."discounts" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'id', '', 'UPSERT');
+
+--
+-- Name: loyalty_programs pos_sync_loyalty_programs; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_loyalty_programs" AFTER INSERT OR DELETE OR UPDATE ON "public"."loyalty_programs" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'organization_id', '', 'UPSERT');
+
+--
+-- Name: modifier_groups pos_sync_modifier_groups; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_modifier_groups" AFTER INSERT OR DELETE OR UPDATE ON "public"."modifier_groups" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('MODIFIERS', 'id', '', 'INVALIDATE');
+
+--
+-- Name: modifier_options pos_sync_modifier_options; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_modifier_options" AFTER INSERT OR DELETE OR UPDATE ON "public"."modifier_options" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('MODIFIERS', 'modifier_group_id', '', 'INVALIDATE');
+
+--
+-- Name: payment_methods pos_sync_payment_methods; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_payment_methods" AFTER INSERT OR DELETE OR UPDATE ON "public"."payment_methods" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'id', '', 'UPSERT');
+
+--
+-- Name: product_modifier_groups pos_sync_product_modifier_groups; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_product_modifier_groups" AFTER INSERT OR DELETE OR UPDATE ON "public"."product_modifier_groups" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('MODIFIERS', 'product_id', '', 'INVALIDATE');
+
+--
+-- Name: product_store_settings pos_sync_product_store_settings; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_product_store_settings" AFTER INSERT OR DELETE OR UPDATE ON "public"."product_store_settings" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('CATALOG', 'product_id', 'store_id', 'UPSERT');
+
+--
+-- Name: product_variants pos_sync_product_variants; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_product_variants" AFTER INSERT OR DELETE OR UPDATE ON "public"."product_variants" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('CATALOG', 'product_id', '', 'UPSERT');
+
+--
+-- Name: products pos_sync_products; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_products" AFTER INSERT OR DELETE OR UPDATE ON "public"."products" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('CATALOG', 'id', '', 'UPSERT');
+
+--
+-- Name: store_payment_methods pos_sync_store_payment_methods; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_store_payment_methods" AFTER INSERT OR DELETE OR UPDATE ON "public"."store_payment_methods" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'payment_method_id', 'store_id', 'UPSERT');
+
+--
+-- Name: tax_rates pos_sync_tax_rates; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_tax_rates" AFTER INSERT OR DELETE OR UPDATE ON "public"."tax_rates" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'id', '', 'UPSERT');
+
+--
+-- Name: ticket_templates pos_sync_ticket_templates; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_ticket_templates" AFTER INSERT OR DELETE OR UPDATE ON "public"."ticket_templates" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'id', '', 'UPSERT');
 
 --
 -- Name: product_components product_components_set_updated_at; Type: TRIGGER; Schema: public; Owner: postgres
@@ -33602,6 +35881,55 @@ ALTER TABLE ONLY "public"."payments"
     ADD CONSTRAINT "payments_sale_organization_fkey" FOREIGN KEY ("sale_id", "organization_id") REFERENCES "public"."sales"("id", "organization_id") ON DELETE RESTRICT;
 
 --
+-- Name: pos_device_sequence_receipts pos_device_sequence_receipts_device_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sequence_receipts"
+    ADD CONSTRAINT "pos_device_sequence_receipts_device_org_fkey" FOREIGN KEY ("device_id", "organization_id") REFERENCES "public"."pos_devices"("id", "organization_id") ON DELETE RESTRICT;
+
+--
+-- Name: pos_device_sequence_receipts pos_device_sequence_receipts_register_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sequence_receipts"
+    ADD CONSTRAINT "pos_device_sequence_receipts_register_org_fkey" FOREIGN KEY ("register_id", "organization_id") REFERENCES "public"."registers"("id", "organization_id") ON DELETE RESTRICT;
+
+--
+-- Name: pos_device_sequence_receipts pos_device_sequence_receipts_store_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sequence_receipts"
+    ADD CONSTRAINT "pos_device_sequence_receipts_store_org_fkey" FOREIGN KEY ("store_id", "organization_id") REFERENCES "public"."stores"("id", "organization_id") ON DELETE RESTRICT;
+
+--
+-- Name: pos_device_sync_checkpoints pos_device_sync_checkpoints_device_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sync_checkpoints"
+    ADD CONSTRAINT "pos_device_sync_checkpoints_device_org_fkey" FOREIGN KEY ("device_id", "organization_id") REFERENCES "public"."pos_devices"("id", "organization_id") ON DELETE RESTRICT;
+
+--
+-- Name: pos_device_sync_telemetry pos_device_sync_telemetry_device_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sync_telemetry"
+    ADD CONSTRAINT "pos_device_sync_telemetry_device_org_fkey" FOREIGN KEY ("device_id", "organization_id") REFERENCES "public"."pos_devices"("id", "organization_id") ON DELETE CASCADE;
+
+--
+-- Name: pos_device_sync_telemetry pos_device_sync_telemetry_register_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sync_telemetry"
+    ADD CONSTRAINT "pos_device_sync_telemetry_register_org_fkey" FOREIGN KEY ("register_id", "organization_id") REFERENCES "public"."registers"("id", "organization_id") ON DELETE CASCADE;
+
+--
+-- Name: pos_device_sync_telemetry pos_device_sync_telemetry_store_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sync_telemetry"
+    ADD CONSTRAINT "pos_device_sync_telemetry_store_org_fkey" FOREIGN KEY ("store_id", "organization_id") REFERENCES "public"."stores"("id", "organization_id") ON DELETE CASCADE;
+
+--
 -- Name: pos_devices pos_devices_organization_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -33670,6 +35998,20 @@ ALTER TABLE ONLY "public"."pos_favorite_tiles"
 
 ALTER TABLE ONLY "public"."pos_favorite_tiles"
     ADD CONSTRAINT "pos_favorite_tiles_variant_product_organization_fkey" FOREIGN KEY ("variant_id", "product_id", "organization_id") REFERENCES "public"."product_variants"("id", "product_id", "organization_id") ON DELETE RESTRICT;
+
+--
+-- Name: pos_sync_changes pos_sync_changes_organization_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_sync_changes"
+    ADD CONSTRAINT "pos_sync_changes_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE CASCADE;
+
+--
+-- Name: pos_sync_changes pos_sync_changes_store_id_organization_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_sync_changes"
+    ADD CONSTRAINT "pos_sync_changes_store_id_organization_id_fkey" FOREIGN KEY ("store_id", "organization_id") REFERENCES "public"."stores"("id", "organization_id") ON DELETE CASCADE;
 
 --
 -- Name: product_components product_components_component_organization_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -35399,6 +37741,30 @@ ALTER TABLE "public"."permissions" ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "permissions_select_authenticated" ON "public"."permissions" FOR SELECT TO "authenticated" USING (true);
 
 --
+-- Name: pos_device_sequence_receipts; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."pos_device_sequence_receipts" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: pos_device_sync_checkpoints; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."pos_device_sync_checkpoints" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: pos_device_sync_telemetry; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."pos_device_sync_telemetry" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: pos_device_sync_telemetry pos_device_sync_telemetry_manager_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "pos_device_sync_telemetry_manager_select" ON "public"."pos_device_sync_telemetry" FOR SELECT TO "authenticated" USING ((("private"."current_employee_id"("organization_id") IS NOT NULL) AND "private"."has_permission"("organization_id", 'devices.manage'::"text")));
+
+--
 -- Name: pos_devices; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
@@ -35454,6 +37820,12 @@ CREATE POLICY "pos_favorite_tiles_update_catalog_users" ON "public"."pos_favorit
    FROM ("public"."employees" "employee"
      JOIN "public"."employee_stores" "employee_store" ON ((("employee_store"."employee_id" = "employee"."id") AND ("employee_store"."organization_id" = "employee"."organization_id"))))
   WHERE (("employee"."organization_id" = "pos_favorite_tiles"."organization_id") AND ("employee"."profile_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("employee"."status" = 'active'::"text") AND ("employee_store"."store_id" = "pos_favorite_tiles"."store_id"))))));
+
+--
+-- Name: pos_sync_changes; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."pos_sync_changes" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: product_components; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -37001,14 +39373,12 @@ GRANT ALL ON FUNCTION "private"."has_inventory_capability"("target_organization_
 --
 
 REVOKE ALL ON FUNCTION "private"."has_organization_export_access"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_organization_export_access"("target_organization_id" "uuid") TO "authenticated";
 
 --
 -- Name: FUNCTION "has_organization_lifecycle_access"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."has_organization_lifecycle_access"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_organization_lifecycle_access"("target_organization_id" "uuid") TO "authenticated";
 
 --
 -- Name: FUNCTION "has_organization_membership"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -37154,6 +39524,12 @@ REVOKE ALL ON FUNCTION "private"."inventory_actor"("target_organization_id" "uui
 --
 
 REVOKE ALL ON FUNCTION "private"."inventory_count_actor"("target_organization_id" "uuid", "target_store_id" "uuid") FROM PUBLIC;
+
+--
+-- Name: FUNCTION "inventory_count_actor"("target_organization_id" "uuid", "target_store_id" "uuid", "requested_capabilities" "text"[]); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."inventory_count_actor"("target_organization_id" "uuid", "target_store_id" "uuid", "requested_capabilities" "text"[]) FROM PUBLIC;
 
 --
 -- Name: FUNCTION "inventory_organization_actor"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -37386,6 +39762,12 @@ GRANT ALL ON FUNCTION "private"."record_inventory_adjustment"("target_organizati
 REVOKE ALL ON FUNCTION "private"."record_inventory_adjustment_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text") FROM PUBLIC;
 
 --
+-- Name: FUNCTION "record_pos_sync_change"(); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."record_pos_sync_change"() FROM PUBLIC;
+
+--
 -- Name: FUNCTION "refund_sale"("target_organization_id" "uuid", "target_sale_id" "uuid", "target_payment_method_id" "uuid", "target_idempotency_key" "uuid", "target_reason" "text", "target_reference_number" "text", "target_items" "jsonb"); Type: ACL; Schema: private; Owner: postgres
 --
 
@@ -37453,6 +39835,18 @@ REVOKE ALL ON FUNCTION "private"."require_employee_manager_target"("target_organ
 --
 
 REVOKE ALL ON FUNCTION "private"."require_pos_capabilities"("target_organization_id" "uuid", "required_permission_codes" "text"[]) FROM PUBLIC;
+
+--
+-- Name: FUNCTION "require_pos_sequence_access"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."require_pos_sequence_access"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") FROM PUBLIC;
+
+--
+-- Name: FUNCTION "require_pos_sync_access"("target_organization_id" "uuid", "target_device_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."require_pos_sync_access"("target_organization_id" "uuid", "target_device_id" "uuid") FROM PUBLIC;
 
 --
 -- Name: FUNCTION "require_pos_workspace_access"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -38211,6 +40605,13 @@ REVOKE ALL ON FUNCTION "public"."ensure_current_identity_profile"("target_email"
 GRANT ALL ON FUNCTION "public"."ensure_current_identity_profile"("target_email" "text", "target_full_name" "text") TO "authenticated";
 
 --
+-- Name: FUNCTION "finalize_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_final_state" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."finalize_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_final_state" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."finalize_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_final_state" "text") TO "authenticated";
+
+--
 -- Name: FUNCTION "generate_catalog_identifiers"("target_organization_id" "uuid", "target_product_name" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -38332,11 +40733,39 @@ REVOKE ALL ON FUNCTION "public"."get_inventory_count_awareness"("target_organiza
 GRANT ALL ON FUNCTION "public"."get_inventory_count_awareness"("target_organization_id" "uuid") TO "authenticated";
 
 --
+-- Name: FUNCTION "get_inventory_count_batch_documents_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_batch_ids" "uuid"[]); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_inventory_count_batch_documents_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_batch_ids" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_inventory_count_batch_documents_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_batch_ids" "uuid"[]) TO "authenticated";
+
+--
+-- Name: FUNCTION "get_inventory_count_batches_workspace_v2"("target_organization_id" "uuid", "target_limit" integer); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_inventory_count_batches_workspace_v2"("target_organization_id" "uuid", "target_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_inventory_count_batches_workspace_v2"("target_organization_id" "uuid", "target_limit" integer) TO "authenticated";
+
+--
+-- Name: FUNCTION "get_inventory_count_lines_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_ids" "uuid"[]); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_inventory_count_lines_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_ids" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_inventory_count_lines_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_ids" "uuid"[]) TO "authenticated";
+
+--
 -- Name: FUNCTION "get_inventory_count_suppliers"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_inventory_count_suppliers"("target_organization_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_inventory_count_suppliers"("target_organization_id" "uuid") TO "authenticated";
+
+--
+-- Name: FUNCTION "get_inventory_counts_workspace_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_limit" integer); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_inventory_counts_workspace_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_inventory_counts_workspace_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_limit" integer) TO "authenticated";
 
 --
 -- Name: FUNCTION "get_inventory_health_awareness"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
@@ -38416,6 +40845,27 @@ REVOKE ALL ON FUNCTION "public"."get_organization_usage_snapshot"("target_organi
 GRANT ALL ON FUNCTION "public"."get_organization_usage_snapshot"("target_organization_id" "uuid") TO "authenticated";
 
 --
+-- Name: FUNCTION "get_pos_bootstrap_core_v2"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_bootstrap_core_v2"("target_organization_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_bootstrap_core_v2"("target_organization_id" "uuid") TO "authenticated";
+
+--
+-- Name: FUNCTION "get_pos_catalog_product_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_catalog_product_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_catalog_product_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") TO "authenticated";
+
+--
+-- Name: FUNCTION "get_pos_catalog_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_mode" "text", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_catalog_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_mode" "text", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_catalog_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_mode" "text", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer) TO "authenticated";
+
+--
 -- Name: FUNCTION "get_pos_customer_display_sessions"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -38430,6 +40880,13 @@ REVOKE ALL ON FUNCTION "public"."get_pos_customer_display_sessions_with_ids"("ta
 GRANT ALL ON FUNCTION "public"."get_pos_customer_display_sessions_with_ids"("target_organization_id" "uuid") TO "authenticated";
 
 --
+-- Name: FUNCTION "get_pos_device_sync_checkpoint"("target_organization_id" "uuid", "target_device_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_device_sync_checkpoint"("target_organization_id" "uuid", "target_device_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_device_sync_checkpoint"("target_organization_id" "uuid", "target_device_id" "uuid") TO "authenticated";
+
+--
 -- Name: FUNCTION "get_pos_favorite_items"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -38442,6 +40899,20 @@ GRANT ALL ON FUNCTION "public"."get_pos_favorite_items"("target_organization_id"
 
 REVOKE ALL ON FUNCTION "public"."get_pos_incoming_stock_transfers"("target_organization_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_pos_incoming_stock_transfers"("target_organization_id" "uuid") TO "authenticated";
+
+--
+-- Name: FUNCTION "get_pos_live_state_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_live_state_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_live_state_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") TO "authenticated";
+
+--
+-- Name: FUNCTION "get_pos_modifiers_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_modifiers_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_modifiers_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") TO "authenticated";
 
 --
 -- Name: FUNCTION "get_pos_open_tickets"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
@@ -38485,11 +40956,39 @@ REVOKE ALL ON FUNCTION "public"."get_pos_recent_items"("target_organization_id" 
 GRANT ALL ON FUNCTION "public"."get_pos_recent_items"("target_organization_id" "uuid", "target_store_id" "uuid", "target_limit" integer) TO "authenticated";
 
 --
+-- Name: FUNCTION "get_pos_reference_bundle_v2"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_reference_bundle_v2"("target_organization_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_reference_bundle_v2"("target_organization_id" "uuid") TO "authenticated";
+
+--
 -- Name: FUNCTION "get_pos_shift_operational_summary"("target_organization_id" "uuid", "target_shift_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_pos_shift_operational_summary"("target_organization_id" "uuid", "target_shift_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_pos_shift_operational_summary"("target_organization_id" "uuid", "target_shift_id" "uuid") TO "authenticated";
+
+--
+-- Name: FUNCTION "get_pos_sync_change_window"("target_organization_id" "uuid", "target_device_id" "uuid", "target_after_revision" bigint, "target_limit" integer); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_sync_change_window"("target_organization_id" "uuid", "target_device_id" "uuid", "target_after_revision" bigint, "target_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_sync_change_window"("target_organization_id" "uuid", "target_device_id" "uuid", "target_after_revision" bigint, "target_limit" integer) TO "authenticated";
+
+--
+-- Name: FUNCTION "get_pos_sync_customer"("target_organization_id" "uuid", "target_device_id" "uuid", "target_customer_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_sync_customer"("target_organization_id" "uuid", "target_device_id" "uuid", "target_customer_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_sync_customer"("target_organization_id" "uuid", "target_device_id" "uuid", "target_customer_id" "uuid") TO "authenticated";
+
+--
+-- Name: FUNCTION "get_pos_sync_revision"("target_organization_id" "uuid", "target_device_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_sync_revision"("target_organization_id" "uuid", "target_device_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_sync_revision"("target_organization_id" "uuid", "target_device_id" "uuid") TO "authenticated";
 
 --
 -- Name: FUNCTION "get_pos_ticket_assignees"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
@@ -38749,11 +41248,25 @@ REVOKE ALL ON FUNCTION "public"."remove_inventory_policy_override"("target_organ
 GRANT ALL ON FUNCTION "public"."remove_inventory_policy_override"("target_organization_id" "uuid", "target_store_id" "uuid") TO "authenticated";
 
 --
+-- Name: FUNCTION "report_pos_device_sync_telemetry"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_employee_id" "uuid", "target_employee_name" "text", "target_connection_mode" "text", "target_app_version" "text", "target_last_successful_sync_at" timestamp with time zone, "target_device_checkpoint" bigint, "target_server_checkpoint" bigint, "target_queue_depth" integer, "target_conflict_count" integer, "target_failed_count" integer, "target_offline_since" timestamp with time zone, "target_crash_count" bigint, "target_crash_window_started_at" timestamp with time zone, "target_last_crash_at" timestamp with time zone, "target_api_average_latency_ms" integer, "target_api_max_latency_ms" integer, "target_api_failure_count" integer, "target_sync_average_latency_ms" integer, "target_sync_max_latency_ms" integer, "target_local_database_health" "text", "target_local_schema_version" integer); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."report_pos_device_sync_telemetry"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_employee_id" "uuid", "target_employee_name" "text", "target_connection_mode" "text", "target_app_version" "text", "target_last_successful_sync_at" timestamp with time zone, "target_device_checkpoint" bigint, "target_server_checkpoint" bigint, "target_queue_depth" integer, "target_conflict_count" integer, "target_failed_count" integer, "target_offline_since" timestamp with time zone, "target_crash_count" bigint, "target_crash_window_started_at" timestamp with time zone, "target_last_crash_at" timestamp with time zone, "target_api_average_latency_ms" integer, "target_api_max_latency_ms" integer, "target_api_failure_count" integer, "target_sync_average_latency_ms" integer, "target_sync_max_latency_ms" integer, "target_local_database_health" "text", "target_local_schema_version" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."report_pos_device_sync_telemetry"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_employee_id" "uuid", "target_employee_name" "text", "target_connection_mode" "text", "target_app_version" "text", "target_last_successful_sync_at" timestamp with time zone, "target_device_checkpoint" bigint, "target_server_checkpoint" bigint, "target_queue_depth" integer, "target_conflict_count" integer, "target_failed_count" integer, "target_offline_since" timestamp with time zone, "target_crash_count" bigint, "target_crash_window_started_at" timestamp with time zone, "target_last_crash_at" timestamp with time zone, "target_api_average_latency_ms" integer, "target_api_max_latency_ms" integer, "target_api_failure_count" integer, "target_sync_average_latency_ms" integer, "target_sync_max_latency_ms" integer, "target_local_database_health" "text", "target_local_schema_version" integer) TO "authenticated";
+
+--
 -- Name: FUNCTION "request_manager_approval"("target_organization_id" "uuid", "target_operation_code" "text", "target_reason" "text", "target_payload" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."request_manager_approval"("target_organization_id" "uuid", "target_operation_code" "text", "target_reason" "text", "target_payload" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."request_manager_approval"("target_organization_id" "uuid", "target_operation_code" "text", "target_reason" "text", "target_payload" "jsonb") TO "authenticated";
+
+--
+-- Name: FUNCTION "reserve_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_local_receipt_reference" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."reserve_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_local_receipt_reference" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."reserve_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_local_receipt_reference" "text") TO "authenticated";
 
 --
 -- Name: FUNCTION "restore_tindio_payment_preset"("target_organization_id" "uuid", "target_preset_code" "text", "target_store_ids" "uuid"[]); Type: ACL; Schema: public; Owner: postgres
@@ -39649,10 +42162,24 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."permissions" TO "s
 GRANT SELECT ON TABLE "public"."permissions" TO "authenticated";
 
 --
+-- Name: TABLE "pos_device_sync_telemetry"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT ON TABLE "public"."pos_device_sync_telemetry" TO "authenticated";
+
+--
 -- Name: TABLE "pos_devices"; Type: ACL; Schema: public; Owner: postgres
 --
 
 GRANT SELECT ON TABLE "public"."pos_devices" TO "authenticated";
+
+--
+-- Name: SEQUENCE "pos_sync_changes_revision_seq"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT UPDATE ON SEQUENCE "public"."pos_sync_changes_revision_seq" TO "anon";
+GRANT UPDATE ON SEQUENCE "public"."pos_sync_changes_revision_seq" TO "authenticated";
+GRANT UPDATE ON SEQUENCE "public"."pos_sync_changes_revision_seq" TO "service_role";
 
 --
 -- Name: TABLE "product_components"; Type: ACL; Schema: public; Owner: postgres
@@ -40443,6 +42970,4 @@ GRANT SELECT ON TABLE "public"."time_clock_entries" TO "authenticated";
 --
 -- PostgreSQL database dump complete
 --
-
--- \unrestrict mqL9jxPOMwNPGpdodmePZtwgwr3Dz990eXXoqyFOoFNktVSH7gemc4AuwN8GZ2B
 

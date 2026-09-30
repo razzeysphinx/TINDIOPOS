@@ -1,0 +1,43 @@
+{
+  "formatVersion": 1,
+  "source": "CERTIFIED_LOCAL_SUPABASE_POSTGRESQL",
+  "targetPurpose": "R2_CANONICAL_TINDIO_SCHEMA_SNAPSHOT",
+  "historicalAncestor": "2d48e2ead33d783aef6c61dedb661ba74714ea9a",
+  "baselineSha256": "c2c8183c6f02327e80e561b4b2b504887140586b0d5d03e068ae97132e18ef46",
+  "baselineBytes": 1975098,
+  "baselineLines": 42974,
+  "migrationEvidence": {
+    "historicalMigrationCount": 211,
+    "recoveryForwardMigrationCount": 2,
+    "activeMigrationCount": 213,
+    "recoveryForwardMigrations": [
+      "20260930111500_recovery_r1_pos_shift_rls_execute_grant.sql",
+      "20260930113000_recovery_r1_device_checkpoint_ambiguity_repair.sql"
+    ],
+    "migrationSetSha256": "7aad8dcf1152cc5c43df27190ae39552f827d22e693fd66c55b7b11b5983b246"
+  },
+  "sourceSchemaCounts": {
+    "publicTables": 100,
+    "privateTables": 7,
+    "publicIndexes": 409,
+    "publicPolicies": 149,
+    "publicTriggers": 204,
+    "privateTriggers": 2,
+    "publicFunctions": 196,
+    "publicSequences": 0,
+    "authUidFunctions": 132,
+    "privateFunctions": 257,
+    "privateSequences": 10,
+    "authUserIdFunctions": 0,
+    "providerCoupledPolicies": 10
+  },
+  "baselinePortabilityInventory": {
+    "authUidReferences": 167,
+    "authUserIdReferences": 0,
+    "providerRoleReferences": 698,
+    "postgrestReloadReferences": 0,
+    "authSchemaReferences": 169,
+    "storageSchemaReferences": 0,
+    "realtimeSchemaReferences": 1
+  }
+}

@@ -178,6 +178,7 @@
     "recovery:refresh-db-types": "node scripts/recovery/refresh-local-database-types-contract.mjs",
     "recovery:neon:r1": "node scripts/recovery/neon-recovery-r1-schema-diff.mjs",
     "test:recovery:neon-r1": "node --test scripts/recovery/neon-recovery-r1-check.mjs",
+    "test:recovery:preflight": "node --test scripts/recovery/neon-recovery-preflight-check.mjs",
     "test:recovery:refresh-db-types": "node --test scripts/recovery/refresh-local-database-types-contract-check.mjs",
     "test:recovery:r1-pos-shift-grant": "node --test scripts/recovery/neon-recovery-r1-pos-shift-grant-check.mjs",
     "test:recovery:r1-device-checkpoint": "node --test scripts/recovery/neon-recovery-r1-device-checkpoint-check.mjs",

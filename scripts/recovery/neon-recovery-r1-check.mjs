@@ -9,7 +9,7 @@ const r1 = readFileSync("scripts/recovery/neon-recovery-r1-schema-diff.mjs", "ut
 test("recovery source of truth preserves protected architecture", () => {
   assert.match(sourceOfTruth, /inventory ledger/i);
   assert.match(sourceOfTruth, /tenant isolation/i);
-  assert.match(sourceOfTruth, /There is NO Mobile Phase 27/i);
+  assert.match(sourceOfTruth, /no Mobile Phase 27/i);
   assert.match(sourceOfTruth, /Supabase Auth/i);
   assert.match(sourceOfTruth, /Neon/i);
 });

@@ -2,17 +2,17 @@
 
 Branch: `recovery/neon-canonical-rebuild`
 
-HEAD: `d7a94dc2bb0cfa433ca844ccbaac8f20cfd35428`
+HEAD: `65c55b6af55148244160ae0dae677c185d1767a6`
 
 ## Totals
 
 ```json
 {
-  "files": 373,
-  "files_with_db_calls": 89,
-  "from_calls": 218,
-  "rpc_calls": 179,
-  "db_call_sites": 397,
+  "files": 374,
+  "files_with_db_calls": 90,
+  "from_calls": 205,
+  "rpc_calls": 181,
+  "db_call_sites": 386,
   "create_client_calls": 139,
   "pos_database_client_calls": 6,
   "supabase_server_imports": 62,
@@ -25,7 +25,7 @@ HEAD: `d7a94dc2bb0cfa433ca844ccbaac8f20cfd35428`
 | Domain | Files with DB calls | .from() | .rpc() | Static DB call sites |
 | --- | ---: | ---: | ---: | ---: |
 | other | 60 | 121 | 85 | 206 |
-| inventory | 11 | 19 | 44 | 63 |
+| inventory | 12 | 6 | 46 | 52 |
 | management | 3 | 39 | 12 | 51 |
 | pos | 10 | 13 | 24 | 37 |
 | catalog | 2 | 18 | 12 | 30 |
@@ -38,7 +38,7 @@ HEAD: `d7a94dc2bb0cfa433ca844ccbaac8f20cfd35428`
 
 | File | Domain | .from() | .rpc() | Static DB call sites |
 | --- | --- | ---: | ---: | ---: |
-| `src/app/(back-office)/back-office/inventory/page.tsx` | inventory | 14 | 10 | 24 |
+| `src/app/(back-office)/back-office/inventory/page.tsx` | inventory | 1 | 10 | 11 |
 | `src/app/(back-office)/back-office/replenishment/page.tsx` | replenishment | 0 | 0 | 0 |
 | `src/features/management/data.ts` | management | 27 | 3 | 30 |
 | `src/features/management/service.ts` | management | 11 | 6 | 17 |
@@ -57,7 +57,6 @@ HEAD: `d7a94dc2bb0cfa433ca844ccbaac8f20cfd35428`
 | File | Domain | DB call sites | .from() | .rpc() |
 | --- | --- | ---: | ---: | ---: |
 | `src/features/management/data.ts` | management | 30 | 27 | 3 |
-| `src/app/(back-office)/back-office/inventory/page.tsx` | inventory | 24 | 14 | 10 |
 | `src/features/pos/data.ts` | pos | 22 | 12 | 10 |
 | `src/features/inventory/advanced-inventory-actions.ts` | inventory | 21 | 0 | 21 |
 | `src/features/advanced-sales/service.ts` | other | 18 | 18 | 0 |
@@ -67,6 +66,7 @@ HEAD: `d7a94dc2bb0cfa433ca844ccbaac8f20cfd35428`
 | `src/features/receipts/detail/data.ts` | other | 13 | 13 | 0 |
 | `src/features/catalog/data.ts` | catalog | 12 | 11 | 1 |
 | `src/features/customers/data.ts` | other | 12 | 8 | 4 |
+| `src/app/(back-office)/back-office/inventory/page.tsx` | inventory | 11 | 1 | 10 |
 | `src/lib/auth/dal.ts` | other | 10 | 9 | 1 |
 | `src/app/(back-office)/back-office/shifts/page.tsx` | other | 9 | 6 | 3 |
 | `src/features/time-clock/data.ts` | other | 8 | 6 | 2 |
@@ -97,6 +97,7 @@ HEAD: `d7a94dc2bb0cfa433ca844ccbaac8f20cfd35428`
 | `src/features/shifts/service.ts` | other | 3 | 0 | 3 |
 | `src/app/api/pos/v2/customers/route.ts` | pos | 2 | 1 | 1 |
 | `src/app/api/pos/v2/sync/checkpoint/route.ts` | pos | 2 | 0 | 2 |
+| `src/features/inventory/inventory-specialized-data.ts` | inventory | 2 | 0 | 2 |
 | `src/features/inventory/pos-transfer-service.ts` | inventory | 2 | 0 | 2 |
 | `src/features/receipts/improvement-6-actions.ts` | other | 2 | 0 | 2 |
 | `src/features/receipts/service.ts` | other | 2 | 0 | 2 |

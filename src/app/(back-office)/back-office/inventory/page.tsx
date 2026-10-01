@@ -51,6 +51,11 @@ import {
   loadInventoryPurchasingBundleResult,
   type InventoryPurchasingBundleNeed,
 } from "@/features/inventory/inventory-purchasing-data";
+import {
+  loadInventoryActivityReferenceBundleResult,
+  loadInventoryValuationReferenceBundleResult,
+  type InventoryActivityReferenceNeed,
+} from "@/features/inventory/inventory-specialized-data";
 import { InventoryActivityList } from "@/features/inventory/inventory-activity-list";
 import { InventoryCountWorkspace } from "@/features/inventory/inventory-count-workspace";
 import {
@@ -226,48 +231,9 @@ function resolveMovementSourceType(value: string | string[] | undefined): Invent
     : null;
 }
 
-function movementSourceIdsFrom(
-  movements: readonly Pick<TableRow<"inventory_movements">, "source_id" | "source_type">[],
-  sourceType: InventoryMovementSourceType,
-) {
-  return [...new Set(
-    movements
-      .filter((movement) => movement.source_type === sourceType && movement.source_id && UUID_PATTERN.test(movement.source_id))
-      .map((movement) => movement.source_id as string),
-  )];
-}
-
 function resolveHealthSeverity(value: string | string[] | undefined): InventoryHealthSeverity | "all" {
   const candidate = Array.isArray(value) ? value[0] : value;
   return candidate === "critical" || candidate === "warning" || candidate === "information" ? candidate : "all";
-}
-
-async function loadInventoryItemActivity({
-  limit,
-  organizationId,
-  productId,
-  storeId,
-  supabase,
-  variantId,
-}: {
-  limit: number;
-  organizationId: string;
-  productId: string;
-  storeId: string;
-  supabase: Awaited<ReturnType<typeof createClient>>;
-  variantId: string | null;
-}) {
-  const query = supabase
-    .from("inventory_movements")
-    .select("id, store_id, product_id, variant_id, quantity_delta, quantity_before, quantity_after, movement_type, actor_employee_id, reason, reason_code, source_type, source_id, unit_snapshot, created_at")
-    .eq("organization_id", organizationId)
-    .eq("store_id", storeId)
-    .eq("product_id", productId);
-
-  if (variantId) query.eq("variant_id", variantId);
-  else query.is("variant_id", null);
-
-  return query.order("created_at", { ascending: false }).limit(limit);
 }
 
 /** CANDIDATE_FOR_REMOVAL: retained while shared InventoryWorkspaceNavigation completes QA. */
@@ -882,27 +848,11 @@ export async function InventoryWorkspacePage({
     });
   }
 
-  // Valuation is an audit view. Historical product and store names must remain
-  // visible without turning archived catalog records into operating options.
-  const valuationProductsQuery = activeTab === "valuation" && canViewValuation && inventoryModules.valuation
-    ? supabase
-        .from("products")
-        .select("id, name, unit, status, product_type, price_minor")
-        .eq("organization_id", organizationId)
-        .eq("track_inventory", true)
-    : null;
-  const valuationVariantsQuery = activeTab === "valuation" && canViewValuation && inventoryModules.valuation
-    ? supabase
-        .from("product_variants")
-        .select("id, product_id, name, price_minor, is_active")
-        .eq("organization_id", organizationId)
-    : null;
-  const valuationStoresQuery = activeTab === "valuation" && canViewValuation && inventoryModules.valuation
-    ? supabase
-        .from("stores")
-        .select("id, name")
-        .eq("organization_id", organizationId)
-    : null;
+  const valuationReferencePromise = loadInventoryValuationReferenceBundleResult({
+    client: supabase,
+    organizationId,
+    enabled: activeTab === "valuation" && canViewValuation && inventoryModules.valuation,
+  });
   const valuationQuery = ["overview", "valuation"].includes(activeTab) && canViewValuation && inventoryModules.valuation
     ? supabase.rpc("get_inventory_valuation", { target_organization_id: organizationId })
     : Promise.resolve({ data: [], error: null });
@@ -937,10 +887,6 @@ export async function InventoryWorkspacePage({
   const countAwarenessQuery = workspace === "control" && activeTab === "overview"
     ? supabase.rpc("get_inventory_health_awareness", { target_organization_id: organizationId })
     : null;
-  if (scopedStoreIds) {
-    valuationStoresQuery?.in("id", scopedStoreIds);
-  }
-
   const activityLimit = activeTab === "activity" ? INVENTORY_ACTIVITY_PAGE_SIZE + 1 : 30;
   const activityOffset = activeTab === "activity" ? activityPageOffset : 0;
   const coreDataPromise = loadInventoryControlCoreData({
@@ -967,9 +913,7 @@ export async function InventoryWorkspacePage({
 
   const [
     coreData,
-    valuationProductsResult,
-    valuationVariantsResult,
-    valuationStoresResult,
+    valuationReferenceResult,
     valuationResult,
     purchasingBundleResult,
     inventoryCountsResult,
@@ -978,9 +922,7 @@ export async function InventoryWorkspacePage({
     countAwarenessResult,
   ] = await Promise.all([
     coreDataPromise,
-    valuationProductsQuery ?? Promise.resolve({ data: [], error: null }),
-    valuationVariantsQuery ?? Promise.resolve({ data: [], error: null }),
-    valuationStoresQuery ?? Promise.resolve({ data: [], error: null }),
+    valuationReferencePromise,
     valuationQuery,
     purchasingBundlePromise,
     inventoryCountsQuery ?? Promise.resolve({
@@ -1010,15 +952,12 @@ export async function InventoryWorkspacePage({
         )
       : null;
 
-  const valuationError = [
-    valuationProductsResult,
-    valuationVariantsResult,
-    valuationStoresResult,
-    valuationResult,
-  ].find((result) => result.error)?.error;
-  const valuationFailure = valuationError
-    ? reportInventoryModuleFailure("valuation", valuationError)
+  const valuationReferenceFailure = valuationReferenceResult.error
+    ? reportInventoryModuleFailure("valuation", valuationReferenceResult.error)
     : null;
+  const valuationFailure = valuationReferenceFailure || (valuationResult.error
+    ? reportInventoryModuleFailure("valuation", valuationResult.error)
+    : null);
 
   const purchasingError = purchasingBundleResult.error;
   const purchasingFailure = purchasingError
@@ -1063,9 +1002,9 @@ export async function InventoryWorkspacePage({
   const products = coreBundle.products;
   const activityProducts = coreBundle.activityProducts;
   const activityStores = coreBundle.activityStores.filter((store) => visibleStore(store.id));
-  const valuationProducts = valuationProductsResult.data ?? [];
-  const valuationVariants = valuationVariantsResult.data ?? [];
-  const valuationStores = (valuationStoresResult.data ?? []).filter((store) => visibleStore(store.id));
+  const valuationProducts = valuationReferenceFailure ? [] : valuationReferenceResult.data.products;
+  const valuationVariants = valuationReferenceFailure ? [] : valuationReferenceResult.data.variants;
+  const valuationStores = (valuationReferenceFailure ? [] : valuationReferenceResult.data.stores).filter((store) => visibleStore(store.id));
   const variants = coreBundle.variants;
   const purchasingBundle = purchasingBundleResult.data;
   const productUnits = purchasingBundle.productUnits;
@@ -1273,150 +1212,52 @@ export async function InventoryWorkspacePage({
   const activityPageStart = movements.length ? activityPageOffset + 1 : 0;
   const activityPageEnd = activityPageOffset + movements.length;
   const detailActivityLimit = activeTab === "activity" ? 50 : 12;
-  const detailMovementsResult = selectedDetailPosition
-    ? await loadInventoryItemActivity({
-        limit: detailActivityLimit,
-        organizationId,
-        productId: selectedDetailPosition.product_id,
-        storeId: selectedDetailPosition.store_id,
-        supabase,
-        variantId: selectedDetailPosition.variant_id,
-      })
-    : { data: [], error: null };
-
-  if (detailMovementsResult.error) {
-    throw new Error(`Unable to load inventory activity: ${detailMovementsResult.error.message}`);
-  }
-
-  const detailMovements = detailMovementsResult.data ?? [];
+  const activityReferenceNeeds: InventoryActivityReferenceNeed[] = [];
+  if (selectedDetailPosition) activityReferenceNeeds.push("movements");
+  if (hasPermission(context, "employees.manage")) activityReferenceNeeds.push("employees", "profiles");
+  if (hasPermission(context, "receipts.view")) activityReferenceNeeds.push("refunds", "receipts");
+  if (canViewInventory) activityReferenceNeeds.push("adjustments");
+  if (canCount) activityReferenceNeeds.push("counts");
+  if (canManage && inventoryModules.direct_transfers) activityReferenceNeeds.push("transfers");
+  if (canManage) activityReferenceNeeds.push("supplierReturns", "productionRuns");
+  const activityReferenceResult = await loadInventoryActivityReferenceBundleResult({
+    client: supabase, organizationId,
+    detailStoreId: selectedDetailPosition?.store_id ?? null,
+    detailProductId: selectedDetailPosition?.product_id ?? null,
+    detailVariantId: selectedDetailPosition?.variant_id ?? null,
+    movementIds: selectedDetailPosition ? null : movements.map((movement) => movement.id),
+    limit: detailActivityLimit,
+    needs: activityReferenceNeeds,
+  });
+  const activityReferenceFailure = activityReferenceResult.error
+    ? reportInventoryModuleFailure("activity_references", activityReferenceResult.error)
+    : null;
+  const activityReferenceBundle = activityReferenceResult.data;
+  const detailMovements = activityReferenceFailure ? [] : activityReferenceBundle.movements;
   const activityMovements = selectedDetailPosition ? detailMovements : movements;
-  const activityActorSource = selectedDetailPosition || activeTab === "activity" ? activityMovements : [];
-  const actorEmployeeIds = [...new Set(activityActorSource.flatMap((movement) => movement.actor_employee_id ? [movement.actor_employee_id] : []))];
-  const employeesResult = hasPermission(context, "employees.manage") && actorEmployeeIds.length
-    ? await supabase
-        .from("employees")
-        .select("id, profile_id, employee_number")
-        .eq("organization_id", organizationId)
-        .in("id", actorEmployeeIds)
-    : { data: [], error: null };
-
-  if (employeesResult.error) {
-    reportInventoryModuleFailure("activity_references", employeesResult.error);
-  }
-
-  const activityEmployees = employeesResult.data ?? [];
-  const actorProfileIds = activityEmployees.map((employee) => employee.profile_id);
-  const profilesResult = actorProfileIds.length
-    ? await supabase.from("profiles").select("id, full_name").in("id", actorProfileIds)
-    : { data: [], error: null };
-
-  if (profilesResult.error) {
-    reportInventoryModuleFailure("activity_references", profilesResult.error);
-  }
-
-  const receiptSourceSaleIds = [...new Set(activityActorSource.flatMap((movement) => (
-    movement.source_id && (movement.source_type === "sale" || movement.source_type === "composite_sale")
-      ? [movement.source_id]
-      : []
-  )))];
-  const refundSourceIds = movementSourceIdsFrom(activityActorSource, "refund");
-  const refundsResult = hasPermission(context, "receipts.view") && refundSourceIds.length
-    ? await supabase
-        .from("refunds")
-        .select("id, sale_id")
-        .eq("organization_id", organizationId)
-        .in("id", refundSourceIds)
-    : { data: [], error: null };
-
-  if (refundsResult.error) {
-    reportInventoryModuleFailure("activity_references", refundsResult.error);
-  }
-
-  const receiptSaleIds = [...new Set([
-    ...receiptSourceSaleIds,
-    ...(refundsResult.data ?? []).map((refund) => refund.sale_id),
-  ])];
-  const receiptsResult = hasPermission(context, "receipts.view") && receiptSaleIds.length
-    ? await supabase
-        .from("receipts")
-        .select("id, sale_id, receipt_number")
-        .eq("organization_id", organizationId)
-        .in("sale_id", receiptSaleIds)
-    : { data: [], error: null };
-
-  if (receiptsResult.error) {
-    reportInventoryModuleFailure("activity_references", receiptsResult.error);
-  }
-
-  const profileNames = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.full_name]));
+  const activityEmployees = activityReferenceFailure ? [] : activityReferenceBundle.employees;
+  const activityProfiles = activityReferenceFailure ? [] : activityReferenceBundle.profiles;
+  const refunds = activityReferenceFailure ? [] : activityReferenceBundle.refunds;
+  const receipts = activityReferenceFailure ? [] : activityReferenceBundle.receipts;
+  const adjustmentDocuments = activityReferenceFailure ? [] : activityReferenceBundle.adjustments;
+  const countDocuments = activityReferenceFailure ? [] : activityReferenceBundle.counts;
+  const transferDocuments = activityReferenceFailure ? [] : activityReferenceBundle.transfers;
+  const supplierReturnDocuments = activityReferenceFailure ? [] : activityReferenceBundle.supplierReturns;
+  const productionRunDocuments = activityReferenceFailure ? [] : activityReferenceBundle.productionRuns;
+  const profileNames = new Map(activityProfiles.map((profile) => [profile.id, profile.full_name]));
   const actorNames = new Map<string, string>();
   actorNames.set(context.employee.id, context.profile.full_name || context.profile.email || context.employee.employee_number);
   for (const employee of activityEmployees) {
     actorNames.set(employee.id, profileNames.get(employee.profile_id) || employee.employee_number);
   }
-  const receiptBySaleId = new Map((receiptsResult.data ?? []).map((receipt) => [receipt.sale_id, receipt]));
-  const refundById = new Map((refundsResult.data ?? []).map((refund) => [refund.id, refund]));
-  const movementSourceIds = (sourceType: string) => [...new Set(
-    activityMovements
-      .filter((movement) => movement.source_type === sourceType && movement.source_id && UUID_PATTERN.test(movement.source_id))
-      .map((movement) => movement.source_id as string),
-  )];
-  const adjustmentSourceIds = movementSourceIds("inventory_adjustment");
-  const countSourceIds = movementSourceIds("inventory_count");
-  const goodsReceiptSourceIds = movementSourceIds("goods_receipt");
-  const transferSourceIds = movementSourceIds("stock_transfer");
-  const supplierReturnSourceIds = movementSourceIds("supplier_return");
-  const productionRunSourceIds = movementSourceIds("production_run");
-  const [adjustmentDocumentsResult, countDocumentsResult, goodsReceiptDocumentsResult, transferDocumentsResult, supplierReturnDocumentsResult, productionRunDocumentsResult] = await Promise.all([
-    canViewInventory && adjustmentSourceIds.length
-      ? supabase
-          .from("inventory_adjustments")
-          .select("id, adjustment_number")
-          .eq("organization_id", organizationId)
-          .in("id", adjustmentSourceIds)
-      : Promise.resolve({ data: [], error: null }),
-    canCount && countSourceIds.length
-      ? supabase
-          .from("inventory_counts")
-          .select("id, count_number")
-          .eq("organization_id", organizationId)
-          .in("id", countSourceIds)
-      : Promise.resolve({ data: [], error: null }),
-    canManage && inventoryModules.purchasing && goodsReceiptSourceIds.length
-      ? Promise.resolve({
-          data: purchasingBundle.goodsReceipts.filter((receipt) =>
-            goodsReceiptSourceIds.includes(receipt.id),
-          ),
-          error: null,
-        })
-      : Promise.resolve({ data: [], error: null }),
-    canManage && inventoryModules.direct_transfers && transferSourceIds.length
-      ? supabase
-          .from("stock_transfers")
-          .select("id, transfer_number")
-          .eq("organization_id", organizationId)
-          .in("id", transferSourceIds)
-      : Promise.resolve({ data: [], error: null }),
-    canManage && supplierReturnSourceIds.length
-      ? supabase
-          .from("supplier_returns")
-          .select("id")
-          .eq("organization_id", organizationId)
-          .in("id", supplierReturnSourceIds)
-      : Promise.resolve({ data: [], error: null }),
-    canManage && productionRunSourceIds.length
-      ? supabase
-          .from("production_runs")
-          .select("id")
-          .eq("organization_id", organizationId)
-          .in("id", productionRunSourceIds)
-      : Promise.resolve({ data: [], error: null }),
-  ]);
-
-  const sourceDocumentError = [adjustmentDocumentsResult, countDocumentsResult, goodsReceiptDocumentsResult, transferDocumentsResult, supplierReturnDocumentsResult, productionRunDocumentsResult].find((result) => result.error)?.error;
-  if (sourceDocumentError) {
-    reportInventoryModuleFailure("document_references", sourceDocumentError);
-  }
+  const receiptBySaleId = new Map(receipts.map((receipt) => [receipt.sale_id, receipt]));
+  const refundById = new Map(refunds.map((refund) => [refund.id, refund]));
+  const goodsReceiptSourceIds = [...new Set(activityMovements
+    .filter((movement) => movement.source_type === "goods_receipt" && movement.source_id && UUID_PATTERN.test(movement.source_id))
+    .map((movement) => movement.source_id as string))];
+  const goodsReceiptDocuments = canManage && inventoryModules.purchasing
+    ? purchasingBundle.goodsReceipts.filter((receipt) => goodsReceiptSourceIds.includes(receipt.id))
+    : [];
   const purchaseUnitsByProduct = new Map<string, Array<{ code: string; factorToBase: number; name: string }>>();
   for (const productUnit of productUnits) {
     if (!productUnit.is_purchase_unit && !productUnit.is_base) continue;
@@ -1729,37 +1570,37 @@ export async function InventoryWorkspacePage({
     return `/back-office/inventory?${query.toString()}`;
   };
   const sourceDocumentReferences = new Map<string, { href: string | null; label: string }>();
-  for (const adjustment of adjustmentDocumentsResult.data ?? []) {
+  for (const adjustment of adjustmentDocuments) {
     sourceDocumentReferences.set(`inventory_adjustment:${adjustment.id}`, {
       href: inventorySourceHref("inventory_adjustment", adjustment.id),
       label: `Adjustment SA-${String(adjustment.adjustment_number).padStart(6, "0")}`,
     });
   }
-  for (const count of countDocumentsResult.data ?? []) {
+  for (const count of countDocuments) {
     sourceDocumentReferences.set(`inventory_count:${count.id}`, {
       href: inventorySourceHref("inventory_count", count.id),
       label: `Count IC-${String(count.count_number).padStart(6, "0")}`,
     });
   }
-  for (const receipt of goodsReceiptDocumentsResult.data ?? []) {
+  for (const receipt of goodsReceiptDocuments) {
     sourceDocumentReferences.set(`goods_receipt:${receipt.id}`, {
       href: inventorySourceHref("goods_receipt", receipt.id),
       label: `Receiving GR-${String(receipt.receipt_number).padStart(6, "0")}`,
     });
   }
-  for (const transfer of transferDocumentsResult.data ?? []) {
+  for (const transfer of transferDocuments) {
     sourceDocumentReferences.set(`stock_transfer:${transfer.id}`, {
       href: inventorySourceHref("stock_transfer", transfer.id),
       label: `Transfer TR-${String(transfer.transfer_number).padStart(6, "0")}`,
     });
   }
-  for (const supplierReturn of supplierReturnDocumentsResult.data ?? []) {
+  for (const supplierReturn of supplierReturnDocuments) {
     sourceDocumentReferences.set(`supplier_return:${supplierReturn.id}`, {
       href: inventorySourceHref("supplier_return", supplierReturn.id),
       label: "Supplier return",
     });
   }
-  for (const productionRun of productionRunDocumentsResult.data ?? []) {
+  for (const productionRun of productionRunDocuments) {
     sourceDocumentReferences.set(`production_run:${productionRun.id}`, {
       href: inventorySourceHref("production_run", productionRun.id),
       label: "Production run",

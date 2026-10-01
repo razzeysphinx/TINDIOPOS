@@ -25,11 +25,8 @@ test("manual adjustments keep a review before the existing immutable document RP
 });
 
 test("activity resolves canonical source documents without duplicating history", () => {
-  for (const table of ["inventory_adjustments", "inventory_counts", "stock_transfers"]) {
-    assert.match(page, new RegExp(`from\\(\\"${table}\\"\\)`));
-  }
-  assert.match(page, /loadInventoryPurchasingBundleResult/);
-  assert.doesNotMatch(page, /from\("goods_receipts"\)/);
+  assert.match(page, /loadInventoryActivityReferenceBundleResult/);
+  for (const table of ["inventory_adjustments", "inventory_counts", "goods_receipts", "stock_transfers"]) assert.doesNotMatch(page, new RegExp(`from\\(\\"${table}\\"\\)`));
   assert.match(page, /sourceDocumentReferences/);
   assert.match(page, /Adjustment SA-/);
   assert.match(page, /Count IC-/);

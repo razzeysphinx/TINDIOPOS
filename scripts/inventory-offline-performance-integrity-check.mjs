@@ -73,5 +73,5 @@ test("Inventory activity remains bounded and implements correct page look-ahead"
   assert.match(inventoryPage, /const selectedDetailLevel\s*=\s*selectedDetailLevelId\s*\?/);
   assert.match(inventoryPage, /const selectedDetailPosition:\s*InventoryDetailPosition \| null\s*=\s*selectedDetailLevel/);
   assert.match(inventoryPage, /const detailActivityLimit = activeTab === "activity" \? 50 : 12;/);
-  assert.match(inventoryPage, /const detailMovementsResult = selectedDetailPosition\s*\?\s*await loadInventoryItemActivity\(\{[\s\S]*?limit: detailActivityLimit/);
+  assert.match(inventoryPage, /const activityReferenceResult = await loadInventoryActivityReferenceBundleResult\(\{[\s\S]*?detailStoreId: selectedDetailPosition\?\.store_id \?\? null,[\s\S]*?limit: detailActivityLimit/);
 });

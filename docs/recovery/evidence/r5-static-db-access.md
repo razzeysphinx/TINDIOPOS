@@ -2,18 +2,18 @@
 
 Branch: `recovery/neon-canonical-rebuild`
 
-HEAD: `bf2117e0ff99ca0d25e7e6e904b29943dd254417`
+HEAD: `4e33995f4f9eb931cdffff352a3af9c819a5b573`
 
 ## Totals
 
 ```json
 {
-  "files": 374,
-  "files_with_db_calls": 90,
-  "from_calls": 205,
-  "rpc_calls": 181,
-  "db_call_sites": 386,
-  "create_client_calls": 139,
+  "files": 376,
+  "files_with_db_calls": 92,
+  "from_calls": 167,
+  "rpc_calls": 183,
+  "db_call_sites": 350,
+  "create_client_calls": 132,
   "pos_database_client_calls": 6,
   "supabase_server_imports": 62,
   "direct_supabase_js_imports": 3
@@ -26,9 +26,9 @@ HEAD: `bf2117e0ff99ca0d25e7e6e904b29943dd254417`
 | --- | ---: | ---: | ---: | ---: |
 | other | 60 | 121 | 85 | 206 |
 | inventory | 12 | 6 | 46 | 52 |
-| management | 3 | 39 | 12 | 51 |
 | pos | 10 | 13 | 24 | 37 |
-| catalog | 2 | 18 | 12 | 30 |
+| management | 4 | 12 | 13 | 25 |
+| catalog | 3 | 7 | 13 | 20 |
 | dashboard | 1 | 6 | 1 | 7 |
 | reports | 2 | 2 | 1 | 3 |
 | replenishment | 0 | 0 | 0 | 0 |
@@ -40,11 +40,11 @@ HEAD: `bf2117e0ff99ca0d25e7e6e904b29943dd254417`
 | --- | --- | ---: | ---: | ---: |
 | `src/app/(back-office)/back-office/inventory/page.tsx` | inventory | 1 | 10 | 11 |
 | `src/app/(back-office)/back-office/replenishment/page.tsx` | replenishment | 0 | 0 | 0 |
-| `src/features/management/data.ts` | management | 27 | 3 | 30 |
+| `src/features/management/data.ts` | management | 0 | 3 | 3 |
 | `src/features/management/service.ts` | management | 11 | 6 | 17 |
 | `src/features/pos/data.ts` | pos | 12 | 10 | 22 |
 | `src/features/pos/service.ts` | pos | 0 | 1 | 1 |
-| `src/features/catalog/data.ts` | catalog | 11 | 1 | 12 |
+| `src/features/catalog/data.ts` | catalog | 0 | 1 | 1 |
 | `src/features/catalog/service.ts` | catalog | 7 | 11 | 18 |
 | `src/features/dashboard/data.ts` | dashboard | 6 | 1 | 7 |
 | `src/features/reports/data.ts` | reports | 1 | 0 | 1 |
@@ -56,7 +56,6 @@ HEAD: `bf2117e0ff99ca0d25e7e6e904b29943dd254417`
 
 | File | Domain | DB call sites | .from() | .rpc() |
 | --- | --- | ---: | ---: | ---: |
-| `src/features/management/data.ts` | management | 30 | 27 | 3 |
 | `src/features/pos/data.ts` | pos | 22 | 12 | 10 |
 | `src/features/inventory/advanced-inventory-actions.ts` | inventory | 21 | 0 | 21 |
 | `src/features/advanced-sales/service.ts` | other | 18 | 18 | 0 |
@@ -64,7 +63,6 @@ HEAD: `bf2117e0ff99ca0d25e7e6e904b29943dd254417`
 | `src/features/management/service.ts` | management | 17 | 11 | 6 |
 | `src/features/customers/service.ts` | other | 13 | 4 | 9 |
 | `src/features/receipts/detail/data.ts` | other | 13 | 13 | 0 |
-| `src/features/catalog/data.ts` | catalog | 12 | 11 | 1 |
 | `src/features/customers/data.ts` | other | 12 | 8 | 4 |
 | `src/app/(back-office)/back-office/inventory/page.tsx` | inventory | 11 | 1 | 10 |
 | `src/lib/auth/dal.ts` | other | 10 | 9 | 1 |
@@ -93,6 +91,7 @@ HEAD: `bf2117e0ff99ca0d25e7e6e904b29943dd254417`
 | `src/features/devices/actions.ts` | other | 3 | 0 | 3 |
 | `src/features/inventory/inventory-stock-view.tsx` | inventory | 3 | 3 | 0 |
 | `src/features/kitchen/data.ts` | other | 3 | 1 | 2 |
+| `src/features/management/data.ts` | management | 3 | 0 | 3 |
 | `src/features/organization-readiness/service.ts` | other | 3 | 1 | 2 |
 | `src/features/shifts/service.ts` | other | 3 | 0 | 3 |
 | `src/app/api/pos/v2/customers/route.ts` | pos | 2 | 1 | 1 |
@@ -123,6 +122,8 @@ HEAD: `bf2117e0ff99ca0d25e7e6e904b29943dd254417`
 | `src/app/onboarding/page.tsx` | other | 1 | 1 | 0 |
 | `src/components/back-office/date-range-picker.tsx` | other | 1 | 1 | 0 |
 | `src/features/business-profile/service.ts` | other | 1 | 0 | 1 |
+| `src/features/catalog/catalog-read-model.ts` | catalog | 1 | 0 | 1 |
+| `src/features/catalog/data.ts` | catalog | 1 | 0 | 1 |
 | `src/features/customer-display/service.ts` | other | 1 | 0 | 1 |
 | `src/features/customers/customer-csv.ts` | other | 1 | 1 | 0 |
 | `src/features/devices/device-manager.tsx` | other | 1 | 1 | 0 |
@@ -131,6 +132,7 @@ HEAD: `bf2117e0ff99ca0d25e7e6e904b29943dd254417`
 | `src/features/inventory/inventory-schema-contract.ts` | inventory | 1 | 0 | 1 |
 | `src/features/inventory/replenishment-data.ts` | inventory | 1 | 0 | 1 |
 | `src/features/inventory/supplier-csv.ts` | inventory | 1 | 1 | 0 |
+| `src/features/management/management-read-model.ts` | management | 1 | 0 | 1 |
 | `src/features/offline/pos-v2-sync-service.ts` | other | 1 | 0 | 1 |
 | `src/features/onboarding/service.ts` | other | 1 | 0 | 1 |
 | `src/features/organization-recovery/data.ts` | other | 1 | 0 | 1 |

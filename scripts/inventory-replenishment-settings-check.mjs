@@ -27,7 +27,8 @@ test("catalog CSV and display use the canonical effective threshold contract", (
   assert.doesNotMatch(exportRoute, /low_stock_level/);
   assert.match(csv, /low_stock_level is retired/);
   assert.doesNotMatch(csv, /"low_stock_level",/);
-  assert.match(data, /inventory_replenishment_rules/);
+  assert.match(data, /loadCatalogReadBundleResult/);
+  assert.match(data, /"replenishmentRules"/);
   assert.match(workspace, /rule\?\.reorder_point \?\? legacyFallback/);
   assert.match(workspace, /candidate\.variant_id === level\.variant_id/);
   assert.match(

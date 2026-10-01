@@ -24,11 +24,10 @@ test("stores and registers overview is a capability-gated, store-scoped primary 
   assert.match(source.overview, /requireBackOfficePermission\(\["stores\.manage", "registers\.manage"\]\)/);
   assert.match(source.overview, /loadManagementStoreRegisterOverview\(context\)/);
   assert.match(source.data, /hasOrganizationWideStoreScope\(context\)/);
-  assert.match(source.data, /storesQuery = storesQuery\.in\("id", assignedStoreIds\)/);
-  assert.match(source.data, /registersQuery = registersQuery\.in\("store_id", assignedStoreIds\)/);
-  assert.match(source.data, /\.from\("shifts"\)/);
-  assert.match(source.data, /\.from\("pos_devices"\)/);
-  assert.match(source.data, /\.from\("offline_sync_events"\)/);
+  assert.match(source.data, /managementBundle\(context, \["stores", "registers"/);
+  assert.match(source.data, /hasStoreAccess\(context, row\.store_id\)/);
+  assert.match(source.data, /"shifts" as const/);
+  assert.match(source.data, /"posDevices" as const, "offlineSyncEvents" as const/);
   assert.doesNotMatch(overviewLoader, /get_shift_cash_summary|get_pos_shift_operational_summary/);
 });
 
@@ -49,7 +48,7 @@ test("store quick view opens on demand, preserves focus, and uses central store 
   assert.match(source.drawerAction, /loadManagementStoreDrawer\(context, parsed\.data\.storeId\)/);
   assert.match(source.data, /export async function loadManagementStoreDrawer/);
   assert.match(source.data, /hasStoreAccess\(context, storeId\)/);
-  assert.match(source.data, /\.eq\("store_id", storeId\)/);
+  assert.match(source.data, /data\.registers\.filter\(\(row\) => row\.store_id === storeId\)/);
   assert.match(source.overviewClient, /aria-label={`View store \$\{store\.name\}, \$\{store\.code\}`}/);
   assert.match(source.overviewClient, /<BackOfficeDetailDrawer closeLabel="Close details" width="wide">/);
   assert.match(source.overviewClient, /const \[drawerView, setDrawerView\] = useState<"store" \| "register">\("store"\)/);
@@ -68,11 +67,11 @@ test("store quick view opens on demand, preserves focus, and uses central store 
 test("register operational drawer starts from scoped identity data", () => {
   const registerDrawerLoader = source.data.slice(
     source.data.indexOf("export async function loadManagementRegisterDrawer"),
-    source.data.indexOf("type RegisterOperationalSummaryRpc"),
+    source.data.indexOf("type RegisterOperationalSummary"),
   );
   assert.match(source.drawerAction, /loadManagementRegisterOperationalDrawer\(context, parsed\.data\.registerId\)/);
-  assert.match(registerDrawerLoader, /registerQuery = registerQuery\.in\("store_id", assignedStoreIds\)/);
-  assert.match(registerDrawerLoader, /hasStoreAccess\(context, registerResult\.data\.store_id\)/);
+  assert.match(registerDrawerLoader, /managementBundle\(context, \["stores", "registers"\]\)/);
+  assert.match(registerDrawerLoader, /hasStoreAccess\(context, row\.store_id\)/);
   assert.match(source.overviewClient, /onOpenRegister=\{openRegister\}/);
   assert.match(source.overviewClient, /aria-label={`Open register \$\{register\.name\}, \$\{register\.code\},/);
   assert.match(source.overviewClient, /aria-label="Loading register"/);
@@ -91,8 +90,7 @@ test("register operational drawer reuses the authoritative shift summary and rec
   assert.match(operationalLoader, /get_pos_shift_operational_summary/);
   assert.doesNotMatch(operationalLoader, /get_shift_cash_summary/);
   assert.match(operationalLoader, /hasPermission\(context, "devices\.manage"\)/);
-  assert.match(operationalLoader, /\.from\("pos_devices"\)/);
-  assert.match(operationalLoader, /\.from\("offline_sync_events"\)/);
+  assert.match(operationalLoader, /managementBundle\(context, \["shifts", "posDevices", "offlineSyncEvents"\]\)/);
   assert.match(operationalLoader, /\["LOCAL_PENDING", "SYNCING"\]/);
   assert.match(operationalLoader, /\["CONFLICT", "FAILED"\]/);
   assert.match(source.overviewClient, /CurrentShiftSection/);

@@ -2,7 +2,7 @@
 
 Branch: `recovery/neon-canonical-rebuild`
 
-HEAD: `65c55b6af55148244160ae0dae677c185d1767a6`
+HEAD: `bf2117e0ff99ca0d25e7e6e904b29943dd254417`
 
 ## Totals
 

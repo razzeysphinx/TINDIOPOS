@@ -4,17 +4,17 @@
   "slice": "R5-S1",
   "purpose": "Static database-access baseline before R5 performance rewrites",
   "branch": "recovery/neon-canonical-rebuild",
-  "head": "13810df0b56d00f0b8428e54b6a4af9843771328",
+  "head": "7cb8aa9b535ed8bcbb0a21a6b1f023183a241986",
   "source_roots": [
     "src"
   ],
   "missing_required_targets": [],
   "totals": {
-    "files": 369,
-    "files_with_db_calls": 87,
-    "from_calls": 272,
-    "rpc_calls": 177,
-    "db_call_sites": 449,
+    "files": 371,
+    "files_with_db_calls": 88,
+    "from_calls": 253,
+    "rpc_calls": 178,
+    "db_call_sites": 431,
     "create_client_calls": 139,
     "pos_database_client_calls": 6,
     "supabase_server_imports": 62,
@@ -35,14 +35,14 @@
     },
     {
       "domain": "inventory",
-      "files": 26,
-      "files_with_db_calls": 8,
+      "files": 28,
+      "files_with_db_calls": 10,
       "from_calls": 54,
-      "rpc_calls": 41,
-      "db_call_sites": 95,
-      "create_client_calls": 28,
+      "rpc_calls": 43,
+      "db_call_sites": 97,
+      "create_client_calls": 29,
       "pos_database_client_calls": 0,
-      "supabase_server_imports": 5,
+      "supabase_server_imports": 6,
       "direct_supabase_js_imports": 0
     },
     {
@@ -82,18 +82,6 @@
       "direct_supabase_js_imports": 0
     },
     {
-      "domain": "replenishment",
-      "files": 1,
-      "files_with_db_calls": 1,
-      "from_calls": 19,
-      "rpc_calls": 1,
-      "db_call_sites": 20,
-      "create_client_calls": 1,
-      "pos_database_client_calls": 0,
-      "supabase_server_imports": 1,
-      "direct_supabase_js_imports": 0
-    },
-    {
       "domain": "dashboard",
       "files": 8,
       "files_with_db_calls": 1,
@@ -115,6 +103,18 @@
       "create_client_calls": 2,
       "pos_database_client_calls": 0,
       "supabase_server_imports": 2,
+      "direct_supabase_js_imports": 0
+    },
+    {
+      "domain": "replenishment",
+      "files": 1,
+      "files_with_db_calls": 0,
+      "from_calls": 0,
+      "rpc_calls": 0,
+      "db_call_sites": 0,
+      "create_client_calls": 0,
+      "pos_database_client_calls": 0,
+      "supabase_server_imports": 0,
       "direct_supabase_js_imports": 0
     },
     {
@@ -145,12 +145,12 @@
     {
       "file": "src/app/(back-office)/back-office/replenishment/page.tsx",
       "domain": "replenishment",
-      "from_calls": 19,
-      "rpc_calls": 1,
-      "db_call_sites": 20,
-      "create_client_calls": 1,
+      "from_calls": 0,
+      "rpc_calls": 0,
+      "db_call_sites": 0,
+      "create_client_calls": 0,
       "pos_database_client_calls": 0,
-      "supabase_server_imports": 1,
+      "supabase_server_imports": 0,
       "direct_supabase_js_imports": 0
     },
     {
@@ -316,17 +316,6 @@
       "rpc_calls": 21,
       "db_call_sites": 21,
       "create_client_calls": 19,
-      "pos_database_client_calls": 0,
-      "supabase_server_imports": 1,
-      "direct_supabase_js_imports": 0
-    },
-    {
-      "file": "src/app/(back-office)/back-office/replenishment/page.tsx",
-      "domain": "replenishment",
-      "from_calls": 19,
-      "rpc_calls": 1,
-      "db_call_sites": 20,
-      "create_client_calls": 1,
       "pos_database_client_calls": 0,
       "supabase_server_imports": 1,
       "direct_supabase_js_imports": 0
@@ -1047,12 +1036,34 @@
       "direct_supabase_js_imports": 0
     },
     {
+      "file": "src/features/inventory/inventory-read-model.ts",
+      "domain": "inventory",
+      "from_calls": 0,
+      "rpc_calls": 1,
+      "db_call_sites": 1,
+      "create_client_calls": 0,
+      "pos_database_client_calls": 0,
+      "supabase_server_imports": 0,
+      "direct_supabase_js_imports": 0
+    },
+    {
       "file": "src/features/inventory/inventory-schema-contract.ts",
       "domain": "inventory",
       "from_calls": 0,
       "rpc_calls": 1,
       "db_call_sites": 1,
       "create_client_calls": 0,
+      "pos_database_client_calls": 0,
+      "supabase_server_imports": 1,
+      "direct_supabase_js_imports": 0
+    },
+    {
+      "file": "src/features/inventory/replenishment-data.ts",
+      "domain": "inventory",
+      "from_calls": 0,
+      "rpc_calls": 1,
+      "db_call_sites": 1,
+      "create_client_calls": 1,
       "pos_database_client_calls": 0,
       "supabase_server_imports": 1,
       "direct_supabase_js_imports": 0

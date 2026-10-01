@@ -23,9 +23,10 @@ test("Phase 4 derives loaded-page product totals from authorized store-level pro
 });
 
 test("Phase 4 preserves shared store scope, bounded stock reads, and stock-detail routing after the Stock & Restock split", async () => {
-  const [inventoryPage, replenishmentPage, stockPageMigration] = await Promise.all([
+  const [inventoryPage, replenishmentPage, replenishmentLoader, stockPageMigration] = await Promise.all([
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
     source("src/app/(back-office)/back-office/replenishment/page.tsx"),
+    source("src/features/inventory/replenishment-data.ts"),
     source("supabase/migrations/20260911140000_inventory_stock_page_performance.sql"),
   ]);
 
@@ -34,8 +35,9 @@ test("Phase 4 preserves shared store scope, bounded stock reads, and stock-detai
   assert.match(replenishmentPage, /const storeScope = resolveBackOfficeStoreScope\(context, parameters\)/);
   assert.match(replenishmentPage, /const authorizedStore = \(storeId: string\) => storeScope\.storeIds === null \|\| storeScope\.storeIds\.includes\(storeId\);/);
   assert.match(replenishmentPage, /const visibleStore = \(storeId: string\) => authorizedStore\(storeId\) &&/);
-  assert.match(replenishmentPage, /supabase\.rpc\("get_inventory_stock_page"/);
-  assert.match(replenishmentPage, /requested_store_id: storeScope\.selectedStoreId/);
+  assert.match(replenishmentPage, /loadReplenishmentWorkspaceData/);
+  assert.match(replenishmentLoader, /supabase\.rpc\("get_inventory_stock_page"/);
+  assert.match(replenishmentLoader, /requested_store_id: stockFilters\.selectedStoreId/);
   assert.match(replenishmentPage, /const stockRows: InventoryStockRow\[\] = stockPageEntries\.map/);
   assert.match(replenishmentPage, /multiStoreCount=\{stores\.length\}/);
   assert.match(stockPageMigration, /private\.has_store_read_scope\(target_organization_id, store\.id\)/);

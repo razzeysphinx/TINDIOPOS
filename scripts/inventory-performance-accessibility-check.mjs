@@ -21,6 +21,7 @@ const [
   stockPageRepairMigration,
   stockView,
   replenishmentPage,
+  replenishmentLoader,
   inventoryPage,
 ] =
   await Promise.all([
@@ -41,6 +42,10 @@ const [
     ),
 
     source(
+      "../src/features/inventory/replenishment-data.ts",
+    ),
+
+    source(
       "../src/app/(back-office)/back-office/inventory/page.tsx",
     ),
   ]);
@@ -55,7 +60,8 @@ test(
     assert.match(stockPageMigration, /limit page_size\s+offset \(page_number - 1\) \* page_size/s);
     assert.match(stockPageMigration, /uninitialized_simple_positions/);
     assert.match(stockPageMigration, /uninitialized_variant_positions/);
-    assert.match(replenishmentPage, /supabase\.rpc\("get_inventory_stock_page"/);
+    assert.match(replenishmentPage, /loadReplenishmentWorkspaceData/);
+    assert.match(replenishmentLoader, /supabase\.rpc\("get_inventory_stock_page"/);
     assert.match(replenishmentPage, /const stockPageSize = 50/);
     assert.match(stockView, /router\.replace\(`\$\{pathname\}\?\$\{query\.toString\(\)\}`/);
     assert.match(stockView, /Page \{page\} of \{pageCount\}/);

@@ -2,17 +2,17 @@
 
 Branch: `recovery/neon-canonical-rebuild`
 
-HEAD: `13810df0b56d00f0b8428e54b6a4af9843771328`
+HEAD: `7cb8aa9b535ed8bcbb0a21a6b1f023183a241986`
 
 ## Totals
 
 ```json
 {
-  "files": 369,
-  "files_with_db_calls": 87,
-  "from_calls": 272,
-  "rpc_calls": 177,
-  "db_call_sites": 449,
+  "files": 371,
+  "files_with_db_calls": 88,
+  "from_calls": 253,
+  "rpc_calls": 178,
+  "db_call_sites": 431,
   "create_client_calls": 139,
   "pos_database_client_calls": 6,
   "supabase_server_imports": 62,
@@ -25,13 +25,13 @@ HEAD: `13810df0b56d00f0b8428e54b6a4af9843771328`
 | Domain | Files with DB calls | .from() | .rpc() | Static DB call sites |
 | --- | ---: | ---: | ---: | ---: |
 | other | 60 | 121 | 85 | 206 |
-| inventory | 8 | 54 | 41 | 95 |
+| inventory | 10 | 54 | 43 | 97 |
 | management | 3 | 39 | 12 | 51 |
 | pos | 10 | 13 | 24 | 37 |
 | catalog | 2 | 18 | 12 | 30 |
-| replenishment | 1 | 19 | 1 | 20 |
 | dashboard | 1 | 6 | 1 | 7 |
 | reports | 2 | 2 | 1 | 3 |
+| replenishment | 0 | 0 | 0 | 0 |
 | database-boundary | 0 | 0 | 0 | 0 |
 
 ## Required R5 target files
@@ -39,7 +39,7 @@ HEAD: `13810df0b56d00f0b8428e54b6a4af9843771328`
 | File | Domain | .from() | .rpc() | Static DB call sites |
 | --- | --- | ---: | ---: | ---: |
 | `src/app/(back-office)/back-office/inventory/page.tsx` | inventory | 49 | 10 | 59 |
-| `src/app/(back-office)/back-office/replenishment/page.tsx` | replenishment | 19 | 1 | 20 |
+| `src/app/(back-office)/back-office/replenishment/page.tsx` | replenishment | 0 | 0 | 0 |
 | `src/features/management/data.ts` | management | 27 | 3 | 30 |
 | `src/features/management/service.ts` | management | 11 | 6 | 17 |
 | `src/features/pos/data.ts` | pos | 12 | 10 | 22 |
@@ -60,7 +60,6 @@ HEAD: `13810df0b56d00f0b8428e54b6a4af9843771328`
 | `src/features/management/data.ts` | management | 30 | 27 | 3 |
 | `src/features/pos/data.ts` | pos | 22 | 12 | 10 |
 | `src/features/inventory/advanced-inventory-actions.ts` | inventory | 21 | 0 | 21 |
-| `src/app/(back-office)/back-office/replenishment/page.tsx` | replenishment | 20 | 19 | 1 |
 | `src/features/advanced-sales/service.ts` | other | 18 | 18 | 0 |
 | `src/features/catalog/service.ts` | catalog | 18 | 7 | 11 |
 | `src/features/management/service.ts` | management | 17 | 11 | 6 |
@@ -126,7 +125,9 @@ HEAD: `13810df0b56d00f0b8428e54b6a4af9843771328`
 | `src/features/customer-display/service.ts` | other | 1 | 0 | 1 |
 | `src/features/customers/customer-csv.ts` | other | 1 | 1 | 0 |
 | `src/features/devices/device-manager.tsx` | other | 1 | 1 | 0 |
+| `src/features/inventory/inventory-read-model.ts` | inventory | 1 | 0 | 1 |
 | `src/features/inventory/inventory-schema-contract.ts` | inventory | 1 | 0 | 1 |
+| `src/features/inventory/replenishment-data.ts` | inventory | 1 | 0 | 1 |
 | `src/features/inventory/supplier-csv.ts` | inventory | 1 | 1 | 0 |
 | `src/features/offline/pos-v2-sync-service.ts` | other | 1 | 0 | 1 |
 | `src/features/onboarding/service.ts` | other | 1 | 0 | 1 |

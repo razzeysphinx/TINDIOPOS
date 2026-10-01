@@ -4,8 +4,10 @@ import test from "node:test";
 
 const source = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-const [page, workflows, transferWorkspace, migration] = await Promise.all([
+const [page, readModel, readModelMigration, workflows, transferWorkspace, migration] = await Promise.all([
   source("../src/app/(back-office)/back-office/replenishment/page.tsx"),
+  source("../src/features/inventory/inventory-read-model.ts"),
+  source("../database/migrations/0004_inventory_replenishment_read_models.sql"),
   source("../src/features/inventory/supply-chain-workflows.tsx"),
   source("../src/features/inventory/inventory-transfer-workspace.tsx"),
   source("../supabase/migrations/20260905090400_inventory_transfer_chain_of_custody.sql"),
@@ -15,16 +17,17 @@ test("transfer creation keeps source, destination, and in-transit positions dist
   assert.match(workflows, /Source on hand/);
   assert.match(workflows, /Destination on hand/);
   assert.match(workflows, /label="In transit"/);
-  assert.match(page, /quantity.*received_quantity.*short_quantity/);
+  assert.match(readModel, /quantity: DatabaseNumber; received_quantity: DatabaseNumber; short_quantity: DatabaseNumber/);
   assert.match(page, /inTransitBySaleable/);
-  assert.match(page, /destination_store_id/);
+  assert.match(readModel, /destination_store_id/);
 });
 
 test("canonical request lifecycle and discrepancy evidence are visible", () => {
   for (const stage of ["Requested", "Approved", "Picked", "Sent", "Received"]) {
     assert.match(workflows, new RegExp(stage));
   }
-  assert.match(page, /stock_request_discrepancies/);
+  assert.match(readModel, /stockRequestDiscrepancies/);
+  assert.match(readModelMigration, /stock_request_discrepancies/);
   assert.match(workflows, /Transfer requires attention/);
   assert.match(workflows, /remain in transit/);
   assert.match(workflows, /remain in the audit trail/);

@@ -63,10 +63,16 @@ test("Phase 7 keeps replenishment suggestions source-aware and non-automatic", a
 });
 
 test("Phase 7 calculates the restock gap from on-hand and confirmed inbound quantities", async () => {
-  const replenishmentPage = await source("src/app/(back-office)/back-office/replenishment/page.tsx");
+  const [replenishmentPage, readModel, migration] = await Promise.all([
+    source("src/app/(back-office)/back-office/replenishment/page.tsx"),
+    source("src/features/inventory/inventory-read-model.ts"),
+    source("database/migrations/0004_inventory_replenishment_read_models.sql"),
+  ]);
   const workflow = await source("src/features/inventory/supply-chain-workflows.tsx");
 
-  assert.match(replenishmentPage, /purchase_order_id, product_id, variant_id, ordered_quantity, received_quantity/);
+  assert.match(replenishmentPage, /loadReplenishmentWorkspaceData/);
+  assert.match(readModel, /openPurchaseOrderLines/);
+  assert.match(migration, /purchase_order_id, line\.product_id, line\.variant_id, line\.ordered_quantity, line\.received_quantity/);
   assert.match(replenishmentPage, /incomingPurchaseBySaleable/);
   assert.match(replenishmentPage, /incomingPurchaseQuantity:/);
   assert.match(replenishmentPage, /inTransitQuantity:/);

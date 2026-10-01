@@ -2,17 +2,17 @@
 
 Branch: `recovery/neon-canonical-rebuild`
 
-HEAD: `4e33995f4f9eb931cdffff352a3af9c819a5b573`
+HEAD: `5bece720054cb01c1639e54d5a8e258642e452a9`
 
 ## Totals
 
 ```json
 {
-  "files": 376,
-  "files_with_db_calls": 92,
-  "from_calls": 167,
-  "rpc_calls": 183,
-  "db_call_sites": 350,
+  "files": 377,
+  "files_with_db_calls": 93,
+  "from_calls": 149,
+  "rpc_calls": 186,
+  "db_call_sites": 335,
   "create_client_calls": 132,
   "pos_database_client_calls": 6,
   "supabase_server_imports": 62,
@@ -26,11 +26,11 @@ HEAD: `4e33995f4f9eb931cdffff352a3af9c819a5b573`
 | --- | ---: | ---: | ---: | ---: |
 | other | 60 | 121 | 85 | 206 |
 | inventory | 12 | 6 | 46 | 52 |
-| pos | 10 | 13 | 24 | 37 |
+| pos | 11 | 2 | 25 | 27 |
 | management | 4 | 12 | 13 | 25 |
 | catalog | 3 | 7 | 13 | 20 |
-| dashboard | 1 | 6 | 1 | 7 |
-| reports | 2 | 2 | 1 | 3 |
+| reports | 2 | 1 | 2 | 3 |
+| dashboard | 1 | 0 | 2 | 2 |
 | replenishment | 0 | 0 | 0 | 0 |
 | database-boundary | 0 | 0 | 0 | 0 |
 
@@ -42,12 +42,12 @@ HEAD: `4e33995f4f9eb931cdffff352a3af9c819a5b573`
 | `src/app/(back-office)/back-office/replenishment/page.tsx` | replenishment | 0 | 0 | 0 |
 | `src/features/management/data.ts` | management | 0 | 3 | 3 |
 | `src/features/management/service.ts` | management | 11 | 6 | 17 |
-| `src/features/pos/data.ts` | pos | 12 | 10 | 22 |
+| `src/features/pos/data.ts` | pos | 1 | 10 | 11 |
 | `src/features/pos/service.ts` | pos | 0 | 1 | 1 |
 | `src/features/catalog/data.ts` | catalog | 0 | 1 | 1 |
 | `src/features/catalog/service.ts` | catalog | 7 | 11 | 18 |
-| `src/features/dashboard/data.ts` | dashboard | 6 | 1 | 7 |
-| `src/features/reports/data.ts` | reports | 1 | 0 | 1 |
+| `src/features/dashboard/data.ts` | dashboard | 0 | 2 | 2 |
+| `src/features/reports/data.ts` | reports | 0 | 1 | 1 |
 | `src/lib/database/env.ts` | database-boundary | 0 | 0 | 0 |
 | `src/lib/database/neon-data-api-fetch.ts` | database-boundary | 0 | 0 | 0 |
 | `src/lib/supabase/pos-v2-database-client.ts` | database-boundary | 0 | 0 | 0 |
@@ -56,7 +56,6 @@ HEAD: `4e33995f4f9eb931cdffff352a3af9c819a5b573`
 
 | File | Domain | DB call sites | .from() | .rpc() |
 | --- | --- | ---: | ---: | ---: |
-| `src/features/pos/data.ts` | pos | 22 | 12 | 10 |
 | `src/features/inventory/advanced-inventory-actions.ts` | inventory | 21 | 0 | 21 |
 | `src/features/advanced-sales/service.ts` | other | 18 | 18 | 0 |
 | `src/features/catalog/service.ts` | catalog | 18 | 7 | 11 |
@@ -65,10 +64,10 @@ HEAD: `4e33995f4f9eb931cdffff352a3af9c819a5b573`
 | `src/features/receipts/detail/data.ts` | other | 13 | 13 | 0 |
 | `src/features/customers/data.ts` | other | 12 | 8 | 4 |
 | `src/app/(back-office)/back-office/inventory/page.tsx` | inventory | 11 | 1 | 10 |
+| `src/features/pos/data.ts` | pos | 11 | 1 | 10 |
 | `src/lib/auth/dal.ts` | other | 10 | 9 | 1 |
 | `src/app/(back-office)/back-office/shifts/page.tsx` | other | 9 | 6 | 3 |
 | `src/features/time-clock/data.ts` | other | 8 | 6 | 2 |
-| `src/features/dashboard/data.ts` | dashboard | 7 | 6 | 1 |
 | `src/features/inventory/supply-chain-actions.ts` | inventory | 7 | 0 | 7 |
 | `src/app/(back-office)/back-office/receipts/page.tsx` | other | 6 | 6 | 0 |
 | `src/features/advanced-sales/data.ts` | other | 6 | 6 | 0 |
@@ -96,6 +95,7 @@ HEAD: `4e33995f4f9eb931cdffff352a3af9c819a5b573`
 | `src/features/shifts/service.ts` | other | 3 | 0 | 3 |
 | `src/app/api/pos/v2/customers/route.ts` | pos | 2 | 1 | 1 |
 | `src/app/api/pos/v2/sync/checkpoint/route.ts` | pos | 2 | 0 | 2 |
+| `src/features/dashboard/data.ts` | dashboard | 2 | 0 | 2 |
 | `src/features/inventory/inventory-specialized-data.ts` | inventory | 2 | 0 | 2 |
 | `src/features/inventory/pos-transfer-service.ts` | inventory | 2 | 0 | 2 |
 | `src/features/receipts/improvement-6-actions.ts` | other | 2 | 0 | 2 |
@@ -137,8 +137,9 @@ HEAD: `4e33995f4f9eb931cdffff352a3af9c819a5b573`
 | `src/features/onboarding/service.ts` | other | 1 | 0 | 1 |
 | `src/features/organization-recovery/data.ts` | other | 1 | 0 | 1 |
 | `src/features/organization-recovery/service.ts` | other | 1 | 0 | 1 |
+| `src/features/pos/pos-bootstrap-data.ts` | pos | 1 | 0 | 1 |
 | `src/features/pos/service.ts` | pos | 1 | 0 | 1 |
-| `src/features/reports/data.ts` | reports | 1 | 1 | 0 |
+| `src/features/reports/data.ts` | reports | 1 | 0 | 1 |
 | `src/features/shifts/actions.ts` | other | 1 | 0 | 1 |
 | `src/features/shifts/data.ts` | other | 1 | 0 | 1 |
 | `src/features/smart-menu/service.ts` | other | 1 | 0 | 1 |

@@ -318,4 +318,95 @@ R1 COMPLETE
 R2 COMPLETE
 R3 COMPLETE
 R4 COMPLETE
-R5 NOT STARTED
+R5 IN PROGRESS
+
+R5 â€” DATABASE ACCESS + PERFORMANCE REWRITE
+
+STATUS: IN PROGRESS
+
+ENTRY HEAD:
+13810df0b56d00f0b8428e54b6a4af9843771328
+
+ENTRY CONDITIONS:
+R0 COMPLETE
+R1 COMPLETE
+R2 COMPLETE
+R3 COMPLETE
+R4 COMPLETE
+
+R5 EXECUTION MODEL:
+
+R5-S1
+static DB access census + performance evidence baseline
+
+R5-S2
+Inventory + Replenishment fan-out rewrite
+
+R5-S3
+Management + Catalog fan-out rewrite
+
+R5-S4
+POS + Dashboard + Reports fan-out rewrite
+
+R5-S5
+shared database boundary / connection / residual fan-out cleanup
+
+R5-S6
+full R5 certification + before/after performance proof
+
+These are controlled slices inside R5.
+They are NOT new recovery phases.
+
+PERFORMANCE PRINCIPLE:
+
+MEASURE
+â†’ IDENTIFY
+â†’ CONSOLIDATE
+â†’ REDUCE ROUND-TRIPS
+â†’ VERIFY BUSINESS INVARIANTS
+â†’ MEASURE AGAIN
+
+R5 DOES NOT optimize by randomly adding indexes.
+
+Primary objective:
+reduce database/network round-trips and query fan-out.
+
+R5 SAFETY:
+
+current live Neon remains protected
+historical migrations remain immutable
+tenant isolation remains mandatory
+store isolation remains mandatory
+RBAC remains mandatory
+inventory invariants remain mandatory
+sales/payment invariants remain mandatory
+offline durability remains mandatory
+
+R5-S1 STATIC ACCESS BASELINE:
+
+scanned source files: 369
+files containing DB calls: 87
+.from() call sites: 272
+.rpc() call sites: 177
+total static DB call sites: 449
+
+Top hotspot files:
+src/app/(back-office)/back-office/inventory/page.tsx â€” inventory â€” 49 .from(), 10 .rpc(), 59 total DB call sites
+src/features/management/data.ts â€” management â€” 27 .from(), 3 .rpc(), 30 total DB call sites
+src/features/pos/data.ts â€” pos â€” 12 .from(), 10 .rpc(), 22 total DB call sites
+src/features/inventory/advanced-inventory-actions.ts â€” inventory â€” 0 .from(), 21 .rpc(), 21 total DB call sites
+src/app/(back-office)/back-office/replenishment/page.tsx â€” replenishment â€” 19 .from(), 1 .rpc(), 20 total DB call sites
+src/features/advanced-sales/service.ts â€” other â€” 18 .from(), 0 .rpc(), 18 total DB call sites
+src/features/catalog/service.ts â€” catalog â€” 7 .from(), 11 .rpc(), 18 total DB call sites
+src/features/management/service.ts â€” management â€” 11 .from(), 6 .rpc(), 17 total DB call sites
+src/features/customers/service.ts â€” other â€” 4 .from(), 9 .rpc(), 13 total DB call sites
+src/features/receipts/detail/data.ts â€” other â€” 13 .from(), 0 .rpc(), 13 total DB call sites
+src/features/catalog/data.ts â€” catalog â€” 11 .from(), 1 .rpc(), 12 total DB call sites
+src/features/customers/data.ts â€” other â€” 8 .from(), 4 .rpc(), 12 total DB call sites
+src/lib/auth/dal.ts â€” other â€” 9 .from(), 1 .rpc(), 10 total DB call sites
+src/app/(back-office)/back-office/shifts/page.tsx â€” other â€” 6 .from(), 3 .rpc(), 9 total DB call sites
+src/features/time-clock/data.ts â€” other â€” 6 .from(), 2 .rpc(), 8 total DB call sites
+
+Evidence:
+docs/recovery/evidence/r5-static-db-access.json
+docs/recovery/evidence/r5-static-db-access.md

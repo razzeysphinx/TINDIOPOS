@@ -2,17 +2,17 @@
 
 Branch: `recovery/neon-canonical-rebuild`
 
-HEAD: `7cb8aa9b535ed8bcbb0a21a6b1f023183a241986`
+HEAD: `175205caadb933916cbe23f17c5d46747b285c0d`
 
 ## Totals
 
 ```json
 {
-  "files": 371,
+  "files": 372,
   "files_with_db_calls": 88,
-  "from_calls": 253,
+  "from_calls": 235,
   "rpc_calls": 178,
-  "db_call_sites": 431,
+  "db_call_sites": 413,
   "create_client_calls": 139,
   "pos_database_client_calls": 6,
   "supabase_server_imports": 62,
@@ -25,7 +25,7 @@ HEAD: `7cb8aa9b535ed8bcbb0a21a6b1f023183a241986`
 | Domain | Files with DB calls | .from() | .rpc() | Static DB call sites |
 | --- | ---: | ---: | ---: | ---: |
 | other | 60 | 121 | 85 | 206 |
-| inventory | 10 | 54 | 43 | 97 |
+| inventory | 10 | 36 | 43 | 79 |
 | management | 3 | 39 | 12 | 51 |
 | pos | 10 | 13 | 24 | 37 |
 | catalog | 2 | 18 | 12 | 30 |
@@ -38,7 +38,7 @@ HEAD: `7cb8aa9b535ed8bcbb0a21a6b1f023183a241986`
 
 | File | Domain | .from() | .rpc() | Static DB call sites |
 | --- | --- | ---: | ---: | ---: |
-| `src/app/(back-office)/back-office/inventory/page.tsx` | inventory | 49 | 10 | 59 |
+| `src/app/(back-office)/back-office/inventory/page.tsx` | inventory | 31 | 10 | 41 |
 | `src/app/(back-office)/back-office/replenishment/page.tsx` | replenishment | 0 | 0 | 0 |
 | `src/features/management/data.ts` | management | 27 | 3 | 30 |
 | `src/features/management/service.ts` | management | 11 | 6 | 17 |
@@ -56,7 +56,7 @@ HEAD: `7cb8aa9b535ed8bcbb0a21a6b1f023183a241986`
 
 | File | Domain | DB call sites | .from() | .rpc() |
 | --- | --- | ---: | ---: | ---: |
-| `src/app/(back-office)/back-office/inventory/page.tsx` | inventory | 59 | 49 | 10 |
+| `src/app/(back-office)/back-office/inventory/page.tsx` | inventory | 41 | 31 | 10 |
 | `src/features/management/data.ts` | management | 30 | 27 | 3 |
 | `src/features/pos/data.ts` | pos | 22 | 12 | 10 |
 | `src/features/inventory/advanced-inventory-actions.ts` | inventory | 21 | 0 | 21 |

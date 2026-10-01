@@ -48,9 +48,17 @@ test("Inventory read and count access do not expose unrelated mutation workspace
 });
 
 test("Phase 8 never serializes raw inventory cost fields to client workspaces", async () => {
-  const inventoryPage = await source("src/app/(back-office)/back-office/inventory/page.tsx");
+  const [inventoryPage, readModel, inventoryBundleMigration] = await Promise.all([
+    source("src/app/(back-office)/back-office/inventory/page.tsx"),
+    source("src/features/inventory/inventory-read-model.ts"),
+    source("database/migrations/0005_inventory_core_read_model_extension.sql"),
+  ]);
 
-  assert.match(inventoryPage, /from\("inventory_levels"\)[\s\S]{0,120}\.select\("id, store_id, product_id, variant_id, quantity, updated_at"\)/);
+  assert.match(inventoryPage, /loadInventoryControlCoreData/);
+  assert.match(readModel, /type InventoryLevel = \{[\s\S]{0,260}updated_at: string/);
+  assert.doesNotMatch(readModel, /type InventoryLevel = \{[\s\S]{0,400}(?:unit_cost|average_cost|cost_minor)/);
+  assert.match(inventoryBundleMigration, /'inventoryLevels'[\s\S]{0,420}select id,store_id,product_id,variant_id,quantity,updated_at from public\.inventory_levels/);
+  assert.doesNotMatch(inventoryBundleMigration, /'inventoryLevels'[\s\S]{0,520}(?:unit_cost|average_cost|cost_minor)/);
   assert.match(inventoryPage, /from\("purchase_order_lines"\)[\s\S]{0,320}\.select\("id, purchase_order_id, product_id, variant_id, product_name_snapshot/);
   assert.match(inventoryPage, /rpc\("get_inventory_valuation"/);
   assert.match(inventoryPage, /rpc\("get_inventory_movement_costs"/);

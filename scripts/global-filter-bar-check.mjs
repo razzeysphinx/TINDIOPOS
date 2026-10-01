@@ -108,7 +108,7 @@ test("inventory activity reuses the date range picker contract and includes its 
   assert.match(inventoryPage, /<GlobalFilterBar/);
   assert.match(inventoryPage, /dateStartName="from"/);
   assert.match(inventoryPage, /dateEndName="to"/);
-  assert.match(inventoryPage, /recentMovementsQuery\?\.lte\("created_at", `\$\{activityTo\}T23:59:59\.999Z`\)/);
+  assert.match(inventoryPage, /activityTo: activityTo \? `\$\{activityTo\}T23:59:59\.999Z` : null/);
   assert.doesNotMatch(inventoryPage, /<span>From<\/span><input/);
   assert.doesNotMatch(inventoryPage, /<span>To<\/span><input/);
 });

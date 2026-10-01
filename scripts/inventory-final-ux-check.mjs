@@ -4,8 +4,9 @@ import test from "node:test";
 
 const source = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-const [inventoryPage, stockView, productDetail, storeScope, workspaceNavigation, activityList, viewToggle] = await Promise.all([
+const [inventoryPage, inventoryCoreLoader, stockView, productDetail, storeScope, workspaceNavigation, activityList, viewToggle] = await Promise.all([
   source("../src/app/(back-office)/back-office/inventory/page.tsx"),
+  source("../src/features/inventory/inventory-core-data.ts"),
   source("../src/features/inventory/inventory-stock-view.tsx"),
   source("../src/features/inventory/inventory-product-detail.tsx"),
   source("../src/lib/server/back-office-store-scope.ts"),
@@ -39,13 +40,14 @@ test("Phase 10 applies employee store assignments before Inventory data is displ
   assert.match(storeScope, /stores\.manage.*organization-wide authority/s);
   assert.match(storeScope, /storeIds: canAccessAllStores \? null : assignedStoreIds/);
   assert.match(inventoryPage, /const scopedStoreIds = selectedStoreId \? \[selectedStoreId\] : storeScope\.storeIds/);
-  assert.match(inventoryPage, /settingsQuery\?\.in\("store_id", scopedStoreIds\)/);
-  assert.match(inventoryPage, /levelsQuery\?\.in\("store_id", scopedStoreIds\)/);
-  assert.match(inventoryPage, /recentMovementsQuery\?\.in\("store_id", scopedStoreIds\)/);
+  assert.match(inventoryPage, /loadInventoryControlCoreData\(\{[\s\S]{0,180}storeIds: scopedStoreIds,/);
+  assert.match(inventoryCoreLoader, /storeIds,/);
+  assert.match(inventoryCoreLoader, /productStoreSettings", "inventoryLevels/);
+  assert.match(inventoryCoreLoader, /coreNeeds\.push\("movements"\)/);
   assert.match(inventoryPage, /get_inventory_counts_workspace_v2/);
   assert.match(inventoryPage, /target_store_ids: scopedStoreIds/);
   assert.match(inventoryPage, /purchaseOrdersQuery\?\.in\("store_id", scopedStoreIds\)/);
-  assert.match(inventoryPage, /inventoryPoliciesQuery\?\.in\("store_id", scopedStoreIds\)/);
+  assert.match(inventoryCoreLoader, /operationsNeeds\.push\("inventoryPolicies", "inventoryPolicyDefaults"\)/);
   assert.match(inventoryPage, /const visibleStore = \(storeId: string\) => scopedStoreIds === null \|\| scopedStoreIds\.includes\(storeId\)/);
 });
 

@@ -11,6 +11,7 @@ import type {
 } from "@/features/time-clock/time-clock-types";
 import type { BusinessContext } from "@/lib/auth/dal";
 import { createBusinessContextClient } from "@/lib/supabase/context-client";
+import { loadTimeClockWorkspaceBundle } from "@/features/time-clock/time-clock-read-model";
 
 function mapCurrentEntry(
   data: Array<{
@@ -65,24 +66,18 @@ export async function loadTimeClockWorkspace(
   context: BusinessContext,
 ): Promise<TimeClockWorkspace> {
   const supabase = await createBusinessContextClient(context);
-  const [storesResult, entryResult] = await Promise.all([
-    supabase
-      .from("stores")
-      .select("id, name")
-      .eq("organization_id", context.organization.id)
-      .eq("is_active", true)
-      .in("id", context.storeIds)
-      .order("name", { ascending: true }),
+  const [bundleResult, entryResult] = await Promise.all([
+    loadTimeClockWorkspaceBundle({ client: supabase as unknown as Parameters<typeof loadTimeClockWorkspaceBundle>[0]["client"], organizationId: context.organization.id, storeIds: context.storeIds, includeAttendance: false }),
     supabase.rpc("get_current_time_clock_entry", {
       target_organization_id: context.organization.id,
     }),
   ]);
 
-  if (storesResult.error || entryResult.error) {
-    throw new Error(`Unable to load the time clock: ${storesResult.error?.message ?? entryResult.error?.message}`);
+  if (bundleResult.error || entryResult.error) {
+    throw new Error(`Unable to load the time clock: ${bundleResult.error?.message ?? entryResult.error?.message}`);
   }
 
-  const stores = (storesResult.data ?? []) as TimeClockStoreOption[];
+  const stores = bundleResult.data.stores.filter((store) => store.is_active).map(({ id, name }) => ({ id, name })) as TimeClockStoreOption[];
   const employees = stores[0] ? await loadAttendanceEmployees(context, stores[0].id) : [];
   return { stores, employees, entry: mapCurrentEntry(entryResult.data, context, stores) };
 }
@@ -96,51 +91,12 @@ export async function loadTimeAttendanceWorkspace(
   filters: { storeId?: string | null; employeeId?: string | null; start?: string | null; end?: string | null },
 ): Promise<TimeAttendanceWorkspace> {
   const supabase = await createBusinessContextClient(context);
-  let entriesQuery = supabase
-    .from("time_clock_entries")
-    .select("id, employee_id, store_id, clocked_in_at, clocked_out_at, clock_in_verification_method, clock_out_verification_method")
-    .eq("organization_id", context.organization.id)
-    .order("clocked_in_at", { ascending: false })
-    .limit(200);
-
-  if (filters.storeId) entriesQuery = entriesQuery.eq("store_id", filters.storeId);
-  if (filters.employeeId) entriesQuery = entriesQuery.eq("employee_id", filters.employeeId);
-  if (filters.start) entriesQuery = entriesQuery.gte("clocked_in_at", `${filters.start}T00:00:00.000Z`);
-  if (filters.end) entriesQuery = entriesQuery.lte("clocked_in_at", `${filters.end}T23:59:59.999Z`);
-
-  const [entriesResult, employeesResult, storesResult, clockedInResult] = await Promise.all([
-    entriesQuery,
-    supabase
-      .from("employees")
-      .select("id, profile_id, employee_number")
-      .eq("organization_id", context.organization.id)
-      .order("employee_number", { ascending: true }),
-    supabase
-      .from("stores")
-      .select("id, name, is_active")
-      .eq("organization_id", context.organization.id)
-      .in("id", context.storeIds)
-      .order("name", { ascending: true }),
-    supabase
-      .from("time_clock_entries")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", context.organization.id)
-      .is("clocked_out_at", null),
-  ]);
-
-  const baseError = [entriesResult, employeesResult, storesResult, clockedInResult].find((result) => result.error)?.error;
-  if (baseError) throw new Error(`Unable to load time and attendance: ${baseError.message}`);
-
-  const employees = employeesResult.data ?? [];
-  const profileIds = employees.map((employee) => employee.profile_id);
-  const profilesResult = profileIds.length > 0
-    ? await supabase.from("profiles").select("id, full_name, email").in("id", profileIds)
-    : { data: [], error: null };
-  if (profilesResult.error) throw new Error(`Unable to load attendance employees: ${profilesResult.error.message}`);
-
-  const profiles = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile]));
+  const bundleResult = await loadTimeClockWorkspaceBundle({ client: supabase as unknown as Parameters<typeof loadTimeClockWorkspaceBundle>[0]["client"], organizationId: context.organization.id, storeIds: context.storeIds, filters, includeAttendance: true });
+  if (bundleResult.error) throw new Error(`Unable to load time and attendance: ${bundleResult.error.message}`);
+  const { entries: entryRows, employees, stores: storeRows, profiles: profileRows, clockedInCount } = bundleResult.data;
+  const profiles = new Map(profileRows.map((profile) => [profile.id, profile]));
   const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
-  const storeById = new Map((storesResult.data ?? []).map((store) => [store.id, store.name]));
+  const storeById = new Map(storeRows.map((store) => [store.id, store.name]));
   const employeeOptions: TimeAttendanceEmployeeOption[] = employees.map((employee) => {
     const profile = profiles.get(employee.profile_id);
     return {
@@ -149,7 +105,7 @@ export async function loadTimeAttendanceWorkspace(
       employeeNumber: employee.employee_number,
     };
   });
-  const entries: TimeAttendanceEntry[] = (entriesResult.data ?? []).map((entry) => {
+  const entries: TimeAttendanceEntry[] = entryRows.map((entry) => {
     const employee = employeeById.get(entry.employee_id);
     const profile = employee ? profiles.get(employee.profile_id) : undefined;
     return {
@@ -169,9 +125,9 @@ export async function loadTimeAttendanceWorkspace(
   return {
     entries,
     employees: employeeOptions,
-    stores: (storesResult.data ?? [])
+    stores: storeRows
       .filter((store) => store.is_active)
       .map((store) => ({ id: store.id, name: store.name })),
-    clockedInCount: clockedInResult.count ?? 0,
+    clockedInCount,
   };
 }

@@ -2,17 +2,17 @@
 
 Branch: `recovery/neon-canonical-rebuild`
 
-HEAD: `5bece720054cb01c1639e54d5a8e258642e452a9`
+HEAD: `aa2f1e5c5b34f00d1ee9abd95f99009197be0801`
 
 ## Totals
 
 ```json
 {
-  "files": 377,
-  "files_with_db_calls": 93,
-  "from_calls": 149,
-  "rpc_calls": 186,
-  "db_call_sites": 335,
+  "files": 379,
+  "files_with_db_calls": 94,
+  "from_calls": 130,
+  "rpc_calls": 188,
+  "db_call_sites": 318,
   "create_client_calls": 132,
   "pos_database_client_calls": 6,
   "supabase_server_imports": 62,
@@ -24,7 +24,7 @@ HEAD: `5bece720054cb01c1639e54d5a8e258642e452a9`
 
 | Domain | Files with DB calls | .from() | .rpc() | Static DB call sites |
 | --- | ---: | ---: | ---: | ---: |
-| other | 60 | 121 | 85 | 206 |
+| other | 61 | 102 | 87 | 189 |
 | inventory | 12 | 6 | 46 | 52 |
 | pos | 11 | 2 | 25 | 27 |
 | management | 4 | 12 | 13 | 25 |
@@ -61,13 +61,11 @@ HEAD: `5bece720054cb01c1639e54d5a8e258642e452a9`
 | `src/features/catalog/service.ts` | catalog | 18 | 7 | 11 |
 | `src/features/management/service.ts` | management | 17 | 11 | 6 |
 | `src/features/customers/service.ts` | other | 13 | 4 | 9 |
-| `src/features/receipts/detail/data.ts` | other | 13 | 13 | 0 |
 | `src/features/customers/data.ts` | other | 12 | 8 | 4 |
 | `src/app/(back-office)/back-office/inventory/page.tsx` | inventory | 11 | 1 | 10 |
 | `src/features/pos/data.ts` | pos | 11 | 1 | 10 |
 | `src/lib/auth/dal.ts` | other | 10 | 9 | 1 |
 | `src/app/(back-office)/back-office/shifts/page.tsx` | other | 9 | 6 | 3 |
-| `src/features/time-clock/data.ts` | other | 8 | 6 | 2 |
 | `src/features/inventory/supply-chain-actions.ts` | inventory | 7 | 0 | 7 |
 | `src/app/(back-office)/back-office/receipts/page.tsx` | other | 6 | 6 | 0 |
 | `src/features/advanced-sales/data.ts` | other | 6 | 6 | 0 |
@@ -101,6 +99,7 @@ HEAD: `5bece720054cb01c1639e54d5a8e258642e452a9`
 | `src/features/receipts/improvement-6-actions.ts` | other | 2 | 0 | 2 |
 | `src/features/receipts/service.ts` | other | 2 | 0 | 2 |
 | `src/features/reports/reporting.ts` | reports | 2 | 1 | 1 |
+| `src/features/time-clock/data.ts` | other | 2 | 0 | 2 |
 | `src/features/time-clock/service.ts` | other | 2 | 0 | 2 |
 | `src/lib/auth/pos-v2-catalog.ts` | other | 2 | 0 | 2 |
 | `src/app/(back-office)/back-office/categories/page.tsx` | other | 1 | 1 | 0 |
@@ -139,10 +138,12 @@ HEAD: `5bece720054cb01c1639e54d5a8e258642e452a9`
 | `src/features/organization-recovery/service.ts` | other | 1 | 0 | 1 |
 | `src/features/pos/pos-bootstrap-data.ts` | pos | 1 | 0 | 1 |
 | `src/features/pos/service.ts` | pos | 1 | 0 | 1 |
+| `src/features/receipts/detail/receipt-detail-read-model.ts` | other | 1 | 0 | 1 |
 | `src/features/reports/data.ts` | reports | 1 | 0 | 1 |
 | `src/features/shifts/actions.ts` | other | 1 | 0 | 1 |
 | `src/features/shifts/data.ts` | other | 1 | 0 | 1 |
 | `src/features/smart-menu/service.ts` | other | 1 | 0 | 1 |
+| `src/features/time-clock/time-clock-read-model.ts` | other | 1 | 0 | 1 |
 | `src/lib/auth/identity-provisioning.ts` | other | 1 | 0 | 1 |
 | `src/lib/auth/identity.ts` | other | 1 | 0 | 1 |
 | `src/lib/auth/pos-v2-context.ts` | other | 1 | 0 | 1 |
@@ -150,11 +151,11 @@ HEAD: `5bece720054cb01c1639e54d5a8e258642e452a9`
 | `src/lib/auth/pos-v2-reference.ts` | other | 1 | 0 | 1 |
 | `src/lib/server/back-office-store-scope.ts` | other | 1 | 1 | 0 |
 | `src/app/auth/callback/route.ts` | other | 0 | 0 | 0 |
+| `src/features/receipts/detail/data.ts` | other | 0 | 0 | 0 |
 | `src/lib/supabase/client.ts` | database-boundary | 0 | 0 | 0 |
 | `src/lib/supabase/context-client.ts` | database-boundary | 0 | 0 | 0 |
 | `src/lib/supabase/pos-v2-database-client.ts` | database-boundary | 0 | 0 | 0 |
 | `src/lib/supabase/realtime-client.ts` | database-boundary | 0 | 0 | 0 |
-| `src/lib/supabase/server.ts` | database-boundary | 0 | 0 | 0 |
 
 ## Missing required targets
 

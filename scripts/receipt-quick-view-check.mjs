@@ -20,11 +20,12 @@ const source = Object.fromEntries(await Promise.all(
 test("receipt quick view uses an authorized, canonical on-demand data loader", () => {
   assert.match(source.action, /requireBackOfficePermission\("receipts\.view"\)/);
   assert.match(source.action, /loadAuthorizedReceiptDetail\(context, parsed\.data\.receiptId\)/);
-  assert.match(source.detail, /\.eq\("organization_id", context\.organization\.id\)/);
-  assert.match(source.detail, /if \(!hasStoreAccess\(context, sale\.store_id\)\) return null/);
+  assert.match(source.detail, /loadReceiptDetailBundle/);
+  assert.match(source.detail, /organizationId: context\.organization\.id/);
+  assert.match(source.detail, /!hasStoreAccess\(context, string\(sale, "store_id"\)\)/);
   assert.match(source.detail, /hasPermission\(context, "sales\.refund"\) \|\| hasPermission\(context, "approvals\.request"\)/);
-  assert.match(source.detail, /deliveryRecipientEmail: customerEmailResult\.data\?\.email \?\? null/);
-  assert.match(source.detail, /\.from\("customers"\)\s*\.select\("email"\)/);
+  assert.match(source.detail, /deliveryRecipientEmail: nullableString\(result\.data\.customerEmails\[0\]/);
+  assert.doesNotMatch(source.detail, /\.from\(/);
   assert.match(source.route, /loadAuthorizedReceiptDetail\(context, receiptId\)/);
 });
 

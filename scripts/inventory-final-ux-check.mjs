@@ -4,9 +4,10 @@ import test from "node:test";
 
 const source = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-const [inventoryPage, inventoryCoreLoader, stockView, productDetail, storeScope, workspaceNavigation, activityList, viewToggle] = await Promise.all([
+const [inventoryPage, inventoryCoreLoader, purchasingMigration, stockView, productDetail, storeScope, workspaceNavigation, activityList, viewToggle] = await Promise.all([
   source("../src/app/(back-office)/back-office/inventory/page.tsx"),
   source("../src/features/inventory/inventory-core-data.ts"),
+  source("../database/migrations/0006_inventory_purchasing_read_model.sql"),
   source("../src/features/inventory/inventory-stock-view.tsx"),
   source("../src/features/inventory/inventory-product-detail.tsx"),
   source("../src/lib/server/back-office-store-scope.ts"),
@@ -46,13 +47,14 @@ test("Phase 10 applies employee store assignments before Inventory data is displ
   assert.match(inventoryCoreLoader, /coreNeeds\.push\("movements"\)/);
   assert.match(inventoryPage, /get_inventory_counts_workspace_v2/);
   assert.match(inventoryPage, /target_store_ids: scopedStoreIds/);
-  assert.match(inventoryPage, /purchaseOrdersQuery\?\.in\("store_id", scopedStoreIds\)/);
+  assert.match(inventoryPage, /loadInventoryPurchasingBundleResult\(\{[\s\S]{0,180}storeIds: scopedStoreIds,/);
+  assert.match(purchasingMigration, /target_store_ids is null or purchase_order\.store_id = any\(target_store_ids\)/);
   assert.match(inventoryCoreLoader, /operationsNeeds\.push\("inventoryPolicies", "inventoryPolicyDefaults"\)/);
   assert.match(inventoryPage, /const visibleStore = \(storeId: string\) => scopedStoreIds === null \|\| scopedStoreIds\.includes\(storeId\)/);
 });
 
 test("the final UI preserves bounded inventory activity and cost visibility", () => {
-  assert.match(inventoryPage, /\.limit\(30\)/);
+  assert.match(purchasingMigration, /order by purchase_order\.created_at desc limit 30/i);
   assert.match(inventoryPage, /const detailActivityLimit = activeTab === "activity" \? 50 : 12/);
   assert.match(inventoryPage, /hasPermission\(context, "products\.view_cost"\)/);
   assert.match(stockView, /\{canViewCosts \? <th/);

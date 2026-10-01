@@ -203,6 +203,7 @@
     "test:recovery:neon-r5:management-catalog": "node --test scripts/recovery/neon-recovery-r5-management-catalog-check.mjs",
     "test:recovery:neon-r5:pos-reporting": "node --test scripts/recovery/neon-recovery-r5-pos-reporting-check.mjs",
     "test:recovery:neon-r5:residual": "node --test scripts/recovery/neon-recovery-r5-residual-check.mjs",
+    "test:recovery:neon-r5:final": "node --test scripts/recovery/neon-recovery-r5-final-check.mjs",
     "test:recovery:preflight": "node --test scripts/recovery/neon-recovery-preflight-check.mjs",
     "test:recovery:refresh-db-types": "node --test scripts/recovery/refresh-local-database-types-contract-check.mjs",
     "test:recovery:r1-pos-shift-grant": "node --test scripts/recovery/neon-recovery-r1-pos-shift-grant-check.mjs",

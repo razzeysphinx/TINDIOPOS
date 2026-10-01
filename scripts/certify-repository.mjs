@@ -1082,6 +1082,14 @@ async function runDatabaseCertification() {
     const [testName]
     of localDatabaseIntegrationTests
   ) {
+    if (testName === "test:phase-14-browser") {
+      runStep({
+        name: "Apply canonical R5 chain before browser integration",
+        command: "node",
+        args: ["scripts/recovery/apply-r5-canonical-chain-local.mjs"],
+      });
+    }
+
     runStep({
       name:
         `Local database integration ${testName}`,

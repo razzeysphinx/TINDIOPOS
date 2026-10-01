@@ -91,8 +91,8 @@ R2  COMPLETE
 R3  COMPLETE
 R4  COMPLETE
 
-R5  IN PROGRESS
-R6  NOT STARTED
+R5  COMPLETE
+R6  NEXT / NOT STARTED
 R7  NOT STARTED
 R8  NOT STARTED
 R9  NOT STARTED
@@ -102,19 +102,19 @@ R5 current slices:
 
 ```text
 R5-S1   COMPLETE
-R5-S2   IN PROGRESS
+R5-S2   COMPLETE
 
   R5-S2B   COMPLETE + PUSHED + VERIFIED
   R5-S2C   COMPLETE + PUSHED + VERIFIED
   R5-S2D1  COMPLETE + PUSHED + VERIFIED
-  R5-S2D2  NEXT / NOT STARTED
-  R5-S2E   NOT STARTED
-  R5-S2F   NOT STARTED
+  R5-S2D2  COMPLETE + PUSHED + VERIFIED
+  R5-S2E   COMPLETE
+  R5-S2F   COMPLETE
 
-R5-S3   NOT STARTED
-R5-S4   NOT STARTED
-R5-S5   NOT STARTED
-R5-S6   NOT STARTED
+R5-S3   COMPLETE
+R5-S4   COMPLETE
+R5-S5   COMPLETE
+R5-S6   COMPLETE
 ```
 
 The letters/numbers under an R phase are execution slices only.
@@ -524,7 +524,7 @@ Provider role mapping remains in adapter SQL.
 
 # R5 — DATABASE ACCESS + PERFORMANCE REWRITE
 
-**Status:** IN PROGRESS
+**Status:** COMPLETE
 
 Purpose:
 
@@ -562,7 +562,7 @@ docs/recovery/evidence/r5-static-db-access.md
 
 ## R5-S2 — Inventory + Replenishment
 
-**Status:** IN PROGRESS
+**Status:** COMPLETE
 
 Execution order:
 
@@ -576,19 +576,21 @@ R5-S2C  Inventory core read consolidation
 R5-S2D1 Purchasing read consolidation
         COMPLETE + PUSHED + VERIFIED
 
-R5-S2D2 Valuation + Activity reference cleanup
-        NEXT
+  R5-S2D2 Valuation + Activity reference cleanup
+        COMPLETE + PUSHED + VERIFIED
 
-R5-S2E  Fan-out cleanup + regenerate measured evidence
+  R5-S2E  Fan-out cleanup + regenerate measured evidence
+        COMPLETE
 
-R5-S2F  Full Inventory/Replenishment certification
+  R5-S2F  Full Inventory/Replenishment certification
+        COMPLETE
 ```
 
-R5-S2 is complete only after S2F.
+R5-S2 certification is complete.
 
 ## R5-S3 — Management + Catalog
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 Scope:
 
@@ -613,7 +615,7 @@ preserve atomic command RPCs
 
 ## R5-S4 — POS + Dashboard + Reports
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 Scope:
 
@@ -635,7 +637,7 @@ do not weaken offline sync
 
 ## R5-S5 — Shared DB Boundary + Residual Hotspots
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 Scope is evidence-driven after S2–S4.
 
@@ -661,7 +663,7 @@ Atomic/hardened RPCs may be intentionally correct.
 
 ## R5-S6 — Final Performance + R5 Certification
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 Required:
 
@@ -695,7 +697,7 @@ No R6 until R5-S6 is green.
 
 # R6 — CLEAN NEON REBUILD + PORTABILITY CERTIFICATION
 
-**Status:** NOT STARTED
+**Status:** NEXT / NOT STARTED
 
 Purpose:
 

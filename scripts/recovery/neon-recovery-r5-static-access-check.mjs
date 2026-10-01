@@ -73,5 +73,6 @@ test("R5 audit keeps the locked recovery program intact", () => {
   assert.ok(source.includes("R4"), "Recovery SoT must retain R4.");
   assert.ok(source.includes("R5"), "Recovery SoT must contain R5.");
   assert.match(source, /^R4\s+COMPLETE\s*$/m);
-  assert.match(source, /^R5\s+IN PROGRESS\s*$/m);
+  assert.match(source, /^R5\s+COMPLETE\s*$/m);
+  assert.match(source, /^R6\s+NEXT \/ NOT STARTED\s*$/m);
 });

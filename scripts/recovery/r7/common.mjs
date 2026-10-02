@@ -55,7 +55,8 @@ function assertDirectNeonUrl(value, expected, label) {
 }
 
 export async function sourceUrl() {
-  const explicit = process.env.TINDIO_R7_SOURCE_DATABASE_URL;
+  const explicit = process.env.TINDIO_CANONICAL_SOURCE_DATABASE_URL
+    ?? process.env.TINDIO_R7_SOURCE_DATABASE_URL;
   const env = explicit ? {} : parseEnv(await readFile(".env.local", "utf8"));
   return assertDirectNeonUrl(explicit || env.DATABASE_URL_UNPOOLED, SOURCE, "R7 source");
 }

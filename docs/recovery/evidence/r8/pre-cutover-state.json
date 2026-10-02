@@ -1,0 +1,14 @@
+{
+  "databaseProvider": "neon",
+  "dataApi": {
+    "hostname": "ep-steep-bonus-ay5df74y.apirest.c-5.us-east-2.aws.neon.tech",
+    "pathname": "/neondb/rest/v1",
+    "valueSha256": "05a17431cd556414d1c84786718a9c2072dc5226ff53c9ca0801cbb949c82606"
+  },
+  "mappedDatabase": "OLD_SOURCE",
+  "inspectionMethod": "vercel env run -e production (isolated linked working directory)",
+  "rawSecretPersisted": false,
+  "vercelEnvironmentMutated": false,
+  "productionDeploymentChanged": false,
+  "databaseWrites": 0
+}

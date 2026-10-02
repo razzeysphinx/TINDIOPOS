@@ -4,7 +4,9 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { runReadOnlySql } from "../../lib/phase-04-postgres-docker.mjs";
 import { SOURCE, TARGET, identity, quoteLiteral, sanitizedIdentity, sourceUrl, targetUrl } from "./common.mjs";
 
-const outputDirectory = "docs/recovery/evidence/r7";
+const outputDirectory = process.env.TINDIO_CANONICAL_MIGRATION_EVIDENCE_DIRECTORY
+  ?? "docs/recovery/evidence/r7";
+const phase = process.env.TINDIO_CANONICAL_MIGRATION_PHASE ?? "R7";
 
 function tableNames(url) {
   return JSON.parse(runReadOnlySql(url, `
@@ -76,7 +78,7 @@ async function main() {
     sourceRows: Object.values(evidence.sourceCounts).reduce((sum, count) => sum + count, 0),
     targetRows: Object.values(evidence.targetCounts).reduce((sum, count) => sum + count, 0),
   }, null, 2));
-  console.log("TINDIO R7 READ-ONLY SOURCE/TARGET CENSUS: PASS");
+  console.log(`TINDIO ${phase} READ-ONLY SOURCE/TARGET CENSUS: PASS`);
 }
 
 main().catch((error) => {

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 
-const directory = "docs/recovery/evidence/r7";
+const directory = process.env.TINDIO_CANONICAL_MIGRATION_EVIDENCE_DIRECTORY
+  ?? "docs/recovery/evidence/r7";
+const phase = process.env.TINDIO_CANONICAL_MIGRATION_PHASE ?? "R7";
 const census = JSON.parse(await readFile(`${directory}/source-target-census.json`, "utf8"));
 
 const migrate = [...census.sharedTables].sort();
@@ -47,4 +49,4 @@ const plan = {
 await writeFile(`${directory}/table-classification.json`, `${JSON.stringify(classification, null, 2)}\n`);
 await writeFile(`${directory}/dependency-plan.json`, `${JSON.stringify(plan, null, 2)}\n`);
 console.log(JSON.stringify({ classified: migrate.length + staticBootstrap.length, migrate: migrate.length, staticBootstrap: staticBootstrap.length, investigate: 0, ordered: ordered.length, cyclic: remaining.size }, null, 2));
-console.log("TINDIO R7 CLASSIFICATION + DEPENDENCY PLAN: PASS");
+console.log(`TINDIO ${phase} CLASSIFICATION + DEPENDENCY PLAN: PASS`);

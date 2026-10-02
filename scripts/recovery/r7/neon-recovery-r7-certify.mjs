@@ -4,8 +4,13 @@ import { readFile, writeFile } from "node:fs/promises";
 import { runReadOnlySql, runSql } from "../../lib/phase-04-postgres-docker.mjs";
 import { sourceUrl, targetUrl } from "./common.mjs";
 
-assert.equal(process.env.TINDIO_R7_REMOTE_WRITE, "YES", "Rollback-only runtime checks require explicit isolated R7 target authorization.");
-const directory = "docs/recovery/evidence/r7";
+const phase = process.env.TINDIO_CANONICAL_MIGRATION_PHASE ?? "R7";
+const directory = process.env.TINDIO_CANONICAL_MIGRATION_EVIDENCE_DIRECTORY
+  ?? "docs/recovery/evidence/r7";
+const remoteWriteGuard = process.env.TINDIO_CANONICAL_MIGRATION_REMOTE_WRITE_GUARD
+  ?? "TINDIO_R7_REMOTE_WRITE";
+
+assert.equal(process.env[remoteWriteGuard], "YES", `Rollback-only runtime checks require explicit isolated ${phase} target authorization.`);
 const census = JSON.parse(await readFile(`${directory}/source-target-census.json`, "utf8"));
 const source = await sourceUrl(); const target = targetUrl();
 const sequenceNames = census.sourceCatalog.sequences.map((item) => `${item.sequence_schema}.${item.sequence_name}`);
@@ -39,4 +44,4 @@ const catalogPlan = JSON.parse(runReadOnlySql(target, "EXPLAIN (FORMAT JSON) SEL
 const evidence = { generatedAt: new Date().toISOString(), sequences: { status: "PASS", count: sequenceNames.length, source: sourceSequences, target: targetSequences }, securityAndDomain: { status: "PASS", ...state }, runtimeTimestampRegression: "PASS — rollback-only", baseUnitProtectionRegression: "PASS — rollback-only", tenantStoreRbac: "PASS — exact table content + FK/orphan checks", inventory: "PASS — exact content; no negative projection", financial: "PASS — zero-row domains verified", offlineSync: "PASS — source absent/zero; canonical target-only tables empty", applicationSmoke: "PASS — canonical identity and 9 R5 read models present", performanceSanity: { status: "PASS", inventoryPlan, catalogPlan, indexChanges: 0 }, sourceWrites: 0, productionLiveWrites: 0 };
 await writeFile(`${directory}/r7-domain-certification.json`, `${JSON.stringify(evidence, null, 2)}\n`);
 console.log(JSON.stringify({ sequences: "PASS", security: "PASS", runtimeTimestamp: "PASS", baseUnitProtection: "PASS", domains: "PASS", smoke: "PASS", performance: "PASS" }, null, 2));
-console.log("TINDIO R7 DOMAIN + RUNTIME CERTIFICATION: PASS");
+console.log(`TINDIO ${phase} DOMAIN + RUNTIME CERTIFICATION: PASS`);

@@ -5,7 +5,9 @@ import { readFile, writeFile } from "node:fs/promises";
 import { runReadOnlySql } from "../../lib/phase-04-postgres-docker.mjs";
 import { sourceUrl, targetUrl } from "./common.mjs";
 
-const directory = "docs/recovery/evidence/r7";
+const directory = process.env.TINDIO_CANONICAL_MIGRATION_EVIDENCE_DIRECTORY
+  ?? "docs/recovery/evidence/r7";
+const phase = process.env.TINDIO_CANONICAL_MIGRATION_PHASE ?? "R7";
 const census = JSON.parse(await readFile(`${directory}/source-target-census.json`, "utf8"));
 const classification = JSON.parse(await readFile(`${directory}/table-classification.json`, "utf8"));
 const source = await sourceUrl();
@@ -61,4 +63,4 @@ await Promise.all([
   writeFile(`${directory}/relationship-reconciliation.json`, `${JSON.stringify({ status: "PASS", ...orphanResult }, null, 2)}\n`),
 ]);
 console.log(JSON.stringify({ tables: classification.MIGRATE.length, rowCounts: "PASS", ids: "PASS", content: "PASS", relationships: "PASS" }, null, 2));
-console.log("TINDIO R7 DATA RECONCILIATION: PASS");
+console.log(`TINDIO ${phase} DATA RECONCILIATION: PASS`);

@@ -7,7 +7,11 @@ import { SOURCE, TARGET, identity, sanitizedIdentity, sourceUrl, targetUrl } fro
 import { buildMigrationStages } from "./dependency-planner.mjs";
 import { exactTimestampScopeSql, resolveProductUnitTimestampTrigger } from "./historical-trigger-scope.mjs";
 
-const directory = "docs/recovery/evidence/r7";
+const directory = process.env.TINDIO_CANONICAL_MIGRATION_EVIDENCE_DIRECTORY
+  ?? "docs/recovery/evidence/r7";
+const phase = process.env.TINDIO_CANONICAL_MIGRATION_PHASE ?? "R7";
+const remoteWriteGuard = process.env.TINDIO_CANONICAL_MIGRATION_REMOTE_WRITE_GUARD
+  ?? "TINDIO_R7_REMOTE_WRITE";
 
 function counts(url, tables) {
   const selects = tables.map((table) => {
@@ -31,7 +35,7 @@ function tableRows(url, table) {
 }
 
 const startedAt = new Date();
-assert.equal(process.env.TINDIO_R7_REMOTE_WRITE, "YES", "Set TINDIO_R7_REMOTE_WRITE=YES only for the approved isolated R7 target migration.");
+assert.equal(process.env[remoteWriteGuard], "YES", `Set ${remoteWriteGuard}=YES only for the approved isolated ${phase} target migration.`);
 const classification = JSON.parse(await readFile(`${directory}/table-classification.json`, "utf8"));
 assert.deepEqual(classification.INVESTIGATE, []);
 const source = await sourceUrl();
@@ -147,4 +151,4 @@ const evidence = {
 };
 await writeFile(`${directory}/migration-result.json`, `${JSON.stringify(evidence, null, 2)}\n`);
 console.log(JSON.stringify({ tables: evidence.tablesAttempted, inserted: rows, skipped: 0, failed: 0, sourceReadOnly: true }, null, 2));
-console.log("TINDIO R7 BUSINESS DATA MIGRATION: PASS");
+console.log(`TINDIO ${phase} BUSINESS DATA MIGRATION: PASS`);

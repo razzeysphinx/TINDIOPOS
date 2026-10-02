@@ -1,0 +1,168 @@
+{
+  "generatedAt": "2026-10-02T05:05:48.988Z",
+  "sequences": {
+    "status": "PASS",
+    "count": 10,
+    "source": {
+      "private.tindio_refund_number_sequence": {
+        "isCalled": true,
+        "lastValue": 7
+      },
+      "private.tindio_receipt_number_sequence": {
+        "isCalled": true,
+        "lastValue": 31
+      },
+      "private.inventory_count_number_sequence": {
+        "isCalled": true,
+        "lastValue": 4
+      },
+      "private.inventory_adjustment_number_sequence": {
+        "isCalled": true,
+        "lastValue": 29
+      },
+      "private.tindio_goods_receipt_number_sequence": {
+        "isCalled": true,
+        "lastValue": 4
+      },
+      "private.tindio_stock_request_number_sequence": {
+        "isCalled": true,
+        "lastValue": 4
+      },
+      "private.inventory_count_batch_number_sequence": {
+        "isCalled": false,
+        "lastValue": 1
+      },
+      "private.tindio_purchase_order_number_sequence": {
+        "isCalled": true,
+        "lastValue": 6
+      },
+      "private.tindio_stock_transfer_number_sequence": {
+        "isCalled": true,
+        "lastValue": 13
+      },
+      "private.tindio_stock_transfer_receipt_number_sequence": {
+        "isCalled": true,
+        "lastValue": 10
+      }
+    },
+    "target": {
+      "private.tindio_refund_number_sequence": {
+        "isCalled": true,
+        "lastValue": 7
+      },
+      "private.tindio_receipt_number_sequence": {
+        "isCalled": true,
+        "lastValue": 31
+      },
+      "private.inventory_count_number_sequence": {
+        "isCalled": true,
+        "lastValue": 4
+      },
+      "private.inventory_adjustment_number_sequence": {
+        "isCalled": true,
+        "lastValue": 29
+      },
+      "private.tindio_goods_receipt_number_sequence": {
+        "isCalled": true,
+        "lastValue": 4
+      },
+      "private.tindio_stock_request_number_sequence": {
+        "isCalled": true,
+        "lastValue": 4
+      },
+      "private.inventory_count_batch_number_sequence": {
+        "isCalled": false,
+        "lastValue": 1
+      },
+      "private.tindio_purchase_order_number_sequence": {
+        "isCalled": true,
+        "lastValue": 6
+      },
+      "private.tindio_stock_transfer_number_sequence": {
+        "isCalled": true,
+        "lastValue": 13
+      },
+      "private.tindio_stock_transfer_receipt_number_sequence": {
+        "isCalled": true,
+        "lastValue": 10
+      }
+    }
+  },
+  "securityAndDomain": {
+    "status": "PASS",
+    "guards": 78,
+    "r5Functions": 9,
+    "organizations": 2,
+    "baseProtection": 1,
+    "unvalidatedFks": 0,
+    "sensitiveColumns": 0,
+    "timestampTrigger": 1,
+    "crossTenantStores": 0,
+    "negativeInventory": 0,
+    "activeOrganizations": 2
+  },
+  "runtimeTimestampRegression": "PASS — rollback-only",
+  "baseUnitProtectionRegression": "PASS — rollback-only",
+  "tenantStoreRbac": "PASS — exact table content + FK/orphan checks",
+  "inventory": "PASS — exact content; no negative projection",
+  "financial": "PASS — zero-row domains verified",
+  "offlineSync": "PASS — source absent/zero; canonical target-only tables empty",
+  "applicationSmoke": "PASS — canonical identity and 9 R5 read models present",
+  "performanceSanity": {
+    "status": "PASS",
+    "inventoryPlan": [
+      {
+        "Plan": {
+          "Node Type": "Bitmap Heap Scan",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Relation Name": "inventory_levels",
+          "Alias": "inventory_levels",
+          "Startup Cost": 4.17,
+          "Total Cost": 11.28,
+          "Plan Rows": 3,
+          "Plan Width": 115,
+          "Disabled": false,
+          "Recheck Cond": "(organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid)",
+          "Plans": [
+            {
+              "Node Type": "Bitmap Index Scan",
+              "Parent Relationship": "Outer",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Index Name": "inventory_levels_organization_store_idx",
+              "Startup Cost": 0,
+              "Total Cost": 4.17,
+              "Plan Rows": 3,
+              "Plan Width": 0,
+              "Disabled": false,
+              "Index Cond": "(organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid)"
+            }
+          ]
+        }
+      }
+    ],
+    "catalogPlan": [
+      {
+        "Plan": {
+          "Node Type": "Index Scan",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Scan Direction": "Forward",
+          "Index Name": "products_organization_status_name_idx",
+          "Relation Name": "products",
+          "Alias": "products",
+          "Startup Cost": 0.14,
+          "Total Cost": 8.16,
+          "Plan Rows": 1,
+          "Plan Width": 372,
+          "Disabled": false,
+          "Index Cond": "(organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid)"
+        }
+      }
+    ],
+    "indexChanges": 0
+  },
+  "sourceWrites": 0,
+  "productionLiveWrites": 0
+}

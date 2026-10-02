@@ -64,8 +64,8 @@ async function main() {
   try {
     let ready = false;
     for (let attempt = 0; attempt < 30; attempt += 1) {
-      const result = spawnSync("docker", ["exec", container, "pg_isready", "-U", "postgres", "-d", "postgres"], { encoding: "utf8" });
-      if (result.status === 0) {
+      const result = spawnSync("docker", ["exec", container, "psql", "-U", "postgres", "-d", "postgres", "-X", "-q", "-A", "-t", "-c", "select 1"], { encoding: "utf8" });
+      if (result.status === 0 && String(result.stdout ?? "").trim() === "1") {
         ready = true;
         break;
       }

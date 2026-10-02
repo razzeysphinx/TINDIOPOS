@@ -93,8 +93,8 @@ R4  COMPLETE
 
 R5  COMPLETE
 R6  COMPLETE
-R7  NEXT / NOT STARTED
-R8  NOT STARTED
+R7  COMPLETE
+R8  NEXT / NOT STARTED
 R9  NOT STARTED
 ```
 
@@ -749,7 +749,7 @@ installation is reproducible
 
 # R7 — DATA MIGRATION + RECONCILIATION
 
-**Status:** NEXT / NOT STARTED
+**Status:** COMPLETE
 
 Purpose:
 
@@ -818,7 +818,7 @@ fresh Neon contains certified equivalent business truth
 
 # R8 — CONTROLLED CUTOVER + PRODUCTION CERTIFICATION
 
-**Status:** NOT STARTED
+**Status:** NEXT / NOT STARTED
 
 Purpose:
 

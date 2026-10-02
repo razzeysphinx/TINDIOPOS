@@ -74,11 +74,11 @@ are explicitly set.
 
 ## Remaining external gate
 
-No production environment value, deployment, source freeze, target reset, or
-endpoint switch has been changed. Production endpoint fingerprint verification
-is complete; preview deployment configured for the target Data API and final
-sync remain pending the R8 pre-cutover readiness work and explicit cutover
-authorization.
+No production environment value, deployment, source freeze, or endpoint switch
+has been changed. The target-only final-sync rehearsal and target-configured
+preview checks are complete. Only an explicit production cutover authorization
+can permit a production environment change, deployment, source freeze, or
+endpoint switch.
 
 ## Production environment fingerprint (read-only)
 
@@ -94,3 +94,25 @@ authorization.
   R7 target. The target remains non-production.
 - No raw environment value was written, and no Vercel environment,
   deployment, or database state changed.
+
+## Target preview and isolated rehearsal
+
+- Normal target preview: deployment `dpl_HCpUiGFLcuVP5TBpwSdeE1F3iv8o` at
+  `tindiopos-6khz4swc5-razzeysphinx.vercel.app`; Vercel reported `Ready` as a
+  preview deployment with the R8 checkpoint traceability marker.
+- Its Data API was the approved target
+  `ep-wandering-voice-b5w9m9db.apirest.c-7.us-east-2.aws.neon.tech` at
+  `/tindio_r6_recovery/rest/v1`. API V2, direct target Data API, browser
+  fallback, and protection-bypass checks passed without business mutations.
+- Verified freeze preview: deployment `dpl_CoAL3Ug8UJR8sJfWNHDis1a2fdr7` at
+  `tindiopos-ha058lmri-razzeysphinx.vercel.app`. Normal API traffic received
+  cache-safe retryable HTTP 503; browser routes redirected to maintenance;
+  static maintenance assets remained available; an in-memory, server-only
+  bypass reached ordinary endpoint authentication.
+- Two earlier non-production freeze previews were not used as evidence after
+  their automation-bypass setup was inconclusive. They made no production
+  change and were retained only as transparent non-certifying attempts.
+- The isolated target final-sync rehearsal selected, attempted, and inserted
+  561 rows with zero skipped and zero failed; source writes and production
+  writes were zero. Row-count, ID, content, relationship, sequence, security,
+  runtime, and domain checks all passed.

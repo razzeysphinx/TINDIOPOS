@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-10-02T07:57:47.699Z",
+  "checkpoint": "a3ced2e315345acd4de013758b385f7f080566dd",
+  "targetDataApi": {
+    "host": "ep-wandering-voice-b5w9m9db.apirest.c-7.us-east-2.aws.neon.tech",
+    "path": "/tindio_r6_recovery/rest/v1"
+  },
+  "normalPreview": {
+    "deploymentId": "dpl_HCpUiGFLcuVP5TBpwSdeE1F3iv8o",
+    "url": "https://tindiopos-6khz4swc5-razzeysphinx.vercel.app",
+    "target": "preview",
+    "status": "READY",
+    "apiV2": "PASS",
+    "directTargetDataApi": "PASS",
+    "browserFallback": "PASS",
+    "businessMutations": 0
+  },
+  "verifiedFreezePreview": {
+    "deploymentId": "dpl_CoAL3Ug8UJR8sJfWNHDis1a2fdr7",
+    "url": "https://tindiopos-ha058lmri-razzeysphinx.vercel.app",
+    "target": "preview",
+    "status": "READY",
+    "normalApi": "503 retryable, Retry-After 60, Cache-Control no-store",
+    "browser": "maintenance redirect PASS",
+    "staticAssets": "PASS",
+    "authorizedBypass": "ordinary endpoint authentication reached",
+    "businessMutations": 0
+  },
+  "nonCertifyingFreezeAttempts": [
+    "https://tindiopos-o84d7sruz-razzeysphinx.vercel.app",
+    "https://tindiopos-a4ksk3gc6-razzeysphinx.vercel.app"
+  ],
+  "productionEnvironmentMutations": 0,
+  "productionDeployments": 0,
+  "sourceWrites": 0
+}

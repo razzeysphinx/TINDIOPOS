@@ -1,0 +1,517 @@
+{
+  "private.employee_pin_credentials": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "private.identity_links": {
+    "sourceSha256": "caa570fe165f3fde754330c1550f7c1bbc63ead8107410530bb91325eadd2de2",
+    "targetSha256": "caa570fe165f3fde754330c1550f7c1bbc63ead8107410530bb91325eadd2de2",
+    "status": "PASS"
+  },
+  "private.organization_data_governance": {
+    "sourceSha256": "8be80cfaf3f23cc4ef388d9684eb97c498aae3f9bd87c04b4dfefb26abc2c763",
+    "targetSha256": "8be80cfaf3f23cc4ef388d9684eb97c498aae3f9bd87c04b4dfefb26abc2c763",
+    "status": "PASS"
+  },
+  "private.organization_recovery_drills": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "private.pos_device_credentials": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "private.product_unit_operations": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "private.stock_transfer_operations": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.advanced_checkout_requests": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.approval_requests": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.approval_rules": {
+    "sourceSha256": "0520fff32fb714a21ee8e63b2ea926fbce5b14142f808c2ff7f718002c4c84fb",
+    "targetSha256": "0520fff32fb714a21ee8e63b2ea926fbce5b14142f808c2ff7f718002c4c84fb",
+    "status": "PASS"
+  },
+  "public.audit_logs": {
+    "sourceSha256": "c8953eb3c9fb0510f3d93794e2c62e4ead8381dd31d0df223b826320dfdb7e1a",
+    "targetSha256": "c8953eb3c9fb0510f3d93794e2c62e4ead8381dd31d0df223b826320dfdb7e1a",
+    "status": "PASS"
+  },
+  "public.cash_movements": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.categories": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.checkout_requests": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.customer_display_sessions": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.customer_segment_memberships": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.customer_segments": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.customers": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.dining_options": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.discounts": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.employee_invitations": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.employee_roles": {
+    "sourceSha256": "333b4826444a4848a03bf34dcb60ec46ed23ca5966deafec422a55d9e5d15312",
+    "targetSha256": "333b4826444a4848a03bf34dcb60ec46ed23ca5966deafec422a55d9e5d15312",
+    "status": "PASS"
+  },
+  "public.employee_stores": {
+    "sourceSha256": "bc4b6462ca7ec096a9e95731e60a887f09fd1fd7c48010573d807226866d7cca",
+    "targetSha256": "bc4b6462ca7ec096a9e95731e60a887f09fd1fd7c48010573d807226866d7cca",
+    "status": "PASS"
+  },
+  "public.employees": {
+    "sourceSha256": "c4ee9ce91dc997ba21b7b476c0ae1dc768a8ed664c709560dc173883a22d3d4c",
+    "targetSha256": "c4ee9ce91dc997ba21b7b476c0ae1dc768a8ed664c709560dc173883a22d3d4c",
+    "status": "PASS"
+  },
+  "public.goods_receipt_lines": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.goods_receipts": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.inventory_adjustment_import_batches": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.inventory_adjustment_reasons": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.inventory_adjustments": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.inventory_count_batch_documents": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.inventory_count_batches": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.inventory_count_lines": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.inventory_counts": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.inventory_levels": {
+    "sourceSha256": "ac4d1d555aab3ae8f8fd165dcfcdaa5e68091f41a22eac89e121d732c2a19c3b",
+    "targetSha256": "ac4d1d555aab3ae8f8fd165dcfcdaa5e68091f41a22eac89e121d732c2a19c3b",
+    "status": "PASS"
+  },
+  "public.inventory_movements": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.inventory_policies": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.inventory_policy_defaults": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.inventory_replenishment_rules": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.kitchen_order_items": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.kitchen_orders": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.kitchen_station_category_routes": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.loyalty_card_events": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.loyalty_cards": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.loyalty_programs": {
+    "sourceSha256": "8be80cfaf3f23cc4ef388d9684eb97c498aae3f9bd87c04b4dfefb26abc2c763",
+    "targetSha256": "8be80cfaf3f23cc4ef388d9684eb97c498aae3f9bd87c04b4dfefb26abc2c763",
+    "status": "PASS"
+  },
+  "public.loyalty_transactions": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.modifier_groups": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.modifier_options": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.offline_sync_events": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.open_tickets": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.organization_export_sessions": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.organization_features": {
+    "sourceSha256": "b0f7f563425bd9df31dbeb577b7428a8995181bf085157eae8f55c196f994696",
+    "targetSha256": "b0f7f563425bd9df31dbeb577b7428a8995181bf085157eae8f55c196f994696",
+    "status": "PASS"
+  },
+  "public.organization_rate_limit_windows": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.organization_usage_daily": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.organizations": {
+    "sourceSha256": "8be80cfaf3f23cc4ef388d9684eb97c498aae3f9bd87c04b4dfefb26abc2c763",
+    "targetSha256": "8be80cfaf3f23cc4ef388d9684eb97c498aae3f9bd87c04b4dfefb26abc2c763",
+    "status": "PASS"
+  },
+  "public.payment_methods": {
+    "sourceSha256": "a26b633970ff194dd45abaec4c931d598fb7b3019cd852317fbc0bde43bb99cc",
+    "targetSha256": "a26b633970ff194dd45abaec4c931d598fb7b3019cd852317fbc0bde43bb99cc",
+    "status": "PASS"
+  },
+  "public.payments": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.permissions": {
+    "sourceSha256": "6ab6ee07051328ac8aee499cc51b31e8d95945f1dfc7a6bfb6ac2a9298f53b34",
+    "targetSha256": "6ab6ee07051328ac8aee499cc51b31e8d95945f1dfc7a6bfb6ac2a9298f53b34",
+    "status": "PASS"
+  },
+  "public.pos_devices": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.pos_favorite_tiles": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.product_components": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.product_modifier_groups": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.product_store_settings": {
+    "sourceSha256": "bc1fa977d89bcef7a0a26113566cae90cc168acded9f4f0488fa094dbadf6296",
+    "targetSha256": "bc1fa977d89bcef7a0a26113566cae90cc168acded9f4f0488fa094dbadf6296",
+    "status": "PASS"
+  },
+  "public.product_units": {
+    "sourceSha256": "e9f18318b4a8b78389875a83fda417ccd1d7eeecce808b9227bc5b6a245722f2",
+    "targetSha256": "e9f18318b4a8b78389875a83fda417ccd1d7eeecce808b9227bc5b6a245722f2",
+    "status": "PASS"
+  },
+  "public.product_variants": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.production_run_components": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.production_runs": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.products": {
+    "sourceSha256": "c8a4015a6394e06c14cd790aaa2d29f3943ca614de99cdbab20a60f191899fbb",
+    "targetSha256": "c8a4015a6394e06c14cd790aaa2d29f3943ca614de99cdbab20a60f191899fbb",
+    "status": "PASS"
+  },
+  "public.profiles": {
+    "sourceSha256": "dc442d354939471595594d7f3090b46cb634ec1b4aba84deaf612b23ba9d0ed0",
+    "targetSha256": "dc442d354939471595594d7f3090b46cb634ec1b4aba84deaf612b23ba9d0ed0",
+    "status": "PASS"
+  },
+  "public.purchase_order_lines": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.purchase_orders": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.receipt_delivery_requests": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.receipt_settings": {
+    "sourceSha256": "8be80cfaf3f23cc4ef388d9684eb97c498aae3f9bd87c04b4dfefb26abc2c763",
+    "targetSha256": "8be80cfaf3f23cc4ef388d9684eb97c498aae3f9bd87c04b4dfefb26abc2c763",
+    "status": "PASS"
+  },
+  "public.receipts": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.refund_items": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.refund_payments": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.refund_requests": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.refunds": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.registers": {
+    "sourceSha256": "97fdd52fee4cf51d389b043e0ccc4e850c17db8497f4e253c7a5baaf9d71350e",
+    "targetSha256": "97fdd52fee4cf51d389b043e0ccc4e850c17db8497f4e253c7a5baaf9d71350e",
+    "status": "PASS"
+  },
+  "public.role_permissions": {
+    "sourceSha256": "cefda1a35470392d31bf147aa967986f1cfaf761bc5cd37dc96e182aeb3f11fc",
+    "targetSha256": "cefda1a35470392d31bf147aa967986f1cfaf761bc5cd37dc96e182aeb3f11fc",
+    "status": "PASS"
+  },
+  "public.roles": {
+    "sourceSha256": "be15b50e8aac2a2e3cab310ee8903c34e9642dbe1685d50ca842d62e690ca39a",
+    "targetSha256": "be15b50e8aac2a2e3cab310ee8903c34e9642dbe1685d50ca842d62e690ca39a",
+    "status": "PASS"
+  },
+  "public.sale_exchanges": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.sale_items": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.sales": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.shifts": {
+    "sourceSha256": "8c0b854ae1bf143f6e66da622e26a385470ea60acb984db87238d30ba8b24beb",
+    "targetSha256": "8c0b854ae1bf143f6e66da622e26a385470ea60acb984db87238d30ba8b24beb",
+    "status": "PASS"
+  },
+  "public.smart_menu_categories": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.smart_menu_products": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.smart_menus": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.stock_request_discrepancies": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.stock_request_lines": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.stock_requests": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.stock_transfer_lines": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.stock_transfer_receipt_lines": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.stock_transfer_receipts": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.stock_transfers": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.store_payment_methods": {
+    "sourceSha256": "c432084ddb24717dc76ab3193cb13b4dbcefd8372a9b101c1135394c39134e0f",
+    "targetSha256": "c432084ddb24717dc76ab3193cb13b4dbcefd8372a9b101c1135394c39134e0f",
+    "status": "PASS"
+  },
+  "public.stores": {
+    "sourceSha256": "8ab56f1dce3c81d5d03e8d404d6cda36bab9628ff035e5d28aae2b97065f00ea",
+    "targetSha256": "8ab56f1dce3c81d5d03e8d404d6cda36bab9628ff035e5d28aae2b97065f00ea",
+    "status": "PASS"
+  },
+  "public.supplier_return_lines": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.supplier_returns": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.suppliers": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.supply_chain_warehouses": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.tax_rates": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.ticket_templates": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  },
+  "public.time_clock_entries": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS"
+  }
+}

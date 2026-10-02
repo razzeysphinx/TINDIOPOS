@@ -1,0 +1,14 @@
+{
+  "freezeDeployment": "dpl_BTkMd8MD5qEozNx6YMXtXohNGMtQ",
+  "source": {
+    "project": "noisy-violet-27747237",
+    "branch": "tindio-preproduction-phase-04",
+    "database": "neondb"
+  },
+  "sourceRows": 561,
+  "sourceTables": 103,
+  "sourceFingerprintSha256": "2d732f8dfd0bc19c2185c9868ed9d86ee9b84479a71ea1c2557603a0e523a3ad",
+  "sourceStability": "PASS",
+  "censusEvidence": "source-target-census.json",
+  "sourceWrites": 0
+}

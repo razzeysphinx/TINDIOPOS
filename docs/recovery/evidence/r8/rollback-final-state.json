@@ -1,0 +1,10 @@
+{
+  "generatedAt": "2026-10-02T12:05:32.092Z",
+  "oldSourceRetained": true,
+  "oldSourceDeleted": false,
+  "oldSourceReset": false,
+  "oldSourceRecoveryMigrationWrites": 0,
+  "firstBusinessAuthoritativeTargetWrite": "2026-10-02T11:48:29.088634+00:00",
+  "blindOldSourceFailbackSafe": false,
+  "incidentResponseRequirement": "Reconcile authoritative target business writes before any source-directed failback."
+}

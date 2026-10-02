@@ -1,0 +1,51 @@
+{
+  "generatedAt": "2026-10-02T12:05:32.092Z",
+  "status": "PASS",
+  "stateCExit": {
+    "frozenMaintenanceBarrier": "PASS",
+    "frozenApiReliability": "PASS 500/500",
+    "frozenBrowser": "PASS",
+    "exactBusinessContentBeforeUnfreeze": "PASS",
+    "controlledIdentityMetadataDrift": "PASS",
+    "unexplainedDrift": 0,
+    "operationalGuards": "PASS 78/78"
+  },
+  "activation": {
+    "persistentMode": "normal",
+    "productionEndpoint": "RECOVERED_TARGET",
+    "deploymentId": "dpl_G7wq2ajSEM3EDU2g3Ur1qWVeAa2B",
+    "runtimeCandidate": "bd22d4b1fb67fef013c6484cc71d04f803611c0e"
+  },
+  "postUnfreeze": {
+    "apiReliability": "PASS 500/500",
+    "browser": "PASS",
+    "controlledBusinessWrites": "PASS",
+    "phase18Automated": "PASS",
+    "offlineIntegrity": "PASS",
+    "observabilityContract": "PASS",
+    "targetProtections": "PASS",
+    "unexplainedBusinessDelta": 0
+  },
+  "repositoryCertification": {
+    "recoveryContracts": "PASS R1-R8",
+    "typecheck": "PASS",
+    "mobileTypecheck": "PASS",
+    "lint": "PASS — 0 errors, 3 pre-existing warnings",
+    "build": "PASS",
+    "staticCatalogue": "PASS — 145/145 automated package tests",
+    "localDatabase": "PASS — clean migration replay, full pgTAP suite, and database lint",
+    "historicalMigrationsChanged": 0
+  },
+  "writeClassification": {
+    "businessAuthoritativeWritesBeforeUnfreeze": 0,
+    "controlledIdentityMetadataWritesBeforeUnfreeze": 2,
+    "firstBusinessAuthoritativeTargetWrite": "2026-10-02T11:48:29.088634+00:00",
+    "blindOldSourceFailbackSafe": false
+  },
+  "oldSource": {
+    "retained": true,
+    "deleted": false,
+    "reset": false,
+    "recoveryMigrationWrites": 0
+  }
+}

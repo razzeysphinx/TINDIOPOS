@@ -26,6 +26,6 @@ for (const marker of ["TRUNCATE TABLE", "RESTART IDENTITY", "without CASCADE"]) 
   assert.ok(reset.includes(marker), `Missing R8 reset safety marker: ${marker}`);
 }
 assert.match(sourceOfTruth, /^R7  COMPLETE$/m);
-assert.match(sourceOfTruth, /^R8  NEXT \/ NOT STARTED$/m);
-assert.match(sourceOfTruth, /^R9  NOT STARTED$/m);
+assert.match(sourceOfTruth, /^R8  COMPLETE$/m);
+assert.match(sourceOfTruth, /^R9  NEXT \/ NOT STARTED$/m);
 console.log("TINDIO R8 AUTOMATED CONTRACT: PASS");

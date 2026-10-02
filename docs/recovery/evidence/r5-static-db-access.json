@@ -4,7 +4,7 @@
   "slice": "R5-S1",
   "purpose": "Static database-access baseline before R5 performance rewrites",
   "branch": "recovery/neon-canonical-rebuild",
-  "head": "fea511852a513e4dbf3bef2b23d38f166334ad57",
+  "head": "de8fd6a375407bc4cc6d2fbc83b02801357462ce",
   "source_roots": [
     "src"
   ],

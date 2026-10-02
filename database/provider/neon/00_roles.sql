@@ -49,9 +49,9 @@ begin
 end;
 $$;
 
-alter role anon inherit;
-alter role authenticated inherit;
-alter role service_role inherit;
+-- Neon Data API may provision its runtime roles outside this database owner's
+-- administrative scope. Newly created fallback roles inherit by declaration;
+-- provider-managed roles are certified for inherited-role state by R6.
 
 grant tindio_anon to anon;
 grant tindio_authenticated to authenticated;

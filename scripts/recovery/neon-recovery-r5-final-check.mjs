@@ -18,7 +18,7 @@ test("R5 final recovery contract remains complete and provider-neutral", () => {
   const pos = read("src/features/pos/data.ts");
   assert.match(sourceOfTruth, /# R0[\s\S]*?# R9/);
   assert.match(sourceOfTruth, /R5\s+COMPLETE/);
-  assert.match(sourceOfTruth, /R6\s+NEXT\s*\/\s*NOT STARTED/);
+  assert.match(sourceOfTruth, /# R6\s+—\s+CLEAN NEON REBUILD \+ PORTABILITY CERTIFICATION/);
   assert.equal(count(replenishment, /\.from\s*\(/g) + count(replenishment, /\.rpc\s*\(/g), 0);
   assert.equal(count(inventory, /\.from\("[a-z_]+"\)/g), 0);
   assert.equal(count(catalog, /\.from\s*\(/g), 0);

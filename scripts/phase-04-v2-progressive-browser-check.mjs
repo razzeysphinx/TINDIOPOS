@@ -33,10 +33,21 @@ const password =
   required(
     "TINDIO_PHASE_04_TEST_PASSWORD",
   );
-const bypass =
+const vercelBypass =
   process.env.VERCEL_AUTOMATION_BYPASS_SECRET
     ?.trim()
   || null;
+const cutoverBypass = process.env.TINDIO_CUTOVER_BYPASS_SECRET?.trim() || null;
+
+function certificationHeaders() {
+  const headers = {};
+  if (vercelBypass) {
+    headers["x-vercel-protection-bypass"] = vercelBypass;
+    headers["x-vercel-set-bypass-cookie"] = "true";
+  }
+  if (cutoverBypass) headers["x-tindio-cutover-bypass"] = cutoverBypass;
+  return headers;
+}
 
 function endpoint(pathname) {
   return new URL(
@@ -48,14 +59,7 @@ function endpoint(pathname) {
 async function signedInPage(browser) {
   const context =
     await browser.newContext({
-      extraHTTPHeaders: bypass
-        ? {
-            "x-vercel-protection-bypass":
-              bypass,
-            "x-vercel-set-bypass-cookie":
-              "true",
-          }
-        : {},
+      extraHTTPHeaders: certificationHeaders(),
     });
   const page =
     await context.newPage();

@@ -42,9 +42,10 @@ const email =
   required("TINDIO_PHASE_04_TEST_EMAIL");
 const password =
   required("TINDIO_PHASE_04_TEST_PASSWORD");
-const bypass =
+const vercelBypass =
   process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim()
   || null;
+const cutoverBypass = process.env.TINDIO_CUTOVER_BYPASS_SECRET?.trim() || null;
 
 function sleep(milliseconds) {
   return new Promise(
@@ -56,12 +57,13 @@ function protectedHeaders(initial = {}) {
   const headers =
     new Headers(initial);
 
-  if (bypass) {
+  if (vercelBypass) {
     headers.set(
       "x-vercel-protection-bypass",
-      bypass,
+      vercelBypass,
     );
   }
+  if (cutoverBypass) headers.set("x-tindio-cutover-bypass", cutoverBypass);
 
   return headers;
 }
@@ -745,10 +747,11 @@ try {
   console.log("Mixed 5-endpoint concurrency: PASS 100/100");
   console.log("Final V2 API reliability: PASS 500/500");
   console.log(
-    bypass
+    vercelBypass
       ? "Vercel protection bypass: ACTIVE"
       : "Vercel protection bypass: NOT REQUIRED",
   );
+  console.log(cutoverBypass ? "TINDIO cutover bypass: ACTIVE" : "TINDIO cutover bypass: NOT REQUIRED");
   console.log("PHASE 04F V2 FINAL DEPLOYED API CERTIFICATION: PASS");
 } finally {
   await auth.auth.signOut().catch(() => null);

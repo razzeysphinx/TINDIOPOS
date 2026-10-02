@@ -62,6 +62,13 @@ export async function sourceUrl() {
 }
 
 export function targetUrl() {
+  const explicit = process.env.TINDIO_CANONICAL_TARGET_DATABASE_URL
+    ?? process.env.TINDIO_R7_TARGET_DATABASE_URL;
+
+  if (explicit) {
+    return assertDirectNeonUrl(explicit, TARGET, "R7 target");
+  }
+
   const projects = JSON.parse(neon(["projects", "list", "-o", "json"]));
   assert.ok(projects.some((item) => item.id === TARGET.projectId && item.name === TARGET.projectName), "R7 target project mismatch.");
   const branches = JSON.parse(neon(["branches", "list", "--project-id", TARGET.projectId, "-o", "json"]));

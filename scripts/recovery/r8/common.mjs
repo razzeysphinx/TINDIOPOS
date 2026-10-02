@@ -50,6 +50,31 @@ export function assertR8CutoverAuthorized() {
   }
 }
 
+export function assertR8TargetWriteAuthorized() {
+  const cutoverAuthorized = [
+    "TINDIO_R8_REMOTE_WRITE",
+    "TINDIO_R8_WRITE_FREEZE_CONFIRMED",
+    "TINDIO_R8_CUTOVER_AUTHORIZED",
+  ].every((name) => process.env[name] === "YES");
+
+  if (cutoverAuthorized) {
+    return "cutover";
+  }
+
+  assert.equal(
+    process.env.TINDIO_R8_REMOTE_WRITE,
+    "YES",
+    "Set TINDIO_R8_REMOTE_WRITE=YES only for the isolated R8 target.",
+  );
+  assert.equal(
+    process.env.TINDIO_R8_REHEARSAL_AUTHORIZED,
+    "YES",
+    "Set TINDIO_R8_REHEARSAL_AUTHORIZED=YES only for an explicitly authorized isolated-target rehearsal.",
+  );
+
+  return "rehearsal";
+}
+
 export async function readClassification() {
   return JSON.parse(
     await readFile(

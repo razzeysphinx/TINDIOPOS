@@ -280,7 +280,7 @@ export function dumpBusinessDataReadOnly(
 
     command:
       [
-        'PGOPTIONS="$TINDIO_PGOPTIONS" pg_dump "$TINDIO_PGURL"',
+        'PGCONNECT_TIMEOUT=30 PGOPTIONS="$TINDIO_PGOPTIONS" pg_dump "$TINDIO_PGURL"',
         "--data-only --no-owner --no-privileges",
         ...safeArguments,
       ].join(" "),
@@ -292,6 +292,6 @@ export function dumpBusinessDataReadOnly(
       null,
 
     pgOptions:
-      "-c default_transaction_read_only=on -c statement_timeout=0",
+      "-c default_transaction_read_only=on -c statement_timeout=120000",
   });
 }

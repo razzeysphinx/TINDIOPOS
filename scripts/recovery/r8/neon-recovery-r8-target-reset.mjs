@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import {
-  assertR8CutoverAuthorized,
+  assertR8TargetWriteAuthorized,
   readClassification,
   verifiedIdentities,
   writeR8Evidence,
@@ -35,7 +35,7 @@ function counts(url, tables) {
   `));
 }
 
-assertR8CutoverAuthorized();
+const authorizationMode = assertR8TargetWriteAuthorized();
 
 const classification = await readClassification();
 assert.deepEqual(classification.INVESTIGATE, []);
@@ -84,6 +84,7 @@ const evidence = {
   tableCount: tables.length,
   targetTableSetProvenExact: true,
   sourceTouched: false,
+  authorizationMode,
   before,
   after,
   status: "PASS",

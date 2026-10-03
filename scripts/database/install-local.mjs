@@ -42,6 +42,7 @@ async function main() {
     drop schema if exists public cascade;
     create schema public;
   `);
+  restoreSql(url, await providerSql("local", "00_extensions.sql"));
   restoreSql(url, install.baseline);
   restoreSql(url, await providerSql("local", "00_roles.sql"));
   for (const migration of install.migrations) restoreSql(url, migration.sql);

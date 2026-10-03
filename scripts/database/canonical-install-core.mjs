@@ -11,6 +11,19 @@ export const MIGRATIONS_DIRECTORY = "database/migrations";
 export const HISTORICAL_ARCHIVE_MANIFEST = "archive/database/supabase-migrations.manifest.json";
 
 const CANONICAL_MIGRATION_PATTERN = /^(?<number>\d{4})_.+\.sql$/u;
+const HISTORICAL_ARCHIVE_SOURCE_COMMIT = "761effb81a0784ded8b56adad2d93e1dc72d8193";
+const HISTORICAL_ARCHIVE_SOURCE_TREE = "0b5f2ba5d5abeca8b0d451515c6deaac1b4ea70e";
+
+function gitBytes(args) {
+  return execFileSync("git", args, {
+    cwd: ROOT,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+}
+
+function gitText(args) {
+  return gitBytes(args).toString("utf8").trim();
+}
 
 export async function canonicalMigrationFiles() {
   const names = (await readdir(MIGRATIONS_DIRECTORY))
@@ -71,13 +84,38 @@ export async function verifyHistoricalMigrationArchive() {
   assert.equal(manifest.migrationCount, manifest.migrations.length, "Historical archive manifest count is inconsistent.");
   assert.ok(manifest.migrationCount > 0, "Historical archive manifest is empty.");
 
+  const sourceTree = gitText([
+    "rev-parse",
+    `${HISTORICAL_ARCHIVE_SOURCE_COMMIT}:${manifest.sourceDirectory}`,
+  ]);
+  assert.equal(
+    sourceTree,
+    HISTORICAL_ARCHIVE_SOURCE_TREE,
+    "Certified R8 historical migration source tree changed unexpectedly.",
+  );
+
+  const archiveTree = gitText(["rev-parse", `HEAD:${manifest.archiveDirectory}`]);
+  assert.equal(
+    archiveTree,
+    sourceTree,
+    "Historical migration archive differs from the certified R8 Git tree.",
+  );
+
+  const dirtyArchive = gitText([
+    "status",
+    "--porcelain",
+    "--untracked-files=all",
+    "--",
+    manifest.archiveDirectory,
+  ]);
+  assert.equal(
+    dirtyArchive,
+    "",
+    "Historical migration archive contains uncommitted working-tree changes.",
+  );
+
   for (const migration of manifest.migrations) {
-    // Hash the committed blob, not checkout bytes that may be rewritten by
-    // core.autocrlf. The archive contract protects repository history.
-    const source = execFileSync("git", ["show", `HEAD:${migration.archivePath}`], {
-      cwd: ROOT,
-      maxBuffer: 32 * 1024 * 1024,
-    });
+    const source = gitBytes(["cat-file", "blob", `HEAD:${migration.archivePath}`]);
     const sha256 = createHash("sha256").update(source).digest("hex");
     assert.equal(sha256, migration.sha256, `Historical archive hash mismatch: ${migration.archivePath}`);
   }

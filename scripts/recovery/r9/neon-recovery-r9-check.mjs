@@ -83,7 +83,13 @@ for (const migration of archiveManifest.migrations) {
 
 assert.equal(git("branch", "--show-current"), "recovery/neon-canonical-rebuild", "R9 must run on the recovery branch.");
 assert.equal(git("ls-files", "-u"), "", "Unresolved merge conflicts are not allowed.");
-assert.equal(git("ls-files", "docs/recovery/TINDIO_NEON_RECOVERY_R4_HANDOVER.md"), "", "The preserved R4 handover must remain untracked.");
+const r4HandoverPath = "docs/recovery/TINDIO_NEON_RECOVERY_R4_HANDOVER.md";
+assert.equal(git("ls-files", r4HandoverPath), r4HandoverPath, "The preserved R4 handover must remain tracked.");
+assert.equal(
+  createHash("sha256").update(gitBytes("show", `HEAD:${r4HandoverPath}`)).digest("hex"),
+  "36e27b4769c0f7e2617d14f6695b3ef95340da3d95c4a9e24d47151af1adf7ec",
+  "The tracked R4 handover content must remain byte-identical.",
+);
 
 if (final) {
   assert.match(sourceOfTruth, /R8\s+COMPLETE/, "R8 must remain complete.");

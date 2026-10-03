@@ -31,6 +31,7 @@ const sourceOfTruth = read("docs/recovery/TINDIO_NEON_RECOVERY_SOURCE_OF_TRUTH.m
 const readme = read("README.md");
 const installer = read("scripts/database/install-neon.mjs");
 const certifier = read("scripts/certify-repository.mjs");
+const rehearsal = read("scripts/phase-14-migration-rehearsal.mjs");
 
 mustExist("database/baseline/0001_tindio_baseline.sql");
 mustExist("archive/database/supabase-migrations.manifest.json");
@@ -62,6 +63,8 @@ assert.match(installer, /DATABASE_URL_UNPOOLED/, "Neon installer must require a 
 assert.match(installer, /neon\.tech/, "Neon installer must guard its host.");
 assert.doesNotMatch(installer, /r6-|r6_/i, "Neon installer must not hard-code an R6 target.");
 assert.doesNotMatch(certifier, /supabase db reset --local/, "Repository certification must use the canonical local installer.");
+assert.match(rehearsal, /db:install:local/, "Migration rehearsal must use the canonical local installer.");
+assert.doesNotMatch(rehearsal, /\["exec",\s*"supabase",\s*"db",\s*"reset"/, "Migration rehearsal must not revive the archived migration path.");
 
 const archiveManifest = JSON.parse(read("archive/database/supabase-migrations.manifest.json"));
 const isolatedNeon = JSON.parse(read("docs/recovery/evidence/r9/r9-isolated-neon-fresh-install.json"));

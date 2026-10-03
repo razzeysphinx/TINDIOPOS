@@ -24,7 +24,7 @@ const [
   source("../src/features/devices/pos-device.ts"),
   source("../src/app/api/pos/v2/offline-checkout/route.ts"),
   source("../src/features/offline/pos-v2-offline-checkout-service.ts"),
-  source("../supabase/migrations/20260827152628_phase_8_offline_sync_binding_integrity.sql"),
+  source("../archive/database/supabase-migrations/20260827152628_phase_8_offline_sync_binding_integrity.sql"),
   source("../supabase/tests/database/improvement_13_offline_sync_foundation.test.sql"),
 ]);
 

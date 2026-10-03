@@ -5,7 +5,7 @@ import test from "node:test";
 const read = (path) => fs.readFileSync(path, "utf8");
 
 test("Phase 26 telemetry covers locked operational health signals", () => {
-  const migration = read("supabase/migrations/20260929230000_phase_26_production_observability.sql");
+  const migration = read("archive/database/supabase-migrations/20260929230000_phase_26_production_observability.sql");
   const reporter = read("apps/mobile/src/features/sync/sync-telemetry-reporter.tsx");
   const center = read("src/features/observability/production-observability-center.tsx");
   for (const marker of ["crash_count", "api_average_latency_ms", "sync_average_latency_ms", "queue_depth", "failed_count", "conflict_count", "app_version", "offline_since", "last_heartbeat_at", "local_database_health"]) assert.ok(migration.includes(marker), `migration must include ${marker}`);
@@ -40,5 +40,5 @@ test("Phase 26 Back Office observability is devices.manage guarded", () => {
 });
 
 test("Phase 26 telemetry does not add transaction payload columns", () => {
-  assert.doesNotMatch(read("supabase/migrations/20260929230000_phase_26_production_observability.sql"), /payload_json|snapshot_json|customer_id|customer_email|card_number|\bpan\b|\bcvv\b|\bcvc\b|access_token|device_secret/i, "observability schema must remain aggregate-only");
+  assert.doesNotMatch(read("archive/database/supabase-migrations/20260929230000_phase_26_production_observability.sql"), /payload_json|snapshot_json|customer_id|customer_email|card_number|\bpan\b|\bcvv\b|\bcvc\b|access_token|device_secret/i, "observability schema must remain aggregate-only");
 });

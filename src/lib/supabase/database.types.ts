@@ -7165,6 +7165,10 @@ export type Database = {
           variant_id: string
         }[]
       }
+      get_catalog_workspace_bundle_v1: {
+        Args: { requested_needs?: string[]; target_organization_id: string }
+        Returns: Json
+      }
       get_checkout_stock_warning:
         | {
             Args: { target_organization_id: string; target_store_id: string }
@@ -7270,6 +7274,10 @@ export type Database = {
         }
         Returns: Json
       }
+      get_dashboard_readiness_snapshot_v1: {
+        Args: { include_inventory?: boolean; target_organization_id: string }
+        Returns: Json
+      }
       get_dashboard_snapshot: {
         Args: {
           target_end_date: string
@@ -7281,6 +7289,18 @@ export type Database = {
       }
       get_employee_management_detail: {
         Args: { target_employee_id: string; target_organization_id: string }
+        Returns: Json
+      }
+      get_inventory_activity_reference_bundle_v1: {
+        Args: {
+          requested_limit?: number
+          requested_movement_ids?: string[]
+          requested_needs?: string[]
+          target_organization_id: string
+          target_product_id?: string
+          target_store_id?: string
+          target_variant_id?: string
+        }
         Returns: Json
       }
       get_inventory_count_awareness: {
@@ -7397,6 +7417,14 @@ export type Database = {
           value_delta_minor: number
         }[]
       }
+      get_inventory_purchasing_bundle_v1: {
+        Args: {
+          requested_needs?: string[]
+          target_organization_id: string
+          target_store_ids?: string[]
+        }
+        Returns: Json
+      }
       get_inventory_schema_contract: {
         Args: { target_organization_id: string }
         Returns: Json
@@ -7451,6 +7479,25 @@ export type Database = {
           variant_id: string
         }[]
       }
+      get_inventory_valuation_reference_bundle_v1: {
+        Args: { target_organization_id: string }
+        Returns: Json
+      }
+      get_inventory_workspace_bundle_v1: {
+        Args: {
+          requested_activity_from?: string
+          requested_activity_limit?: number
+          requested_activity_movement_type?: string
+          requested_activity_offset?: number
+          requested_activity_source_id?: string
+          requested_activity_source_type?: string
+          requested_activity_to?: string
+          requested_needs?: string[]
+          target_organization_id: string
+          target_store_ids?: string[]
+        }
+        Returns: Json
+      }
       get_kitchen_orders: {
         Args: { target_organization_id: string; target_store_id?: string }
         Returns: {
@@ -7478,6 +7525,10 @@ export type Database = {
           station: string
         }[]
       }
+      get_management_workspace_bundle_v1: {
+        Args: { requested_needs?: string[]; target_organization_id: string }
+        Returns: Json
+      }
       get_organization_export_page: {
         Args: {
           target_after_id?: string
@@ -7496,6 +7547,14 @@ export type Database = {
       }
       get_organization_usage_snapshot: {
         Args: { target_organization_id: string }
+        Returns: Json
+      }
+      get_pos_bootstrap_bundle_v1: {
+        Args: {
+          target_employee_id: string
+          target_organization_id: string
+          target_store_ids: string[]
+        }
         Returns: Json
       }
       get_pos_bootstrap_core_v2: {
@@ -7747,6 +7806,15 @@ export type Database = {
           unit_cost_minor: number
         }[]
       }
+      get_receipt_detail_bundle_v1: {
+        Args: {
+          include_refund_methods?: boolean
+          include_reprint_extensions?: boolean
+          target_organization_id: string
+          target_receipt_id: string
+        }
+        Returns: Json
+      }
       get_reports_snapshot: {
         Args: {
           target_end_date: string
@@ -7754,6 +7822,10 @@ export type Database = {
           target_start_date: string
           target_store_id?: string
         }
+        Returns: Json
+      }
+      get_reports_store_reference_v1: {
+        Args: { target_organization_id: string; target_store_ids?: string[] }
         Returns: Json
       }
       get_shift_audit_history: {
@@ -7794,6 +7866,18 @@ export type Database = {
           shift_id: string
           status: string
         }[]
+      }
+      get_time_clock_workspace_bundle_v1: {
+        Args: {
+          include_attendance?: boolean
+          target_employee_id?: string
+          target_end?: string
+          target_organization_id: string
+          target_start?: string
+          target_store_id?: string
+          target_store_ids: string[]
+        }
+        Returns: Json
       }
       import_catalog_products_v3: {
         Args: {

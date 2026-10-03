@@ -222,7 +222,7 @@ async function main() {
       "--porcelain",
       "--untracked-files=all",
       "--",
-      "supabase/migrations",
+      "archive/database/supabase-migrations",
       "src/lib/supabase/database.types.ts",
     ],
     true,

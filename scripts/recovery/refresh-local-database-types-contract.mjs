@@ -42,7 +42,7 @@ function assertLocalDatabaseTarget() {
 function assertNoMigrationWorkingTreeChanges() {
   const result = run({
     command: "git",
-    args: ["status", "--porcelain", "--untracked-files=all", "--", "supabase/migrations"],
+    args: ["status", "--porcelain", "--untracked-files=all", "--", "archive/database/supabase-migrations"],
   });
   assert.equal(
     (result.stdout ?? "").trim(),

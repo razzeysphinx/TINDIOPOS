@@ -34,7 +34,7 @@ test("Stock status presentation reuses the shared condition helper while filteri
   const [stockView, stockStatus, stockPageMigration] = await Promise.all([
     source("src/features/inventory/inventory-stock-view.tsx"),
     source("src/features/inventory/inventory-stock-status.ts"),
-    source("supabase/migrations/20260911140000_inventory_stock_page_performance.sql"),
+    source("archive/database/supabase-migrations/20260911140000_inventory_stock_page_performance.sql"),
   ]);
 
   assert.match(stockView, /getInventoryStockCondition\(\{ quantity: row\.quantity, reorderPoint: row\.reorderPoint \}\)/);
@@ -50,7 +50,7 @@ test("Stock & Restock uses the centralized scoped read model and redacts costs a
   const [replenishmentPage, replenishmentLoader, stockPageMigration] = await Promise.all([
     source("src/app/(back-office)/back-office/replenishment/page.tsx"),
     source("src/features/inventory/replenishment-data.ts"),
-    source("supabase/migrations/20260911140000_inventory_stock_page_performance.sql"),
+    source("archive/database/supabase-migrations/20260911140000_inventory_stock_page_performance.sql"),
   ]);
 
   assert.match(replenishmentPage, /loadReplenishmentWorkspaceData/);

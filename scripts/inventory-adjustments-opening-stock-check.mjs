@@ -4,7 +4,7 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 const [migration, actions, schema, workflow, advancedWorkflows, catalogActions, catalogForms, sqlTest, concurrency] = await Promise.all([
-  read("../supabase/migrations/20260917122822_canonical_inventory_adjustments_opening_stock.sql"),
+  read("../archive/database/supabase-migrations/20260917122822_canonical_inventory_adjustments_opening_stock.sql"),
   read("../src/features/inventory/advanced-inventory-actions.ts"),
   read("../src/features/inventory/advanced-inventory-schema.ts"),
   read("../src/features/inventory/inventory-integrity-workflows.tsx"),

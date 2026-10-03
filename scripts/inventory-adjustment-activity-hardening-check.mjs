@@ -38,7 +38,7 @@ test(
   async () => {
     const migration =
       await source(
-        "supabase/migrations/20260911021727_inventory_adjustment_activity_hardening.sql",
+        "archive/database/supabase-migrations/20260911021727_inventory_adjustment_activity_hardening.sql",
       );
 
     assert.match(

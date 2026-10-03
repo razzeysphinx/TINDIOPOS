@@ -31,7 +31,7 @@ scripts/inventory-granular-rbac-check.mjs
 The affected migration is:
 
 ```text
-supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql
+archive/database/supabase-migrations/20260910142940_granular_inventory_transfer_rbac.sql
 ```
 
 The test output indicates that the migration has orphan procedural declarations after function definitions were reconstructed or removed. Treat this as a same-class Packet 006 Phase 0 reconstruction failure, not as an unrelated application issue.
@@ -94,11 +94,11 @@ If the database target is non-local, stop and report it. Do not run a local rese
 ## Files Worth Inspecting First
 
 ```text
-supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql
+archive/database/supabase-migrations/20260910142940_granular_inventory_transfer_rbac.sql
 scripts/inventory-granular-rbac-check.mjs
-supabase/migrations/20260911062913_purchasing_granular_rbac_integration.sql
+archive/database/supabase-migrations/20260911062913_purchasing_granular_rbac_integration.sql
 scripts/inventory-purchasing-granular-rbac-check.mjs
-supabase/migrations/20260911014827_inventory_count_batches_and_roundtrip_import.sql
+archive/database/supabase-migrations/20260911014827_inventory_count_batches_and_roundtrip_import.sql
 scripts/inventory-count-stocktake-check.mjs
 ```
 

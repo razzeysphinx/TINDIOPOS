@@ -23,7 +23,7 @@ test("Phase 25 fleet UI covers Source-of-Truth capabilities", () => {
 
 test("Phase 25 preserves server-side device authority", () => {
   const actions = read("src/features/devices/actions.ts");
-  const migration = read("supabase/migrations/20260824190000_improvement_12_device_register_management.sql");
+  const migration = read("archive/database/supabase-migrations/20260824190000_improvement_12_device_register_management.sql");
   for (const marker of ["devices.manage", "register_pos_device", "change_pos_device_register", "revoke_pos_device"]) {
     assert.ok(actions.includes(marker), `device actions must retain ${marker}`);
   }

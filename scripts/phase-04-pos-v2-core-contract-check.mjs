@@ -31,7 +31,7 @@ const [
       "src/lib/supabase/pos-v2-database-client.ts",
     ),
     source(
-      "supabase/migrations/20260924_phase_04_pos_bootstrap_v2_core.sql",
+      "archive/database/supabase-migrations/20260924_phase_04_pos_bootstrap_v2_core.sql",
     ),
   ]);
 

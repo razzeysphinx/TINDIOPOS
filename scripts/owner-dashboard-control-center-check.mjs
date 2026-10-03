@@ -6,7 +6,7 @@ const page = await readFile(new URL("../src/app/(back-office)/back-office/page.t
 const dashboard = await readFile(new URL("../src/features/dashboard/owner-dashboard.tsx", import.meta.url), "utf8");
 const period = await readFile(new URL("../src/features/dashboard/dashboard-period.ts", import.meta.url), "utf8");
 const attention = await readFile(new URL("../src/features/dashboard/needs-attention.tsx", import.meta.url), "utf8");
-const migration = await readFile(new URL("../supabase/migrations/20260903090000_owner_dashboard_control_center.sql", import.meta.url), "utf8");
+const migration = await readFile(new URL("../archive/database/supabase-migrations/20260903090000_owner_dashboard_control_center.sql", import.meta.url), "utf8");
 
 test("owner dashboard follows the executive-first hierarchy", () => {
   const headings = [

@@ -1,6 +1,17 @@
 import {
   spawnSync,
 } from "node:child_process";
+import {
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import {
+  tmpdir,
+} from "node:os";
+import {
+  join,
+} from "node:path";
 import process from "node:process";
 
 const POSTGRES_IMAGE =
@@ -78,11 +89,24 @@ function run({
       url,
     );
 
+  const useMountedInput = input !== undefined && Buffer.byteLength(input) >= 64 * 1024;
+  const temporaryDirectory = useMountedInput ? mkdtempSync(join(tmpdir(), "tindio-postgres-")) : null;
+  const inputPath = temporaryDirectory ? join(temporaryDirectory, "input.sql") : null;
+
+  if (inputPath) {
+    writeFileSync(inputPath, input);
+  }
+
   const dockerArgs = [
     "run",
     "--rm",
-    "-i",
   ];
+
+  if (!inputPath) {
+    dockerArgs.push("-i");
+  } else {
+    dockerArgs.push("--mount", `type=bind,src=${inputPath},dst=/tmp/tindio-input.sql,readonly`);
+  }
 
   // Docker Desktop resolves host.docker.internal automatically.
   // Native Linux Docker needs an explicit host-gateway alias.
@@ -104,11 +128,12 @@ function run({
     POSTGRES_IMAGE,
     "sh",
     "-lc",
-    command,
+    inputPath ? `${command} -f /tmp/tindio-input.sql` : command,
   );
 
-  const result =
-    spawnSync(
+  let result;
+  try {
+    result = spawnSync(
       "docker",
       dockerArgs,
       {
@@ -123,7 +148,7 @@ function run({
             : {}),
         },
 
-        input,
+        input: inputPath ? undefined : input,
 
         encoding,
 
@@ -131,6 +156,11 @@ function run({
           MAX_BUFFER,
       },
     );
+  } finally {
+    if (temporaryDirectory) {
+      rmSync(temporaryDirectory, { recursive: true, force: true });
+    }
+  }
 
   if (
     result.error
@@ -167,7 +197,7 @@ export function runSql(
       url,
 
       command:
-        'psql "$TINDIO_PGURL" -X -q -A -t -v ON_ERROR_STOP=1',
+        'PGCONNECT_TIMEOUT=30 PGOPTIONS="-c statement_timeout=180000" psql "$TINDIO_PGURL" -X -q -A -t -v ON_ERROR_STOP=1',
 
       input:
         sql,
@@ -209,7 +239,7 @@ export function restoreSql(
     url,
 
     command:
-      'psql "$TINDIO_PGURL" -X -q -v ON_ERROR_STOP=1',
+        'PGCONNECT_TIMEOUT=30 PGOPTIONS="-c statement_timeout=180000" psql "$TINDIO_PGURL" -X -q -v ON_ERROR_STOP=1',
 
     input:
       sql,

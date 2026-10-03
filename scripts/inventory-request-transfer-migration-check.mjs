@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-const migrationPath = "../supabase/migrations/20260917073801_canonical_request_transfer_migration.sql";
+const migrationPath = "../archive/database/supabase-migrations/20260917073801_canonical_request_transfer_migration.sql";
 const [migration, reader, replenishmentLoader, readModelMigration, posInbox, foundationTest] = await Promise.all([
   read(migrationPath),
   read("../src/features/inventory/inventory-transfer-reader-contract.ts"),

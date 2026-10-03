@@ -1,0 +1,77 @@
+{
+  "status": "COMPLETE",
+  "classifications": [
+    {
+      "path": "supabase/migrations",
+      "classification": "ARCHIVE_HISTORY",
+      "currentCallers": ["local Supabase replay", "static migration-contract checks"],
+      "replacement": "database/baseline + database/migrations + database/provider/* via scripts/database/install-*.mjs",
+      "reason": "Historical replay is no longer the canonical schema construction path.",
+      "risk": "High; immutable SQL and every caller must be preserved or redirected.",
+      "tests": ["db:install:local", "pgTAP", "database lint", "test:db:canonical-install"]
+    },
+    {
+      "path": "scripts/recovery/neon-recovery-r6-install.mjs",
+      "classification": "REMOVE_OBSOLETE",
+      "currentCallers": ["recovery:neon:r6:install", "recovery:neon:r6:resume"],
+      "replacement": "scripts/database/install-neon.mjs",
+      "reason": "Hard-codes the completed R6 recovery target.",
+      "risk": "High; replacement must remain direct-URL and empty-target guarded.",
+      "tests": ["test:db:canonical-install", "isolated Neon install"]
+    },
+    {
+      "path": "scripts/recovery/apply-r5-canonical-chain-local.mjs",
+      "classification": "REMOVE_OBSOLETE",
+      "currentCallers": ["certify-repository local browser integration"],
+      "replacement": "scripts/database/install-local.mjs",
+      "reason": "The complete canonical path now installs all forward migrations before integration tests.",
+      "risk": "Medium; browser integration must use the already-installed canonical schema.",
+      "tests": ["certify:db", "test:phase-14-browser"]
+    },
+    {
+      "path": "scripts/phase-04-neon-migrate.mjs",
+      "classification": "REMOVE_OBSOLETE",
+      "currentCallers": ["certify:phase-04:neon-rehearsal", "migrate:phase-04:neon-cutover"],
+      "replacement": "scripts/database/install-neon.mjs",
+      "reason": "Its recovery/cutover assumptions are superseded by R6-R8 and it is not production-safe.",
+      "risk": "High; package commands must be removed with it.",
+      "tests": ["test:db:canonical-install", "R9 contract"]
+    },
+    {
+      "path": "scripts/database/historical-migration-archive.mjs",
+      "classification": "REMOVE_OBSOLETE",
+      "currentCallers": [],
+      "replacement": "archive/database/supabase-migrations.manifest.json",
+      "reason": "The one-time manifest generator is no longer an executable installation path after archive creation.",
+      "risk": "Low; the immutable manifest and byte hashes remain committed.",
+      "tests": ["test:db:canonical-install", "test:recovery:neon-r9"]
+    },
+    {
+      "path": "scripts/phase-04-v2-final-deployed-certification.mjs and scripts/phase-04-v2-progressive-browser-check.mjs",
+      "classification": "PROMOTE_TO_STABLE",
+      "currentCallers": ["certify:phase-04:v2-final", "certify:phase-04:v2-browser"],
+      "replacement": "stable production certification aliases",
+      "reason": "They remain valuable deployed regression certification.",
+      "risk": "Low; preserve implementations and compatibility aliases.",
+      "tests": ["static certification"]
+    },
+    {
+      "path": "docs/recovery/evidence",
+      "classification": "KEEP_ACTIVE",
+      "currentCallers": ["recovery audit and certification history"],
+      "replacement": null,
+      "reason": "Evidence is historical audit material, not an executable install path.",
+      "risk": "Low.",
+      "tests": ["R9 contract evidence presence"]
+    },
+    {
+      "path": "docs/recovery/TINDIO_NEON_RECOVERY_R4_HANDOVER.md",
+      "classification": "ARCHIVE_EXTERNAL",
+      "currentCallers": [],
+      "replacement": null,
+      "reason": "User-preserved untracked handover; no disposition change is authorized.",
+      "risk": "High; must remain untracked and byte-preserved.",
+      "tests": ["Git status and SHA-256 preservation check"]
+    }
+  ]
+}

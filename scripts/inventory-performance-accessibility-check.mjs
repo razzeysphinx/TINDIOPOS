@@ -28,11 +28,11 @@ const [
 ] =
   await Promise.all([
     source(
-      "../supabase/migrations/20260911140000_inventory_stock_page_performance.sql",
+      "../archive/database/supabase-migrations/20260911140000_inventory_stock_page_performance.sql",
     ),
 
     source(
-      "../supabase/migrations/20260916100000_inventory_stock_page_lint_repair.sql",
+      "../archive/database/supabase-migrations/20260916100000_inventory_stock_page_lint_repair.sql",
     ),
 
     source(

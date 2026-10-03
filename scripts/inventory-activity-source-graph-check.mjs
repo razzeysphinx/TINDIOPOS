@@ -13,7 +13,7 @@ async function source(relativePath) {
 test("inventory activity filters one immutable source operation through the existing source index", async () => {
   const [page, migration, bundleMigration] = await Promise.all([
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
-    source("supabase/migrations/20260906062727_inventory_ledger_integrity_metadata.sql"),
+    source("archive/database/supabase-migrations/20260906062727_inventory_ledger_integrity_metadata.sql"),
     source("database/migrations/0005_inventory_core_read_model_extension.sql"),
   ]);
 
@@ -46,7 +46,7 @@ test("activity resolves canonical source labels without exposing raw source UUID
 test("historical display survives catalog changes without broadening cost access", async () => {
   const [page, migration, coreLoader, bundleMigration] = await Promise.all([
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
-    source("supabase/migrations/20260907090000_inventory_activity_history_access.sql"),
+    source("archive/database/supabase-migrations/20260907090000_inventory_activity_history_access.sql"),
     source("src/features/inventory/inventory-core-data.ts"),
     source("database/migrations/0005_inventory_core_read_model_extension.sql"),
   ]);

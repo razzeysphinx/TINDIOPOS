@@ -35,7 +35,7 @@ test("inventory command application boundary uses only v2/v3 contracts", async (
 });
 
 test("forward migration preserves hardened public/private boundaries and retires old public commands", async () => {
-  const migration = await source("supabase/migrations/20260916034301_inventory_command_rpc_contract_hardening.sql");
+  const migration = await source("archive/database/supabase-migrations/20260916034301_inventory_command_rpc_contract_hardening.sql");
   for (const name of ["create_inventory_count_plan_v2", "save_inventory_count_line_v2", "create_purchase_order_v2", "record_inventory_adjustment_v3"]) {
     assert.match(migration, new RegExp(`function public\\.${name}`));
   }
@@ -49,7 +49,7 @@ test("forward migration preserves hardened public/private boundaries and retires
 });
 
 test("replenishment command moves optional UUIDs behind required inputs", async () => {
-  const migration = await source("supabase/migrations/20260916040115_inventory_replenishment_rule_rpc_contract_v2.sql");
+  const migration = await source("archive/database/supabase-migrations/20260916040115_inventory_replenishment_rule_rpc_contract_v2.sql");
   assert.match(migration, /function public\.upsert_inventory_replenishment_rule_v2/);
   assert.match(migration, /security invoker/);
   assert.match(migration, /set search_path = ''/);

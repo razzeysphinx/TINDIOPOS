@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-const migration = fs.readFileSync("supabase/migrations/20260930030000_neon_inventory_count_runtime_boundary_repair.sql", "utf8");
+const migration = fs.readFileSync("archive/database/supabase-migrations/20260930030000_neon_inventory_count_runtime_boundary_repair.sql", "utf8");
 const page = fs.readFileSync("src/app/(back-office)/back-office/inventory/page.tsx", "utf8");
 
 test("inventory count authorization is provider-neutral", () => {

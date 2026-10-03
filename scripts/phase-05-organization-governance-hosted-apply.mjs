@@ -10,7 +10,7 @@ import {
 } from "./lib/phase-04-postgres-docker.mjs";
 
 const MIGRATION_PATH = new URL(
-  "../supabase/migrations/20260924155408_phase_05_provider_neutral_organization_governance.sql",
+  "../archive/database/supabase-migrations/20260924155408_phase_05_provider_neutral_organization_governance.sql",
   import.meta.url,
 );
 

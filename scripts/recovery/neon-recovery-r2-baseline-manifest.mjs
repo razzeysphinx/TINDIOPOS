@@ -169,7 +169,7 @@ async function migrationEvidence() {
         "--name-only",
         HISTORICAL_ANCESTOR,
         "--",
-        "supabase/migrations",
+        "archive/database/supabase-migrations",
       ],
     })
       .stdout
@@ -212,7 +212,7 @@ async function migrationEvidence() {
       historical.map(
         (file) =>
           file.replace(
-            "supabase/migrations/",
+            "archive/database/supabase-migrations/",
             "",
           ),
       ),

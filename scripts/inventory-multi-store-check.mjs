@@ -27,7 +27,7 @@ test("Phase 4 preserves shared store scope, bounded stock reads, and stock-detai
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
     source("src/app/(back-office)/back-office/replenishment/page.tsx"),
     source("src/features/inventory/replenishment-data.ts"),
-    source("supabase/migrations/20260911140000_inventory_stock_page_performance.sql"),
+    source("archive/database/supabase-migrations/20260911140000_inventory_stock_page_performance.sql"),
   ]);
 
   assert.match(inventoryPage, /rawRequestedTab === "stock"/);
@@ -49,7 +49,7 @@ test("Phase 4 remains a read-only presentation layer with no new database write 
   const [inventoryPage, stockView, stockPageMigration] = await Promise.all([
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
     source("src/features/inventory/inventory-stock-view.tsx"),
-    source("supabase/migrations/20260911140000_inventory_stock_page_performance.sql"),
+    source("archive/database/supabase-migrations/20260911140000_inventory_stock_page_performance.sql"),
   ]);
 
   assert.doesNotMatch(stockView, /use server|supabase/);

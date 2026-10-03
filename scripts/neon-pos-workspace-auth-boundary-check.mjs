@@ -3,7 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 
 const migrationPath =
-  "supabase/migrations/20260930020000_neon_pos_workspace_auth_boundary_repair.sql";
+  "archive/database/supabase-migrations/20260930020000_neon_pos_workspace_auth_boundary_repair.sql";
 
 const migration =
   fs.readFileSync(

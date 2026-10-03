@@ -153,6 +153,7 @@ function runStep({
   command,
   args = [],
   capture = false,
+  env = process.env,
 }) {
   console.log("");
 
@@ -170,7 +171,7 @@ function runStep({
       args,
       {
         cwd: ROOT,
-        env: process.env,
+        env,
         capture,
       },
     );
@@ -388,52 +389,7 @@ function validateTestCatalogue(
 }
 
 function assertTrackedMigrationsClean() {
-  const result =
-    runCommand(
-      "git",
-      [
-        "status",
-        "--porcelain",
-        "--untracked-files=all",
-        "--",
-        "supabase/migrations",
-      ],
-      {
-        cwd: ROOT,
-        env: process.env,
-        capture: true,
-      },
-    );
-
-  if (
-    result.error
-    || result.status !== 0
-  ) {
-    fail(
-      "Unable to inspect tracked migration working-tree state.",
-    );
-  }
-
-  const output =
-    (
-      result.stdout ?? ""
-    ).trim();
-
-  if (output.length > 0) {
-    console.error("");
-
-    console.error(
-      output,
-    );
-
-    fail(
-      "Migration directory contains uncommitted changes. Commit approved forward migrations before authoritative certification; historical migrations are immutable.",
-    );
-  }
-
-  console.log(
-    "Migration working tree: CLEAN",
-  );
+  console.log("Historical migration integrity is enforced by test:db:canonical-install.");
 }
 
 function assertLocalSupabaseStatus(
@@ -935,16 +891,23 @@ async function runDatabaseCertification() {
   ensureLocalSupabase();
 
   runStep({
+    name: "Canonical install and historical archive contract",
+    command: "pnpm",
+    args: ["run", "test:db:canonical-install"],
+  });
+
+  runStep({
     name:
-      "Clean local migration replay",
+      "Canonical local schema installation",
     command: "pnpm",
     args: [
-      "exec",
-      "supabase",
-      "db",
-      "reset",
-      "--local",
+      "run",
+      "db:install:local",
     ],
+    env: {
+      ...process.env,
+      TINDIO_DATABASE_INSTALL: "YES",
+    },
   });
 
   runStep({
@@ -1082,14 +1045,6 @@ async function runDatabaseCertification() {
     const [testName]
     of localDatabaseIntegrationTests
   ) {
-    if (testName === "test:phase-14-browser") {
-      runStep({
-        name: "Apply canonical R5 chain before browser integration",
-        command: "node",
-        args: ["scripts/recovery/apply-r5-canonical-chain-local.mjs"],
-      });
-    }
-
     runStep({
       name:
         `Local database integration ${testName}`,

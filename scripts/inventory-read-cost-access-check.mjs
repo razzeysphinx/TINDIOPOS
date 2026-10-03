@@ -71,7 +71,7 @@ test("Phase 8 never serializes raw inventory cost fields to client workspaces", 
 });
 
 test("Phase 8 keeps inventory cost retrieval permission-checked and store-scoped", async () => {
-  const migration = await source("supabase/migrations/20260829132029_inventory_read_cost_access_hardening.sql");
+  const migration = await source("archive/database/supabase-migrations/20260829132029_inventory_read_cost_access_hardening.sql");
 
   assert.match(migration, /inventory_levels_select_authorized_scope/);
   assert.match(migration, /'inventory\.view'/);
@@ -96,7 +96,7 @@ test(
       purchasingBundleMigration,
     ] = await Promise.all([
       source(
-        "supabase/migrations/20260921090000_purchase_order_line_operational_snapshot_read_grants.sql",
+        "archive/database/supabase-migrations/20260921090000_purchase_order_line_operational_snapshot_read_grants.sql",
       ),
       source(
         "src/app/(back-office)/back-office/inventory/page.tsx",

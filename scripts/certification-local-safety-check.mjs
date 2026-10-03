@@ -602,7 +602,7 @@ test(
 );
 
 test(
-  "authoritative certification includes untracked migration files in its cleanliness gate",
+  "authoritative certification delegates historical migration integrity to the canonical archive contract",
   async () => {
     const source =
       await readFile(
@@ -615,7 +615,7 @@ test(
 
     assert.match(
       source,
-      /--untracked-files=all/,
+      /test:db:canonical-install/,
     );
 
     assert.doesNotMatch(

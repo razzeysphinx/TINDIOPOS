@@ -44,7 +44,7 @@ test("valuation exposes complete, explicitly qualified cost and price informatio
 test("valuation keeps zero and unverified costs distinct in the canonical read path", async () => {
   const [page, migration] = await Promise.all([
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
-    source("supabase/migrations/20260911065054_inventory_valuation_cost_truth.sql"),
+    source("archive/database/supabase-migrations/20260911065054_inventory_valuation_cost_truth.sql"),
   ]);
 
   assert.match(page, /const canViewCosts = hasPermission\(context, "products\.view_cost"\)/);
@@ -63,7 +63,7 @@ test("valuation keeps zero and unverified costs distinct in the canonical read p
 });
 
 test("valuation remains capability-checked and store-scoped", async () => {
-  const migration = await source("supabase/migrations/20260911065054_inventory_valuation_cost_truth.sql");
+  const migration = await source("archive/database/supabase-migrations/20260911065054_inventory_valuation_cost_truth.sql");
 
   assert.match(migration, /private\.has_permission\(target_organization_id, 'products\.view_cost'\)/);
   assert.match(migration, /private\.has_inventory_capability\(target_organization_id, 'inventory\.valuation\.view'\)/);

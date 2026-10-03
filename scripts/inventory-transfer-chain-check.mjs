@@ -10,7 +10,7 @@ const [page, readModel, readModelMigration, workflows, transferWorkspace, migrat
   source("../database/migrations/0004_inventory_replenishment_read_models.sql"),
   source("../src/features/inventory/supply-chain-workflows.tsx"),
   source("../src/features/inventory/inventory-transfer-workspace.tsx"),
-  source("../supabase/migrations/20260905090400_inventory_transfer_chain_of_custody.sql"),
+  source("../archive/database/supabase-migrations/20260905090400_inventory_transfer_chain_of_custody.sql"),
 ]);
 
 test("transfer creation keeps source, destination, and in-transit positions distinct", () => {

@@ -1,0 +1,246 @@
+{
+  "generatedAt": "2026-10-03T05:58:46.821Z",
+  "comparedTo": {
+    "defaultBranch": "origin/TINDIO-PREPRODUCTION",
+    "recovery": "origin/recovery/neon-canonical-rebuild"
+  },
+  "branches": [
+    {
+      "branch": "diagnostic/phase-04-base-control",
+      "aheadOfRecovery": 1,
+      "behindRecovery": 104,
+      "uniqueCommits": [
+        "9f22d5ae28c653c758121b2a6b6872e52d010595 test(vercel): create fresh Phase 04 base control deployment"
+      ],
+      "classification": "HAS_UNIQUE_WORK"
+    },
+    {
+      "branch": "fix/neon-pos-workspace-auth-boundary",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 29,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "migration/phase-04-bootstrap-reliability",
+      "aheadOfRecovery": 1,
+      "behindRecovery": 104,
+      "uniqueCommits": [
+        "170b972006d57a854eb3c93b58eb8afae486ddbd fix(pos): stabilize Phase 04 bootstrap reads"
+      ],
+      "classification": "HAS_UNIQUE_WORK"
+    },
+    {
+      "branch": "migration/phase-04-neon",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 105,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "migration/phase-04-pos-bootstrap-v2-core",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 90,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "migration/phase-04-vercel-auth-stability",
+      "aheadOfRecovery": 2,
+      "behindRecovery": 104,
+      "uniqueCommits": [
+        "06257c4281498b22df741a33fbce690006dbd71b test(auth): update provider-neutral identity transport contract",
+        "743b9a00286de357a737c954381999c8f3d32d48 fix(auth): stabilize token-bound Neon requests on Vercel"
+      ],
+      "classification": "HAS_UNIQUE_WORK"
+    },
+    {
+      "branch": "mobile/phase-00-foundation",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 145,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-01-api-separation",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 140,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-02-auth-tenant-isolation",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 134,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-03-shared-contracts",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 129,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-06-native-foundation",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 71,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-07-native-sqlite",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 64,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-08-cold-start-offline",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 61,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-09-local-first",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 60,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-10-durable-outbox",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 59,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-11-device-sequence-checkpoints",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 58,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-12-delta-sync-reconciliation",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 57,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-13-native-cashier-parity",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 55,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-14-offline-inventory-intelligence",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 52,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-15-store-local-mode",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 48,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-16-isolated-device-mode",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 44,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-17-sync-control-center-2",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 40,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-18-disaster-recovery",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 39,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-19-native-hardware",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 38,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-20-offline-payment-risk",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 37,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-21-security-multitenant-certification",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 36,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-22-performance-cost-certification",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 35,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-23-android-production-hardening",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 34,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-24-google-play-release",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 33,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-25-device-fleet-management",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 32,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "mobile/phase-26-production-observability",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 31,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    },
+    {
+      "branch": "stabilization/phase-05-neon",
+      "aheadOfRecovery": 0,
+      "behindRecovery": 76,
+      "uniqueCommits": [],
+      "classification": "FULLY_CONTAINED"
+    }
+  ],
+  "summary": {
+    "audited": 32,
+    "fullyContained": 29,
+    "uniqueWork": 3,
+    "deleted": 0
+  }
+}

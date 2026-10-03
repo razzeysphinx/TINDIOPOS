@@ -35,15 +35,15 @@ const [
     ),
 
     source(
-      "../supabase/migrations/20260906074121_transfer_lifecycle_operation_integrity.sql",
+      "../archive/database/supabase-migrations/20260906074121_transfer_lifecycle_operation_integrity.sql",
     ),
 
     source(
-      "../supabase/migrations/20260910140907_direct_store_transfer_lifecycle.sql",
+      "../archive/database/supabase-migrations/20260910140907_direct_store_transfer_lifecycle.sql",
     ),
 
     source(
-      "../supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql",
+      "../archive/database/supabase-migrations/20260910142940_granular_inventory_transfer_rbac.sql",
     ),
 
     source(

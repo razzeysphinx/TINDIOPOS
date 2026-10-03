@@ -11,7 +11,7 @@ async function source(relativePath) {
 }
 
 const [phaseTwoMigration, phaseTwoDatabaseTest] = await Promise.all([
-  source("supabase/migrations/20260906070329_purchase_order_receiving_operation_integrity.sql"),
+  source("archive/database/supabase-migrations/20260906070329_purchase_order_receiving_operation_integrity.sql"),
   source("supabase/tests/database/inventory_purchase_order_receiving_integrity.test.sql"),
 ]);
 
@@ -114,7 +114,7 @@ test("Phase 6 bounds purchase and receipt history reads and reuses shared invent
 });
 
 test("Phase 6 scopes goods-receipt history with existing store authority and no grants", async () => {
-  const migration = await source("supabase/migrations/20260829124244_goods_receipt_store_scope.sql");
+  const migration = await source("archive/database/supabase-migrations/20260829124244_goods_receipt_store_scope.sql");
 
   assert.match(migration, /goods_receipts_select_authorized_scope/);
   assert.match(migration, /goods_receipt_lines_select_authorized_scope/);

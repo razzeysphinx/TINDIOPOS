@@ -45,7 +45,7 @@ test(
     );
 
     const sequenceMigration = read(
-      "supabase/migrations/20260929000000_phase_11_device_sequence_checkpoints.sql",
+      "archive/database/supabase-migrations/20260929000000_phase_11_device_sequence_checkpoints.sql",
     );
 
     assert.ok(

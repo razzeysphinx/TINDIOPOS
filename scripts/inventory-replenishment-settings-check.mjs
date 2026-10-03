@@ -4,8 +4,8 @@ import test from "node:test";
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const [migration, stockPageFallbackMigration, service, schema, csv, forms, workspace, data, exportRoute, workflows, actions] = await Promise.all([
-  source("supabase/migrations/20260919013635_canonical_inventory_replenishment_settings.sql"),
-  source("supabase/migrations/20260919021500_phase_13_effective_low_stock_fallback.sql"),
+  source("archive/database/supabase-migrations/20260919013635_canonical_inventory_replenishment_settings.sql"),
+  source("archive/database/supabase-migrations/20260919021500_phase_13_effective_low_stock_fallback.sql"),
   source("src/features/catalog/service.ts"), source("src/features/catalog/catalog-schema.ts"),
   source("src/features/catalog/catalog-csv.ts"), source("src/features/catalog/catalog-forms.tsx"),
   source("src/features/catalog/catalog-product-workspace.tsx"), source("src/features/catalog/data.ts"),

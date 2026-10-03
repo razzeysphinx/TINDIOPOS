@@ -4,7 +4,7 @@ import test from "node:test";
 
 test("Phase 17 Slice 01 server telemetry", () => {
   const migration = fs.readFileSync(
-    "supabase/migrations/20260929173000_phase_17_sync_control_center_telemetry.sql",
+    "archive/database/supabase-migrations/20260929173000_phase_17_sync_control_center_telemetry.sql",
     "utf8",
   );
 

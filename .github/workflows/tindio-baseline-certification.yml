@@ -101,7 +101,7 @@ jobs:
         shell: bash
         run: |
           test -z "$(git status --porcelain --untracked-files=all -- \
-            supabase/migrations \
+            archive/database/supabase-migrations \
             src/lib/supabase/database.types.ts)"
 
       - name: Final whitespace validation

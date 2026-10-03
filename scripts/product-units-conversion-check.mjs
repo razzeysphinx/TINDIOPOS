@@ -4,11 +4,11 @@ import test from "node:test";
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const [migration, service, actions, workspace, phase09] = await Promise.all([
-  source("supabase/migrations/20260918030903_canonical_product_units.sql"),
+  source("archive/database/supabase-migrations/20260918030903_canonical_product_units.sql"),
   source("src/features/catalog/service.ts"),
   source("src/features/catalog/actions.ts"),
   source("src/features/catalog/catalog-product-workspace.tsx"),
-  source("supabase/migrations/20260918023953_canonical_purchasing_receiving.sql"),
+  source("archive/database/supabase-migrations/20260918023953_canonical_purchasing_receiving.sql"),
 ]);
 
 test("base identity and exact per-product conversion remain protected", () => {

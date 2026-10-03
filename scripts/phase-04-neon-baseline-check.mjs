@@ -35,7 +35,7 @@ const [
       "database/provider/neon/01_identity.sql",
     ),
     source(
-      "supabase/migrations/20260922180000_neon_portability_foundation.sql",
+      "archive/database/supabase-migrations/20260922180000_neon_portability_foundation.sql",
     ),
   ]);
 

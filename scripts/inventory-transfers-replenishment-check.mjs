@@ -103,9 +103,9 @@ test("direct transfers are retry-safe while request receipts remain canonical", 
   const supplyChainWorkflows = await source("src/features/inventory/supply-chain-workflows.tsx");
   const legacyActions = await inventoryCommandSource("src/features/inventory/advanced-inventory-actions.ts");
   const inventoryPage = await source("src/app/(back-office)/back-office/inventory/page.tsx");
-  const migration = await source("supabase/migrations/20260906074121_transfer_lifecycle_operation_integrity.sql");
-  const directTransferMigration = await source("supabase/migrations/20260910140907_direct_store_transfer_lifecycle.sql");
-  const legacyGuardMigration = await source("supabase/migrations/20260906081000_inventory_count_snapshots_and_legacy_command_guard.sql");
+  const migration = await source("archive/database/supabase-migrations/20260906074121_transfer_lifecycle_operation_integrity.sql");
+  const directTransferMigration = await source("archive/database/supabase-migrations/20260910140907_direct_store_transfer_lifecycle.sql");
+  const legacyGuardMigration = await source("archive/database/supabase-migrations/20260906081000_inventory_count_snapshots_and_legacy_command_guard.sql");
 
   assert.match(supplyChainActions, /target_operation_id: parsed\.data\.operationId/);
   assert.match(supplyChainWorkflows, /pendingOperationId\(operationScope, payload\)/);

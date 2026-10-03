@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const roots = ["src", "supabase/migrations"];
+const roots = ["src", "archive/database/supabase-migrations"];
 const extensions = new Set([".ts", ".tsx", ".js", ".mjs", ".sql"]);
 
 const categories = [

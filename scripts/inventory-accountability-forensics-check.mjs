@@ -9,7 +9,7 @@ const [page, activity, detail, workflows, lifecycleMigration, offlineFoundation]
   source("../src/features/inventory/inventory-activity-list.tsx"),
   source("../src/features/inventory/inventory-product-detail.tsx"),
   source("../src/features/inventory/inventory-integrity-workflows.tsx"),
-  source("../supabase/migrations/20260904021125_inventory_control_document_lifecycle.sql"),
+  source("../archive/database/supabase-migrations/20260904021125_inventory_control_document_lifecycle.sql"),
   source("../src/features/offline/offline-sync.ts"),
 ]);
 

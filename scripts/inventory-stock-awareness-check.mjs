@@ -10,7 +10,7 @@ const [stockView, replenishmentPage, catalogWorkspace, catalogService, catalogSc
   source("../src/features/catalog/catalog-product-workspace.tsx"),
   source("../src/features/catalog/service.ts"),
   source("../src/features/catalog/catalog-schema.ts"),
-  source("../supabase/migrations/20260905090000_inventory_stock_awareness_lifecycle.sql"),
+  source("../archive/database/supabase-migrations/20260905090000_inventory_stock_awareness_lifecycle.sql"),
 ]);
 
 test("stock levels default to action priority and expose interactive summary filters", () => {

@@ -9,8 +9,8 @@ const [page, health, detail, navigation, migration, clockMigration, purchasingMi
   source("../src/features/inventory/inventory-health-workspace.tsx"),
   source("../src/features/inventory/inventory-product-detail.tsx"),
   source("../src/features/inventory/inventory-workspace-navigation.tsx"),
-  source("../supabase/migrations/20260905090200_inventory_count_awareness.sql"),
-  source("../supabase/migrations/20260905090300_inventory_health_awareness_clock.sql"),
+  source("../archive/database/supabase-migrations/20260905090200_inventory_count_awareness.sql"),
+  source("../archive/database/supabase-migrations/20260905090300_inventory_health_awareness_clock.sql"),
   source("../database/migrations/0006_inventory_purchasing_read_model.sql"),
 ]);
 

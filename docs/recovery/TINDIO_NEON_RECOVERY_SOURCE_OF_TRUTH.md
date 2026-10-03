@@ -50,7 +50,7 @@ docs/: 66 files
 docs/recovery/: 14 files
 database/: 12 files
 supabase/: 294 files
-supabase/migrations/: 213 files
+archive/database/supabase-migrations/: 213 files
 supabase/tests/: 79 files
 ```
 
@@ -95,7 +95,7 @@ R5  COMPLETE
 R6  COMPLETE
 R7  COMPLETE
 R8  COMPLETE
-R9  NEXT / NOT STARTED
+R9  COMPLETE
 ```
 
 R5 current slices:
@@ -818,7 +818,7 @@ fresh Neon contains certified equivalent business truth
 
 # R8 — CONTROLLED CUTOVER + PRODUCTION CERTIFICATION
 
-**Status:** NEXT / NOT STARTED
+**Status:** COMPLETE
 
 Purpose:
 
@@ -890,7 +890,7 @@ old Neon retained temporarily as rollback evidence
 
 # R9 — LEGACY CLEANUP + RECOVERY CLOSURE
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 Purpose:
 
@@ -935,6 +935,16 @@ Exit:
 ```text
 TINDIO NEON RECOVERY = CLOSED
 ```
+
+Local closure state:
+
+```text
+CLOSED LOCALLY / AWAITING REPOSITORY CLOSURE
+```
+
+The recovery branch still requires a separately authorized push and merge into
+the intended default branch before repository closure is complete. No branch or
+database resource deletion is authorized by local R9 completion.
 
 ---
 

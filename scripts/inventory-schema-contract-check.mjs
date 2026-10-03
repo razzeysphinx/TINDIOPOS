@@ -8,7 +8,7 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const source = (relativePath) => readFile(path.join(repositoryRoot, relativePath), "utf8");
 
 test("Inventory schema contract v3 certifies the provider-neutral command boundary", async () => {
-  const migration = await source("supabase/migrations/20260916044235_inventory_schema_contract_v3.sql");
+  const migration = await source("archive/database/supabase-migrations/20260916044235_inventory_schema_contract_v3.sql");
 
   assert.match(migration, /create or replace function public\.get_inventory_schema_contract/);
   assert.match(migration, /'contract_version', 3/);

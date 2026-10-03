@@ -29,7 +29,7 @@ function historicalMigrationPaths() {
     "--name-only",
     AUDITED_ANCESTOR,
     "--",
-    "supabase/migrations",
+    "archive/database/supabase-migrations",
   ]);
   const files = output
     .split(/\r?\n/)
@@ -83,7 +83,7 @@ const migrationFiles = readdirSync(path.join(ROOT, "supabase", "migrations")).fi
 const historicalFiles = assertHistoricalMigrationsImmutable();
 const historicalSet = new Set(historicalFiles);
 const recoveryFiles = migrationFiles
-  .map((name) => `supabase/migrations/${name}`)
+  .map((name) => `archive/database/supabase-migrations/${name}`)
   .filter((file) => !historicalSet.has(file));
 
 assert.ok(

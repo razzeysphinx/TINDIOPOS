@@ -20,10 +20,10 @@ const [
   sqlTest,
   readerContract,
 ] = await Promise.all([
-  source("../supabase/migrations/20260917033614_canonical_inventory_transfer_foundation.sql"),
-  source("../supabase/migrations/20260917070409_phase_05_direct_transfer_contract_repair.sql"),
-  source("../supabase/migrations/20260917073801_canonical_request_transfer_migration.sql"),
-  source("../supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql"),
+  source("../archive/database/supabase-migrations/20260917033614_canonical_inventory_transfer_foundation.sql"),
+  source("../archive/database/supabase-migrations/20260917070409_phase_05_direct_transfer_contract_repair.sql"),
+  source("../archive/database/supabase-migrations/20260917073801_canonical_request_transfer_migration.sql"),
+  source("../archive/database/supabase-migrations/20260910142940_granular_inventory_transfer_rbac.sql"),
   Promise.all([
     source("../src/features/inventory/advanced-inventory-actions.ts"),
     source("../src/features/inventory/pos-transfer-service.ts"),

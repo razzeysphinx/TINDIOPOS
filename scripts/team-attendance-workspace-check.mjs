@@ -8,7 +8,7 @@ test("Back Office Time & Attendance is an audit surface, while POS retains emplo
   const [timeAttendancePage, posDrawer, policy] = await Promise.all([
     read("src/app/(back-office)/back-office/time-clock/page.tsx"),
     read("src/features/pos/pos-operational-drawer.tsx"),
-    read("supabase/migrations/20260904083000_time_attendance_management_scope.sql"),
+    read("archive/database/supabase-migrations/20260904083000_time_attendance_management_scope.sql"),
   ]);
 
   assert.match(timeAttendancePage, /requireBackOfficePermission\("employees\.manage"\)/);

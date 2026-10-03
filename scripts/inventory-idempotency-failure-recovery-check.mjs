@@ -15,7 +15,7 @@ const [
   source("../src/features/inventory/inventory-count-workspace.tsx"),
   source("../src/features/offline/offline-sync.ts"),
   source("../src/features/pos/pos-incoming-transfer-inbox.tsx"),
-  source("../supabase/migrations/20260911112514_inventory_count_post_idempotency.sql"),
+  source("../archive/database/supabase-migrations/20260911112514_inventory_count_post_idempotency.sql"),
 ]);
 
 test("inventory-count posting retains one operation ID through an uncertain client response", () => {

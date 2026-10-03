@@ -13,7 +13,7 @@ const [page, workspace, forms, dialog, detailDrawer, data, actions, exportRoute,
   source("src/features/catalog/data.ts"),
   source("src/features/catalog/actions.ts"),
   source("src/app/api/catalog/export/route.ts"),
-  source("supabase/migrations/20260903093657_controlled_catalog_product_delete.sql"),
+  source("archive/database/supabase-migrations/20260903093657_controlled_catalog_product_delete.sql"),
 ]);
 
 assert.match(page, /requireBackOfficePermission\("products\.manage"\)/, "Catalog route must retain its server permission boundary");

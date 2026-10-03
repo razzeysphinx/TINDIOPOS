@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const migration = readFileSync(
-  "supabase/migrations/20260930113000_recovery_r1_device_checkpoint_ambiguity_repair.sql",
+  "archive/database/supabase-migrations/20260930113000_recovery_r1_device_checkpoint_ambiguity_repair.sql",
   "utf8",
 );
 

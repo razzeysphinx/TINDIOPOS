@@ -3,7 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 
 const migrationsDirectory =
-  new URL("../supabase/migrations/", import.meta.url);
+  new URL("../archive/database/supabase-migrations/", import.meta.url);
 
 const migrationNames = await readdir(migrationsDirectory);
 
@@ -21,7 +21,7 @@ assert.equal(
 
 const migration = await readFile(
   new URL(
-    `../supabase/migrations/${migrations[0]}`,
+    `../archive/database/supabase-migrations/${migrations[0]}`,
     import.meta.url,
   ),
   "utf8",

@@ -56,7 +56,7 @@ if (
 const migration =
   await readFile(
     new URL(
-      "../supabase/migrations/20260930020000_neon_pos_workspace_auth_boundary_repair.sql",
+      "../archive/database/supabase-migrations/20260930020000_neon_pos_workspace_auth_boundary_repair.sql",
       import.meta.url,
     ),
     "utf8",

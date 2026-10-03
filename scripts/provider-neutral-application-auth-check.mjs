@@ -126,8 +126,12 @@ test("archived migration is non-destructive, tracked, and hash-preserved", async
   );
   const archived = archiveManifest.migrations.find(({ archivePath }) => archivePath === migrationRelativePath);
   assert.ok(archived, "the archived provider-neutral identity migration must have a manifest record");
+  const committedMigration = execFileSync("git", ["show", `HEAD:${migrationRelativePath}`], {
+    cwd: process.cwd(),
+    maxBuffer: 32 * 1024 * 1024,
+  });
   assert.equal(
-    createHash("sha256").update(migration).digest("hex"),
+    createHash("sha256").update(committedMigration).digest("hex"),
     archived.sha256,
     "the archived provider-neutral identity migration must retain its recorded bytes",
   );

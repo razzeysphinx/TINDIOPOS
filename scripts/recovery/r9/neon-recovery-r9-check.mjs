@@ -14,6 +14,10 @@ function git(...args) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 }
 
+function gitBytes(...args) {
+  return execFileSync("git", args, { cwd: root, maxBuffer: 32 * 1024 * 1024 });
+}
+
 function mustExist(relativePath) {
   assert.ok(existsSync(`${root}/${relativePath}`), `Required R9 artifact is missing: ${relativePath}`);
 }
@@ -70,7 +74,9 @@ assert.equal(isolatedNeon.oldSourceTouched, false, "R9 must not touch the retain
 assert.equal(isolatedNeon.authRuntimeSurvivedInstall, true, "Provider auth runtime must survive installation.");
 assert.equal(archiveManifest.migrationCount, archiveManifest.migrations.length, "Historical archive count mismatch.");
 for (const migration of archiveManifest.migrations) {
-  const bytes = readFileSync(`${root}/${migration.archivePath}`);
+  // Hash the committed blob so Windows checkout line-ending conversion cannot
+  // produce a different result from Linux CI.
+  const bytes = gitBytes("show", `HEAD:${migration.archivePath}`);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   assert.equal(sha256, migration.sha256, `Historical migration changed: ${migration.archivePath}`);
 }

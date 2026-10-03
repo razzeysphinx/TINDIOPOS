@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
@@ -71,7 +72,12 @@ export async function verifyHistoricalMigrationArchive() {
   assert.ok(manifest.migrationCount > 0, "Historical archive manifest is empty.");
 
   for (const migration of manifest.migrations) {
-    const source = await readFile(migration.archivePath);
+    // Hash the committed blob, not checkout bytes that may be rewritten by
+    // core.autocrlf. The archive contract protects repository history.
+    const source = execFileSync("git", ["show", `HEAD:${migration.archivePath}`], {
+      cwd: ROOT,
+      maxBuffer: 32 * 1024 * 1024,
+    });
     const sha256 = createHash("sha256").update(source).digest("hex");
     assert.equal(sha256, migration.sha256, `Historical archive hash mismatch: ${migration.archivePath}`);
   }

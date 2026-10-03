@@ -92,6 +92,13 @@ function summarizeBaseline(sql) {
   console.log("R3/R4 remove provider identity and role coupling before plain PostgreSQL/Neon certification.");
 }
 
+function withoutDollarQuotedBodies(sql) {
+  return sql.replace(
+    /\$([A-Za-z_][A-Za-z0-9_]*)\$[\s\S]*?\$\1\$|\$\$[\s\S]*?\$\$/g,
+    (body) => body.replace(/[^\n]/g, " "),
+  );
+}
+
 function normalizeBaselineBootstrap(sql) {
   if (!privateFunctionDeclaration.test(sql)) {
     throw new Error(
@@ -319,10 +326,13 @@ async function main() {
   sql =
     normalizeProviderAdministrativePrivileges(
       normalizeSourceOwnership(
-        normalizeBaselineBootstrap(
+      normalizeBaselineBootstrap(
           sql.replace(
             /\r\n/g,
             "\n",
+          ).replace(
+            /^-- \\(?:un)?restrict [^\n]*\n?/gm,
+            "",
           ),
         ),
       ),
@@ -341,6 +351,24 @@ async function main() {
   for (const pattern of forbiddenManagedObjects) {
     if (pattern.test(sql)) {
       throw new Error(`Baseline unexpectedly contains a provider-managed object matching ${pattern}.`);
+    }
+  }
+
+  const forbiddenBusinessDataStatements = [
+    /^\s*COPY\s+(?:"?public"?\.)/im,
+    /^\s*COPY\s+(?:"?private"?\.)/im,
+    /^\s*INSERT\s+INTO\s+(?:"?public"?\.)/im,
+    /^\s*INSERT\s+INTO\s+(?:"?private"?\.)/im,
+  ];
+
+  // The schema dump legitimately includes INSERT statements inside dollar-quoted
+  // stored-function bodies. Only executable top-level COPY/INSERT statements
+  // represent dumped business data.
+  const executableSchemaSql = withoutDollarQuotedBodies(sql);
+
+  for (const pattern of forbiddenBusinessDataStatements) {
+    if (pattern.test(executableSchemaSql)) {
+      throw new Error(`Canonical baseline unexpectedly contains business data matching ${pattern}.`);
     }
   }
 

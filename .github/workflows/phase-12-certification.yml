@@ -74,7 +74,7 @@ jobs:
         run: node scripts/composite-production-concurrency-certification.mjs
 
       - name: Confirm clean migration tree after certification
-        run: git status --porcelain --untracked-files=all -- supabase/migrations
+        run: git status --porcelain --untracked-files=all -- archive/database/supabase-migrations
 
       - name: Final whitespace check
         run: git diff --check

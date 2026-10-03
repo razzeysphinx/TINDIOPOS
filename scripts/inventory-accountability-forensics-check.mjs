@@ -9,7 +9,7 @@ const [page, activity, detail, workflows, lifecycleMigration, offlineFoundation]
   source("../src/features/inventory/inventory-activity-list.tsx"),
   source("../src/features/inventory/inventory-product-detail.tsx"),
   source("../src/features/inventory/inventory-integrity-workflows.tsx"),
-  source("../supabase/migrations/20260904021125_inventory_control_document_lifecycle.sql"),
+  source("../archive/database/supabase-migrations/20260904021125_inventory_control_document_lifecycle.sql"),
   source("../src/features/offline/offline-sync.ts"),
 ]);
 
@@ -25,9 +25,8 @@ test("manual adjustments keep a review before the existing immutable document RP
 });
 
 test("activity resolves canonical source documents without duplicating history", () => {
-  for (const table of ["inventory_adjustments", "inventory_counts", "goods_receipts", "stock_transfers"]) {
-    assert.match(page, new RegExp(`from\\(\\"${table}\\"\\)`));
-  }
+  assert.match(page, /loadInventoryActivityReferenceBundleResult/);
+  for (const table of ["inventory_adjustments", "inventory_counts", "goods_receipts", "stock_transfers"]) assert.doesNotMatch(page, new RegExp(`from\\(\\"${table}\\"\\)`));
   assert.match(page, /sourceDocumentReferences/);
   assert.match(page, /Adjustment SA-/);
   assert.match(page, /Count IC-/);

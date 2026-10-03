@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-10-02T11:18:32.979Z",
+  "status": "PASS",
+  "cause": "successful frozen auth certification invokes ensure_current_identity_profile",
+  "causeContract": {
+    "profileUpdatedAtNow": true,
+    "identityLinkUpdatedAtNow": true,
+    "onConflict": true,
+    "repositoryCallChain": "PASS"
+  },
+  "tables": {
+    "public.profiles": {
+      "rowCountMatch": true,
+      "primaryKeyMatch": true,
+      "nonUpdatedAtContentMatch": true,
+      "updatedAtDriftRows": 1
+    },
+    "private.identity_links": {
+      "rowCountMatch": true,
+      "primaryKeyMatch": true,
+      "nonUpdatedAtContentMatch": true,
+      "updatedAtDriftRows": 1
+    }
+  },
+  "linkedControlledIdentitySha256": "10eed57ff18ddfb6f335375202364806cf6a294770d9034fb8c3b8c25d0170f7",
+  "certificationStartedAt": "2026-10-02T08:42:51.000Z",
+  "observedAt": "2026-10-02T11:18:32.979Z",
+  "businessAuthoritativeWrites": 0,
+  "controlledCertificationMetadataWrites": 2,
+  "unexplainedDrift": 0,
+  "blindBusinessFailbackStillSafe": true
+}

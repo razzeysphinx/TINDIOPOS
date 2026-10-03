@@ -28,7 +28,7 @@ const [
   source("./phase-1-workspace-access-check.mjs"),
   source("./phase-7-security-boundary-check.mjs"),
   source("./phase-8-offline-integrity-check.mjs"),
-  source("../supabase/migrations/20260825034204_improvement_17_backup_recovery_governance.sql"),
+  source("../archive/database/supabase-migrations/20260825034204_improvement_17_backup_recovery_governance.sql"),
   source("../supabase/tests/database/improvement_17_backup_recovery_governance.test.sql"),
 ]);
 

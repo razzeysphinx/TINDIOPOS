@@ -1,0 +1,21 @@
+{
+  "phase": 22,
+  "generatedAt": null,
+  "status": "MEASUREMENT_PENDING",
+  "optimizationApplied": false,
+  "measurements": {
+    "dbQueriesPerCheckout": null,
+    "dbQueriesPerPosLaunch": null,
+    "apiCallsPerCashierHour": null,
+    "rowsScanned": null,
+    "queryLatencyMs": null,
+    "payloadBytes": null,
+    "catalogSyncSize": null,
+    "deltaSyncSize": null,
+    "realtimeConnections": 0,
+    "sqliteSearchLatencyMs": null,
+    "syncThroughputPerSecond": null,
+    "recoveryDurationMs": null
+  },
+  "note": "Do not populate measurement values until they are actually observed in a controlled runtime profile."
+}

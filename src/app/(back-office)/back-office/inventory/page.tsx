@@ -30,10 +30,32 @@ type InventorySaleableItem = {
   storeIds: string[];
   identifiers?: string[];
 };
+
+type InventoryCountWorkspaceRow = Pick<TableRow<"inventory_counts">, "id" | "count_number" | "store_id" | "status" | "note" | "started_at" | "started_by_employee_id" | "completed_at" | "updated_at" | "count_mode" | "scope_type" | "scope_reference_id" | "sort_mode" | "include_zero_stock">;
+type InventoryCountLineWorkspaceRow = Pick<TableRow<"inventory_count_lines">, "id" | "inventory_count_id" | "product_id" | "variant_id" | "expected_quantity" | "reconciled_expected_quantity" | "counted_quantity" | "counted_at" | "product_name_snapshot" | "variant_name_snapshot" | "category_name_snapshot" | "sku_snapshot" | "barcode_snapshot" | "unit_snapshot" | "line_sort_order">;
+type InventoryCountBatchWorkspaceRow = Pick<TableRow<"inventory_count_batches">, "id" | "batch_number" | "name" | "note" | "created_at" | "updated_at">;
+type InventoryCountBatchDocumentWorkspaceRow = Pick<TableRow<"inventory_count_batch_documents">, "inventory_count_batch_id" | "inventory_count_id" | "store_id">;
+type InventoryCountReadError = { code?: string; message?: string; details?: string; hint?: string };
+type InventoryCountReadResult<T> = { data: T[] | null; error: InventoryCountReadError | null };
+type InventoryCountReadClient = {
+  rpc(name: "get_inventory_counts_workspace_v2", args: { target_organization_id: string; target_store_ids: string[] | null; target_limit: number }): PromiseLike<InventoryCountReadResult<InventoryCountWorkspaceRow>>;
+  rpc(name: "get_inventory_count_lines_workspace_v2", args: { target_organization_id: string; target_inventory_count_ids: string[] }): PromiseLike<InventoryCountReadResult<InventoryCountLineWorkspaceRow>>;
+  rpc(name: "get_inventory_count_batches_workspace_v2", args: { target_organization_id: string; target_limit: number }): PromiseLike<InventoryCountReadResult<InventoryCountBatchWorkspaceRow>>;
+  rpc(name: "get_inventory_count_batch_documents_workspace_v2", args: { target_organization_id: string; target_inventory_count_batch_ids: string[] }): PromiseLike<InventoryCountReadResult<InventoryCountBatchDocumentWorkspaceRow>>;
+};
 import {
-  RECEIVABLE_TRANSFER_QUERY_STATUSES,
   isReceivableTransferState,
 } from "@/features/inventory/inventory-transfer-reader-contract";
+import { loadInventoryControlCoreData } from "@/features/inventory/inventory-core-data";
+import {
+  loadInventoryPurchasingBundleResult,
+  type InventoryPurchasingBundleNeed,
+} from "@/features/inventory/inventory-purchasing-data";
+import {
+  loadInventoryActivityReferenceBundleResult,
+  loadInventoryValuationReferenceBundleResult,
+  type InventoryActivityReferenceNeed,
+} from "@/features/inventory/inventory-specialized-data";
 import { InventoryActivityList } from "@/features/inventory/inventory-activity-list";
 import { InventoryCountWorkspace } from "@/features/inventory/inventory-count-workspace";
 import {
@@ -209,48 +231,9 @@ function resolveMovementSourceType(value: string | string[] | undefined): Invent
     : null;
 }
 
-function movementSourceIdsFrom(
-  movements: readonly Pick<TableRow<"inventory_movements">, "source_id" | "source_type">[],
-  sourceType: InventoryMovementSourceType,
-) {
-  return [...new Set(
-    movements
-      .filter((movement) => movement.source_type === sourceType && movement.source_id && UUID_PATTERN.test(movement.source_id))
-      .map((movement) => movement.source_id as string),
-  )];
-}
-
 function resolveHealthSeverity(value: string | string[] | undefined): InventoryHealthSeverity | "all" {
   const candidate = Array.isArray(value) ? value[0] : value;
   return candidate === "critical" || candidate === "warning" || candidate === "information" ? candidate : "all";
-}
-
-async function loadInventoryItemActivity({
-  limit,
-  organizationId,
-  productId,
-  storeId,
-  supabase,
-  variantId,
-}: {
-  limit: number;
-  organizationId: string;
-  productId: string;
-  storeId: string;
-  supabase: Awaited<ReturnType<typeof createClient>>;
-  variantId: string | null;
-}) {
-  const query = supabase
-    .from("inventory_movements")
-    .select("id, store_id, product_id, variant_id, quantity_delta, quantity_before, quantity_after, movement_type, actor_employee_id, reason, reason_code, source_type, source_id, unit_snapshot, created_at")
-    .eq("organization_id", organizationId)
-    .eq("store_id", storeId)
-    .eq("product_id", productId);
-
-  if (variantId) query.eq("variant_id", variantId);
-  else query.is("variant_id", null);
-
-  return query.order("created_at", { ascending: false }).limit(limit);
 }
 
 /** CANDIDATE_FOR_REMOVAL: retained while shared InventoryWorkspaceNavigation completes QA. */
@@ -338,156 +321,39 @@ async function renderPurchasingWorkspace({
   storeScope,
   supabase,
 }: PurchasingWorkspaceProps) {
-  type Store = Pick<TableRow<"stores">, "id" | "name" | "is_active">;
-  type Product = Pick<TableRow<"products">, "id" | "name" | "sku" | "barcode" | "product_type" | "unit" | "status" | "track_inventory">;
-  type Variant = Pick<TableRow<"product_variants">, "id" | "product_id" | "name" | "sku" | "barcode" | "sort_order" | "is_active">;
-  type ProductUnit = Pick<TableRow<"product_units">, "product_id" | "unit_code" | "unit_name" | "factor_to_base" | "is_base" | "is_purchase_unit">;
-  type ProductStoreSetting = Pick<TableRow<"product_store_settings">, "product_id" | "store_id" | "is_available">;
-  type Supplier = Pick<TableRow<"suppliers">, "id" | "name" | "contact_name" | "email" | "phone" | "address" | "notes" | "is_active" | "lead_time_days">;
-  type PurchaseOrder = Pick<TableRow<"purchase_orders">, "id" | "supplier_id" | "store_id" | "order_number" | "status" | "expected_at" | "created_at">;
-  type PurchaseOrderLine = Pick<TableRow<"purchase_order_lines">, "id" | "purchase_order_id" | "product_id" | "variant_id" | "product_name_snapshot" | "variant_name_snapshot" | "unit_snapshot" | "purchase_unit_code_snapshot" | "purchase_unit_factor_to_base" | "ordered_quantity" | "received_quantity">;
-  type GoodsReceipt = Pick<TableRow<"goods_receipts">, "id" | "receipt_number" | "purchase_order_id" | "store_id" | "note" | "received_at">;
-  type GoodsReceiptLine = Pick<TableRow<"goods_receipt_lines">, "goods_receipt_id" | "purchase_order_line_id" | "quantity_received">;
-  const emptyResult = <T,>() => Promise.resolve({ data: [] as T[], error: null });
   const visibleStore = (storeId: string) => scopedStoreIds === null || scopedStoreIds.includes(storeId);
+  const purchasingNeeds: InventoryPurchasingBundleNeed[] = [];
+  const addNeed = (need: InventoryPurchasingBundleNeed) => {
+    if (!purchasingNeeds.includes(need)) purchasingNeeds.push(need);
+  };
+  if (dataNeeds.has("stores")) addNeed("stores");
+  if (dataNeeds.has("products")) addNeed("products");
+  if (dataNeeds.has("variants")) addNeed("variants");
+  if (dataNeeds.has("productUnits") && purchasingEnabled) addNeed("productUnits");
+  if (dataNeeds.has("productStoreSettings")) addNeed("productStoreSettings");
+  if (dataNeeds.has("suppliers") && purchasingEnabled) addNeed("suppliers");
+  if (dataNeeds.has("purchaseOrders") && purchasingEnabled) addNeed("purchaseOrders");
+  if (dataNeeds.has("purchaseOrderLines") && purchasingEnabled) addNeed("purchaseOrderLines");
+  if (dataNeeds.has("goodsReceipts") && purchasingEnabled) addNeed("goodsReceipts");
+  if (dataNeeds.has("goodsReceiptLines") && purchasingEnabled) addNeed("goodsReceiptLines");
 
-  const storesQuery = dataNeeds.has("stores")
-    ? supabase
-        .from("stores")
-        .select("id, name, is_active")
-        .eq("organization_id", organizationId)
-        .eq("is_active", true)
-        .order("created_at", { ascending: true })
+  const purchasingBundleResult = await loadInventoryPurchasingBundleResult({ client: supabase, organizationId, storeIds: scopedStoreIds, needs: purchasingNeeds });
+  const initialPurchasingFailure = purchasingBundleResult.error
+    ? reportInventoryModuleFailure("purchasing", purchasingBundleResult.error)
     : null;
-  const productsQuery = dataNeeds.has("products")
-    ? supabase
-        .from("products")
-        .select("id, name, sku, barcode, product_type, unit, status, track_inventory")
-        .eq("organization_id", organizationId)
-        .eq("status", "active")
-        .eq("track_inventory", true)
-        .order("name", { ascending: true })
-    : null;
-  const variantsQuery = dataNeeds.has("variants")
-    ? supabase
-        .from("product_variants")
-        .select("id, product_id, name, sku, barcode, sort_order, is_active")
-        .eq("organization_id", organizationId)
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true })
-    : null;
-  const productUnitsQuery = dataNeeds.has("productUnits") && purchasingEnabled
-    ? supabase
-        .from("product_units")
-        .select("product_id, unit_code, unit_name, factor_to_base, is_base, is_purchase_unit")
-        .eq("organization_id", organizationId)
-        .order("is_purchase_unit", { ascending: false })
-        .order("is_base", { ascending: false })
-        .order("unit_name", { ascending: true })
-    : null;
-  const settingsQuery = dataNeeds.has("productStoreSettings")
-    ? supabase
-        .from("product_store_settings")
-        .select("product_id, store_id, is_available")
-        .eq("organization_id", organizationId)
-    : null;
-  const suppliersQuery = dataNeeds.has("suppliers") && purchasingEnabled
-    ? supabase
-        .from("suppliers")
-        .select("id, name, contact_name, email, phone, address, notes, is_active, lead_time_days")
-        .eq("organization_id", organizationId)
-        .order("name", { ascending: true })
-    : null;
-  const purchaseOrdersQuery = dataNeeds.has("purchaseOrders") && purchasingEnabled
-    ? supabase
-        .from("purchase_orders")
-        .select("id, supplier_id, store_id, order_number, status, expected_at, created_at")
-        .eq("organization_id", organizationId)
-        .order("created_at", { ascending: false })
-        .limit(30)
-    : null;
-
-  if (scopedStoreIds) {
-    settingsQuery?.in("store_id", scopedStoreIds);
-    purchaseOrdersQuery?.in("store_id", scopedStoreIds);
-  }
-
-  const [
-    storesResult,
-    productsResult,
-    variantsResult,
-    productUnitsResult,
-    settingsResult,
-    suppliersResult,
-    purchaseOrdersResult,
-  ] = await Promise.all([
-    storesQuery ?? emptyResult<Store>(),
-    productsQuery ?? emptyResult<Product>(),
-    variantsQuery ?? emptyResult<Variant>(),
-    productUnitsQuery ?? emptyResult<ProductUnit>(),
-    settingsQuery ?? emptyResult<ProductStoreSetting>(),
-    suppliersQuery ?? emptyResult<Supplier>(),
-    purchaseOrdersQuery ?? emptyResult<PurchaseOrder>(),
-  ]);
-
-  const initialPurchasingError = [
-    storesResult,
-    productsResult,
-    variantsResult,
-    productUnitsResult,
-    settingsResult,
-    suppliersResult,
-    purchaseOrdersResult,
-  ].find((result) => result.error)?.error;
-  const initialPurchasingFailure = initialPurchasingError
-    ? reportInventoryModuleFailure("purchasing", initialPurchasingError)
-    : null;
-
-  const stores = ((storesResult.data ?? []) as Store[]).filter((store) => visibleStore(store.id));
-  const products = (productsResult.data ?? []) as Product[];
-  const variants = (variantsResult.data ?? []) as Variant[];
-  const productUnits = (productUnitsResult.data ?? []) as ProductUnit[];
-  const settings = ((settingsResult.data ?? []) as ProductStoreSetting[]).filter((setting) => visibleStore(setting.store_id));
-  const suppliers = (suppliersResult.data ?? []) as Supplier[];
-  const purchaseOrders = ((purchaseOrdersResult.data ?? []) as PurchaseOrder[]).filter((order) => visibleStore(order.store_id));
-  const purchaseOrderIds = purchaseOrders.map((order) => order.id);
-
-  const [purchaseOrderLinesResult, goodsReceiptsResult] = await Promise.all([
-    dataNeeds.has("purchaseOrderLines") && purchasingEnabled && !initialPurchasingFailure && purchaseOrderIds.length
-      ? supabase
-          .from("purchase_order_lines")
-          .select("id, purchase_order_id, product_id, variant_id, product_name_snapshot, variant_name_snapshot, unit_snapshot, purchase_unit_code_snapshot, purchase_unit_factor_to_base, ordered_quantity, received_quantity")
-          .eq("organization_id", organizationId)
-          .in("purchase_order_id", purchaseOrderIds)
-      : emptyResult<PurchaseOrderLine>(),
-    dataNeeds.has("goodsReceipts") && purchasingEnabled && !initialPurchasingFailure && purchaseOrderIds.length
-      ? supabase
-          .from("goods_receipts")
-          .select("id, receipt_number, purchase_order_id, store_id, note, received_at")
-          .eq("organization_id", organizationId)
-          .in("purchase_order_id", purchaseOrderIds)
-          .order("received_at", { ascending: false })
-          .limit(50)
-      : emptyResult<GoodsReceipt>(),
-  ]);
-  const purchasingHistoryError = [purchaseOrderLinesResult, goodsReceiptsResult].find((result) => result.error)?.error;
-  const purchasingHistoryFailure = purchasingHistoryError
-    ? reportInventoryModuleFailure("purchasing", purchasingHistoryError)
-    : null;
-  const purchaseOrderLines = (purchaseOrderLinesResult.data ?? []) as PurchaseOrderLine[];
-  const goodsReceipts = (goodsReceiptsResult.data ?? []) as GoodsReceipt[];
-  const goodsReceiptIds = goodsReceipts.map((receipt) => receipt.id);
-  const goodsReceiptLinesResult = dataNeeds.has("goodsReceiptLines") && purchasingEnabled && !purchasingHistoryFailure && goodsReceiptIds.length
-    ? await supabase
-        .from("goods_receipt_lines")
-        .select("goods_receipt_id, purchase_order_line_id, quantity_received")
-        .eq("organization_id", organizationId)
-        .in("goods_receipt_id", goodsReceiptIds)
-    : await emptyResult<GoodsReceiptLine>();
-  const goodsReceiptLinesFailure = goodsReceiptLinesResult.error
-    ? reportInventoryModuleFailure("purchasing", goodsReceiptLinesResult.error)
-    : null;
-  const goodsReceiptLines = (goodsReceiptLinesResult.data ?? []) as GoodsReceiptLine[];
+  const purchasingBundle = purchasingBundleResult.data;
+  const stores = purchasingBundle.stores.filter((store) => visibleStore(store.id));
+  const products = purchasingBundle.products;
+  const variants = purchasingBundle.variants;
+  const productUnits = purchasingBundle.productUnits;
+  const settings = purchasingBundle.productStoreSettings.filter((setting) => visibleStore(setting.store_id));
+  const suppliers = purchasingBundle.suppliers;
+  const purchaseOrders = purchasingBundle.purchaseOrders.filter((order) => visibleStore(order.store_id));
+  const purchaseOrderLines = purchasingBundle.purchaseOrderLines;
+  const goodsReceipts = purchasingBundle.goodsReceipts;
+  const goodsReceiptLines = purchasingBundle.goodsReceiptLines;
+  const purchasingHistoryFailure = initialPurchasingFailure;
+  const goodsReceiptLinesFailure = initialPurchasingFailure;
 
   const purchaseOrderLineCostRows: Array<{ id: string; unit_cost_minor: number }> = [];
   let purchaseOrderCostsFailure: InventoryModuleFailure | null = null;
@@ -885,6 +751,7 @@ export async function InventoryWorkspacePage({
   }
 
   const supabase = await createClient();
+  const inventoryCountReadClient = supabase as unknown as InventoryCountReadClient;
   const organizationId = context.organization.id;
   const inventorySchema =
     await loadInventorySchemaContract(
@@ -981,365 +848,127 @@ export async function InventoryWorkspacePage({
     });
   }
 
-  const settingsQuery = canReadOperationalStock
-    ? supabase
-        .from("product_store_settings")
-        .select("product_id, store_id, is_available, price_override_minor, restock_policy")
-        .eq("organization_id", organizationId)
-    : null;
-  const levelsQuery = canReadOperationalStock
-    ? supabase
-        .from("inventory_levels")
-        .select("id, store_id, product_id, variant_id, quantity, updated_at")
-        .eq("organization_id", organizationId)
-    : null;
-  // Operational forms intentionally use active catalog and store records only.
-  // Activity is an audit view, so it loads a small, separate set of historical
-  // display names instead of turning archived items or inactive stores back
-  // into selectable operational options.
-  const activityProductsQuery = activeTab === "activity"
-    ? supabase
-        .from("products")
-        .select("id, name, unit")
-        .eq("organization_id", organizationId)
-        .eq("track_inventory", true)
-    : null;
-  const activityStoresQuery = activeTab === "activity"
-    ? supabase
-        .from("stores")
-        .select("id, name")
-        .eq("organization_id", organizationId)
-    : null;
-  // Valuation is an audit view. Historical product and store names must remain
-  // visible without turning archived catalog records into operating options.
-  const valuationProductsQuery = activeTab === "valuation" && canViewValuation && inventoryModules.valuation
-    ? supabase
-        .from("products")
-        .select("id, name, unit, status, product_type, price_minor")
-        .eq("organization_id", organizationId)
-        .eq("track_inventory", true)
-    : null;
-  const valuationVariantsQuery = activeTab === "valuation" && canViewValuation && inventoryModules.valuation
-    ? supabase
-        .from("product_variants")
-        .select("id, product_id, name, price_minor, is_active")
-        .eq("organization_id", organizationId)
-    : null;
-  const valuationStoresQuery = activeTab === "valuation" && canViewValuation && inventoryModules.valuation
-    ? supabase
-        .from("stores")
-        .select("id, name")
-        .eq("organization_id", organizationId)
-    : null;
+  const valuationReferencePromise = loadInventoryValuationReferenceBundleResult({
+    client: supabase,
+    organizationId,
+    enabled: activeTab === "valuation" && canViewValuation && inventoryModules.valuation,
+  });
   const valuationQuery = ["overview", "valuation"].includes(activeTab) && canViewValuation && inventoryModules.valuation
     ? supabase.rpc("get_inventory_valuation", { target_organization_id: organizationId })
     : Promise.resolve({ data: [], error: null });
-  const replenishmentRulesQuery = canManage && inventoryModules.replenishment
-    ? supabase
-        .from("inventory_replenishment_rules")
-        .select("id, store_id, product_id, variant_id, preferred_warehouse_id, reorder_point, target_stock")
-        .eq("organization_id", organizationId)
-    : null;
-  const purchaseOrdersQuery = canReadPurchaseOrders && inventoryModules.purchasing
-    ? supabase
-        .from("purchase_orders")
-        .select("id, supplier_id, store_id, order_number, status, expected_at, created_at")
-        .eq("organization_id", organizationId)
-        .order("created_at", { ascending: false })
-        .limit(30)
-      : null;
-  const openPurchaseOrdersCountQuery = canReadPurchaseOrders && activeTab === "overview" && inventoryModules.purchasing
-    ? supabase
-        .from("purchase_orders")
-        .select("id", { count: "exact", head: true })
-        .eq("organization_id", organizationId)
-        .in("status", ["ordered", "partially_received"])
-    : null;
-  const productUnitsQuery = canCreatePurchaseOrders && inventoryModules.purchasing
-    ? supabase
-        .from("product_units")
-        .select("product_id, unit_code, unit_name, factor_to_base, is_base, is_purchase_unit")
-        .eq("organization_id", organizationId)
-        .order("is_purchase_unit", { ascending: false })
-        .order("is_base", { ascending: false })
-        .order("unit_name", { ascending: true })
-    : null;
-  const inventoryPoliciesQuery = canManage
-    ? supabase
-        .from("inventory_policies")
-        .select("store_id, negative_stock_policy")
-        .eq("organization_id", organizationId)
-    : null;
-  const inventoryPolicyDefaultsQuery = canManage
-    ? supabase
-        .from("inventory_policy_defaults")
-        .select("negative_stock_policy")
-        .eq("organization_id", organizationId)
-        .limit(1)
-    : null;
-  const recentMovementsQuery = ["overview", "activity"].includes(activeTab)
-    ? supabase
-        .from("inventory_movements")
-        .select(
-          "id, store_id, product_id, variant_id, quantity_delta, quantity_before, quantity_after, movement_type, actor_employee_id, reason, reason_code, source_type, source_id, unit_snapshot, created_at",
-        )
-        .eq("organization_id", organizationId)
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-    : null;
-
-  if (activityFrom) recentMovementsQuery?.gte("created_at", `${activityFrom}T00:00:00.000Z`);
-  if (activityTo) recentMovementsQuery?.lte("created_at", `${activityTo}T23:59:59.999Z`);
-  if (selectedStoreId) recentMovementsQuery?.eq("store_id", selectedStoreId);
-  if (activityMovementType) recentMovementsQuery?.eq("movement_type", activityMovementType);
-  if (activitySourceFilter) {
-    recentMovementsQuery?.eq("source_type", activitySourceFilter.type).eq("source_id", activitySourceFilter.id);
+  const purchasingNeeds: InventoryPurchasingBundleNeed[] = [];
+  const addPurchasingNeed = (need: InventoryPurchasingBundleNeed) => {
+    if (!purchasingNeeds.includes(need)) purchasingNeeds.push(need);
+  };
+  if (canCreatePurchaseOrders && inventoryModules.purchasing) addPurchasingNeed("productUnits");
+  if (canAccessPurchasing && inventoryModules.purchasing) addPurchasingNeed("suppliers");
+  if (canReadPurchaseOrders && inventoryModules.purchasing) {
+    addPurchasingNeed("purchaseOrders");
+    addPurchasingNeed("purchaseOrderLines");
+    addPurchasingNeed("goodsReceipts");
+    addPurchasingNeed("goodsReceiptLines");
   }
-  if (activeTab === "activity") {
-    /*
-     * PostgREST range bounds are inclusive.
-     *
-     * Fetch pageSize + 1 records so the extra row can prove another
-     * page exists. The rendered collection is sliced back to
-     * INVENTORY_ACTIVITY_PAGE_SIZE below.
-     */
-    recentMovementsQuery?.range(
-      activityPageOffset,
-      activityPageOffset + INVENTORY_ACTIVITY_PAGE_SIZE,
-    );
-  } else {
-    recentMovementsQuery?.limit(30);
+  if (canManage && inventoryModules.purchasing) addPurchasingNeed("goodsReceipts");
+  if (canReadPurchaseOrders && activeTab === "overview" && inventoryModules.purchasing) {
+    addPurchasingNeed("openPurchaseOrdersCount");
   }
+  const purchasingBundlePromise = loadInventoryPurchasingBundleResult({
+    client: supabase,
+    organizationId,
+    storeIds: scopedStoreIds,
+    needs: purchasingNeeds,
+  });
   const inventoryCountsQuery = canCount && ["overview", "counts"].includes(activeTab)
-    ? supabase
-        .from("inventory_counts")
-        .select("id, count_number, store_id, status, note, started_at, started_by_employee_id, completed_at, updated_at, count_mode, scope_type, scope_reference_id, sort_mode, include_zero_stock")
-        .eq("organization_id", organizationId)
-        .in("status", ["draft", "in_progress", "ready_for_review", "posted", "cancelled", "open", "completed"])
-        .order("started_at", { ascending: false })
-        .limit(100)
+    ? inventoryCountReadClient.rpc("get_inventory_counts_workspace_v2", { target_organization_id: organizationId, target_store_ids: scopedStoreIds, target_limit: 100 })
     : null;
   const inventoryCountBatchesQuery = canCount && activeTab === "counts" && inventoryModules.count_batches
-    ? supabase
-        .from("inventory_count_batches")
-        .select("id, batch_number, name, note, created_at, updated_at")
-        .eq("organization_id", organizationId)
-        .order("created_at", { ascending: false })
-        .limit(25)
+    ? inventoryCountReadClient.rpc("get_inventory_count_batches_workspace_v2", { target_organization_id: organizationId, target_limit: 25 })
     : null;
   const countAwarenessQuery = workspace === "control" && activeTab === "overview"
     ? supabase.rpc("get_inventory_health_awareness", { target_organization_id: organizationId })
     : null;
-  const offlineInventoryIssuesQuery = hasPermission(context, "devices.manage") && activeTab === "overview"
-    ? supabase
-        .from("offline_sync_events")
-        .select("id, store_id, store_name_snapshot, state, conflict_type")
-        .eq("organization_id", organizationId)
-        .in("state", ["CONFLICT", "FAILED"])
-        .order("last_attempt_at", { ascending: false })
-        .limit(50)
-    : null;
-
-  if (scopedStoreIds) {
-    settingsQuery?.in("store_id", scopedStoreIds);
-    levelsQuery?.in("store_id", scopedStoreIds);
-    activityStoresQuery?.in("id", scopedStoreIds);
-    valuationStoresQuery?.in("id", scopedStoreIds);
-    replenishmentRulesQuery?.in("store_id", scopedStoreIds);
-    purchaseOrdersQuery?.in("store_id", scopedStoreIds);
-    openPurchaseOrdersCountQuery?.in("store_id", scopedStoreIds);
-    inventoryPoliciesQuery?.in("store_id", scopedStoreIds);
-    recentMovementsQuery?.in("store_id", scopedStoreIds);
-    inventoryCountsQuery?.in("store_id", scopedStoreIds);
-  }
+  const activityLimit = activeTab === "activity" ? INVENTORY_ACTIVITY_PAGE_SIZE + 1 : 30;
+  const activityOffset = activeTab === "activity" ? activityPageOffset : 0;
+  const coreDataPromise = loadInventoryControlCoreData({
+    client: supabase,
+    organizationId,
+    storeIds: scopedStoreIds,
+    activeTab,
+    canReadOperationalStock,
+    canManage,
+    canAdjust,
+    canAccessTransfers,
+    canManageDevices: hasPermission(context, "devices.manage"),
+    replenishmentEnabled: inventoryModules.replenishment,
+    directTransfersEnabled: inventoryModules.direct_transfers,
+    showConfiguration,
+    activityFrom: activityFrom ? `${activityFrom}T00:00:00.000Z` : null,
+    activityTo: activityTo ? `${activityTo}T23:59:59.999Z` : null,
+    activityMovementType,
+    activitySourceType: activitySourceFilter?.type ?? null,
+    activitySourceId: activitySourceFilter?.id ?? null,
+    activityLimit,
+    activityOffset,
+  });
 
   const [
-    storesResult,
-    categoriesResult,
-    productsResult,
-    activityProductsResult,
-    activityStoresResult,
-    valuationProductsResult,
-    valuationVariantsResult,
-    valuationStoresResult,
-    variantsResult,
-    productUnitsResult,
-    settingsResult,
-    levelsResult,
+    coreData,
+    valuationReferenceResult,
     valuationResult,
-    movementsResult,
-    suppliersResult,
-    purchaseOrdersResult,
-    openPurchaseOrdersCountResult,
-    inventoryPoliciesResult,
-    inventoryPolicyDefaultsResult,
-    adjustmentReasonsResult,
-    stockTransfersResult,
-    replenishmentRulesResult,
+    purchasingBundleResult,
     inventoryCountsResult,
     inventoryCountBatchesResult,
-    warehousesResult,
     countSuppliersResult,
     countAwarenessResult,
-    offlineInventoryIssuesResult,
   ] = await Promise.all([
-    supabase
-      .from("stores")
-      .select("id, name, is_active")
-      .eq("organization_id", organizationId)
-      .eq("is_active", true)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("categories")
-      .select("id, name, is_archived")
-      .eq("organization_id", organizationId)
-      .order("sort_order", { ascending: true })
-      .order("name", { ascending: true }),
-    supabase
-      .from("products")
-      .select("id, category_id, name, sku, barcode, product_type, is_composite, composite_inventory_mode, unit, status, track_inventory, price_minor")
-      .eq("organization_id", organizationId)
-      .eq("status", "active")
-      .eq("track_inventory", true)
-      .order("name", { ascending: true }),
-    activityProductsQuery ?? Promise.resolve({ data: [], error: null }),
-    activityStoresQuery ?? Promise.resolve({ data: [], error: null }),
-    valuationProductsQuery ?? Promise.resolve({ data: [], error: null }),
-    valuationVariantsQuery ?? Promise.resolve({ data: [], error: null }),
-    valuationStoresQuery ?? Promise.resolve({ data: [], error: null }),
-    supabase
-      .from("product_variants")
-      .select("id, product_id, name, sku, barcode, sort_order, is_active, price_minor")
-      .eq("organization_id", organizationId)
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true }),
-    productUnitsQuery ?? Promise.resolve({ data: [], error: null }),
-    settingsQuery ?? Promise.resolve({ data: [], error: null }),
-    levelsQuery ?? Promise.resolve({ data: [], error: null }),
+    coreDataPromise,
+    valuationReferencePromise,
     valuationQuery,
-    recentMovementsQuery ?? Promise.resolve({
-          data: [] as Array<
-            Pick<
-              TableRow<"inventory_movements">,
-              | "id"
-              | "store_id"
-              | "product_id"
-              | "variant_id"
-              | "quantity_delta"
-              | "quantity_before"
-              | "quantity_after"
-              | "movement_type"
-              | "actor_employee_id"
-              | "reason"
-              | "reason_code"
-              | "source_type"
-              | "source_id"
-              | "unit_snapshot"
-              | "created_at"
-            >
-          >,
-          error: null,
-        }),
-    canAccessPurchasing && inventoryModules.purchasing
-      ? supabase
-          .from("suppliers")
-          .select("id, name, contact_name, email, phone, address, notes, is_active, lead_time_days")
-          .eq("organization_id", organizationId)
-          .order("name", { ascending: true })
-      : Promise.resolve({ data: [], error: null }),
-    purchaseOrdersQuery ?? Promise.resolve({ data: [], error: null }),
-    openPurchaseOrdersCountQuery ?? Promise.resolve({ count: 0, data: null, error: null }),
-    inventoryPoliciesQuery ?? Promise.resolve({ data: [], error: null }),
-    inventoryPolicyDefaultsQuery ?? Promise.resolve({ data: [], error: null }),
-    canAdjust
-      ? supabase
-          .from("inventory_adjustment_reasons")
-          .select("code, name, movement_type")
-          .eq("organization_id", organizationId)
-          .eq("is_active", true)
-          .order("name", { ascending: true })
-      : Promise.resolve({ data: [], error: null }),
-    canAccessTransfers && inventoryModules.direct_transfers
-      ? supabase
-          .from("stock_transfers")
-          .select("id, transfer_number, stock_request_id, source_store_id, destination_store_id, status, note")
-          .eq("organization_id", organizationId)
-          .in("status", [...RECEIVABLE_TRANSFER_QUERY_STATUSES])
-      : Promise.resolve({ data: [], error: null }),
-    replenishmentRulesQuery ?? Promise.resolve({ data: [], error: null }),
+    purchasingBundlePromise,
     inventoryCountsQuery ?? Promise.resolve({
-      data: [] as Array<Pick<TableRow<"inventory_counts">, "id" | "count_number" | "store_id" | "status" | "note" | "started_at" | "started_by_employee_id" | "completed_at" | "updated_at" | "count_mode" | "scope_type" | "scope_reference_id" | "sort_mode" | "include_zero_stock">>,
+      data: [] as InventoryCountWorkspaceRow[],
       error: null,
     }),
     inventoryCountBatchesQuery ?? Promise.resolve({ data: [], error: null }),
-    canManage && showConfiguration
-      ? supabase
-          .from("supply_chain_warehouses")
-          .select("id, store_id, code, name")
-          .eq("organization_id", organizationId)
-          .eq("is_active", true)
-          .order("name", { ascending: true })
-      : Promise.resolve({ data: [], error: null }),
     canCreateCounts && activeTab === "counts"
       ? supabase.rpc("get_inventory_count_suppliers", { target_organization_id: organizationId })
       : Promise.resolve({ data: [], error: null }),
     countAwarenessQuery ?? Promise.resolve({ data: [], error: null }),
-    offlineInventoryIssuesQuery ?? Promise.resolve({ data: [], error: null }),
   ]);
 
-  const coreError = [
-    storesResult,
-    categoriesResult,
-    productsResult,
-    activityProductsResult,
-    activityStoresResult,
-    variantsResult,
-    settingsResult,
-    levelsResult,
-    movementsResult,
-  ].find((result) => result.error)?.error;
-
-  if (coreError) {
-    throw new Error(
-      `Unable to load canonical inventory data: ${
-        coreError.message
-      }`,
-    );
-  }
+  const coreBundleResult = coreData.core;
+  const operationsBundleResult = coreData.operations;
+  const transferBundleResult = coreData.transfers;
+  if (coreBundleResult.error) throw new Error(`Unable to load canonical inventory data: ${coreBundleResult.error.message}`);
+  const coreBundle = coreBundleResult.data;
+  const operationsBundle = operationsBundleResult.data;
+  const transferBundle = transferBundleResult.data;
 
   const transferFailure =
-    stockTransfersResult.error
+    transferBundleResult.error
       ? reportInventoryModuleFailure(
           "direct_transfers",
-          stockTransfersResult.error,
+          transferBundleResult.error,
         )
       : null;
 
-  const valuationError = [
-    valuationProductsResult,
-    valuationVariantsResult,
-    valuationStoresResult,
-    valuationResult,
-  ].find((result) => result.error)?.error;
-  const valuationFailure = valuationError
-    ? reportInventoryModuleFailure("valuation", valuationError)
+  const valuationReferenceFailure = valuationReferenceResult.error
+    ? reportInventoryModuleFailure("valuation", valuationReferenceResult.error)
     : null;
+  const valuationFailure = valuationReferenceFailure || (valuationResult.error
+    ? reportInventoryModuleFailure("valuation", valuationResult.error)
+    : null);
 
-  const purchasingError = [
-    productUnitsResult,
-    suppliersResult,
-    purchaseOrdersResult,
-    openPurchaseOrdersCountResult,
-  ].find((result) => result.error)?.error;
+  const purchasingError = purchasingBundleResult.error;
   const purchasingFailure = purchasingError
     ? reportInventoryModuleFailure("purchasing", purchasingError)
     : null;
 
   const replenishmentFailure =
-    replenishmentRulesResult.error
+    operationsBundleResult.error
       ? reportInventoryModuleFailure(
           "replenishment",
-          replenishmentRulesResult.error,
+          operationsBundleResult.error,
         )
       : null;
 
@@ -1358,50 +987,36 @@ export async function InventoryWorkspacePage({
         )
       : null;
 
-  const adjustmentFailure = adjustmentReasonsResult.error
+  const adjustmentFailure = operationsBundleResult.error
     ? reportInventoryModuleFailure(
-        "adjustments",
-        adjustmentReasonsResult.error,
+      "adjustments",
+      operationsBundleResult.error,
       )
     : null;
 
-  const openStockTransferIds = inventoryModules.direct_transfers && !transferFailure
-    ? (stockTransfersResult.data ?? []).map((transfer) => transfer.id)
-    : [];
-  const stockTransferLinesResult = openStockTransferIds.length
-    ? await supabase
-        .from("stock_transfer_lines")
-        .select("id, stock_transfer_id, product_id, variant_id, quantity, received_quantity, short_quantity")
-        .eq("organization_id", organizationId)
-        .in("stock_transfer_id", openStockTransferIds)
-    : { data: [], error: null };
-  const transferLinesFailure = stockTransferLinesResult.error
-    ? reportInventoryModuleFailure(
-        "direct_transfers",
-        stockTransferLinesResult.error,
-      )
-    : null;
+  const transferLinesFailure = null;
 
   const visibleStore = (storeId: string) => scopedStoreIds === null || scopedStoreIds.includes(storeId);
-  const stores = (storesResult.data ?? []).filter((store) => visibleStore(store.id));
-  const categories = categoriesResult.data ?? [];
-  const products = productsResult.data ?? [];
-  const activityProducts = activityProductsResult.data ?? [];
-  const activityStores = (activityStoresResult.data ?? []).filter((store) => visibleStore(store.id));
-  const valuationProducts = valuationProductsResult.data ?? [];
-  const valuationVariants = valuationVariantsResult.data ?? [];
-  const valuationStores = (valuationStoresResult.data ?? []).filter((store) => visibleStore(store.id));
-  const variants = variantsResult.data ?? [];
-  const productUnits = productUnitsResult.data ?? [];
-  const settings = (settingsResult.data ?? []).filter((setting) => visibleStore(setting.store_id));
-  const levels = (levelsResult.data ?? []).filter((level) => visibleStore(level.store_id));
+  const stores = coreBundle.stores.filter((store) => visibleStore(store.id));
+  const categories = coreBundle.categories;
+  const products = coreBundle.products;
+  const activityProducts = coreBundle.activityProducts;
+  const activityStores = coreBundle.activityStores.filter((store) => visibleStore(store.id));
+  const valuationProducts = valuationReferenceFailure ? [] : valuationReferenceResult.data.products;
+  const valuationVariants = valuationReferenceFailure ? [] : valuationReferenceResult.data.variants;
+  const valuationStores = (valuationReferenceFailure ? [] : valuationReferenceResult.data.stores).filter((store) => visibleStore(store.id));
+  const variants = coreBundle.variants;
+  const purchasingBundle = purchasingBundleResult.data;
+  const productUnits = purchasingBundle.productUnits;
+  const settings = coreBundle.productStoreSettings.filter((setting) => visibleStore(setting.store_id));
+  const levels = coreBundle.inventoryLevels.filter((level) => visibleStore(level.store_id));
   const inventoryValuation = (valuationResult.data ?? []).filter((entry) => visibleStore(entry.store_id));
-  const loadedMovements = (movementsResult.data ?? []).filter((movement) => visibleStore(movement.store_id));
+  const loadedMovements = coreBundle.movements.filter((movement) => visibleStore(movement.store_id));
   const movements = activeTab === "activity"
     ? loadedMovements.slice(0, INVENTORY_ACTIVITY_PAGE_SIZE)
     : loadedMovements;
-  const suppliers = suppliersResult.data ?? [];
-  const purchaseOrders = (purchaseOrdersResult.data ?? []).filter((order) => visibleStore(order.store_id));
+  const suppliers = purchasingBundle.suppliers;
+  const purchaseOrders = purchasingBundle.purchaseOrders.filter((order) => visibleStore(order.store_id));
   const inventoryCounts = countsFailure
     ? []
     : (inventoryCountsResult.data ?? []).filter((count) => visibleStore(count.store_id));
@@ -1410,12 +1025,8 @@ export async function InventoryWorkspacePage({
     : [];
   const inventoryCountBatchIds = inventoryCountBatches.map((batch) => batch.id);
   const inventoryCountBatchDocumentsResult = inventoryCountBatchIds.length
-    ? await supabase
-        .from("inventory_count_batch_documents")
-        .select("inventory_count_batch_id, inventory_count_id, store_id")
-        .eq("organization_id", organizationId)
-        .in("inventory_count_batch_id", inventoryCountBatchIds)
-    : { data: [], error: null };
+    ? await inventoryCountReadClient.rpc("get_inventory_count_batch_documents_workspace_v2", { target_organization_id: organizationId, target_inventory_count_batch_ids: inventoryCountBatchIds })
+    : { data: [] as InventoryCountBatchDocumentWorkspaceRow[], error: null };
   const countBatchDocumentsFailure = inventoryCountBatchDocumentsResult.error
     ? reportInventoryModuleFailure(
         "count_batches",
@@ -1427,62 +1038,22 @@ export async function InventoryWorkspacePage({
     : (inventoryCountBatchDocumentsResult.data ?? []).filter((document) => visibleStore(document.store_id));
   const countSuppliers = countSuppliersResult.data ?? [];
   const countAwareness = (countAwarenessResult.data ?? []).filter((entry) => visibleStore(entry.store_id));
-  const offlineInventoryIssues = (offlineInventoryIssuesResult.data ?? []).filter((entry) => visibleStore(entry.store_id));
-  const purchaseOrderIds = purchaseOrders.map((order) => order.id);
+  const offlineInventoryIssues = coreBundle.offlineInventoryIssues.filter((entry) => visibleStore(entry.store_id));
   const countIds = inventoryCounts.map((count) => count.id);
-  const [purchaseOrderLinesResult, goodsReceiptsResult, countLinesResult] = await Promise.all([
-    inventoryModules.purchasing && !purchasingFailure && purchaseOrderIds.length
-      ? supabase
-          .from("purchase_order_lines")
-          .select("id, purchase_order_id, product_id, variant_id, product_name_snapshot, variant_name_snapshot, unit_snapshot, purchase_unit_code_snapshot, purchase_unit_factor_to_base, ordered_quantity, received_quantity")
-          .eq("organization_id", organizationId)
-          .in("purchase_order_id", purchaseOrderIds)
-      : Promise.resolve({ data: [], error: null }),
-    inventoryModules.purchasing && !purchasingFailure && purchaseOrderIds.length
-      ? supabase
-          .from("goods_receipts")
-          .select("id, receipt_number, purchase_order_id, store_id, note, received_at")
-          .eq("organization_id", organizationId)
-          .in("purchase_order_id", purchaseOrderIds)
-          .order("received_at", { ascending: false })
-          .limit(50)
-      : Promise.resolve({ data: [], error: null }),
-    countIds.length
-      ? supabase
-          .from("inventory_count_lines")
-          .select("id, inventory_count_id, product_id, variant_id, expected_quantity, reconciled_expected_quantity, counted_quantity, counted_at, product_name_snapshot, variant_name_snapshot, category_name_snapshot, sku_snapshot, barcode_snapshot, unit_snapshot, line_sort_order")
-          .eq("organization_id", organizationId)
-          .in("inventory_count_id", countIds)
-          .order("line_sort_order", { ascending: true })
-      : Promise.resolve({ data: [], error: null }),
-  ]);
+  const countLinesResult = countIds.length
+    ? await inventoryCountReadClient.rpc("get_inventory_count_lines_workspace_v2", { target_organization_id: organizationId, target_inventory_count_ids: countIds })
+    : { data: [] as InventoryCountLineWorkspaceRow[], error: null };
 
-  const purchasingHistoryError = [purchaseOrderLinesResult, goodsReceiptsResult].find((result) => result.error)?.error;
-  const purchasingHistoryFailure = purchasingHistoryError
-    ? reportInventoryModuleFailure("purchasing", purchasingHistoryError)
-    : null;
+  const purchasingHistoryFailure = purchasingFailure;
   const countLinesFailure = countLinesResult.error
     ? reportInventoryModuleFailure("counts", countLinesResult.error)
     : null;
 
-  const goodsReceiptIds = (goodsReceiptsResult.data ?? []).map((receipt) => receipt.id);
-  const goodsReceiptLinesResult = !purchasingHistoryFailure && goodsReceiptIds.length
-    ? await supabase
-        .from("goods_receipt_lines")
-        .select("goods_receipt_id, purchase_order_line_id, quantity_received")
-        .eq("organization_id", organizationId)
-        .in("goods_receipt_id", goodsReceiptIds)
-    : { data: [], error: null };
-  const goodsReceiptLinesFailure = goodsReceiptLinesResult.error
-    ? reportInventoryModuleFailure(
-        "purchasing",
-        goodsReceiptLinesResult.error,
-      )
-    : null;
+  const goodsReceiptLinesFailure = purchasingFailure;
 
-  const purchaseOrderLines = purchaseOrderLinesResult.data ?? [];
-  const goodsReceipts = goodsReceiptsResult.data ?? [];
-  const goodsReceiptLines = goodsReceiptLinesResult.data ?? [];
+  const purchaseOrderLines = purchasingBundle.purchaseOrderLines;
+  const goodsReceipts = purchasingBundle.goodsReceipts;
+  const goodsReceiptLines = purchasingBundle.goodsReceiptLines;
   const inventoryCountLines = countLinesResult.data ?? [];
   const purchaseOrderLineIds = purchaseOrderLines.map((line) => line.id);
   const purchaseOrderLineCostRows: Array<{ id: string; unit_cost_minor: number }> = [];
@@ -1530,22 +1101,22 @@ export async function InventoryWorkspacePage({
   const purchaseOrderLineCostById = new Map(
     purchaseOrderLineCostRows.map((line) => [line.id, Number(line.unit_cost_minor)]),
   );
-  const inventoryPolicies = (inventoryPoliciesResult.data ?? []).filter((policy) => visibleStore(policy.store_id));
-  const organizationDefaultPolicy = (inventoryPolicyDefaultsResult.data?.[0]?.negative_stock_policy as "allow" | "warn" | "block" | undefined) ?? "block";
+  const inventoryPolicies = operationsBundle.inventoryPolicies.filter((policy) => visibleStore(policy.store_id));
+  const organizationDefaultPolicy = (operationsBundle.inventoryPolicyDefaults[0]?.negative_stock_policy as "allow" | "warn" | "block" | undefined) ?? "block";
   const canManageOrganizationDefault = canManage && storeScope.canAccessAllStores;
   const adjustmentReasons = adjustmentsModuleAvailable
-    ? adjustmentReasonsResult.data ?? []
+    ? operationsBundle.adjustmentReasons
     : [];
   const stockTransfers = transferModuleAvailable
-    ? (stockTransfersResult.data ?? []).filter((transfer) => visibleStore(transfer.source_store_id) || visibleStore(transfer.destination_store_id))
+    ? transferBundle.receivableStockTransfers.filter((transfer) => (transfer.source_store_id && visibleStore(transfer.source_store_id)) || visibleStore(transfer.destination_store_id))
     : [];
   const stockTransferLines = transferModuleAvailable
-    ? stockTransferLinesResult.data ?? []
+    ? transferBundle.stockTransferLines
     : [];
   const replenishmentRules = replenishmentModuleAvailable
-    ? (replenishmentRulesResult.data ?? []).filter((rule) => visibleStore(rule.store_id))
+    ? operationsBundle.replenishmentRules.filter((rule) => visibleStore(rule.store_id))
     : [];
-  const warehouses = warehousesResult.data ?? [];
+  const warehouses = operationsBundle.warehouses;
   const storeNames = new Map(stores.map((store) => [store.id, store.name]));
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
   const productById = new Map(products.map((product) => [product.id, product]));
@@ -1641,149 +1212,52 @@ export async function InventoryWorkspacePage({
   const activityPageStart = movements.length ? activityPageOffset + 1 : 0;
   const activityPageEnd = activityPageOffset + movements.length;
   const detailActivityLimit = activeTab === "activity" ? 50 : 12;
-  const detailMovementsResult = selectedDetailPosition
-    ? await loadInventoryItemActivity({
-        limit: detailActivityLimit,
-        organizationId,
-        productId: selectedDetailPosition.product_id,
-        storeId: selectedDetailPosition.store_id,
-        supabase,
-        variantId: selectedDetailPosition.variant_id,
-      })
-    : { data: [], error: null };
-
-  if (detailMovementsResult.error) {
-    throw new Error(`Unable to load inventory activity: ${detailMovementsResult.error.message}`);
-  }
-
-  const detailMovements = detailMovementsResult.data ?? [];
+  const activityReferenceNeeds: InventoryActivityReferenceNeed[] = [];
+  if (selectedDetailPosition) activityReferenceNeeds.push("movements");
+  if (hasPermission(context, "employees.manage")) activityReferenceNeeds.push("employees", "profiles");
+  if (hasPermission(context, "receipts.view")) activityReferenceNeeds.push("refunds", "receipts");
+  if (canViewInventory) activityReferenceNeeds.push("adjustments");
+  if (canCount) activityReferenceNeeds.push("counts");
+  if (canManage && inventoryModules.direct_transfers) activityReferenceNeeds.push("transfers");
+  if (canManage) activityReferenceNeeds.push("supplierReturns", "productionRuns");
+  const activityReferenceResult = await loadInventoryActivityReferenceBundleResult({
+    client: supabase, organizationId,
+    detailStoreId: selectedDetailPosition?.store_id ?? null,
+    detailProductId: selectedDetailPosition?.product_id ?? null,
+    detailVariantId: selectedDetailPosition?.variant_id ?? null,
+    movementIds: selectedDetailPosition ? null : movements.map((movement) => movement.id),
+    limit: detailActivityLimit,
+    needs: activityReferenceNeeds,
+  });
+  const activityReferenceFailure = activityReferenceResult.error
+    ? reportInventoryModuleFailure("activity_references", activityReferenceResult.error)
+    : null;
+  const activityReferenceBundle = activityReferenceResult.data;
+  const detailMovements = activityReferenceFailure ? [] : activityReferenceBundle.movements;
   const activityMovements = selectedDetailPosition ? detailMovements : movements;
-  const activityActorSource = selectedDetailPosition || activeTab === "activity" ? activityMovements : [];
-  const actorEmployeeIds = [...new Set(activityActorSource.map((movement) => movement.actor_employee_id))];
-  const employeesResult = hasPermission(context, "employees.manage") && actorEmployeeIds.length
-    ? await supabase
-        .from("employees")
-        .select("id, profile_id, employee_number")
-        .eq("organization_id", organizationId)
-        .in("id", actorEmployeeIds)
-    : { data: [], error: null };
-
-  if (employeesResult.error) {
-    reportInventoryModuleFailure("activity_references", employeesResult.error);
-  }
-
-  const activityEmployees = employeesResult.data ?? [];
-  const actorProfileIds = activityEmployees.map((employee) => employee.profile_id);
-  const profilesResult = actorProfileIds.length
-    ? await supabase.from("profiles").select("id, full_name").in("id", actorProfileIds)
-    : { data: [], error: null };
-
-  if (profilesResult.error) {
-    reportInventoryModuleFailure("activity_references", profilesResult.error);
-  }
-
-  const receiptSourceSaleIds = [...new Set(activityActorSource.flatMap((movement) => (
-    movement.source_id && (movement.source_type === "sale" || movement.source_type === "composite_sale")
-      ? [movement.source_id]
-      : []
-  )))];
-  const refundSourceIds = movementSourceIdsFrom(activityActorSource, "refund");
-  const refundsResult = hasPermission(context, "receipts.view") && refundSourceIds.length
-    ? await supabase
-        .from("refunds")
-        .select("id, sale_id")
-        .eq("organization_id", organizationId)
-        .in("id", refundSourceIds)
-    : { data: [], error: null };
-
-  if (refundsResult.error) {
-    reportInventoryModuleFailure("activity_references", refundsResult.error);
-  }
-
-  const receiptSaleIds = [...new Set([
-    ...receiptSourceSaleIds,
-    ...(refundsResult.data ?? []).map((refund) => refund.sale_id),
-  ])];
-  const receiptsResult = hasPermission(context, "receipts.view") && receiptSaleIds.length
-    ? await supabase
-        .from("receipts")
-        .select("id, sale_id, receipt_number")
-        .eq("organization_id", organizationId)
-        .in("sale_id", receiptSaleIds)
-    : { data: [], error: null };
-
-  if (receiptsResult.error) {
-    reportInventoryModuleFailure("activity_references", receiptsResult.error);
-  }
-
-  const profileNames = new Map((profilesResult.data ?? []).map((profile) => [profile.id, profile.full_name]));
+  const activityEmployees = activityReferenceFailure ? [] : activityReferenceBundle.employees;
+  const activityProfiles = activityReferenceFailure ? [] : activityReferenceBundle.profiles;
+  const refunds = activityReferenceFailure ? [] : activityReferenceBundle.refunds;
+  const receipts = activityReferenceFailure ? [] : activityReferenceBundle.receipts;
+  const adjustmentDocuments = activityReferenceFailure ? [] : activityReferenceBundle.adjustments;
+  const countDocuments = activityReferenceFailure ? [] : activityReferenceBundle.counts;
+  const transferDocuments = activityReferenceFailure ? [] : activityReferenceBundle.transfers;
+  const supplierReturnDocuments = activityReferenceFailure ? [] : activityReferenceBundle.supplierReturns;
+  const productionRunDocuments = activityReferenceFailure ? [] : activityReferenceBundle.productionRuns;
+  const profileNames = new Map(activityProfiles.map((profile) => [profile.id, profile.full_name]));
   const actorNames = new Map<string, string>();
   actorNames.set(context.employee.id, context.profile.full_name || context.profile.email || context.employee.employee_number);
   for (const employee of activityEmployees) {
     actorNames.set(employee.id, profileNames.get(employee.profile_id) || employee.employee_number);
   }
-  const receiptBySaleId = new Map((receiptsResult.data ?? []).map((receipt) => [receipt.sale_id, receipt]));
-  const refundById = new Map((refundsResult.data ?? []).map((refund) => [refund.id, refund]));
-  const movementSourceIds = (sourceType: string) => [...new Set(
-    activityMovements
-      .filter((movement) => movement.source_type === sourceType && movement.source_id && UUID_PATTERN.test(movement.source_id))
-      .map((movement) => movement.source_id as string),
-  )];
-  const adjustmentSourceIds = movementSourceIds("inventory_adjustment");
-  const countSourceIds = movementSourceIds("inventory_count");
-  const goodsReceiptSourceIds = movementSourceIds("goods_receipt");
-  const transferSourceIds = movementSourceIds("stock_transfer");
-  const supplierReturnSourceIds = movementSourceIds("supplier_return");
-  const productionRunSourceIds = movementSourceIds("production_run");
-  const [adjustmentDocumentsResult, countDocumentsResult, goodsReceiptDocumentsResult, transferDocumentsResult, supplierReturnDocumentsResult, productionRunDocumentsResult] = await Promise.all([
-    canViewInventory && adjustmentSourceIds.length
-      ? supabase
-          .from("inventory_adjustments")
-          .select("id, adjustment_number")
-          .eq("organization_id", organizationId)
-          .in("id", adjustmentSourceIds)
-      : Promise.resolve({ data: [], error: null }),
-    canCount && countSourceIds.length
-      ? supabase
-          .from("inventory_counts")
-          .select("id, count_number")
-          .eq("organization_id", organizationId)
-          .in("id", countSourceIds)
-      : Promise.resolve({ data: [], error: null }),
-    canManage && inventoryModules.purchasing && goodsReceiptSourceIds.length
-      ? supabase
-          .from("goods_receipts")
-          .select("id, purchase_order_id, receipt_number")
-          .eq("organization_id", organizationId)
-          .in("id", goodsReceiptSourceIds)
-      : Promise.resolve({ data: [], error: null }),
-    canManage && inventoryModules.direct_transfers && transferSourceIds.length
-      ? supabase
-          .from("stock_transfers")
-          .select("id, transfer_number")
-          .eq("organization_id", organizationId)
-          .in("id", transferSourceIds)
-      : Promise.resolve({ data: [], error: null }),
-    canManage && supplierReturnSourceIds.length
-      ? supabase
-          .from("supplier_returns")
-          .select("id")
-          .eq("organization_id", organizationId)
-          .in("id", supplierReturnSourceIds)
-      : Promise.resolve({ data: [], error: null }),
-    canManage && productionRunSourceIds.length
-      ? supabase
-          .from("production_runs")
-          .select("id")
-          .eq("organization_id", organizationId)
-          .in("id", productionRunSourceIds)
-      : Promise.resolve({ data: [], error: null }),
-  ]);
-
-  const sourceDocumentError = [adjustmentDocumentsResult, countDocumentsResult, goodsReceiptDocumentsResult, transferDocumentsResult, supplierReturnDocumentsResult, productionRunDocumentsResult].find((result) => result.error)?.error;
-  if (sourceDocumentError) {
-    reportInventoryModuleFailure("document_references", sourceDocumentError);
-  }
+  const receiptBySaleId = new Map(receipts.map((receipt) => [receipt.sale_id, receipt]));
+  const refundById = new Map(refunds.map((refund) => [refund.id, refund]));
+  const goodsReceiptSourceIds = [...new Set(activityMovements
+    .filter((movement) => movement.source_type === "goods_receipt" && movement.source_id && UUID_PATTERN.test(movement.source_id))
+    .map((movement) => movement.source_id as string))];
+  const goodsReceiptDocuments = canManage && inventoryModules.purchasing
+    ? purchasingBundle.goodsReceipts.filter((receipt) => goodsReceiptSourceIds.includes(receipt.id))
+    : [];
   const purchaseUnitsByProduct = new Map<string, Array<{ code: string; factorToBase: number; name: string }>>();
   for (const productUnit of productUnits) {
     if (!productUnit.is_purchase_unit && !productUnit.is_base) continue;
@@ -2096,37 +1570,37 @@ export async function InventoryWorkspacePage({
     return `/back-office/inventory?${query.toString()}`;
   };
   const sourceDocumentReferences = new Map<string, { href: string | null; label: string }>();
-  for (const adjustment of adjustmentDocumentsResult.data ?? []) {
+  for (const adjustment of adjustmentDocuments) {
     sourceDocumentReferences.set(`inventory_adjustment:${adjustment.id}`, {
       href: inventorySourceHref("inventory_adjustment", adjustment.id),
       label: `Adjustment SA-${String(adjustment.adjustment_number).padStart(6, "0")}`,
     });
   }
-  for (const count of countDocumentsResult.data ?? []) {
+  for (const count of countDocuments) {
     sourceDocumentReferences.set(`inventory_count:${count.id}`, {
       href: inventorySourceHref("inventory_count", count.id),
       label: `Count IC-${String(count.count_number).padStart(6, "0")}`,
     });
   }
-  for (const receipt of goodsReceiptDocumentsResult.data ?? []) {
+  for (const receipt of goodsReceiptDocuments) {
     sourceDocumentReferences.set(`goods_receipt:${receipt.id}`, {
       href: inventorySourceHref("goods_receipt", receipt.id),
       label: `Receiving GR-${String(receipt.receipt_number).padStart(6, "0")}`,
     });
   }
-  for (const transfer of transferDocumentsResult.data ?? []) {
+  for (const transfer of transferDocuments) {
     sourceDocumentReferences.set(`stock_transfer:${transfer.id}`, {
       href: inventorySourceHref("stock_transfer", transfer.id),
       label: `Transfer TR-${String(transfer.transfer_number).padStart(6, "0")}`,
     });
   }
-  for (const supplierReturn of supplierReturnDocumentsResult.data ?? []) {
+  for (const supplierReturn of supplierReturnDocuments) {
     sourceDocumentReferences.set(`supplier_return:${supplierReturn.id}`, {
       href: inventorySourceHref("supplier_return", supplierReturn.id),
       label: "Supplier return",
     });
   }
-  for (const productionRun of productionRunDocumentsResult.data ?? []) {
+  for (const productionRun of productionRunDocuments) {
     sourceDocumentReferences.set(`production_run:${productionRun.id}`, {
       href: inventorySourceHref("production_run", productionRun.id),
       label: "Production run",
@@ -2389,10 +1863,10 @@ export async function InventoryWorkspacePage({
     const product = activityProductById.get(movement.product_id);
     const variant = movement.variant_id ? variantById.get(movement.variant_id) : undefined;
     const movementCost = movementCostById.get(movement.id);
-    const sourceReference = sourceReferenceForMovement(movement);
+    const sourceReference = sourceReferenceForMovement(movement as TableRow<"inventory_movements">);
 
     return {
-      actorName: actorNames.get(movement.actor_employee_id) ?? null,
+      actorName: (movement.actor_employee_id ? actorNames.get(movement.actor_employee_id) : null) ?? null,
       createdAt: movement.created_at,
       id: movement.id,
       movementType: movement.movement_type,
@@ -2496,7 +1970,7 @@ export async function InventoryWorkspacePage({
     { description: "Destination stock not yet received", href: inventoryTabHref("transfers"), label: "Incoming transfers", value: inTransitTransfers.length },
   ];
   if (canReadPurchaseOrders && purchasingModuleAvailable) {
-    overviewMetrics.push({ description: "Ordered or partially received", href: purchasingTabHref("receiving"), label: "Incoming purchase orders", value: openPurchaseOrdersCountResult.count ?? 0 });
+    overviewMetrics.push({ description: "Ordered or partially received", href: purchasingTabHref("receiving"), label: "Incoming purchase orders", value: purchasingBundle.openPurchaseOrdersCount });
   }
   if (canViewValuation && valuationModuleAvailable) {
     overviewMetrics.push({
@@ -2988,7 +2462,7 @@ export async function InventoryWorkspacePage({
                   const movementCost = movementCostById.get(movement.id);
                   const DeltaIcon = delta > 0 ? ArrowUp : ArrowDown;
                   const activityActorName = selectedDetailLevel
-                    ? actorNames.get(movement.actor_employee_id) ?? null
+                    ? (movement.actor_employee_id ? actorNames.get(movement.actor_employee_id) : null) ?? null
                     : null;
                   const activityReceipt = selectedDetailLevel && movement.source_id
                     ? receiptBySaleId.get(movement.source_id)

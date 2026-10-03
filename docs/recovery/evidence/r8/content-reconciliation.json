@@ -1,0 +1,620 @@
+{
+  "private.employee_pin_credentials": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "private.organization_data_governance": {
+    "sourceSha256": "d394b0ab39ddb59d3b30a332eac6269080a1c98d369b3a4fce89d2117f8851ce",
+    "targetSha256": "d394b0ab39ddb59d3b30a332eac6269080a1c98d369b3a4fce89d2117f8851ce",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "private.organization_recovery_drills": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "private.pos_device_credentials": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "private.product_unit_operations": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "private.stock_transfer_operations": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.advanced_checkout_requests": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.approval_requests": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.approval_rules": {
+    "sourceSha256": "2a0c3a8d644012c80374433ac0adc0afac6c9979a323aafc8cb9383969e1511f",
+    "targetSha256": "2a0c3a8d644012c80374433ac0adc0afac6c9979a323aafc8cb9383969e1511f",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.audit_logs": {
+    "sourceSha256": "2975e5f4f1eafc28abe579de465f9792f47fe85ff6bf4deacbffb9574d31a735",
+    "targetSha256": "2975e5f4f1eafc28abe579de465f9792f47fe85ff6bf4deacbffb9574d31a735",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.cash_movements": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.categories": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.checkout_requests": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.customer_display_sessions": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.customer_segment_memberships": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.customer_segments": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.customers": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.dining_options": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.discounts": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.employee_invitations": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.employee_roles": {
+    "sourceSha256": "f04d413ca822686f8be4c687da305f51274404088dfc4e94d1a10bc2206978cb",
+    "targetSha256": "f04d413ca822686f8be4c687da305f51274404088dfc4e94d1a10bc2206978cb",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.employee_stores": {
+    "sourceSha256": "37d0bbb43a268447f98b4ed2d15a4bde72bb1d72c87e8e8f10b7a0f629f36b53",
+    "targetSha256": "37d0bbb43a268447f98b4ed2d15a4bde72bb1d72c87e8e8f10b7a0f629f36b53",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.employees": {
+    "sourceSha256": "e81f6a9183e6385eb09620851845ed62f05ed13688aaeb4368d7356bbec8912f",
+    "targetSha256": "e81f6a9183e6385eb09620851845ed62f05ed13688aaeb4368d7356bbec8912f",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.goods_receipt_lines": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.goods_receipts": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.inventory_adjustment_import_batches": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.inventory_adjustment_reasons": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.inventory_adjustments": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.inventory_count_batch_documents": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.inventory_count_batches": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.inventory_count_lines": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.inventory_counts": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.inventory_levels": {
+    "sourceSha256": "130cb8014d0ba27bc588872b3fedab067727b74d34cbb2d828c3dd4e5a36eb36",
+    "targetSha256": "130cb8014d0ba27bc588872b3fedab067727b74d34cbb2d828c3dd4e5a36eb36",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.inventory_movements": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.inventory_policies": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.inventory_policy_defaults": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.inventory_replenishment_rules": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.kitchen_order_items": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.kitchen_orders": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.kitchen_station_category_routes": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.loyalty_card_events": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.loyalty_cards": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.loyalty_programs": {
+    "sourceSha256": "0563ec92cff861969d4e209de391baaa01dca9cc4e60a74cfc7ede8a42118fa6",
+    "targetSha256": "0563ec92cff861969d4e209de391baaa01dca9cc4e60a74cfc7ede8a42118fa6",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.loyalty_transactions": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.modifier_groups": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.modifier_options": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.offline_sync_events": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.open_tickets": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.organization_export_sessions": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.organization_features": {
+    "sourceSha256": "2ca91532caadb9e9a9e4a4ffbccb4cea2cb0f3adb1fda37f97d5779b5ed93c65",
+    "targetSha256": "2ca91532caadb9e9a9e4a4ffbccb4cea2cb0f3adb1fda37f97d5779b5ed93c65",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.organization_rate_limit_windows": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.organization_usage_daily": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.organizations": {
+    "sourceSha256": "0ae4e30f25ee35c420a75a3624edb1b21637b58090ab6c90fc3855379c9baf01",
+    "targetSha256": "0ae4e30f25ee35c420a75a3624edb1b21637b58090ab6c90fc3855379c9baf01",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.payment_methods": {
+    "sourceSha256": "fc65cc34ffb8834dc7ba1c5db34d723651a4e3ec4922713e8a586626d382f937",
+    "targetSha256": "fc65cc34ffb8834dc7ba1c5db34d723651a4e3ec4922713e8a586626d382f937",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.payments": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.permissions": {
+    "sourceSha256": "79244284d7667a57143b4bcbf78611c2f3ab4f71fbdb0cfcf4bb0b0dbc1f8681",
+    "targetSha256": "79244284d7667a57143b4bcbf78611c2f3ab4f71fbdb0cfcf4bb0b0dbc1f8681",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.pos_devices": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.pos_favorite_tiles": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.product_components": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.product_modifier_groups": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.product_store_settings": {
+    "sourceSha256": "e99db024dae7f4a471d24708a0bb8c272f144b812b49b4e24154ade7b85f5503",
+    "targetSha256": "e99db024dae7f4a471d24708a0bb8c272f144b812b49b4e24154ade7b85f5503",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.product_units": {
+    "sourceSha256": "f6aa3d73f6a9754046b8c0cebf18ffd5c6951bd03751d2628443df4c6a4e95ef",
+    "targetSha256": "f6aa3d73f6a9754046b8c0cebf18ffd5c6951bd03751d2628443df4c6a4e95ef",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.product_variants": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.production_run_components": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.production_runs": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.products": {
+    "sourceSha256": "d1550ec4565f29531282722a6a0db7c9cb7946eb04730950007214a50eacf077",
+    "targetSha256": "d1550ec4565f29531282722a6a0db7c9cb7946eb04730950007214a50eacf077",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.purchase_order_lines": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.purchase_orders": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.receipt_delivery_requests": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.receipt_settings": {
+    "sourceSha256": "620b828cdeb6559026d535df211d306588c81e882dfb4c5a974f220340cbf874",
+    "targetSha256": "620b828cdeb6559026d535df211d306588c81e882dfb4c5a974f220340cbf874",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.receipts": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.refund_items": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.refund_payments": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.refund_requests": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.refunds": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.registers": {
+    "sourceSha256": "d020fd65a0c110e6051d8460ff599a200982a443208f84ad2fa5f1007b979ee6",
+    "targetSha256": "d020fd65a0c110e6051d8460ff599a200982a443208f84ad2fa5f1007b979ee6",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.role_permissions": {
+    "sourceSha256": "69a404ef60d8afff397d9740713c221b0c2d0bb23098a4b1e3e918bbc1afaadd",
+    "targetSha256": "69a404ef60d8afff397d9740713c221b0c2d0bb23098a4b1e3e918bbc1afaadd",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.roles": {
+    "sourceSha256": "19d80ea1226d7dd61c6aa95f3d82377a404d885f1cf8b018e227a4dcdd7eb4d8",
+    "targetSha256": "19d80ea1226d7dd61c6aa95f3d82377a404d885f1cf8b018e227a4dcdd7eb4d8",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.sale_exchanges": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.sale_items": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.sales": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.shifts": {
+    "sourceSha256": "1f8936024aa71e488ff53ba1bddcd0c0c08cacfac2b495770b73b77bc0bf1bd0",
+    "targetSha256": "1f8936024aa71e488ff53ba1bddcd0c0c08cacfac2b495770b73b77bc0bf1bd0",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.smart_menu_categories": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.smart_menu_products": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.smart_menus": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.stock_request_discrepancies": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.stock_request_lines": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.stock_requests": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.stock_transfer_lines": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.stock_transfer_receipt_lines": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.stock_transfer_receipts": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.stock_transfers": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.store_payment_methods": {
+    "sourceSha256": "5f3cd7fcdd63ce6791a1712200afe6844a326f4ca3403e279aba1366d22161af",
+    "targetSha256": "5f3cd7fcdd63ce6791a1712200afe6844a326f4ca3403e279aba1366d22161af",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.stores": {
+    "sourceSha256": "daed6efcc6bfe4e5da9a8712b6aba93469cf026ab8fbc4f24a1fb130491840e7",
+    "targetSha256": "daed6efcc6bfe4e5da9a8712b6aba93469cf026ab8fbc4f24a1fb130491840e7",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.supplier_return_lines": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.supplier_returns": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.suppliers": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.supply_chain_warehouses": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.tax_rates": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.ticket_templates": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.time_clock_entries": {
+    "sourceSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "targetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "status": "PASS",
+    "contract": "EXACT"
+  },
+  "public.profiles": {
+    "sourceSha256": "93f6111012a54a95edc70135fada100ec7ae238a971db5149eac8b93085f9a72",
+    "targetSha256": "93f6111012a54a95edc70135fada100ec7ae238a971db5149eac8b93085f9a72",
+    "status": "PASS",
+    "contract": "EXACT_EXCEPT_UPDATED_AT"
+  },
+  "private.identity_links": {
+    "sourceSha256": "681d15ccc1bc46c3ff1eb465b7fcf198fc12c2d6f11fe531a4ddd445ea7e7f9c",
+    "targetSha256": "681d15ccc1bc46c3ff1eb465b7fcf198fc12c2d6f11fe531a4ddd445ea7e7f9c",
+    "status": "PASS",
+    "contract": "EXACT_EXCEPT_UPDATED_AT"
+  }
+}

@@ -5,14 +5,15 @@ import test from "node:test";
 const root = new URL("..", import.meta.url);
 const source = (path) => readFile(new URL(path, root), "utf8");
 
-const [migration, rpcGrantMigration, actions, workspace, page, preflightTest, madeToOrderCheckoutMigration] = await Promise.all([
-  source("supabase/migrations/20260905153055_inventory_global_negative_stock_policy.sql"),
-  source("supabase/migrations/20260905154220_inventory_global_negative_stock_policy_rpc_grants.sql"),
+const [migration, rpcGrantMigration, actions, workspace, page, coreLoader, preflightTest, madeToOrderCheckoutMigration] = await Promise.all([
+  source("archive/database/supabase-migrations/20260905153055_inventory_global_negative_stock_policy.sql"),
+  source("archive/database/supabase-migrations/20260905154220_inventory_global_negative_stock_policy_rpc_grants.sql"),
   source("src/features/inventory/advanced-inventory-actions.ts"),
   source("src/features/inventory/inventory-integrity-workflows.tsx"),
   source("src/app/(back-office)/back-office/inventory/page.tsx"),
+  source("src/features/inventory/inventory-core-data.ts"),
   source("supabase/tests/database/pos_negative_stock_preflight.test.sql"),
-  source("supabase/migrations/20260921190000_made_to_order_composite_checkout_stock.sql"),
+  source("archive/database/supabase-migrations/20260921190000_made_to_order_composite_checkout_stock.sql"),
 ]);
 
 test("one organization default is combined with optional per-store overrides", () => {
@@ -47,7 +48,8 @@ test("default and override mutations remain permission-checked and audited", () 
 });
 
 test("the Back Office workspace makes inheritance and override source explicit", () => {
-  assert.match(page, /inventory_policy_defaults/);
+  assert.match(coreLoader, /operationsNeeds\.push\("inventoryPolicies", "inventoryPolicyDefaults"\)/);
+  assert.match(page, /operationsBundle\.inventoryPolicyDefaults\[0\]\?\.negative_stock_policy/);
   assert.match(workspace, /Default policy for all stores/);
   assert.match(workspace, /Applies automatically to every store unless that store has an override/);
   assert.match(workspace, /Store overrides/);

@@ -10,7 +10,7 @@ async function source(relativePath) {
   return readFile(path.join(repositoryRoot, relativePath), "utf8");
 }
 
-async function migrationSources(relativePath = "supabase/migrations") {
+async function migrationSources(relativePath = "archive/database/supabase-migrations") {
   const directory = path.join(repositoryRoot, relativePath);
   const entries = await readdir(directory, { withFileTypes: true });
   const sources = [];
@@ -92,7 +92,7 @@ function countPattern(sourceText, pattern) {
 }
 
 test("Phase 6 defines granular inventory capabilities without role-name authorization", async () => {
-  const migration = await source("supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql");
+  const migration = await source("archive/database/supabase-migrations/20260910142940_granular_inventory_transfer_rbac.sql");
 
   for (const capability of [
     "inventory.transfer.create",
@@ -119,7 +119,7 @@ test("Phase 6 defines granular inventory capabilities without role-name authoriz
 });
 
 test("granular transfer migration has one coherent transaction and no orphan PL/pgSQL fragments", async () => {
-  const migration = await source("supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql");
+  const migration = await source("archive/database/supabase-migrations/20260910142940_granular_inventory_transfer_rbac.sql");
   const withoutComments = migration.replace(/--.*$/gm, "");
 
   assert.doesNotMatch(
@@ -148,7 +148,7 @@ test("granular transfer migration has one coherent transaction and no orphan PL/
 });
 
 test("transfer RPCs retain canonical procedures with capabilities inside the correct function body", async () => {
-  const migration = await source("supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql");
+  const migration = await source("archive/database/supabase-migrations/20260910142940_granular_inventory_transfer_rbac.sql");
 
   assert.match(migration, /private\.has_all_inventory_capabilities/);
   assert.doesNotMatch(migration, /pg_get_functiondef\s*\(/i);
@@ -183,7 +183,7 @@ test("no migration can reintroduce hidden inventory capability routing", async (
 
 test("transfer reads and mutations require both capability and the existing store scope", async () => {
   const [migration, advancedActions, supplyActions] = await Promise.all([
-    source("supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql"),
+    source("archive/database/supabase-migrations/20260910142940_granular_inventory_transfer_rbac.sql"),
     Promise.all([
       source("src/features/inventory/advanced-inventory-actions.ts"),
       source("src/features/inventory/pos-transfer-service.ts"),

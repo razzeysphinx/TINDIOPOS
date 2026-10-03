@@ -4,11 +4,11 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 const [migration, actions, workspace, batchMigration, reconciliationMigration, sqlTest, concurrency] = await Promise.all([
-  read("../supabase/migrations/20260917152516_canonical_inventory_counts_stocktake.sql"),
+  read("../archive/database/supabase-migrations/20260917152516_canonical_inventory_counts_stocktake.sql"),
   read("../src/features/inventory/advanced-inventory-actions.ts"),
   read("../src/features/inventory/inventory-count-workspace.tsx"),
-  read("../supabase/migrations/20260911014827_inventory_count_batches_and_roundtrip_import.sql"),
-  read("../supabase/migrations/20260906121112_inventory_count_concurrent_reconciliation.sql"),
+  read("../archive/database/supabase-migrations/20260911014827_inventory_count_batches_and_roundtrip_import.sql"),
+  read("../archive/database/supabase-migrations/20260906121112_inventory_count_concurrent_reconciliation.sql"),
   read("../supabase/tests/database/canonical_inventory_counts_stocktake.test.sql"),
   read("./inventory-count-concurrency-certification.mjs"),
 ]);

@@ -1,0 +1,64 @@
+{
+  "phase": 24,
+  "packageId": "com.tindio.pos",
+  "generatedAt": null,
+  "signedAab": {
+    "status": "NOT_RUN",
+    "buildId": null,
+    "versionName": "1.0.0",
+    "versionCode": null
+  },
+  "developmentDevice": {
+    "status": "NOT_RUN",
+    "notes": null
+  },
+  "internalTesting": {
+    "status": "NOT_RUN",
+    "releaseId": null,
+    "testerCount": null,
+    "notes": null
+  },
+  "closedTesting": {
+    "status": "NOT_RUN",
+    "releaseId": null,
+    "testerCount": null,
+    "continuousDays": null,
+    "notes": null
+  },
+  "pilotMerchants": {
+    "status": "NOT_RUN",
+    "merchantCount": null,
+    "storeCount": null,
+    "registerCount": null,
+    "minimumPilotDays": null,
+    "notes": null
+  },
+  "realStoreScenarios": {
+    "loginAndBusinessContext": "NOT_RUN",
+    "deviceEnrollment": "NOT_RUN",
+    "storeRegisterAssignment": "NOT_RUN",
+    "initialSync": "NOT_RUN",
+    "onlineCashSale": "NOT_RUN",
+    "offlineCashSale": "NOT_RUN",
+    "appKillRecovery": "NOT_RUN",
+    "phoneRestartRecovery": "NOT_RUN",
+    "networkLossBeforeCommit": "NOT_RUN",
+    "networkLossAfterCommit": "NOT_RUN",
+    "missingAckReplay": "NOT_RUN",
+    "reconnectExactlyOnce": "NOT_RUN",
+    "cameraBarcode": "NOT_RUN",
+    "hidBarcode": "NOT_RUN",
+    "tenantIsolation": "NOT_RUN",
+    "storeIsolation": "NOT_RUN",
+    "revokedDevice": "NOT_RUN",
+    "closedShift": "NOT_RUN",
+    "upgradeWithUnsyncedEvent": "NOT_RUN",
+    "noDuplicateMoney": "NOT_RUN",
+    "noDuplicateInventoryMovement": "NOT_RUN"
+  },
+  "production": {
+    "eligible": false,
+    "releaseStatus": "BLOCKED",
+    "reason": "Internal, closed, pilot, real-store, and upgrade evidence have not all passed."
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-10-02T12:05:32.092Z",
+  "status": "PASS",
+  "firstBusinessAuthoritativeTargetWrite": "2026-10-02T11:48:29.088634+00:00",
+  "controlledFootprint": {
+    "inventoryCounts": 2,
+    "inventoryCountLines": 2,
+    "sales": 1,
+    "saleItems": 1,
+    "payments": 1,
+    "receipts": 1,
+    "refunds": 1,
+    "refundItems": 1,
+    "refundPayments": 1,
+    "checkoutRequests": 1,
+    "refundRequests": 1,
+    "inventoryMovements": 4
+  },
+  "inventoryActivationBaselineRestored": true,
+  "saleAndRefundShiftLinkage": "PASS",
+  "checkoutReplay": "PASS",
+  "refundReplay": "PASS",
+  "inventoryCountPostReplay": "PASS",
+  "receiptAndPaymentLinkage": "PASS",
+  "unexplainedBusinessDelta": 0,
+  "blindOldSourceFailbackSafe": false
+}

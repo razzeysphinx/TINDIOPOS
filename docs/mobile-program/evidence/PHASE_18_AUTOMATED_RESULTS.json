@@ -1,0 +1,91 @@
+{
+  "phase": 18,
+  "generatedAt": "2026-09-29T12:04:18.548Z",
+  "automatedStatus": "PASS",
+  "databaseRuntimeExecuted": true,
+  "certification": "NOT_CERTIFIED",
+  "reason": "Android/device runtime torture scenarios require explicit execution evidence before Phase 18 can become CERTIFIED.",
+  "guaranteesUnderTest": [
+    "NO duplicate money",
+    "NO duplicate stock movement",
+    "NO silent transaction loss",
+    "NO cross-tenant leakage"
+  ],
+  "results": [
+    {
+      "name": "phase18-disaster-model",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "phase18-production-contract",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "phase16-isolated-device-contract",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "phase17-sync-control-center-contract",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "inventory-idempotency-recovery",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "mobile-typecheck",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "root-typecheck",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "offline-sync-database-regression",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "real Android app kill during checkout",
+      "status": "DEFERRED_DEVICE_RUNTIME",
+      "exitCode": null
+    },
+    {
+      "name": "real phone reboot",
+      "status": "DEFERRED_DEVICE_RUNTIME",
+      "exitCode": null
+    },
+    {
+      "name": "real router failure",
+      "status": "DEFERRED_DEVICE_RUNTIME",
+      "exitCode": null
+    },
+    {
+      "name": "real API infrastructure outage",
+      "status": "DEFERRED_DEVICE_RUNTIME",
+      "exitCode": null
+    },
+    {
+      "name": "real database infrastructure outage",
+      "status": "DEFERRED_DEVICE_RUNTIME",
+      "exitCode": null
+    },
+    {
+      "name": "real low-storage behavior",
+      "status": "DEFERRED_DEVICE_RUNTIME",
+      "exitCode": null
+    },
+    {
+      "name": "real SQLite migration/filesystem failure",
+      "status": "DEFERRED_DEVICE_RUNTIME",
+      "exitCode": null
+    }
+  ]
+}

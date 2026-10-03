@@ -4,11 +4,11 @@ import test from "node:test";
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const [migration, actions, schema, workflows, purchasing] = await Promise.all([
-  source("supabase/migrations/20260918035302_canonical_supplier_returns.sql"),
+  source("archive/database/supabase-migrations/20260918035302_canonical_supplier_returns.sql"),
   source("src/features/inventory/advanced-inventory-actions.ts"),
   source("src/features/inventory/advanced-inventory-schema.ts"),
   source("src/features/inventory/inventory-integrity-workflows.tsx"),
-  source("supabase/migrations/20260918023953_canonical_purchasing_receiving.sql"),
+  source("archive/database/supabase-migrations/20260918023953_canonical_purchasing_receiving.sql"),
 ]);
 
 test("supplier returns retain one public operation-aware application route", () => {

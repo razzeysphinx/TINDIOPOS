@@ -94,6 +94,7 @@ export const offlineCheckoutMetadataSchema = z.object({
   createdAt: z.iso.datetime(),
   shiftId: z.uuid(),
   deviceId: z.uuid().nullable(),
+  deviceSequence: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
 });
 
 export const checkoutSubmissionSchema = z.object({

@@ -122,7 +122,7 @@ Repair the current migration chain only enough to produce one deterministic, wor
 
 Priority blocker:
 
-`supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql`
+`archive/database/supabase-migrations/20260910142940_granular_inventory_transfer_rbac.sql`
 
 Requirements:
 

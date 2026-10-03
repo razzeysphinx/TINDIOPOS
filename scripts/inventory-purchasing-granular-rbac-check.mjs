@@ -10,7 +10,7 @@ async function source(relativePath) {
   return readFile(path.join(repositoryRoot, relativePath), "utf8");
 }
 
-const migrationPath = "supabase/migrations/20260911062913_purchasing_granular_rbac_integration.sql";
+const migrationPath = "archive/database/supabase-migrations/20260911062913_purchasing_granular_rbac_integration.sql";
 
 test("Phase 10 retains canonical purchasing commands with explicit granular capability alternatives", async () => {
   const migration = await source(migrationPath);

@@ -10,8 +10,8 @@ const [terminal, warning, service, settings, migration, madeToOrderCheckoutMigra
   source("src/features/checkout/negative-stock-warning.tsx"),
   source("src/features/checkout/checkout-service.ts"),
   source("src/features/inventory/inventory-integrity-workflows.tsx"),
-  source("supabase/migrations/20260903084457_pos_negative_stock_preflight.sql"),
-  source("supabase/migrations/20260921190000_made_to_order_composite_checkout_stock.sql"),
+  source("archive/database/supabase-migrations/20260903084457_pos_negative_stock_preflight.sql"),
+  source("archive/database/supabase-migrations/20260921190000_made_to_order_composite_checkout_stock.sql"),
 ]);
 
 test("Charge performs a fresh server-side stock check before payment", () => {

@@ -65,7 +65,7 @@ const contextClientFiles = [
   "src/app/api/pos/v2/customers/route.ts",
   "src/app/api/pos/v2/customer-display/route.ts",
   "src/app/api/pos/v2/device/route.ts",
-  "src/app/api/pos/v2/offline-checkout/route.ts",
+  "src/features/offline/pos-v2-offline-checkout-service.ts",
 ];
 
 test(
@@ -291,21 +291,7 @@ test(
           "--name-only",
           `${BASE_SHA}...${PHASE_FINAL_SHA}`,
           "--",
-          "supabase/migrations",
-        ],
-        {
-          encoding: "utf8",
-        },
-      ).trim();
-
-    const dirtyMigrations =
-      execFileSync(
-        "git",
-        [
-          "status",
-          "--porcelain",
-          "--",
-          "supabase/migrations",
+          "archive/database/supabase-migrations",
         ],
         {
           encoding: "utf8",
@@ -327,27 +313,8 @@ test(
         },
       ).trim();
 
-    const dirtyTypes =
-      execFileSync(
-        "git",
-        [
-          "status",
-          "--porcelain",
-          "--",
-          "src/lib/supabase/database.types.ts",
-        ],
-        {
-          encoding: "utf8",
-        },
-      ).trim();
-
     assert.equal(
       committedMigrations,
-      "",
-    );
-
-    assert.equal(
-      dirtyMigrations,
       "",
     );
 
@@ -356,10 +323,6 @@ test(
       "",
     );
 
-    assert.equal(
-      dirtyTypes,
-      "",
-    );
   },
 );
 

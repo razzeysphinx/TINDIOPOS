@@ -48,10 +48,20 @@ test("Inventory read and count access do not expose unrelated mutation workspace
 });
 
 test("Phase 8 never serializes raw inventory cost fields to client workspaces", async () => {
-  const inventoryPage = await source("src/app/(back-office)/back-office/inventory/page.tsx");
+  const [inventoryPage, readModel, inventoryBundleMigration, purchasingBundleMigration] = await Promise.all([
+    source("src/app/(back-office)/back-office/inventory/page.tsx"),
+    source("src/features/inventory/inventory-read-model.ts"),
+    source("database/migrations/0005_inventory_core_read_model_extension.sql"),
+    source("database/migrations/0006_inventory_purchasing_read_model.sql"),
+  ]);
 
-  assert.match(inventoryPage, /from\("inventory_levels"\)[\s\S]{0,120}\.select\("id, store_id, product_id, variant_id, quantity, updated_at"\)/);
-  assert.match(inventoryPage, /from\("purchase_order_lines"\)[\s\S]{0,320}\.select\("id, purchase_order_id, product_id, variant_id, product_name_snapshot/);
+  assert.match(inventoryPage, /loadInventoryControlCoreData/);
+  assert.match(readModel, /type InventoryLevel = \{[\s\S]{0,260}updated_at: string/);
+  assert.doesNotMatch(readModel, /type InventoryLevel = \{[\s\S]{0,400}(?:unit_cost|average_cost|cost_minor)/);
+  assert.match(inventoryBundleMigration, /'inventoryLevels'[\s\S]{0,420}select id,store_id,product_id,variant_id,quantity,updated_at from public\.inventory_levels/);
+  assert.doesNotMatch(inventoryBundleMigration, /'inventoryLevels'[\s\S]{0,520}(?:unit_cost|average_cost|cost_minor)/);
+  assert.match(purchasingBundleMigration, /select line\.id, line\.purchase_order_id, line\.product_id, line\.variant_id, line\.product_name_snapshot/);
+  assert.doesNotMatch(purchasingBundleMigration, /line\.unit_cost_minor/);
   assert.match(inventoryPage, /rpc\("get_inventory_valuation"/);
   assert.match(inventoryPage, /rpc\("get_inventory_movement_costs"/);
   assert.match(inventoryPage, /rpc\("get_purchase_order_line_costs"/);
@@ -61,7 +71,7 @@ test("Phase 8 never serializes raw inventory cost fields to client workspaces", 
 });
 
 test("Phase 8 keeps inventory cost retrieval permission-checked and store-scoped", async () => {
-  const migration = await source("supabase/migrations/20260829132029_inventory_read_cost_access_hardening.sql");
+  const migration = await source("archive/database/supabase-migrations/20260829132029_inventory_read_cost_access_hardening.sql");
 
   assert.match(migration, /inventory_levels_select_authorized_scope/);
   assert.match(migration, /'inventory\.view'/);
@@ -83,12 +93,16 @@ test(
     const [
       grantMigration,
       inventoryPage,
+      purchasingBundleMigration,
     ] = await Promise.all([
       source(
-        "supabase/migrations/20260921090000_purchase_order_line_operational_snapshot_read_grants.sql",
+        "archive/database/supabase-migrations/20260921090000_purchase_order_line_operational_snapshot_read_grants.sql",
       ),
       source(
         "src/app/(back-office)/back-office/inventory/page.tsx",
+      ),
+      source(
+        "database/migrations/0006_inventory_purchasing_read_model.sql",
       ),
     ]);
 
@@ -108,8 +122,8 @@ test(
     );
 
     assert.match(
-      inventoryPage,
-      /from\("purchase_order_lines"\)[\s\S]{0,500}purchase_unit_code_snapshot[\s\S]{0,500}purchase_unit_factor_to_base/,
+      purchasingBundleMigration,
+      /select line\.id[\s\S]{0,500}purchase_unit_code_snapshot[\s\S]{0,500}purchase_unit_factor_to_base/,
     );
 
     assert.match(

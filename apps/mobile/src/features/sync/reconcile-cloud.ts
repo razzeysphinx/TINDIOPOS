@@ -1,0 +1,314 @@
+import {
+  getOutboxSummary,
+} from "../../db/outbox";
+import {
+  getSyncCursor,
+  markReconcile,
+  markSyncPush,
+  recordSyncError,
+} from "../../db/sync-cursor";
+import {
+  recordSyncRun,
+} from "../performance/performance-metrics";
+import {
+  loadMobileDeviceIdentity,
+} from "../device/device-store";
+import {
+  prepareOfflineMode,
+} from "../offline/prepare-offline-mode";
+import {
+  refreshDeviceCheckpoint,
+} from "../outbox/checkpoint-sync";
+import {
+  syncOutboxBatches,
+} from "../outbox/outbox-sync";
+import {
+  pullDeltaPages,
+} from "./pull-deltas";
+
+export type CloudReconcileReport = {
+  ok: boolean;
+  reason?: string;
+  outboxAcked: number;
+  pushBatches: number;
+  pullPages: number;
+  catalogProducts: number;
+  customers: number;
+  referenceRefreshed: boolean;
+  modifierInvalidated: boolean;
+  cursorBefore: number;
+  cursorAfter: number;
+  hasMore: boolean;
+};
+
+const active =
+  new Map<
+    string,
+    Promise<CloudReconcileReport>
+  >();
+
+function recordReport(
+  startedAt: number,
+  report: CloudReconcileReport,
+) {
+  recordSyncRun({
+    durationMs:
+      Date.now()
+      - startedAt,
+    outboxAcked:
+      report.outboxAcked,
+    pullPages:
+      report.pullPages,
+    catalogProducts:
+      report.catalogProducts,
+    customers:
+      report.customers,
+  });
+
+  return report;
+}
+
+async function run(
+  organizationId: string,
+): Promise<CloudReconcileReport> {
+  const startedAt =
+    Date.now();
+
+  const identity =
+    await loadMobileDeviceIdentity(
+      organizationId,
+    );
+
+  if (!identity?.binding) {
+    return recordReport(
+      startedAt,
+      {
+        ok: false,
+        reason:
+          "DEVICE_REVALIDATION_REQUIRED",
+        outboxAcked: 0,
+        pushBatches: 0,
+        pullPages: 0,
+        catalogProducts: 0,
+        customers: 0,
+        referenceRefreshed: false,
+        modifierInvalidated: false,
+        cursorBefore: 0,
+        cursorAfter: 0,
+        hasMore: false,
+      },
+    );
+  }
+
+  const current =
+    await getSyncCursor(
+      organizationId,
+      identity.credential.deviceId,
+      identity.binding.storeId,
+    );
+
+  try {
+    let activeIdentity =
+      identity;
+
+    if (!current?.initialized) {
+      const prepared =
+        await prepareOfflineMode(
+          organizationId,
+        );
+
+      if (!prepared.ok) {
+        throw new Error(
+          prepared.reason,
+        );
+      }
+
+      const refreshed =
+        await loadMobileDeviceIdentity(
+          organizationId,
+        );
+
+      if (!refreshed?.binding) {
+        throw new Error(
+          "DEVICE_REVALIDATION_REQUIRED",
+        );
+      }
+
+      activeIdentity =
+        refreshed;
+    }
+
+    const pushed =
+      await syncOutboxBatches(
+        organizationId,
+        10,
+      );
+
+    await markSyncPush(
+      organizationId,
+      activeIdentity
+        .credential.deviceId,
+      activeIdentity
+        .binding!.storeId,
+    );
+
+    const checkpoint =
+      await refreshDeviceCheckpoint(
+        organizationId,
+      );
+
+    if (!checkpoint.ok) {
+      throw new Error(
+        checkpoint.reason,
+      );
+    }
+
+    const summary =
+      await getOutboxSummary(
+        organizationId,
+      );
+
+    if (
+      summary.conflict
+      || summary.failed
+    ) {
+      return recordReport(
+        startedAt,
+        {
+          ok: false,
+          reason:
+            "OUTBOX_REVIEW_REQUIRED",
+          outboxAcked:
+            pushed.completed,
+          pushBatches:
+            pushed.batches,
+          pullPages: 0,
+          catalogProducts: 0,
+          customers: 0,
+          referenceRefreshed:
+            false,
+          modifierInvalidated:
+            false,
+          cursorBefore:
+            current?.pullCursor
+            ?? 0,
+          cursorAfter:
+            current?.pullCursor
+            ?? 0,
+          hasMore: false,
+        },
+      );
+    }
+
+    const pulled =
+      await pullDeltaPages(
+        organizationId,
+        activeIdentity.credential,
+        activeIdentity
+          .binding!.storeId,
+      );
+
+    await markReconcile(
+      organizationId,
+      activeIdentity
+        .credential.deviceId,
+      activeIdentity
+        .binding!.storeId,
+    );
+
+    return recordReport(
+      startedAt,
+      {
+        ok: true,
+        outboxAcked:
+          pushed.completed,
+        pushBatches:
+          pushed.batches,
+        pullPages:
+          pulled.pages,
+        catalogProducts:
+          pulled.catalog,
+        customers:
+          pulled.customers,
+        referenceRefreshed:
+          pulled.reference,
+        modifierInvalidated:
+          pulled.modifiers,
+        cursorBefore:
+          pulled.fromCursor,
+        cursorAfter:
+          pulled.toCursor,
+        hasMore:
+          pulled.hasMore,
+      },
+    );
+  } catch (error) {
+    const reason =
+      error instanceof Error
+        ? error.message
+        : "RECONCILE_UNAVAILABLE";
+
+    await recordSyncError(
+      organizationId,
+      identity.credential.deviceId,
+      identity.binding.storeId,
+      reason,
+    );
+
+    return recordReport(
+      startedAt,
+      {
+        ok: false,
+        reason,
+        outboxAcked: 0,
+        pushBatches: 0,
+        pullPages: 0,
+        catalogProducts: 0,
+        customers: 0,
+        referenceRefreshed:
+          false,
+        modifierInvalidated:
+          false,
+        cursorBefore:
+          current?.pullCursor
+          ?? 0,
+        cursorAfter:
+          current?.pullCursor
+          ?? 0,
+        hasMore: false,
+      },
+    );
+  }
+}
+
+export function reconcileCloud(
+  organizationId: string,
+) {
+  const existing =
+    active.get(
+      organizationId,
+    );
+
+  if (existing) {
+    return existing;
+  }
+
+  const promise =
+    run(
+      organizationId,
+    );
+
+  active.set(
+    organizationId,
+    promise,
+  );
+
+  void promise.finally(
+    () =>
+      active.delete(
+        organizationId,
+      ),
+  );
+
+  return promise;
+}

@@ -49,3 +49,8 @@ supabase/.branches/
 
 # Local TINDIO safety/audit snapshots
 .tindio-pre-*
+
+# Local editor settings
+.vscode/
+# Neon recovery audit evidence
+.audit/

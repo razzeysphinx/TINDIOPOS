@@ -99,50 +99,50 @@ export async function loadBeginnerSetupItems(
 
   const supabase = await createClient();
   const organizationId = context.organization.id;
-  const [stores, products, paymentMethods, stockLevels, employees, registers] = await Promise.all([
-    supabase.from("stores").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("is_active", true),
-    supabase.from("products").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "active"),
-    supabase.from("payment_methods").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("is_enabled", true),
-    context.features.inventory
-      ? supabase.from("inventory_levels").select("id", { count: "exact", head: true }).eq("organization_id", organizationId)
-      : Promise.resolve({ count: 0, error: null }),
-    supabase.from("employees").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "active"),
-    supabase.from("registers").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("is_active", true),
-  ]);
+  const readiness = await (supabase as unknown as {
+    rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: Json | null; error: { code?: string; message: string } | null }>;
+  }).rpc("get_dashboard_readiness_snapshot_v1", {
+    target_organization_id: organizationId,
+    include_inventory: context.features.inventory,
+  });
 
-  if ([stores, products, paymentMethods, stockLevels, employees, registers].some((result) => result.error)) {
-    // The checklist is supplemental. Do not block the dashboard if a role can
-    // see it but cannot read one setup resource through RLS.
-    console.error("Unable to load Back Office setup progress", {
-      organizationId,
-      errors: [stores, products, paymentMethods, stockLevels, employees, registers]
-        .map((result) => result.error?.code)
-        .filter(Boolean),
-    });
+  if (readiness.error || !readiness.data || Array.isArray(readiness.data) || typeof readiness.data !== "object") {
+    console.error("Unable to load Back Office setup progress", { organizationId, error: readiness.error?.code });
     return null;
   }
+
+  const count = (key: string) => {
+    const value = (readiness.data as Record<string, unknown>)[key];
+    return typeof value === "number" ? value : 0;
+  };
+  const stores = count("stores");
+  const products = count("products");
+  const paymentMethods = count("paymentMethods");
+  const stockLevels = count("inventoryLevels");
+  const employees = count("employees");
+  const registers = count("registers");
 
   const items: BeginnerSetupItem[] = [];
   if (hasAnyPermission(context, ["organization.manage", "settings.manage"])) {
     items.push({ complete: context.organization.name.trim().length > 0, description: "Review your business name, receipt details, and enabled features.", href: "/back-office/business-profile", label: "Review business information" });
   }
   if (hasPermission(context, "stores.manage")) {
-    items.push({ complete: (stores.count ?? 0) > 0, description: "Create the location where you will sell and manage stock.", href: "/back-office/stores", label: "Create your first store" });
+    items.push({ complete: stores > 0, description: "Create the location where you will sell and manage stock.", href: "/back-office/stores", label: "Create your first store" });
   }
   if (hasPermission(context, "products.manage")) {
-    items.push({ complete: (products.count ?? 0) > 0, description: "Add something you can sell in the POS.", href: "/back-office/catalog", label: "Add your first product" });
+    items.push({ complete: products > 0, description: "Add something you can sell in the POS.", href: "/back-office/catalog", label: "Add your first product" });
   }
   if (hasPermission(context, "settings.manage")) {
-    items.push({ complete: (paymentMethods.count ?? 0) > 0, description: "Check the ways customers can pay at each store.", href: "/back-office/payment-methods", label: "Configure payment methods" });
+    items.push({ complete: paymentMethods > 0, description: "Check the ways customers can pay at each store.", href: "/back-office/payment-methods", label: "Configure payment methods" });
   }
   if (context.features.inventory && hasPermission(context, "inventory.manage")) {
-    items.push({ complete: (stockLevels.count ?? 0) > 0, description: "Record the quantity you have before selling tracked items.", href: "/back-office/inventory?tab=stock", label: "Set opening stock" });
+    items.push({ complete: stockLevels > 0, description: "Record the quantity you have before selling tracked items.", href: "/back-office/inventory?tab=stock", label: "Set opening stock" });
   }
   if (hasPermission(context, "employees.manage")) {
-    items.push({ complete: (employees.count ?? 0) > 1, description: "Invite a teammate and choose their access and stores.", href: "/back-office/employees", label: "Add an employee" });
+    items.push({ complete: employees > 1, description: "Invite a teammate and choose their access and stores.", href: "/back-office/employees", label: "Add an employee" });
   }
   if (hasPermission(context, "registers.manage")) {
-    items.push({ complete: (registers.count ?? 0) > 0, description: "Prepare a selling station for a cashier and shift.", href: "/back-office/registers", label: "Prepare your first register" });
+    items.push({ complete: registers > 0, description: "Prepare a selling station for a cashier and shift.", href: "/back-office/registers", label: "Prepare your first register" });
   }
 
   return items;

@@ -1,7 +1,7 @@
 {
   "phase": "06",
   "requiredPaths": [
-    "supabase/migrations/20260917073801_canonical_request_transfer_migration.sql",
+    "archive/database/supabase-migrations/20260917073801_canonical_request_transfer_migration.sql",
     "supabase/tests/database/canonical_request_transfer_migration.test.sql",
     "supabase/tests/database/canonical_inventory_transfer_foundation.test.sql",
     "supabase/tests/database/improvement_14_supply_chain_replenishment.test.sql",
@@ -16,11 +16,11 @@
     "src/lib/supabase/database.types.ts"
   ],
   "requiredText": [
-    { "path": "supabase/migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "private.dispatch_inventory_transfer_core" },
-    { "path": "supabase/migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "private.receive_inventory_transfer_core" },
-    { "path": "supabase/migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "private.inventory_transfer_child_operation_id(target_operation_id, 'dispatch')" },
-    { "path": "supabase/migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "status in ('draft', 'submitted', 'approved', 'dispatched', 'partially_received', 'received', 'cancelled')" },
-    { "path": "supabase/migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "Legacy transfer statuses remain after deterministic cleanup." },
+    { "path": "archive/database/supabase-migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "private.dispatch_inventory_transfer_core" },
+    { "path": "archive/database/supabase-migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "private.receive_inventory_transfer_core" },
+    { "path": "archive/database/supabase-migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "private.inventory_transfer_child_operation_id(target_operation_id, 'dispatch')" },
+    { "path": "archive/database/supabase-migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "status in ('draft', 'submitted', 'approved', 'dispatched', 'partially_received', 'received', 'cancelled')" },
+    { "path": "archive/database/supabase-migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "Legacy transfer statuses remain after deterministic cleanup." },
     { "path": "src/features/inventory/inventory-transfer-reader-contract.ts", "text": "\"dispatched\"" },
     { "path": "src/features/inventory/inventory-transfer-reader-contract.ts", "text": "\"partially_received\"" },
     { "path": "supabase/tests/database/canonical_inventory_transfer_foundation.test.sql", "text": "request dispatch produces a canonical dispatched physical transfer" },
@@ -37,7 +37,7 @@
   ],
   "forbiddenText": [
     { "path": "src/features/inventory/inventory-transfer-reader-contract.ts", "text": "\"in_transit\"" },
-    { "path": "supabase/migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "gen_random_uuid()" },
+    { "path": "archive/database/supabase-migrations/20260917073801_canonical_request_transfer_migration.sql", "text": "gen_random_uuid()" },
     { "path": "src/app/(back-office)/back-office/replenishment/page.tsx", "text": "[\"in_transit\", \"partially_received\"]" },
     { "path": "supabase/tests/database/improvement_14_supply_chain_replenishment.test.sql", "text": "'in_transit'" },
     { "path": "supabase/tests/database/improvement_14_supply_chain_replenishment.test.sql", "text": "'completed'" },

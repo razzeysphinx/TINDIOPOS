@@ -173,7 +173,7 @@ Phase 7 extends `sales` with an optional customer reference plus immutable loyal
 
 2. **Organization and identity migration — implemented**
    - **Goal:** Create the organization, profile, store, register, and employee relationship model.
-   - **Files:** `supabase/migrations/*`, generated database types, organization service tests.
+   - **Files:** `archive/database/supabase-migrations/*`, generated database types, organization service tests.
    - **Database:** `organizations`, `profiles`, `stores`, `registers`, `employees`, and `employee_stores` with constraints and indexes.
    - **Dependencies:** Supabase CLI/project link and the chosen organization bootstrap flow.
    - **Definition of Done:** a test organization can be created, an authenticated owner is associated with it, and cross-organization reads return no rows.
@@ -210,7 +210,7 @@ Phase 7 extends `sales` with an optional customer reference plus immutable loyal
 
 1. **Catalogue schema and identifiers — implemented**
    - **Goal:** Model ordered categories, simple products, variant products, pricing, cost, SKUs, barcodes, units, archive state, and per-store availability.
-   - **Files:** `supabase/migrations/20260821045609_phase_2_catalog_inventory.sql`, `src/lib/supabase/database.types.ts`.
+   - **Files:** `archive/database/supabase-migrations/20260821045609_phase_2_catalog_inventory.sql`, `src/lib/supabase/database.types.ts`.
    - **Database:** `categories`, `products`, `product_variants`, and `product_store_settings`, including composite tenant foreign keys and indexed identifiers.
    - **Definition of Done:** one atomic routine creates a product, its variants, store settings, and initial stock projections; identifiers cannot be ambiguous across products and variants within an organization.
 
@@ -239,7 +239,7 @@ Phase 7 extends `sales` with an optional customer reference plus immutable loyal
 
 1. **Secure, paginated POS catalogue — implemented**
    - **Goal:** Return only saleable items for the cashier's active, assigned store without exposing product cost or loading the entire catalogue into the browser.
-   - **Files:** `supabase/migrations/20260821061248_phase_3_pos_catalog_search.sql`, `/api/pos/catalog`, and `src/features/pos/pos-types.ts`.
+   - **Files:** `archive/database/supabase-migrations/20260821061248_phase_3_pos_catalog_search.sql`, `/api/pos/catalog`, and `src/features/pos/pos-types.ts`.
    - **Database:** `search_pos_catalog` is an authenticated, store-assignment-aware, security-invoker query boundary. It returns active simple products and active variants only, supports product/variant name, SKU, and barcode matching, and is capped at 24 rows per page. Trigram indexes support catalogue text search.
    - **Definition of Done:** an assigned cashier with `sales.create` can page and search their store catalogue; another organization, an unassigned store, oversized requests, and cost data are denied or excluded.
 
@@ -256,7 +256,7 @@ Phase 7 extends `sales` with an optional customer reference plus immutable loyal
 
 1. **Immutable cash-sale records — implemented**
    - **Goal:** Persist a completed sale, line snapshots, one or more payment records, and one receipt with minor-unit money checks.
-   - **Files:** `supabase/migrations/20260821063657_phase_4_cash_checkout.sql`, database types, and Phase 4 schema tests.
+   - **Files:** `archive/database/supabase-migrations/20260821063657_phase_4_cash_checkout.sql`, database types, and Phase 4 schema tests.
    - **Database:** `sales`, `sale_items`, `payments`, `receipts`, and `checkout_requests`, all with RLS and least-privilege object grants.
    - **Definition of Done:** authenticated callers cannot write financial records directly; only authorized receipt readers can select completed-sale records.
 

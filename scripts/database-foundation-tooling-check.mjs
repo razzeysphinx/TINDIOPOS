@@ -31,11 +31,11 @@ test("Windows execution remains centralized", () => {
 });
 
 test("historical target remains exact", () => {
-  assert.match(rebuild, /supabase\/migrations\/20260910142940_granular_inventory_transfer_rbac\.sql/);
+  assert.match(rebuild, /archive\/database\/supabase-migrations\/20260910142940_granular_inventory_transfer_rbac\.sql/);
 });
 
 test("recovery checks are byte-stable and read-only", async () => {
-  const target = new URL("../supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql", import.meta.url);
+  const target = new URL("../archive/database/supabase-migrations/20260910142940_granular_inventory_transfer_rbac.sql", import.meta.url);
   const before = await readFile(target, "utf8");
   for (let index = 0; index < 2; index += 1) {
     const result = spawnSync(process.execPath, ["scripts/rebuild-inventory-transfer-rbac.mjs", "--check"], { cwd: new URL("..", import.meta.url), encoding: "utf8" });

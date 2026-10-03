@@ -11,16 +11,20 @@ Phase 7 extends that foundation with organization-scoped customer records, purch
 ## Stack
 
 - Next.js 16 App Router, React 19, TypeScript, Tailwind CSS, shadcn/ui, and Lucide
-- Supabase Auth, Postgres, and Row Level Security
+- Supabase Auth for authentication and session authority
+- Neon PostgreSQL for authoritative TINDIO business data and Row Level Security
 - React Hook Form and Zod for client and server validation
-- Supabase CLI for reproducible local database migrations
+- Canonical schema tooling in `database/baseline`, `database/migrations`, and
+  `database/provider/*`
 
 ## Local setup
 
 1. Copy `.env.example` to `.env.local`.
 2. Add the project URL and publishable key from the Supabase Connect panel.
-3. Apply `supabase/migrations` to a disposable project or start the local Supabase stack.
-4. Run `pnpm dev` and visit `http://127.0.0.1:3000`.
+3. Start the local Supabase runtime: `pnpm exec supabase start`.
+4. Install the canonical schema into that disposable local database:
+   `TINDIO_DATABASE_INSTALL=YES pnpm db:install:local`.
+5. Run `pnpm dev` and visit `http://127.0.0.1:3000`.
 
 ```env
 NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000
@@ -53,7 +57,7 @@ The browser does not determine access. Server-side JWT verification and database
 The POS verifies the cashier's active shift before it loads the product workspace. With no active shift, TINDIO renders only the opening-shift gate; product search, barcode entry, cart actions, checkout, and the catalogue endpoint remain unavailable. Checkout accepts only item references, quantities, selected register, validated payment method IDs/amounts, and an idempotency key; the database reconstructs prices, computes totals/change, creates payment snapshots and the receipt, and records tracked stock deductions as one transaction. A sale or refund is linked atomically to the cashier's open register shift. Receipt history and thermal-friendly reprints read immutable snapshots. Refunds use a separate idempotent transaction that cannot edit the original sale and restores only stock that was originally tracked. Shift closing locks the drawer ledger, derives expected cash from opening cash, net cash payments, cash refunds, pay-ins, and pay-outs, then permanently records the count and difference.
 
 Customer profiles are visible only to authorized CRM managers. The POS customer lookup has its own store-assignment and active-shift guard and returns only the fields required for a sale. Loyalty balances are never a writable field: earnings, redemptions, and refund reversals append immutable `loyalty_transactions` rows. Redemptions use an internal `LOYALTY` voucher tender, preserving merchandise totals, payment records, refund values, and shift cash expectations.
-n
+
 ## Quality checks
 
 ```powershell
@@ -64,4 +68,12 @@ pnpm exec supabase test db
 pnpm exec supabase db advisors --local --type all --level warn --fail-on warn
 ```
 
-The database test requires Docker Desktop and a running local Supabase stack. See [the architecture contract](docs/architecture.md) for table relationships, security boundaries, and later phase plans.
+The database test requires Docker Desktop and a running local Supabase stack.
+The local runtime supplies Auth infrastructure; the business schema is installed
+from the canonical baseline, ordered forward migrations, and the local provider
+adapter. Fresh Neon installations use `TINDIO_DATABASE_INSTALL=YES`,
+`TINDIO_DATABASE_PROVIDER=neon`, and a direct `DATABASE_URL_UNPOOLED` with
+`pnpm db:install:neon`; production never uses recovery scripts. Historical
+Supabase migrations are retained as recovery history and are not the supported
+installation path. See [the architecture contract](docs/architecture.md) for
+table relationships and security boundaries.

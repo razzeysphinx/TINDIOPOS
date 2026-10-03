@@ -13,8 +13,8 @@ const [workspace, manager, navigation, layout, drawerShell, quickViewAction, det
   source("src/features/shifts/quick-view/actions.ts"),
   source("src/app/(back-office)/back-office/shifts/[shiftId]/page.tsx"),
   source("src/features/shifts/data.ts"),
-  source("supabase/migrations/20260828082731_shift_audit_report_details.sql"),
-  source("supabase/migrations/20260828083939_shift_audit_history_listing.sql"),
+  source("archive/database/supabase-migrations/20260828082731_shift_audit_report_details.sql"),
+  source("archive/database/supabase-migrations/20260828083939_shift_audit_history_listing.sql"),
 ]);
 
 assert.match(workspace, /canViewClosedShiftAudit/, "Shift workspace must derive the existing history/settings permission boundary");

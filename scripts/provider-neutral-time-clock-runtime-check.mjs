@@ -7,7 +7,7 @@ import test from "node:test";
 
 const migrationsDirectory =
   new URL(
-    "../supabase/migrations/",
+    "../archive/database/supabase-migrations/",
     import.meta.url,
   );
 
@@ -34,7 +34,7 @@ assert.equal(
 const migration =
   await readFile(
     new URL(
-      `../supabase/migrations/${matches[0]}`,
+      `../archive/database/supabase-migrations/${matches[0]}`,
       import.meta.url,
     ),
     "utf8",

@@ -4,8 +4,8 @@ import test from "node:test";
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const [migration, stockPageFallbackMigration, service, schema, csv, forms, workspace, data, exportRoute, workflows, actions] = await Promise.all([
-  source("supabase/migrations/20260919013635_canonical_inventory_replenishment_settings.sql"),
-  source("supabase/migrations/20260919021500_phase_13_effective_low_stock_fallback.sql"),
+  source("archive/database/supabase-migrations/20260919013635_canonical_inventory_replenishment_settings.sql"),
+  source("archive/database/supabase-migrations/20260919021500_phase_13_effective_low_stock_fallback.sql"),
   source("src/features/catalog/service.ts"), source("src/features/catalog/catalog-schema.ts"),
   source("src/features/catalog/catalog-csv.ts"), source("src/features/catalog/catalog-forms.tsx"),
   source("src/features/catalog/catalog-product-workspace.tsx"), source("src/features/catalog/data.ts"),
@@ -27,7 +27,8 @@ test("catalog CSV and display use the canonical effective threshold contract", (
   assert.doesNotMatch(exportRoute, /low_stock_level/);
   assert.match(csv, /low_stock_level is retired/);
   assert.doesNotMatch(csv, /"low_stock_level",/);
-  assert.match(data, /inventory_replenishment_rules/);
+  assert.match(data, /loadCatalogReadBundleResult/);
+  assert.match(data, /"replenishmentRules"/);
   assert.match(workspace, /rule\?\.reorder_point \?\? legacyFallback/);
   assert.match(workspace, /candidate\.variant_id === level\.variant_id/);
   assert.match(

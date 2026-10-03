@@ -12,6 +12,7 @@ const [
   posTerminal,
   posDevice,
   offlineRoute,
+  offlineService,
   offlineMigration,
   offlineDatabaseTest,
 ] = await Promise.all([
@@ -22,7 +23,8 @@ const [
   source("../src/features/pos/pos-terminal.tsx"),
   source("../src/features/devices/pos-device.ts"),
   source("../src/app/api/pos/v2/offline-checkout/route.ts"),
-  source("../supabase/migrations/20260827152628_phase_8_offline_sync_binding_integrity.sql"),
+  source("../src/features/offline/pos-v2-offline-checkout-service.ts"),
+  source("../archive/database/supabase-migrations/20260827152628_phase_8_offline_sync_binding_integrity.sql"),
   source("../supabase/tests/database/improvement_13_offline_sync_foundation.test.sql"),
 ]);
 
@@ -68,13 +70,10 @@ test("the server checkout and telemetry paths preserve authoritative context and
     /getPosV2BusinessContext\(\s*request\s*,?\s*\)/,
     "offline checkout resolves the authenticated POS V2 business context",
   );
-  assert.match(
-    offlineRoute,
-    /completeCheckout\(\s*context\s*,\s*input\s*,\s*\{\s*guardOfflineTotal:\s*true\s*,?\s*\}\s*,?\s*\)/,
-    "offline checkout keeps the authoritative total guard enabled",
-  );
-  assert.match(offlineRoute, /record_offline_sync_event/);
-  assert.match(offlineRoute, /context\.organization\.id/);
+  assert.match(offlineRoute, /processPosV2OfflineCheckout/);
+  assert.match(offlineService, /completeCheckout\(context,input,\{guardOfflineTotal:true\}\)/, "offline checkout keeps the authoritative total guard enabled");
+  assert.match(offlineService, /record_offline_sync_event/);
+  assert.match(offlineService, /context\.organization\.id/);
   assert.match(
     offlineRoute,
     /"Cache-Control"\s*:\s*"private, no-store"/,

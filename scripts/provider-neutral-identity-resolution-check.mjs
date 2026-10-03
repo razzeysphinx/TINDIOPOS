@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 
-const migrationsDirectory = new URL("../supabase/migrations/", import.meta.url);
+const migrationsDirectory = new URL("../archive/database/supabase-migrations/", import.meta.url);
 
 const migrationNames = await readdir(migrationsDirectory);
 
@@ -34,7 +34,7 @@ const [
 ] = await Promise.all([
   readFile(
     new URL(
-      `../supabase/migrations/${resolutionMigrations[0]}`,
+      `../archive/database/supabase-migrations/${resolutionMigrations[0]}`,
       import.meta.url,
     ),
     "utf8",
@@ -42,7 +42,7 @@ const [
 
   readFile(
     new URL(
-      `../supabase/migrations/${foundationMigrations[0]}`,
+      `../archive/database/supabase-migrations/${foundationMigrations[0]}`,
       import.meta.url,
     ),
     "utf8",
@@ -50,7 +50,7 @@ const [
 
   readFile(
     new URL(
-      "../supabase/migrations/20260820165413_phase_1_business_setup.sql",
+      "../archive/database/supabase-migrations/20260820165413_phase_1_business_setup.sql",
       import.meta.url,
     ),
     "utf8",

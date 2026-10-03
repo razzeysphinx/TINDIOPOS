@@ -21,15 +21,18 @@ const [
   stockPageRepairMigration,
   stockView,
   replenishmentPage,
+  replenishmentLoader,
   inventoryPage,
+  inventoryCoreLoader,
+  inventoryBundleMigration,
 ] =
   await Promise.all([
     source(
-      "../supabase/migrations/20260911140000_inventory_stock_page_performance.sql",
+      "../archive/database/supabase-migrations/20260911140000_inventory_stock_page_performance.sql",
     ),
 
     source(
-      "../supabase/migrations/20260916100000_inventory_stock_page_lint_repair.sql",
+      "../archive/database/supabase-migrations/20260916100000_inventory_stock_page_lint_repair.sql",
     ),
 
     source(
@@ -41,7 +44,19 @@ const [
     ),
 
     source(
+      "../src/features/inventory/replenishment-data.ts",
+    ),
+
+    source(
       "../src/app/(back-office)/back-office/inventory/page.tsx",
+    ),
+
+    source(
+      "../src/features/inventory/inventory-core-data.ts",
+    ),
+
+    source(
+      "../database/migrations/0005_inventory_core_read_model_extension.sql",
     ),
   ]);
 
@@ -55,7 +70,8 @@ test(
     assert.match(stockPageMigration, /limit page_size\s+offset \(page_number - 1\) \* page_size/s);
     assert.match(stockPageMigration, /uninitialized_simple_positions/);
     assert.match(stockPageMigration, /uninitialized_variant_positions/);
-    assert.match(replenishmentPage, /supabase\.rpc\("get_inventory_stock_page"/);
+    assert.match(replenishmentPage, /loadReplenishmentWorkspaceData/);
+    assert.match(replenishmentLoader, /supabase\.rpc\("get_inventory_stock_page"/);
     assert.match(replenishmentPage, /const stockPageSize = 50/);
     assert.match(stockView, /router\.replace\(`\$\{pathname\}\?\$\{query\.toString\(\)\}`/);
     assert.match(stockView, /Page \{page\} of \{pageCount\}/);
@@ -77,12 +93,19 @@ test(
 test(
   "Inventory Control fetches one activity lookahead row and renders only the page size",
   () => {
-    assert.match(inventoryPage, /recentMovementsQuery\?\.range\(\s*activityPageOffset,\s*activityPageOffset \+ INVENTORY_ACTIVITY_PAGE_SIZE,\s*\)/s);
+    assert.match(inventoryPage, /const activityLimit = activeTab === "activity" \? INVENTORY_ACTIVITY_PAGE_SIZE \+ 1 : 30/);
+    assert.match(inventoryPage, /const activityOffset = activeTab === "activity" \? activityPageOffset : 0/);
+    assert.match(inventoryPage, /loadInventoryControlCoreData\([\s\S]{0,1000}activityLimit,[\s\S]{0,160}activityOffset,/);
+    assert.match(inventoryCoreLoader, /needs: coreNeeds,[\s\S]{0,360}activityLimit, activityOffset/);
+    assert.match(inventoryBundleMigration, /least\(greatest\(coalesce\(requested_activity_limit, 30\), 1\), 101\)/);
+    assert.match(inventoryBundleMigration, /v_activity_offset integer := greatest\(coalesce\(requested_activity_offset, 0\), 0\)/);
     assert.match(inventoryPage, /loadedMovements\.slice\(0, INVENTORY_ACTIVITY_PAGE_SIZE\)/);
     assert.match(inventoryPage, /loadedMovements\.length > INVENTORY_ACTIVITY_PAGE_SIZE/);
     assert.match(inventoryPage, /const countAwarenessQuery = workspace === "control" && activeTab === "overview"/);
-    assert.match(inventoryPage, /\.in\("inventory_count_batch_id", inventoryCountBatchIds\)/);
-    assert.match(inventoryPage, /\.in\("stock_transfer_id", openStockTransferIds\)/);
+    assert.match(inventoryPage, /get_inventory_count_batch_documents_workspace_v2/);
+    assert.match(inventoryCoreLoader, /\["receivableStockTransfers", "stockTransferLines"\]/);
+    assert.match(inventoryPage, /transferBundle\.stockTransferLines/);
+    assert.doesNotMatch(inventoryPage, /from\("stock_transfer_lines"\)/);
     assert.doesNotMatch(inventoryPage, /inventoryCountBatchDocumentsQuery/);
   },
 );

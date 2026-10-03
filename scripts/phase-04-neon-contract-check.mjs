@@ -33,7 +33,7 @@ const [
     source("src/lib/database/env.ts"),
     source("src/lib/database/neon-data-api-fetch.ts"),
     source("src/lib/supabase/server.ts"),
-    source("supabase/migrations/20260922180000_neon_portability_foundation.sql"),
+    source("archive/database/supabase-migrations/20260922180000_neon_portability_foundation.sql"),
     source(
       "database/provider/neon/00_extensions.sql",
     ),
@@ -173,9 +173,9 @@ test(
       /auth\.user_id\(\)/,
     );
 
-    assert.match(
+    assert.doesNotMatch(
       identityProvider,
-      /auth\.uid\(\)/,
+      /\bauth\.uid\s*\(/,
     );
 
     assert.match(
@@ -241,8 +241,9 @@ test(
         "test:phase-04-supabase-jwks",
         "test:phase-04-cookie-neon-auth",
         "test:provider-neutral-time-clock-runtime",
-        "certify:phase-04:neon-rehearsal",
-        "migrate:phase-04:neon-cutover",
+        "db:install:local",
+        "db:install:neon",
+        "certify:production:api",
         "certify:phase-04:neon-api",
       ]
     ) {

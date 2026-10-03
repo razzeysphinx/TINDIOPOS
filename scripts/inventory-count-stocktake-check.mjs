@@ -26,7 +26,7 @@ test("Phase 8 extends the canonical count document for paper and spreadsheet sto
 test("Phase 8 keeps multi-store batches as coordination over independent store count documents", async () => {
   const [workspace, migration] = await Promise.all([
     source("src/features/inventory/inventory-count-workspace.tsx"),
-    source("supabase/migrations/20260911014827_inventory_count_batches_and_roundtrip_import.sql"),
+    source("archive/database/supabase-migrations/20260911014827_inventory_count_batches_and_roundtrip_import.sql"),
   ]);
 
   assert.match(workspace, /New count batch/);
@@ -42,7 +42,7 @@ test("Phase 8 keeps multi-store batches as coordination over independent store c
 test("count preparation, import, review, and posting use granular capability and store-scope enforcement", async () => {
   const [actions, migration, page] = await Promise.all([
     source("src/features/inventory/advanced-inventory-actions.ts"),
-    source("supabase/migrations/20260911014827_inventory_count_batches_and_roundtrip_import.sql"),
+    source("archive/database/supabase-migrations/20260911014827_inventory_count_batches_and_roundtrip_import.sql"),
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
   ]);
 

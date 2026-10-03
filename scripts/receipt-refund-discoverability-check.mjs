@@ -16,7 +16,7 @@ const [posPage, posHistory, posSearch, refundForm, refundAction, approvalDialog,
   source("src/features/approvals/manager-approval-dialog.tsx"),
   source("src/features/approvals/actions.ts"),
   source("src/app/(back-office)/back-office/security/page.tsx"),
-  source("supabase/migrations/20260903093000_final_pos_receipts_workspace.sql"),
+  source("archive/database/supabase-migrations/20260903093000_final_pos_receipts_workspace.sql"),
   source("supabase/tests/database/phase_5_receipts_refunds.test.sql"),
 ]);
 

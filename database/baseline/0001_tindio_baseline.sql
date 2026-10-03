@@ -5,11 +5,77 @@
 create schema if not exists private;
 revoke all on schema private from public;
 
+-- TINDIO-owned database access classes.
+do $tindio_roles$
+begin
+  if not exists (
+    select 1 from pg_catalog.pg_roles
+    where rolname = 'tindio_anon'
+  ) then
+    create role tindio_anon nologin inherit;
+  end if;
+
+  if not exists (
+    select 1 from pg_catalog.pg_roles
+    where rolname = 'tindio_authenticated'
+  ) then
+    create role tindio_authenticated nologin inherit;
+  end if;
+
+  if not exists (
+    select 1 from pg_catalog.pg_roles
+    where rolname = 'tindio_service'
+  ) then
+    create role tindio_service nologin inherit;
+  end if;
+end;
+$tindio_roles$;
+
+alter role tindio_anon nologin inherit;
+alter role tindio_authenticated nologin inherit;
+alter role tindio_service nologin inherit;
+
+
+CREATE FUNCTION "private"."current_identity_email"()
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+  select null::text;
+$function$;
+
+
+revoke execute on function private.current_identity_email() from public;
+
+CREATE FUNCTION "private"."current_identity_email_matches"("target_email" text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO ''
+AS $tindio_identity_email$
+  select
+    private.current_identity_email() is not null
+    and lower(trim(coalesce(target_email, '')))
+      = private.current_identity_email();
+$tindio_identity_email$;
+
+REVOKE ALL
+ON FUNCTION "private"."current_identity_email_matches"(text)
+FROM PUBLIC;
+
+GRANT EXECUTE
+ON FUNCTION "private"."current_identity_email_matches"(text)
+TO "tindio_authenticated";
+
+
+
+
 --
 -- PostgreSQL database dump
 --
-
--- \restrict mqL9jxPOMwNPGpdodmePZtwgwr3Dz990eXXoqyFOoFNktVSH7gemc4AuwN8GZ2B
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -53,8 +119,8 @@ CREATE OR REPLACE FUNCTION "private"."accept_employee_invitation"("invitation_to
     SET "search_path" TO ''
     AS $_$
 declare
-  current_user_id uuid := (select auth.uid());
-  current_user_email text := lower(coalesce((select auth.jwt() ->> 'email'), ''));
+  current_user_id uuid := (select private.current_profile_id());
+  current_user_email text := lower(coalesce((select private.current_identity_email()), ''));
   invitation public.employee_invitations%rowtype;
   new_employee_id uuid;
 begin
@@ -257,7 +323,7 @@ declare
   next_quantity numeric(14, 3);
   new_movement_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
     raise exception 'Inventory management permission is required.' using errcode = '42501';
   end if;
@@ -282,7 +348,7 @@ begin
   into actor_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active'
   limit 1;
 
@@ -640,7 +706,7 @@ begin
   if transfer.id is null or transfer.stock_request_id is not null then
     raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514';
   end if;
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
     raise exception 'Transfer send permission is required.' using errcode = '42501';
   end if;
@@ -845,7 +911,7 @@ CREATE OR REPLACE FUNCTION "private"."approve_stock_request"("target_organizatio
     AS $_$
 declare request_row public.stock_requests%rowtype; actor_id uuid; line jsonb; request_line public.stock_request_lines%rowtype; warehouse_store_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or (
        not (select private.has_permission(target_organization_id, 'inventory.manage'))
        and not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send'))
@@ -1517,7 +1583,7 @@ CREATE OR REPLACE FUNCTION "private"."can_access_kitchen_realtime_topic"("target
     SET "search_path" TO ''
     AS $$
   select coalesce(
-    (select auth.uid()) is not null
+    (select private.current_profile_id()) is not null
     and exists (
       select 1
       from public.employees employee
@@ -1530,7 +1596,7 @@ CREATE OR REPLACE FUNCTION "private"."can_access_kitchen_realtime_topic"("target
       join public.role_permissions role_permission
         on role_permission.role_id = employee_role.role_id
        and role_permission.organization_id = employee_role.organization_id
-      where employee.profile_id = (select auth.uid())
+      where employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
         and role_permission.permission_code in ('kitchen.view', 'kitchen.manage')
         and target_topic = private.kitchen_realtime_topic(
@@ -1551,7 +1617,7 @@ CREATE OR REPLACE FUNCTION "private"."can_grant_role"("target_organization_id" "
     SET "search_path" TO ''
     AS $$
   select
-    (select auth.uid()) is not null
+    (select private.current_profile_id()) is not null
     and (select private.has_permission(
       target_organization_id,
       'employees.manage'
@@ -1689,7 +1755,7 @@ begin
   if transfer.id is null or transfer.stock_request_id is not null then
     raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514';
   end if;
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (
        (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.create'))
        or (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send'))
@@ -1754,7 +1820,7 @@ CREATE OR REPLACE FUNCTION "private"."cancel_open_ticket"("target_organization_i
 declare
   target_ticket public.open_tickets%rowtype;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -1797,7 +1863,7 @@ declare
   actor_id uuid;
   normalized_note text;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.po.create'))) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -2072,7 +2138,7 @@ begin
   if target_organization_id is null or target_store_id is null or target_register_id is null or target_idempotency_key is null then
     raise exception 'A store, register, and checkout key are required.' using errcode = '23514';
   end if;
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'sales.create')) then
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
   if target_items is null or jsonb_typeof(target_items) <> 'array' or jsonb_array_length(target_items) not between 1 and 100
@@ -2086,7 +2152,7 @@ begin
   select employee.id into actor_employee_id from public.employees employee
   join public.employee_stores es on es.employee_id = employee.id and es.organization_id = employee.organization_id and es.store_id = target_store_id
   join public.registers register on register.id = target_register_id and register.organization_id = employee.organization_id and register.store_id = target_store_id and register.is_active
-  where employee.organization_id = target_organization_id and employee.profile_id = (select auth.uid()) and employee.status = 'active';
+  where employee.organization_id = target_organization_id and employee.profile_id = (select private.current_profile_id()) and employee.status = 'active';
   if actor_employee_id is null then raise exception 'An active assigned employee and register are required.' using errcode = '42501'; end if;
 
   request_payload := jsonb_build_object('items', target_items, 'payments', target_payments, 'store_id', target_store_id, 'register_id', target_register_id, 'customer_id', target_customer_id, 'loyalty_redemption_points', coalesce(target_loyalty_redemption_points, 0), 'discount_id', target_discount_id, 'tax_rate_id', target_tax_rate_id, 'dining_option_id', target_dining_option_id, 'open_ticket_id', target_open_ticket_id);
@@ -2329,7 +2395,7 @@ begin
     or jsonb_array_length(target_payments) <> 1 then
     raise exception 'Special catalogue checkout requires valid items and one internal payment.' using errcode = '23514';
   end if;
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -2365,7 +2431,7 @@ begin
    and register.is_active
   join public.profiles profile on profile.id = employee.profile_id
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -2685,7 +2751,7 @@ begin
       using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -2707,7 +2773,7 @@ begin
    and register.organization_id = store.organization_id
    and register.is_active
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -3188,7 +3254,7 @@ begin
       using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -3226,7 +3292,7 @@ begin
   join public.profiles profile
     on profile.id = employee.profile_id
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -3743,7 +3809,7 @@ begin
     organization_id, operation_id, command, normalized_payload, result_unit_id, actor_profile_id
   ) values (
     target_organization_id, target_operation_id, target_command, target_payload,
-    target_result_unit_id, (select auth.uid())
+    target_result_unit_id, (select private.current_profile_id())
   );
   return null;
 end;
@@ -4237,7 +4303,7 @@ begin
       using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'shifts.close')) then
     raise exception 'Shift closing permission is required.' using errcode = '42501';
   end if;
@@ -4269,7 +4335,7 @@ begin
    and employee_store.organization_id = employee.organization_id
    and employee_store.store_id = target_shift.store_id
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -4317,7 +4383,7 @@ CREATE OR REPLACE FUNCTION "private"."complete_inventory_count"("target_organiza
     AS $_$
 declare actor_id uuid; count_id uuid; line jsonb; expected numeric(14,3); counted numeric(14,3); target_line_product_id uuid; target_line_variant_id uuid;
 begin
- if (select auth.uid()) is null or not (select private.has_permission(target_organization_id,'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode='42501'; end if;
+ if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id,'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode='42501'; end if;
  if target_lines is null or jsonb_typeof(target_lines) <> 'array' or jsonb_array_length(target_lines) not between 1 and 500 then raise exception 'A count needs one to 500 items.' using errcode='23514'; end if;
  perform private.inventory_count_actor(target_organization_id, target_store_id, array['inventory.count.create', 'inventory.count.finalize']::text[]);
   actor_id := private.inventory_actor(target_organization_id, target_store_id); if actor_id is null then raise exception 'An assigned employee is required for this store.' using errcode='42501'; end if;
@@ -4342,6 +4408,7 @@ declare
   export_session public.organization_export_sessions%rowtype;
   actor_employee_id uuid;
   delivery_completed_at timestamptz := clock_timestamp();
+  current_profile_id uuid := private.current_profile_id();
 begin
   if target_record_count not between 1 and 50000000
     or jsonb_typeof(target_manifest) <> 'object'
@@ -4354,7 +4421,7 @@ begin
   into export_session
   from public.organization_export_sessions session
   where session.id = target_export_session_id
-    and session.profile_id = (select auth.uid())
+    and session.profile_id = current_profile_id
     and session.expires_at > now()
   for update;
 
@@ -4382,7 +4449,9 @@ begin
     delivery_manifest = target_manifest
   where session.id = export_session.id;
 
-  actor_employee_id := private.current_organization_member_employee_id(export_session.organization_id);
+  actor_employee_id := private.current_organization_member_employee_id(
+    export_session.organization_id
+  );
 
   perform private.write_audit_log(
     export_session.organization_id,
@@ -4512,18 +4581,20 @@ CREATE OR REPLACE FUNCTION "private"."consume_organization_rate_limit"("target_o
 declare
   normalized_action_code text :=
     lower(btrim(coalesce(target_action_code, '')));
-
   configured_limit integer;
-
+  current_profile_id uuid := private.current_profile_id();
   current_window_start timestamptz :=
     date_trunc('hour', clock_timestamp());
-
   current_window_ends_at timestamptz;
-
   observed_request_count integer;
-
   request_was_allowed boolean := false;
 begin
+  if current_profile_id is null then
+    raise exception
+      'An authenticated TINDIO profile is required.'
+      using errcode = '42501';
+  end if;
+
   case normalized_action_code
     when 'organization.export' then
       configured_limit := 3;
@@ -4582,7 +4653,7 @@ begin
   )
   values (
     target_organization_id,
-    (select auth.uid()),
+    current_profile_id,
     normalized_action_code,
     current_window_start,
     1
@@ -4611,7 +4682,7 @@ begin
     into observed_request_count
     from public.organization_rate_limit_windows rate_window
     where rate_window.organization_id = target_organization_id
-      and rate_window.profile_id = (select auth.uid())
+      and rate_window.profile_id = current_profile_id
       and rate_window.action_code = normalized_action_code
       and rate_window.window_started_at = current_window_start;
 
@@ -4623,30 +4694,15 @@ begin
   end if;
 
   return jsonb_build_object(
-    'allowed',
-      request_was_allowed,
-
-    'limit',
-      configured_limit,
-
-    'remaining',
-      greatest(
-        configured_limit - observed_request_count,
-        0
-      ),
-
-    'retry_after_seconds',
-      greatest(
-        floor(
-          extract(
-            epoch
-            from (
-              current_window_ends_at - clock_timestamp()
-            )
-          )
-        )::integer,
-        0
-      )
+    'allowed', request_was_allowed,
+    'limit', configured_limit,
+    'remaining', greatest(configured_limit - observed_request_count, 0),
+    'retry_after_seconds', greatest(
+      floor(extract(
+        epoch from (current_window_ends_at - clock_timestamp())
+      ))::integer,
+      0
+    )
   );
 end;
 $$;
@@ -4671,7 +4727,7 @@ declare
   valid_store_count integer;
   variant_count integer;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -4865,7 +4921,7 @@ declare
   persisted_lines jsonb;
   transfer_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.create'))
      or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
     raise exception 'Transfer create and send permissions are required.' using errcode = '42501';
@@ -4960,7 +5016,7 @@ CREATE OR REPLACE FUNCTION "private"."create_inventory_adjustment_reason"("targe
     AS $$
 declare reason_id uuid;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
   insert into public.inventory_adjustment_reasons (organization_id, code, name, movement_type)
   values (target_organization_id, upper(btrim(target_code)), btrim(target_name), target_movement_type)
   returning id into reason_id;
@@ -5257,7 +5313,7 @@ declare
   transfer_id uuid;
   transfer_number bigint;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.create')) then
     raise exception 'Transfer creation permission is required.' using errcode = '42501';
   end if;
@@ -5474,7 +5530,7 @@ declare
   requested_lines jsonb;
   persisted_lines jsonb;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.po.create'))) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -5673,7 +5729,7 @@ declare
   requested_lines jsonb;
   persisted_lines jsonb;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or (
        not (select private.has_permission(target_organization_id, 'inventory.manage'))
        and not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.create'))
@@ -5889,7 +5945,7 @@ CREATE OR REPLACE FUNCTION "private"."create_supplier"("target_organization_id" 
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$ declare supplier_id uuid; begin
- if (select auth.uid()) is null or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.suppliers.manage'))) then raise exception 'Inventory permission is required.' using errcode='42501'; end if;
+ if (select private.current_profile_id()) is null or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.suppliers.manage'))) then raise exception 'Inventory permission is required.' using errcode='42501'; end if;
  insert into public.suppliers (organization_id,name,contact_name,email,phone,address,notes) values (target_organization_id,nullif(btrim(target_name),''),nullif(btrim(target_contact_name),''),nullif(btrim(target_email),''),nullif(btrim(target_phone),''),nullif(btrim(target_address),''),nullif(btrim(target_notes),'')) returning id into supplier_id; return supplier_id; end; $$;
 
 --
@@ -5902,7 +5958,7 @@ CREATE OR REPLACE FUNCTION "private"."create_supply_chain_warehouse"("target_org
     AS $_$
 declare actor_id uuid; warehouse_id uuid;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
   if target_code is null or upper(btrim(target_code)) !~ '^[A-Z][A-Z0-9_-]{1,39}$'
@@ -5948,12 +6004,15 @@ $$;
 -- Name: current_identity_subject(); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
-CREATE OR REPLACE FUNCTION "private"."current_identity_subject"() RETURNS "text"
-    LANGUAGE "sql" STABLE SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
-  select (select auth.uid())::text;
-$$;
+CREATE FUNCTION "private"."current_identity_subject"()
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+  select null::text;
+$function$;
 
 --
 -- Name: current_organization_member_employee_id("uuid"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -5966,7 +6025,7 @@ CREATE OR REPLACE FUNCTION "private"."current_organization_member_employee_id"("
   select employee.id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = private.current_profile_id()
     and employee.status = 'active'
   order by employee.created_at
   limit 1;
@@ -6161,7 +6220,7 @@ declare
   existing_status text;
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -6347,7 +6406,7 @@ declare transfer public.stock_transfers%rowtype;
 begin
   select * into transfer from public.stock_transfers where organization_id = target_organization_id and id = target_stock_transfer_id;
   if transfer.id is null or transfer.stock_request_id is not null then raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514'; end if;
-  if (select auth.uid()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
+  if (select private.current_profile_id()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
     raise exception 'Transfer send permission is required.' using errcode = '42501';
   end if;
   return private.dispatch_inventory_transfer_core(target_organization_id, target_stock_transfer_id, target_note, target_operation_id, false);
@@ -6450,7 +6509,7 @@ declare
   create_payload jsonb; transition_payload jsonb;
   submit_id uuid; approve_id uuid; dispatch_id uuid;
 begin
-  if (select auth.uid()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
+  if (select private.current_profile_id()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send')) then
     raise exception 'Transfer send permission is required.' using errcode = '42501';
   end if;
   if target_operation_id is null then raise exception 'A stable transfer-dispatch operation ID is required.' using errcode = '23514'; end if;
@@ -6689,8 +6748,8 @@ begin
   end if;
 
   -- Internal database maintenance has no Supabase user context. Every client
-  -- request has auth.uid() and must satisfy the full POS ticket capability.
-  if (select auth.uid()) is not null then
+  -- request has private.current_profile_id() and must satisfy the full POS ticket capability.
+  if (select private.current_profile_id()) is not null then
     perform private.require_pos_capabilities(
       target_organization_id,
       array['pos.access', 'sales.create', 'tickets.manage']
@@ -6881,7 +6940,7 @@ CREATE OR REPLACE FUNCTION "private"."get_catalog_costs"("target_organization_id
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(
       target_organization_id,
       'products.view_cost'
@@ -6919,7 +6978,7 @@ CREATE OR REPLACE FUNCTION "private"."get_checkout_stock_warning"("target_organi
 declare
   negative_item_count integer;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -6951,7 +7010,7 @@ CREATE OR REPLACE FUNCTION "private"."get_checkout_stock_warning"("target_organi
 declare
   negative_item_count integer;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (
       select private.has_permission(target_organization_id, 'sales.create')
     ) then
@@ -7113,7 +7172,7 @@ CREATE OR REPLACE FUNCTION "private"."get_customer_display_management_sessions"(
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'registers.manage')) then
     raise exception 'Register management permission is required.' using errcode = '42501';
   end if;
@@ -7228,7 +7287,7 @@ CREATE OR REPLACE FUNCTION "private"."get_inventory_count_awareness"("target_org
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null or not (
+  if (select private.current_profile_id()) is null or not (
     (select private.has_permission(target_organization_id, 'inventory.view'))
     or (select private.has_permission(target_organization_id, 'inventory.count'))
     or (select private.has_permission(target_organization_id, 'inventory.manage'))
@@ -7288,7 +7347,7 @@ CREATE OR REPLACE FUNCTION "private"."get_kitchen_orders"("target_organization_i
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (
       (select private.has_permission(target_organization_id, 'kitchen.view'))
       or (select private.has_permission(target_organization_id, 'kitchen.manage'))
@@ -7348,7 +7407,7 @@ begin
         on employee_store.employee_id = employee.id
        and employee_store.organization_id = employee.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
         and employee_store.store_id = kitchen_order.store_id
     )
@@ -7387,7 +7446,7 @@ CREATE OR REPLACE FUNCTION "private"."get_kitchen_station_routes"("target_organi
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'kitchen.manage')) then
     raise exception 'Kitchen order management access is required.' using errcode = '42501';
   end if;
@@ -7413,7 +7472,7 @@ CREATE OR REPLACE FUNCTION "private"."get_pos_customer_display_sessions"("target
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -7430,7 +7489,7 @@ begin
         on employee_store.employee_id = employee.id
        and employee_store.organization_id = employee.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
         and employee_store.store_id = display.store_id
     );
@@ -7446,7 +7505,7 @@ CREATE OR REPLACE FUNCTION "private"."get_pos_customer_display_sessions_with_ids
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -7463,7 +7522,7 @@ begin
         on employee_store.employee_id = employee.id
        and employee_store.organization_id = employee.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
         and employee_store.store_id = display.store_id
     );
@@ -7484,7 +7543,7 @@ declare
   period_end timestamptz;
   can_view_cost boolean;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or target_required_permission not in ('dashboard.view', 'reports.view')
      or not (select private.has_permission(target_organization_id, target_required_permission)) then
     raise exception 'Reporting access is required.' using errcode = '42501';
@@ -7814,7 +7873,7 @@ CREATE OR REPLACE FUNCTION "private"."get_scoped_reporting_snapshot"("target_org
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or target_required_permission not in ('dashboard.view', 'reports.view')
      or not (select private.has_permission(target_organization_id, target_required_permission)) then
     raise exception 'Reporting access is required.' using errcode = '42501';
@@ -7834,7 +7893,7 @@ begin
         on assignment.employee_id = employee.id
        and assignment.organization_id = employee.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
         and assignment.store_id = target_store_id
     ) then
@@ -8024,7 +8083,7 @@ CREATE OR REPLACE FUNCTION "private"."guard_employee_lifecycle_transition"() RET
     AS $$
 begin
   if (new.status is distinct from old.status or new.archived_at is distinct from old.archived_at)
-    and (select auth.uid()) is not null
+    and (select private.current_profile_id()) is not null
     and coalesce(current_setting('tindio.employee_lifecycle_change', true), '') <> 'authorized' then
     raise exception 'Use the controlled employee lifecycle workflow to change status.' using errcode = '42501';
   end if;
@@ -8262,36 +8321,69 @@ CREATE OR REPLACE FUNCTION "private"."has_active_pos_shift_access"("target_organ
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select
-    (select auth.uid()) is not null
-    and (select private.has_permission(target_organization_id, 'sales.create'))
+  select coalesce(
+    target_organization_id is not null
+    and target_store_id is not null
+    and target_register_id is not null
+
+    and private.current_profile_id()
+      is not null
+
+    and private.has_permission(
+      target_organization_id,
+      'sales.create'
+    )
+
+    and private.has_store_read_scope(
+      target_organization_id,
+      target_store_id
+    )
+
     and exists (
       select 1
       from public.employees employee
-      join public.employee_stores employee_store
-        on employee_store.employee_id = employee.id
-       and employee_store.organization_id = employee.organization_id
-       and employee_store.store_id = target_store_id
       join public.stores store
-        on store.id = employee_store.store_id
-       and store.organization_id = employee_store.organization_id
+        on store.organization_id =
+          employee.organization_id
+       and store.id =
+          target_store_id
        and store.is_active
       join public.registers register
-        on register.id = target_register_id
-       and register.organization_id = employee.organization_id
-       and register.store_id = target_store_id
+        on register.organization_id =
+          employee.organization_id
+       and register.id =
+          target_register_id
+       and register.store_id =
+          target_store_id
        and register.is_active
       join public.shifts shift
-        on shift.organization_id = employee.organization_id
-       and shift.store_id = target_store_id
-       and shift.register_id = target_register_id
-       and shift.opened_by_employee_id = employee.id
-       and shift.status = 'open'
-      where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
-        and employee.status = 'active'
-    );
+        on shift.organization_id =
+          employee.organization_id
+       and shift.store_id =
+          target_store_id
+       and shift.register_id =
+          target_register_id
+       and shift.opened_by_employee_id =
+          employee.id
+       and shift.status =
+          'open'
+      where employee.organization_id =
+          target_organization_id
+        and employee.profile_id =
+          private.current_profile_id()
+        and employee.status =
+          'active'
+    ),
+
+    false
+  );
 $$;
+
+--
+-- Name: FUNCTION "has_active_pos_shift_access"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid"); Type: COMMENT; Schema: private; Owner: postgres
+--
+
+COMMENT ON FUNCTION "private"."has_active_pos_shift_access"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") IS 'RLS-safe active POS drawer predicate. EXECUTE is intentionally limited to authenticated because open_tickets RLS evaluates this helper for authenticated users. The function remains SECURITY DEFINER and independently validates TINDIO identity, sales permission, store scope, employee status, register scope, and owned open-shift state.';
 
 --
 -- Name: has_all_inventory_capabilities("uuid", "text"[]); Type: FUNCTION; Schema: private; Owner: postgres
@@ -8478,8 +8570,8 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_export_access"("target_or
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select
-    (select auth.uid()) is not null
+  select coalesce(
+    private.current_profile_id() is not null
     and exists (
       select 1
       from public.employees employee
@@ -8490,10 +8582,12 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_export_access"("target_or
         on role_permission.role_id = employee_role.role_id
        and role_permission.organization_id = employee_role.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = private.current_profile_id()
         and employee.status = 'active'
         and role_permission.permission_code = 'organization.export'
-    );
+    ),
+    false
+  );
 $$;
 
 --
@@ -8504,8 +8598,8 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_lifecycle_access"("target
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select
-    (select auth.uid()) is not null
+  select coalesce(
+    private.current_profile_id() is not null
     and exists (
       select 1
       from public.employees employee
@@ -8516,12 +8610,17 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_lifecycle_access"("target
         on role_permission.role_id = employee_role.role_id
        and role_permission.organization_id = employee_role.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = private.current_profile_id()
         and employee.status = 'active'
-        and role_permission.permission_code in ('organization.archive', 'organization.lifecycle')
+        and role_permission.permission_code in (
+          'organization.archive',
+          'organization.lifecycle'
+        )
       group by employee.id
       having count(distinct role_permission.permission_code) = 2
-    );
+    ),
+    false
+  );
 $$;
 
 --
@@ -8533,12 +8632,12 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_membership"("target_organ
     SET "search_path" TO ''
     AS $$
   select coalesce(
-    (select auth.uid()) is not null
+    (select private.current_profile_id()) is not null
     and exists (
       select 1
       from public.employees employee
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
     ), false);
 $$;
@@ -8552,7 +8651,7 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_recovery_manage_access"("
     SET "search_path" TO ''
     AS $$
   select coalesce(
-    (select auth.uid()) is not null
+    private.current_profile_id() is not null
     and exists (
       select 1
       from public.employees employee
@@ -8563,7 +8662,7 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_recovery_manage_access"("
         on role_permission.role_id = employee_role.role_id
        and role_permission.organization_id = employee_role.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = private.current_profile_id()
         and employee.status = 'active'
         and role_permission.permission_code = 'recovery.manage'
     ),
@@ -8580,7 +8679,7 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_recovery_view_access"("ta
     SET "search_path" TO ''
     AS $$
   select coalesce(
-    (select auth.uid()) is not null
+    private.current_profile_id() is not null
     and exists (
       select 1
       from public.employees employee
@@ -8591,10 +8690,11 @@ CREATE OR REPLACE FUNCTION "private"."has_organization_recovery_view_access"("ta
         on role_permission.role_id = employee_role.role_id
        and role_permission.organization_id = employee_role.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = private.current_profile_id()
         and employee.status = 'active'
         and role_permission.permission_code in (
-          'recovery.view', 'recovery.manage'
+          'recovery.view',
+          'recovery.manage'
         )
     ),
     false
@@ -8754,7 +8854,7 @@ CREATE OR REPLACE FUNCTION "private"."has_shift_access"("target_organization_id"
     SET "search_path" TO ''
     AS $$
   select
-    (select auth.uid()) is not null
+    (select private.current_profile_id()) is not null
     and (
       (select private.has_permission(target_organization_id, 'settings.manage'))
       or exists (
@@ -8765,7 +8865,7 @@ CREATE OR REPLACE FUNCTION "private"."has_shift_access"("target_organization_id"
          and employee_store.organization_id = employee.organization_id
          and employee_store.store_id = target_store_id
         where employee.organization_id = target_organization_id
-          and employee.profile_id = (select auth.uid())
+          and employee.profile_id = (select private.current_profile_id())
           and employee.status = 'active'
           and (
             (select private.has_permission(target_organization_id, 'shifts.open'))
@@ -8901,7 +9001,7 @@ declare
   row_category_id uuid; row_unit text; row_price_minor bigint; row_cost_minor bigint;
   row_price_override_minor bigint; row_product_id uuid; seen_skus text[] := '{}'; seen_barcodes text[] := '{}'; imported_count integer := 0;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id,'products.manage')) then raise exception 'Product management permission is required.' using errcode='42501'; end if;
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id,'products.manage')) then raise exception 'Product management permission is required.' using errcode='42501'; end if;
   if jsonb_typeof(target_rows)<>'array' or jsonb_array_length(target_rows) not between 1 and 500 then raise exception 'Import between 1 and 500 product rows at a time.' using errcode='22023'; end if;
   if target_store_ids is null or cardinality(target_store_ids) not between 1 and 100 or cardinality(target_store_ids)<>(select count(distinct id) from unnest(target_store_ids) id) then raise exception 'Choose unique stores for this import.' using errcode='22023'; end if;
   if exists(select 1 from unnest(target_store_ids) id where not private.has_store_read_scope(target_organization_id,id))
@@ -8962,7 +9062,7 @@ declare
   seen_cards text[] := '{}';
   imported_count integer := 0;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -8975,7 +9075,7 @@ begin
   select employee.id into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active'
   limit 1;
 
@@ -9085,7 +9185,7 @@ declare
   seen_items text[] := '{}';
   imported_count integer := 0;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory management permission is required.' using errcode = '42501'; end if;
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory management permission is required.' using errcode = '42501'; end if;
   if jsonb_typeof(target_rows) <> 'array' or jsonb_array_length(target_rows) not between 1 and 500 then raise exception 'Import between 1 and 500 adjustment rows at a time.' using errcode = '22023'; end if;
   actor_employee_id := private.inventory_actor(target_organization_id, target_store_id);
   if actor_employee_id is null then raise exception 'An assigned employee is required for this store.' using errcode = '42501'; end if;
@@ -9139,7 +9239,7 @@ declare
   row_quantity numeric(14,3);
   row_note text;
 begin
-  if (select auth.uid()) is null or target_operation_id is null then
+  if (select private.current_profile_id()) is null or target_operation_id is null then
     raise exception 'Inventory adjustment permission and operation identity are required.' using errcode = '42501';
   end if;
   if coalesce(jsonb_typeof(target_rows), '') <> 'array'
@@ -9415,14 +9515,14 @@ declare
   seen_names text[] := '{}';
   imported_count integer := 0;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.suppliers.manage'))) then
     raise exception 'Inventory management permission is required.' using errcode = '42501';
   end if;
   if jsonb_typeof(target_rows) <> 'array' or jsonb_array_length(target_rows) not between 1 and 500 then
     raise exception 'Import between 1 and 500 supplier rows at a time.' using errcode = '22023';
   end if;
-  select employee.id into actor_employee_id from public.employees employee where employee.organization_id = target_organization_id and employee.profile_id = (select auth.uid()) and employee.status = 'active' limit 1;
+  select employee.id into actor_employee_id from public.employees employee where employee.organization_id = target_organization_id and employee.profile_id = (select private.current_profile_id()) and employee.status = 'active' limit 1;
 
   for import_row in select value, ordinality from jsonb_array_elements(target_rows) with ordinality loop
     row_json := import_row.value;
@@ -9582,11 +9682,7 @@ CREATE OR REPLACE FUNCTION "private"."inventory_count_actor"("target_organizatio
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  select private.inventory_count_actor(
-    target_organization_id,
-    target_store_id,
-    array['inventory.count.create']::text[]
-  );
+  select private.inventory_count_actor(target_organization_id,target_store_id,array['inventory.count.create']::text[]);
 $$;
 
 --
@@ -9597,31 +9693,22 @@ CREATE OR REPLACE FUNCTION "private"."inventory_count_actor"("target_organizatio
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-declare
-  actor_id uuid;
+declare actor_profile_id uuid; actor_id uuid;
 begin
-  if (select auth.uid()) is null
-    or coalesce(cardinality(requested_capabilities), 0) = 0
-    or not (select private.has_all_inventory_capabilities(target_organization_id, requested_capabilities)) then
-    raise exception 'Inventory count permission is required.' using errcode = '42501';
+  actor_profile_id := private.current_profile_id();
+  if actor_profile_id is null or coalesce(cardinality(requested_capabilities),0)=0
+    or not private.has_all_inventory_capabilities(target_organization_id, requested_capabilities) then
+    raise exception 'Inventory count permission is required.' using errcode='42501';
   end if;
-  if not (select private.has_store_read_scope(target_organization_id, target_store_id)) then
-    raise exception 'Store access is required for this inventory count.' using errcode = '42501';
+  if not private.has_store_read_scope(target_organization_id,target_store_id) then
+    raise exception 'Store access is required for this inventory count.' using errcode='42501';
   end if;
-
-  actor_id := private.current_employee_id(target_organization_id);
-  if actor_id is null or not exists (
-    select 1
-    from public.employees employee
-    where employee.id = actor_id
-      and employee.organization_id = target_organization_id
-      and employee.status = 'active'
-  ) then
-    raise exception 'An active employee record is required.' using errcode = '42501';
-  end if;
+  select employee.id into actor_id from public.employees employee
+  where employee.organization_id=target_organization_id and employee.profile_id=actor_profile_id and employee.status='active'
+  order by employee.created_at, employee.id limit 1;
+  if actor_id is null then raise exception 'An active employee record is required.' using errcode='42501'; end if;
   return actor_id;
-end;
-$$;
+end; $$;
 
 --
 -- Name: inventory_organization_actor("uuid"); Type: FUNCTION; Schema: private; Owner: postgres
@@ -9634,7 +9721,7 @@ CREATE OR REPLACE FUNCTION "private"."inventory_organization_actor"("target_orga
   select employee.id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active'
   limit 1;
 $$;
@@ -9896,14 +9983,15 @@ begin
     raise exception 'Organization was not found.' using errcode = 'P0002';
   end if;
 
-  select employee.id
-  into actor_employee_id
-  from public.employees employee
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active'
-  order by employee.created_at
-  limit 1;
+  actor_employee_id := private.current_organization_member_employee_id(
+    target_organization_id
+  );
+
+  if actor_employee_id is null then
+    raise exception
+      'An active organization employee is required.'
+      using errcode = '42501';
+  end if;
 
   if normalized_action in ('SUSPEND', 'REQUEST_ARCHIVE')
     and (normalized_reason is null or char_length(normalized_reason) not between 3 and 500) then
@@ -10298,7 +10386,7 @@ begin
       using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'shifts.open')) then
     raise exception 'Shift opening permission is required.' using errcode = '42501';
   end if;
@@ -10318,7 +10406,7 @@ begin
    and employee_store.organization_id = employee.organization_id
    and employee_store.store_id = target_store_id
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active'
   for update of employee;
 
@@ -10744,6 +10832,7 @@ declare
   rate_limit_result jsonb;
   export_session_id uuid;
   actor_employee_id uuid;
+  current_profile_id uuid := private.current_profile_id();
 begin
   rate_limit_result := private.consume_organization_rate_limit(
     target_organization_id,
@@ -10757,18 +10846,22 @@ begin
   delete from public.organization_export_sessions session
   where session.expires_at <= now();
 
-  insert into public.organization_export_sessions (organization_id, profile_id, expires_at)
-  values (target_organization_id, (select auth.uid()), now() + interval '1 hour')
+  insert into public.organization_export_sessions (
+    organization_id,
+    profile_id,
+    expires_at
+  )
+  values (
+    target_organization_id,
+    current_profile_id,
+    now() + interval '1 hour'
+  )
   returning id into export_session_id;
 
-  select employee.id
-  into actor_employee_id
-  from public.employees employee
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active'
-  order by employee.created_at
-  limit 1;
+  actor_employee_id :=
+    private.current_organization_member_employee_id(
+      target_organization_id
+    );
 
   perform private.write_audit_log(
     target_organization_id,
@@ -10949,7 +11042,7 @@ declare
   actor_employee_id uuid;
   new_session_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'registers.manage')) then
     raise exception 'Register management permission is required.' using errcode = '42501';
   end if;
@@ -10974,7 +11067,7 @@ begin
   into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -11298,7 +11391,7 @@ begin
   select * into transfer from public.stock_transfers where organization_id = target_organization_id and id = target_stock_transfer_id;
   if transfer.id is null then raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514'; end if;
   if transfer.stock_request_id is not null then raise exception 'Receive replenishment transfers from the stock request workflow so shortages stay traceable.' using errcode = '23514'; end if;
-  if (select auth.uid()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive')) then
+  if (select private.current_profile_id()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive')) then
     raise exception 'Transfer receive permission is required.' using errcode = '42501';
   end if;
   return private.receive_inventory_transfer_core(target_organization_id, target_stock_transfer_id, target_lines, target_note, target_operation_id, false);
@@ -11426,7 +11519,7 @@ declare
   requested_lines jsonb;
   persisted_lines jsonb;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.receive'))) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -11671,7 +11764,7 @@ declare
   received_now numeric(14,3); short_now numeric(14,3); total_remaining numeric(14,3); has_shortage boolean;
   normalized_note text := nullif(btrim(target_note), ''); normalized_lines jsonb;
 begin
-  if (select auth.uid()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive')) then
+  if (select private.current_profile_id()) is null or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive')) then
     raise exception 'Transfer receive permission is required.' using errcode = '42501';
   end if;
   if target_operation_id is null then raise exception 'A stable transfer-receipt operation ID is required.' using errcode = '23514'; end if;
@@ -11805,7 +11898,7 @@ begin
     else 'cash.pay_out'
   end;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, required_permission)) then
     raise exception 'Cash movement permission is required.' using errcode = '42501';
   end if;
@@ -11836,7 +11929,7 @@ begin
    and employee_store.organization_id = employee.organization_id
    and employee_store.store_id = target_shift.store_id
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -11989,7 +12082,7 @@ declare
   resolved_note text;
   expected_payload jsonb;
 begin
-  if (select auth.uid()) is null then
+  if (select private.current_profile_id()) is null then
     raise exception 'Inventory adjustment permission is required.' using errcode = '42501';
   end if;
 
@@ -12060,7 +12153,7 @@ declare
   movement_id uuid;
   resolved_note text;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -12118,6 +12211,26 @@ end;
 $$;
 
 --
+-- Name: record_pos_sync_change(); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."record_pos_sync_change"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare payload jsonb; operation_value text; store_value uuid; entity_value uuid;
+begin
+  payload := case when TG_OP='DELETE' then to_jsonb(OLD) else to_jsonb(NEW) end;
+  operation_value := case when TG_ARGV[3]='INVALIDATE' then 'INVALIDATE' when TG_OP='DELETE' then 'DELETE' else 'UPSERT' end;
+  entity_value := nullif(payload ->> TG_ARGV[1], '')::uuid;
+  store_value := case when coalesce(TG_ARGV[2],'')='' then null else nullif(payload ->> TG_ARGV[2], '')::uuid end;
+  insert into public.pos_sync_changes(organization_id,store_id,domain,entity_id,operation)
+  values ((payload ->> 'organization_id')::uuid,store_value,TG_ARGV[0],entity_value,operation_value);
+  return coalesce(NEW, OLD);
+end;
+$$;
+
+--
 -- Name: refund_sale("uuid", "uuid", "uuid", "uuid", "text", "text", "jsonb"); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -12154,7 +12267,7 @@ begin
     raise exception 'A sale and refund key are required.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.refund')) then
     raise exception 'Sales refund permission is required.' using errcode = '42501';
   end if;
@@ -12218,7 +12331,7 @@ begin
    and store.organization_id = original_sale.organization_id
    and store.is_active
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -12570,7 +12683,7 @@ declare
   actor_id uuid;
   removed_policy text;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -12646,7 +12759,7 @@ declare
   existing_request public.approval_requests%rowtype;
   normalized_reason text;
 begin
-  if (select auth.uid()) is null then
+  if (select private.current_profile_id()) is null then
     raise exception 'Sign in is required.' using errcode = '42501';
   end if;
 
@@ -12859,64 +12972,99 @@ CREATE OR REPLACE FUNCTION "private"."require_active_pos_shift"("target_organiza
     SET "search_path" TO ''
     AS $$
 declare
+  actor_profile_id uuid;
   actor_employee_id uuid;
   active_shift_id uuid;
 begin
   if target_organization_id is null
     or target_store_id is null
-    or target_register_id is null then
-    raise exception 'A store and register are required for POS activity.' using errcode = '23514';
+    or target_register_id is null
+  then
+    raise exception
+      'A store and register are required for POS activity.'
+      using errcode = '23514';
   end if;
 
-  perform private.require_active_pos_device(
-    target_organization_id,
-    target_store_id,
-    target_register_id
-  );
+  actor_profile_id :=
+    private.current_profile_id();
 
-  if (select auth.uid()) is null
-    or not (select private.has_permission(target_organization_id, 'sales.create')) then
-    raise exception 'Sales permission is required.' using errcode = '42501';
+  if actor_profile_id is null
+    or not private.has_permission(
+      target_organization_id,
+      'sales.create'
+    )
+  then
+    raise exception
+      'Sales permission is required.'
+      using errcode = '42501';
+  end if;
+
+  if not private.has_store_read_scope(
+    target_organization_id,
+    target_store_id
+  )
+  then
+    raise exception
+      'An active employee assignment, store, and register are required.'
+      using errcode = '42501';
   end if;
 
   select employee.id
   into actor_employee_id
   from public.employees employee
-  join public.employee_stores employee_store
-    on employee_store.employee_id = employee.id
-   and employee_store.organization_id = employee.organization_id
-   and employee_store.store_id = target_store_id
   join public.stores store
-    on store.id = employee_store.store_id
-   and store.organization_id = employee_store.organization_id
+    on store.organization_id =
+      employee.organization_id
+   and store.id =
+      target_store_id
    and store.is_active
   join public.registers register
-    on register.id = target_register_id
-   and register.organization_id = employee.organization_id
-   and register.store_id = target_store_id
+    on register.organization_id =
+      employee.organization_id
+   and register.id =
+      target_register_id
+   and register.store_id =
+      target_store_id
    and register.is_active
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active'
-  for key share of employee, store, register;
+  where employee.organization_id =
+      target_organization_id
+    and employee.profile_id =
+      actor_profile_id
+    and employee.status =
+      'active'
+  order by
+    employee.created_at,
+    employee.id
+  limit 1
+  for key share
+  of employee, store, register;
 
-  if actor_employee_id is null then
-    raise exception 'An active employee assignment, store, and register are required.'
+  if actor_employee_id is null
+  then
+    raise exception
+      'An active employee assignment, store, and register are required.'
       using errcode = '42501';
   end if;
 
   select shift.id
   into active_shift_id
   from public.shifts shift
-  where shift.organization_id = target_organization_id
-    and shift.store_id = target_store_id
-    and shift.register_id = target_register_id
-    and shift.opened_by_employee_id = actor_employee_id
-    and shift.status = 'open'
+  where shift.organization_id =
+      target_organization_id
+    and shift.store_id =
+      target_store_id
+    and shift.register_id =
+      target_register_id
+    and shift.opened_by_employee_id =
+      actor_employee_id
+    and shift.status =
+      'open'
   for update;
 
-  if active_shift_id is null then
-    raise exception 'Open your register shift before using transactional POS features.'
+  if active_shift_id is null
+  then
+    raise exception
+      'Open your register shift before using transactional POS features.'
       using errcode = '42501';
   end if;
 
@@ -12935,7 +13083,7 @@ CREATE OR REPLACE FUNCTION "private"."require_attendance_terminal"("target_organ
 declare
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'attendance.use')) then
     raise exception 'Attendance access is required.' using errcode = '42501';
   end if;
@@ -12967,25 +13115,12 @@ CREATE OR REPLACE FUNCTION "private"."require_device_manager"("target_organizati
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-declare
-  actor_employee_id uuid;
+declare actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
-    or not (select private.has_permission(target_organization_id, 'devices.manage')) then
+  actor_employee_id := private.current_employee_id(target_organization_id);
+  if actor_employee_id is null or not (select private.has_permission(target_organization_id, 'devices.manage')) then
     raise exception 'Device-management permission is required.' using errcode = '42501';
   end if;
-
-  select employee.id
-  into actor_employee_id
-  from public.employees employee
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active';
-
-  if actor_employee_id is null then
-    raise exception 'An active employee membership is required.' using errcode = '42501';
-  end if;
-
   return actor_employee_id;
 end;
 $$;
@@ -13001,7 +13136,7 @@ CREATE OR REPLACE FUNCTION "private"."require_employee_manager_target"("target_o
 declare
   actor_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'employees.manage')) then
     raise exception 'Employee-management permission is required.' using errcode = '42501';
   end if;
@@ -13031,7 +13166,7 @@ CREATE OR REPLACE FUNCTION "private"."require_pos_capabilities"("target_organiza
 declare
   missing_permission_code text;
 begin
-  if (select auth.uid()) is null then
+  if (select private.current_profile_id()) is null then
     raise exception 'An authenticated employee is required.' using errcode = '42501';
   end if;
 
@@ -13055,6 +13190,49 @@ $$;
 COMMENT ON FUNCTION "private"."require_pos_capabilities"("target_organization_id" "uuid", "required_permission_codes" "text"[]) IS 'Shared permission-only POS capability guard. Preset and customer-created roles use the same role_permissions rows.';
 
 --
+-- Name: require_pos_sequence_access("uuid", "uuid", "uuid", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."require_pos_sequence_access"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare actor_employee_id uuid;
+begin
+  actor_employee_id := private.current_employee_id(target_organization_id);
+  if actor_employee_id is null or not (select private.has_permission(target_organization_id, 'sales.create')) then
+    raise exception 'Sales permission is required.' using errcode = '42501';
+  end if;
+  if not exists (
+    select 1 from public.pos_devices device
+    join public.employee_stores assignment on assignment.organization_id=device.organization_id and assignment.employee_id=actor_employee_id and assignment.store_id=device.store_id
+    join public.stores store on store.id=device.store_id and store.organization_id=device.organization_id and store.is_active
+    join public.registers register on register.id=device.register_id and register.organization_id=device.organization_id and register.store_id=device.store_id and register.is_active
+    where device.organization_id=target_organization_id and device.id=target_device_id
+      and device.store_id=target_store_id and device.register_id=target_register_id and device.status='active'
+  ) then
+    raise exception 'An active device, register, and employee store assignment are required.' using errcode = '42501';
+  end if;
+end;
+$$;
+
+--
+-- Name: require_pos_sync_access("uuid", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "private"."require_pos_sync_access"("target_organization_id" "uuid", "target_device_id" "uuid") RETURNS TABLE("store_id" "uuid", "register_id" "uuid")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare selected_store_id uuid; selected_register_id uuid;
+begin
+  select device.store_id,device.register_id into selected_store_id,selected_register_id from public.pos_devices device where device.organization_id=target_organization_id and device.id=target_device_id;
+  perform private.require_pos_sequence_access(target_organization_id,target_device_id,selected_store_id,selected_register_id);
+  return query select selected_store_id,selected_register_id;
+end;
+$$;
+
+--
 -- Name: require_pos_workspace_access("uuid", "uuid"); Type: FUNCTION; Schema: private; Owner: postgres
 --
 
@@ -13063,45 +13241,89 @@ CREATE OR REPLACE FUNCTION "private"."require_pos_workspace_access"("target_orga
     SET "search_path" TO ''
     AS $$
 declare
+  actor_profile_id uuid;
   actor_employee_id uuid;
 begin
-  if target_organization_id is null or target_store_id is null then
-    raise exception 'Organization and store are required.' using errcode = '22023';
+  if target_organization_id is null
+    or target_store_id is null
+  then
+    raise exception
+      'Organization and store are required.'
+      using errcode = '22023';
   end if;
 
-  if (select auth.uid()) is null
-    or not (select private.has_permission(target_organization_id, 'sales.create')) then
-    raise exception 'POS access is required.' using errcode = '42501';
+  actor_profile_id :=
+    private.current_profile_id();
+
+  if actor_profile_id is null
+    or not private.has_permission(
+      target_organization_id,
+      'sales.create'
+    )
+  then
+    raise exception
+      'POS access is required.'
+      using errcode = '42501';
+  end if;
+
+  if not private.has_store_read_scope(
+    target_organization_id,
+    target_store_id
+  )
+  then
+    raise exception
+      'The selected store is not assigned to this employee.'
+      using errcode = '42501';
   end if;
 
   select employee.id
   into actor_employee_id
   from public.employees employee
-  join public.employee_stores employee_store
-    on employee_store.employee_id = employee.id
-   and employee_store.organization_id = employee.organization_id
+  join public.organizations organization
+    on organization.id =
+      employee.organization_id
+   and organization.status =
+      'active'
   join public.stores store
-    on store.id = employee_store.store_id
-   and store.organization_id = employee_store.organization_id
-  where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
-    and employee.status = 'active'
-    and employee_store.store_id = target_store_id
-    and store.is_active;
+    on store.organization_id =
+      employee.organization_id
+   and store.id =
+      target_store_id
+   and store.is_active
+  where employee.organization_id =
+      target_organization_id
+    and employee.profile_id =
+      actor_profile_id
+    and employee.status =
+      'active'
+  order by
+    employee.created_at,
+    employee.id
+  limit 1;
 
-  if actor_employee_id is null then
-    raise exception 'The selected store is not assigned to this employee.' using errcode = '42501';
+  if actor_employee_id is null
+  then
+    raise exception
+      'An active employee is required for this POS workspace.'
+      using errcode = '42501';
   end if;
 
   if not exists (
     select 1
     from public.shifts shift
-    where shift.organization_id = target_organization_id
-      and shift.store_id = target_store_id
-      and shift.opened_by_employee_id = actor_employee_id
-      and shift.status = 'open'
-  ) then
-    raise exception 'Open a register shift before using the POS workspace.' using errcode = '42501';
+    where shift.organization_id =
+        target_organization_id
+      and shift.store_id =
+        target_store_id
+      and shift.opened_by_employee_id =
+        actor_employee_id
+      and shift.status =
+        'open'
+  )
+  then
+    raise exception
+      'Open a register shift before using the POS workspace.'
+      using errcode = '42501';
   end if;
 
   return actor_employee_id;
@@ -13278,7 +13500,7 @@ declare
   normalized_lines jsonb;
   persisted_lines jsonb;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or (
        not (select private.has_permission(target_organization_id, 'inventory.manage'))
        and not (select private.has_inventory_capability(target_organization_id, 'purchasing.return'))
@@ -13713,7 +13935,7 @@ declare
   normalized_note text := nullif(btrim(coalesce(target_note, '')), '');
   normalized_cart jsonb;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -14055,7 +14277,7 @@ declare
   existing_status text;
   next_status text := case when target_is_archived then 'archived' else 'active' end;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -14187,7 +14409,7 @@ declare
   manageable_store_ids uuid[];
   selected_store_ids uuid[];
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -14263,7 +14485,7 @@ declare
   resolved_register_id uuid;
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -14288,7 +14510,7 @@ begin
   into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null or not exists (
@@ -14403,7 +14625,7 @@ CREATE OR REPLACE FUNCTION "private"."set_kitchen_order_priority"("target_organi
 declare
   resolved_store_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'kitchen.manage')) then
     raise exception 'Kitchen order management access is required.' using errcode = '42501';
   end if;
@@ -14429,7 +14651,7 @@ begin
       on employee_store.employee_id = employee.id
      and employee_store.organization_id = employee.organization_id
     where employee.organization_id = target_organization_id
-      and employee.profile_id = (select auth.uid())
+      and employee.profile_id = (select private.current_profile_id())
       and employee.status = 'active'
       and employee_store.store_id = resolved_store_id
   ) then
@@ -14456,7 +14678,7 @@ CREATE OR REPLACE FUNCTION "private"."set_kitchen_station_category_route"("targe
 declare
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'kitchen.manage')) then
     raise exception 'Kitchen order management access is required.' using errcode = '42501';
   end if;
@@ -14468,7 +14690,7 @@ begin
   select employee.id into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null or not exists (
@@ -14576,7 +14798,7 @@ CREATE OR REPLACE FUNCTION "private"."ship_stock_transfer"("target_organization_
     AS $_$
 declare actor_id uuid; transfer_id uuid; line jsonb; source_level public.inventory_levels%rowtype; line_quantity numeric(14,3);
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
   if target_source_store_id = target_destination_store_id or target_lines is null or jsonb_typeof(target_lines) <> 'array' or jsonb_array_length(target_lines) not between 1 and 100 then raise exception 'Choose two stores and one to 100 transfer items.' using errcode = '23514'; end if;
   if exists (select 1 from jsonb_array_elements(target_lines) requested(value) where jsonb_typeof(requested.value) <> 'object' or coalesce(requested.value->>'product_id','') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' or (requested.value ? 'variant_id' and requested.value->'variant_id' <> 'null'::jsonb and coalesce(requested.value->>'variant_id','') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') or coalesce(requested.value->>'quantity','') !~ '^\d+(\.\d{1,3})?$' or (requested.value->>'quantity')::numeric <= 0) then raise exception 'Transfer lines must contain valid items and positive quantities.' using errcode = '23514'; end if;
   if (select count(*) from jsonb_array_elements(target_lines)) <> (select count(distinct (value->>'product_id') || ':' || coalesce(value->>'variant_id','')) from jsonb_array_elements(target_lines)) then raise exception 'Each transfer item can appear only once.' using errcode = '23514'; end if;
@@ -14702,7 +14924,7 @@ CREATE OR REPLACE FUNCTION "private"."start_stock_request_picking"("target_organ
     AS $$
 declare request_row public.stock_requests%rowtype; actor_id uuid; warehouse_store_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or (
        not (select private.has_permission(target_organization_id, 'inventory.manage'))
        and not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.send'))
@@ -14786,7 +15008,7 @@ begin
   if transfer.id is null or transfer.stock_request_id is not null then
     raise exception 'Choose a canonical direct transfer in this organization.' using errcode = '23514';
   end if;
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.create')) then
     raise exception 'Transfer creation permission is required.' using errcode = '42501';
   end if;
@@ -15008,7 +15230,7 @@ CREATE OR REPLACE FUNCTION "private"."transfer_stock"("target_organization_id" "
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $_$ declare actor_id uuid; transfer_id uuid; line jsonb; source_quantity numeric(14,3); begin
- if (select auth.uid()) is null
+ if (select private.current_profile_id()) is null
      or (
        not (select private.has_permission(target_organization_id, 'inventory.manage'))
        and not (select private.has_all_inventory_capabilities(
@@ -15103,7 +15325,7 @@ declare
   previous_feature_settings jsonb;
   current_feature_settings jsonb;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Business profile permission is required.' using errcode = '42501';
   end if;
@@ -15224,7 +15446,7 @@ declare
   existing_unit text;
   effective_cost_minor bigint;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -15316,7 +15538,7 @@ declare
   valid_role_count integer;
   valid_store_count integer;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'employees.manage')) then
     raise exception 'Employee management permission is required.' using errcode = '42501';
   end if;
@@ -15338,7 +15560,7 @@ begin
   into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   select employee.profile_id, employee.status
@@ -15361,7 +15583,7 @@ begin
   into requested_role_ids
   from unnest(target_role_ids) as requested_role_id;
 
-  if target_profile_id = (select auth.uid()) then
+  if target_profile_id = (select private.current_profile_id()) then
     if not (select private.has_permission(target_organization_id, 'organization.manage')) then
       raise exception 'Only organization managers can update their own employee record.' using errcode = '42501';
     end if;
@@ -15508,7 +15730,7 @@ CREATE OR REPLACE FUNCTION "private"."update_inventory_policy"("target_organizat
 declare
   actor_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -15579,7 +15801,7 @@ declare
   resolved_store_id uuid;
   resolved_order_status text;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'kitchen.manage')) then
     raise exception 'Kitchen order management access is required.' using errcode = '42501';
   end if;
@@ -15609,7 +15831,7 @@ begin
       on employee_store.employee_id = employee.id
      and employee_store.organization_id = employee.organization_id
     where employee.organization_id = target_organization_id
-      and employee.profile_id = (select auth.uid())
+      and employee.profile_id = (select private.current_profile_id())
       and employee.status = 'active'
       and employee_store.store_id = resolved_store_id
   ) then
@@ -15678,7 +15900,7 @@ declare
   current_status text;
   resolved_store_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'kitchen.manage')) then
     raise exception 'Kitchen order management access is required.' using errcode = '42501';
   end if;
@@ -15705,7 +15927,7 @@ begin
       on employee_store.employee_id = employee.id
      and employee_store.organization_id = employee.organization_id
     where employee.organization_id = target_organization_id
-      and employee.profile_id = (select auth.uid())
+      and employee.profile_id = (select private.current_profile_id())
       and employee.status = 'active'
       and employee_store.store_id = resolved_store_id
   ) then
@@ -15753,7 +15975,7 @@ CREATE OR REPLACE FUNCTION "private"."update_organization_inventory_policy"("tar
 declare
   actor_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'inventory.manage'))
     or not (select private.has_permission(target_organization_id, 'stores.manage')) then
     raise exception 'Organization-wide inventory policy permission is required.' using errcode = '42501';
@@ -15820,7 +16042,7 @@ begin
     raise exception 'Choose a cash-close visibility setting.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required.' using errcode = '42501';
   end if;
@@ -15847,10 +16069,10 @@ CREATE OR REPLACE FUNCTION "private"."update_supplier_lead_time"("target_organiz
     AS $$
 declare actor_id uuid;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
   if target_lead_time_days is null or target_lead_time_days not between 0 and 365 then raise exception 'Supplier lead time must be between zero and 365 days.' using errcode = '23514'; end if;
   if not exists (select 1 from public.suppliers supplier where supplier.id = target_supplier_id and supplier.organization_id = target_organization_id) then raise exception 'Choose a supplier in this organization.' using errcode = '23514'; end if;
-  select employee.id into actor_id from public.employees employee where employee.organization_id = target_organization_id and employee.profile_id = (select auth.uid()) and employee.status = 'active' order by employee.created_at limit 1;
+  select employee.id into actor_id from public.employees employee where employee.organization_id = target_organization_id and employee.profile_id = (select private.current_profile_id()) and employee.status = 'active' order by employee.created_at limit 1;
   if actor_id is null then raise exception 'An active employee record is required.' using errcode = '42501'; end if;
   update public.suppliers set lead_time_days = target_lead_time_days where id = target_supplier_id and organization_id = target_organization_id;
   perform private.write_audit_log(target_organization_id, 'SUPPLIER_LEAD_TIME_UPDATED', 'inventory.manage', actor_id, null, null, null, null, null, null, jsonb_build_object('supplier_id', target_supplier_id, 'lead_time_days', target_lead_time_days));
@@ -15867,7 +16089,7 @@ CREATE OR REPLACE FUNCTION "private"."upsert_inventory_replenishment_rule"("targ
     AS $$
 declare actor_id uuid; rule_id uuid; warehouse_store_id uuid;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'inventory.manage')) then raise exception 'Inventory permission is required.' using errcode = '42501'; end if;
   if target_reorder_point is null or target_target_stock is null or target_reorder_point < 0 or target_target_stock <= 0 or target_target_stock < target_reorder_point or target_reorder_point <> round(target_reorder_point, 3) or target_target_stock <> round(target_target_stock, 3) then raise exception 'Reorder point and target stock must be valid quantities.' using errcode = '23514'; end if;
   actor_id := private.inventory_actor(target_organization_id, target_store_id);
   if actor_id is null then raise exception 'An assigned employee is required for the requesting store.' using errcode = '42501'; end if;
@@ -15993,7 +16215,7 @@ begin
    and register.store_id = target_store_id
    and register.is_active
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -16618,7 +16840,7 @@ declare
   resolved_store_id uuid;
   resolved_register_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (
       (select private.has_permission(target_organization_id, 'customers.manage'))
       or (select private.has_permission(target_organization_id, 'sales.create'))
@@ -16767,7 +16989,7 @@ declare
   created_transaction_id uuid;
   updated_balance integer;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -16942,7 +17164,7 @@ CREATE OR REPLACE FUNCTION "public"."bootstrap_organization"("organization_name"
     SET "search_path" TO ''
     AS $_$
 declare
-  current_user_id uuid := (select auth.uid());
+  current_user_id uuid := (select public.current_profile_id());
   normalized_organization_name text := btrim(organization_name);
   normalized_store_name text := btrim(store_name);
   normalized_register_name text := btrim(register_name);
@@ -17394,7 +17616,7 @@ declare
   resolved_store_id uuid;
   resolved_register_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (
       (select private.has_permission(target_organization_id, 'customers.manage'))
       or (select private.has_permission(target_organization_id, 'sales.create'))
@@ -17761,7 +17983,7 @@ declare
   normalized_description text := nullif(btrim(role_description), '');
   new_role_id uuid;
 begin
-  if (select auth.uid()) is null then
+  if (select public.current_profile_id()) is null then
     raise exception 'Authentication is required.' using errcode = '42501';
   end if;
 
@@ -17829,7 +18051,7 @@ declare
   normalized_description text := nullif(btrim(coalesce(target_description, '')), '');
   created_segment_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -17958,7 +18180,7 @@ declare
   replay_id uuid;
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -18027,7 +18249,7 @@ declare
   was_existing boolean;
   actor_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (
        (select private.has_permission(target_organization_id, 'inventory.manage'))
        or (select private.has_inventory_capability(target_organization_id, 'purchasing.po.create'))
@@ -18122,7 +18344,7 @@ begin
       using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required to configure payment methods.' using errcode = '42501';
   end if;
@@ -18288,7 +18510,7 @@ declare
   old_values jsonb;
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -18364,7 +18586,7 @@ begin
     else 'products.manage'
   end;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, required_permission)) then
     raise exception 'You do not have permission to permanently delete this record.' using errcode = '42501';
   end if;
@@ -18373,7 +18595,7 @@ begin
   into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   case target_record_type
@@ -18755,6 +18977,36 @@ $$;
 COMMENT ON FUNCTION "public"."ensure_current_identity_profile"("target_email" "text", "target_full_name" "text") IS 'Ensures the current externally authenticated Supabase subject has a permanent TINDIO profile and identity link. Used during the Neon database migration while Supabase Auth remains authoritative.';
 
 --
+-- Name: finalize_pos_device_sequence("uuid", "uuid", bigint, "uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."finalize_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_final_state" "text") RETURNS TABLE("server_checkpoint" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare receipt public.pos_device_sequence_receipts%rowtype; current_checkpoint bigint; normalized_state text; device_store_id uuid; device_register_id uuid;
+begin
+  normalized_state := upper(nullif(btrim(coalesce(target_final_state,'')),''));
+  if normalized_state not in ('APPLIED','CONFLICT') then raise exception 'The sequence finalization state is invalid.' using errcode='23514'; end if;
+  select device.store_id,device.register_id into device_store_id,device_register_id from public.pos_devices device where device.organization_id=target_organization_id and device.id=target_device_id;
+  perform private.require_pos_sequence_access(target_organization_id,target_device_id,device_store_id,device_register_id);
+  select checkpoint.server_checkpoint into current_checkpoint from public.pos_device_sync_checkpoints checkpoint where checkpoint.organization_id=target_organization_id and checkpoint.device_id=target_device_id for update;
+  select * into receipt from public.pos_device_sequence_receipts candidate where candidate.organization_id=target_organization_id and candidate.device_id=target_device_id and candidate.device_sequence=target_device_sequence for update;
+  if receipt.idempotency_key is null or receipt.idempotency_key <> target_idempotency_key then raise exception 'The sequence receipt does not match this checkout.' using errcode='23514'; end if;
+  if receipt.state='RECEIVED' then
+    update public.pos_device_sequence_receipts set state=normalized_state,finalized_at=now()
+      where organization_id=target_organization_id and device_id=target_device_id and device_sequence=target_device_sequence;
+  end if;
+  if target_device_sequence=current_checkpoint+1 then
+    update public.pos_device_sync_checkpoints set server_checkpoint=target_device_sequence,updated_at=now()
+      where organization_id=target_organization_id and device_id=target_device_id;
+    current_checkpoint := target_device_sequence;
+  end if;
+  server_checkpoint := current_checkpoint; return next;
+end;
+$$;
+
+--
 -- Name: generate_catalog_identifiers("uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -19002,7 +19254,7 @@ CREATE OR REPLACE FUNCTION "public"."get_customer_loyalty_card_events"("target_o
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -19039,7 +19291,7 @@ CREATE OR REPLACE FUNCTION "public"."get_customer_loyalty_cards"("target_organiz
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -19075,7 +19327,7 @@ begin
     raise exception 'Purchase history limit must be between 1 and 100.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -19109,7 +19361,7 @@ CREATE OR REPLACE FUNCTION "public"."get_customer_summary"("target_organization_
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -19175,7 +19427,7 @@ declare
   can_team boolean;
   can_tickets boolean;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_permission(target_organization_id, 'dashboard.view')) then
     raise exception 'Dashboard access is required.' using errcode = '42501';
   end if;
@@ -19211,7 +19463,7 @@ begin
         on assignment.employee_id = employee.id
        and assignment.organization_id = employee.organization_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
         and assignment.store_id = target_store_id
     ) then
@@ -19563,27 +19815,88 @@ $$;
 COMMENT ON FUNCTION "public"."get_inventory_count_awareness"("target_organization_id" "uuid") IS 'Returns the latest completed physical-count fact for each authorized active tracked stock position. It is read-only awareness and does not enforce count frequency.';
 
 --
+-- Name: get_inventory_count_batch_documents_workspace_v2("uuid", "uuid"[]); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_inventory_count_batch_documents_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_batch_ids" "uuid"[]) RETURNS TABLE("inventory_count_batch_id" "uuid", "inventory_count_id" "uuid", "store_id" "uuid")
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if target_organization_id is null or target_inventory_count_batch_ids is null or cardinality(target_inventory_count_batch_ids) not between 1 and 50 then raise exception 'Choose between one and fifty count batches.' using errcode='22023'; end if;
+  if private.current_profile_id() is null or not private.has_any_inventory_capability(target_organization_id,array['inventory.count.create','inventory.count.finalize']::text[]) then raise exception 'Inventory count access is required.' using errcode='42501'; end if;
+  return query select d.inventory_count_batch_id,d.inventory_count_id,d.store_id from public.inventory_count_batch_documents d
+  where d.organization_id=target_organization_id and d.inventory_count_batch_id=any(target_inventory_count_batch_ids) and private.has_store_read_scope(target_organization_id,d.store_id)
+  order by d.inventory_count_batch_id,d.store_id,d.inventory_count_id;
+end; $$;
+
+--
+-- Name: get_inventory_count_batches_workspace_v2("uuid", integer); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_inventory_count_batches_workspace_v2"("target_organization_id" "uuid", "target_limit" integer DEFAULT 25) RETURNS TABLE("id" "uuid", "batch_number" bigint, "name" "text", "note" "text", "created_at" timestamp with time zone, "updated_at" timestamp with time zone)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if target_organization_id is null or target_limit is null or target_limit not between 1 and 50 then raise exception 'Invalid inventory count batch request.' using errcode='22023'; end if;
+  if private.current_profile_id() is null or not private.has_any_inventory_capability(target_organization_id,array['inventory.count.create','inventory.count.finalize']::text[]) then raise exception 'Inventory count access is required.' using errcode='42501'; end if;
+  return query select b.id,b.batch_number,b.name,b.note,b.created_at,b.updated_at from public.inventory_count_batches b
+  where b.organization_id=target_organization_id and exists (select 1 from public.inventory_count_batch_documents d join public.inventory_counts c on c.organization_id=d.organization_id and c.id=d.inventory_count_id where d.organization_id=b.organization_id and d.inventory_count_batch_id=b.id and private.has_store_read_scope(target_organization_id,c.store_id))
+  order by b.created_at desc,b.id desc limit target_limit;
+end; $$;
+
+--
+-- Name: get_inventory_count_lines_workspace_v2("uuid", "uuid"[]); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_inventory_count_lines_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_ids" "uuid"[]) RETURNS TABLE("id" "uuid", "inventory_count_id" "uuid", "product_id" "uuid", "variant_id" "uuid", "expected_quantity" numeric, "reconciled_expected_quantity" numeric, "counted_quantity" numeric, "counted_at" timestamp with time zone, "product_name_snapshot" "text", "variant_name_snapshot" "text", "category_name_snapshot" "text", "sku_snapshot" "text", "barcode_snapshot" "text", "unit_snapshot" "text", "line_sort_order" integer)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if target_organization_id is null or target_inventory_count_ids is null or cardinality(target_inventory_count_ids) not between 1 and 100 then raise exception 'Choose between one and one hundred inventory counts.' using errcode='22023'; end if;
+  if private.current_profile_id() is null or not private.has_any_inventory_capability(target_organization_id,array['inventory.count.create','inventory.count.finalize']::text[]) then raise exception 'Inventory count access is required.' using errcode='42501'; end if;
+  return query select l.id,l.inventory_count_id,l.product_id,l.variant_id,l.expected_quantity,l.reconciled_expected_quantity,l.counted_quantity,l.counted_at,l.product_name_snapshot,l.variant_name_snapshot,l.category_name_snapshot,l.sku_snapshot,l.barcode_snapshot,l.unit_snapshot,l.line_sort_order
+  from public.inventory_count_lines l join public.inventory_counts c on c.organization_id=l.organization_id and c.id=l.inventory_count_id
+  where l.organization_id=target_organization_id and l.inventory_count_id=any(target_inventory_count_ids) and private.has_store_read_scope(target_organization_id,c.store_id)
+  order by l.inventory_count_id,l.line_sort_order,l.id;
+end; $$;
+
+--
 -- Name: get_inventory_count_suppliers("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
 CREATE OR REPLACE FUNCTION "public"."get_inventory_count_suppliers"("target_organization_id" "uuid") RETURNS TABLE("id" "uuid", "name" "text")
-    LANGUAGE "plpgsql" SECURITY DEFINER
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
-    or not (select private.has_inventory_capability(target_organization_id, 'inventory.count.create')) then
-    raise exception 'Inventory count creation permission is required.' using errcode = '42501';
+  if private.current_profile_id() is null or not private.has_inventory_capability(target_organization_id,'inventory.count.create') then
+    raise exception 'Inventory count creation permission is required.' using errcode='42501';
   end if;
+  return query select supplier.id,supplier.name from public.suppliers supplier
+    where supplier.organization_id=target_organization_id and supplier.is_active order by lower(supplier.name),supplier.id;
+end; $$;
 
-  return query
-  select supplier.id, supplier.name
-  from public.suppliers supplier
-  where supplier.organization_id = target_organization_id
-    and supplier.is_active
-  order by lower(supplier.name), supplier.id;
-end;
-$$;
+--
+-- Name: get_inventory_counts_workspace_v2("uuid", "uuid"[], integer); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_inventory_counts_workspace_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[] DEFAULT NULL::"uuid"[], "target_limit" integer DEFAULT 100) RETURNS TABLE("id" "uuid", "count_number" bigint, "store_id" "uuid", "status" "text", "note" "text", "started_at" timestamp with time zone, "started_by_employee_id" "uuid", "completed_at" timestamp with time zone, "updated_at" timestamp with time zone, "count_mode" "text", "scope_type" "text", "scope_reference_id" "uuid", "sort_mode" "text", "include_zero_stock" boolean)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if target_organization_id is null or target_limit is null or target_limit not between 1 and 100 then raise exception 'Invalid inventory count workspace request.' using errcode='22023'; end if;
+  if private.current_profile_id() is null or not private.has_any_inventory_capability(target_organization_id,array['inventory.count.create','inventory.count.finalize']::text[]) then raise exception 'Inventory count access is required.' using errcode='42501'; end if;
+  return query select c.id,c.count_number,c.store_id,c.status,c.note,c.started_at,c.started_by_employee_id,c.completed_at,c.updated_at,c.count_mode,c.scope_type,c.scope_reference_id,c.sort_mode,c.include_zero_stock
+  from public.inventory_counts c where c.organization_id=target_organization_id
+    and c.status in ('draft','in_progress','ready_for_review','posted','cancelled','open','completed')
+    and (target_store_ids is null or c.store_id=any(target_store_ids))
+    and private.has_store_read_scope(target_organization_id,c.store_id)
+  order by c.started_at desc,c.id desc limit target_limit;
+end; $$;
 
 --
 -- Name: get_inventory_health_awareness("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -19627,7 +19940,7 @@ CREATE OR REPLACE FUNCTION "public"."get_inventory_movement_costs"("target_organ
     AS $$
   select movement.id, movement.unit_cost_minor, movement.value_delta_minor
   from public.inventory_movements movement
-  where (select auth.uid()) is not null
+  where (select private.current_profile_id()) is not null
     and cardinality(requested_movement_ids) between 1 and 100
     and movement.id = any(requested_movement_ids)
     and movement.organization_id = target_organization_id
@@ -19770,7 +20083,7 @@ declare
   can_read_cost boolean := false;
   can_manage_reorder boolean := false;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_any_inventory_capability(
       target_organization_id,
       array[
@@ -20104,7 +20417,7 @@ CREATE OR REPLACE FUNCTION "public"."get_inventory_valuation"("target_organizati
       else null::bigint
     end as value_minor
   from public.inventory_levels level
-  where (select auth.uid()) is not null
+  where (select private.current_profile_id()) is not null
     and level.organization_id = target_organization_id
     and (select private.has_permission(target_organization_id, 'products.view_cost'))
     and (select private.has_inventory_capability(target_organization_id, 'inventory.valuation.view'))
@@ -20154,12 +20467,13 @@ declare
   source_predicate text;
   export_rows jsonb;
   next_after_id uuid;
+  current_profile_id uuid := private.current_profile_id();
 begin
   select session.*
   into export_session
   from public.organization_export_sessions session
   where session.id = target_export_session_id
-    and session.profile_id = (select auth.uid())
+    and session.profile_id = current_profile_id
     and session.expires_at > now();
 
   if not found then
@@ -20431,6 +20745,614 @@ end;
 $$;
 
 --
+-- Name: get_pos_bootstrap_core_v2("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_bootstrap_core_v2"("target_organization_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_profile_id uuid;
+  selected_organization_id uuid;
+  selected_employee_id uuid;
+  selected_employee_number text;
+  selected_job_title text;
+
+  permissions text[] := '{}'::text[];
+  role_names text[] := '{}'::text[];
+  effective_store_ids uuid[] := '{}'::uuid[];
+
+  organization_record record;
+  profile_record record;
+  active_shift_record record;
+
+  available_organizations jsonb := '[]'::jsonb;
+  stores_json jsonb := '[]'::jsonb;
+  registers_json jsonb := '[]'::jsonb;
+  features_json jsonb := '{}'::jsonb;
+begin
+  actor_profile_id :=
+    private.current_profile_id();
+
+  if actor_profile_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'IDENTITY_UNMAPPED'
+    );
+  end if;
+
+  select
+    profile.full_name,
+    profile.email
+  into profile_record
+  from public.profiles profile
+  where profile.id = actor_profile_id;
+
+  if profile_record is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'PROFILE_NOT_FOUND'
+    );
+  end if;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', organization.id,
+          'name', organization.name,
+          'status', organization.status
+        )
+        order by
+          case when organization.status = 'active' then 0 else 1 end,
+          lower(organization.name),
+          organization.id
+      ),
+      '[]'::jsonb
+    )
+  into available_organizations
+  from public.employees employee
+  join public.organizations organization
+    on organization.id = employee.organization_id
+  where employee.profile_id = actor_profile_id
+    and employee.status = 'active';
+
+  if jsonb_array_length(available_organizations) = 0 then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'NO_ACTIVE_EMPLOYEE'
+    );
+  end if;
+
+  if target_organization_id is not null then
+    select employee.organization_id
+    into selected_organization_id
+    from public.employees employee
+    where employee.profile_id = actor_profile_id
+      and employee.organization_id = target_organization_id
+      and employee.status = 'active'
+    limit 1;
+
+    if selected_organization_id is null then
+      return jsonb_build_object(
+        'ok', false,
+        'reason', 'ORGANIZATION_FORBIDDEN'
+      );
+    end if;
+  else
+    select employee.organization_id
+    into selected_organization_id
+    from public.employees employee
+    join public.organizations organization
+      on organization.id = employee.organization_id
+    where employee.profile_id = actor_profile_id
+      and employee.status = 'active'
+    order by
+      case when organization.status = 'active' then 0 else 1 end,
+      employee.created_at,
+      employee.id
+    limit 1;
+  end if;
+
+  select
+    employee.id,
+    employee.employee_number,
+    employee.job_title
+  into
+    selected_employee_id,
+    selected_employee_number,
+    selected_job_title
+  from public.employees employee
+  where employee.profile_id = actor_profile_id
+    and employee.organization_id = selected_organization_id
+    and employee.status = 'active'
+  order by employee.created_at, employee.id
+  limit 1;
+
+  if selected_employee_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'NO_ACTIVE_EMPLOYEE'
+    );
+  end if;
+
+  select organization.*
+  into organization_record
+  from public.organizations organization
+  where organization.id = selected_organization_id;
+
+  if organization_record is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'ORGANIZATION_NOT_FOUND'
+    );
+  end if;
+
+  select
+    coalesce(
+      array_agg(distinct role.name order by role.name),
+      '{}'::text[]
+    )
+  into role_names
+  from public.employee_roles employee_role
+  join public.roles role
+    on role.organization_id = employee_role.organization_id
+    and role.id = employee_role.role_id
+  where employee_role.organization_id = selected_organization_id
+    and employee_role.employee_id = selected_employee_id;
+
+  select
+    coalesce(
+      array_agg(
+        distinct role_permission.permission_code
+        order by role_permission.permission_code
+      ),
+      '{}'::text[]
+    )
+  into permissions
+  from public.employee_roles employee_role
+  join public.role_permissions role_permission
+    on role_permission.organization_id = employee_role.organization_id
+    and role_permission.role_id = employee_role.role_id
+  where employee_role.organization_id = selected_organization_id
+    and employee_role.employee_id = selected_employee_id;
+
+  if 'stores.manage' = any(permissions) then
+    select
+      coalesce(
+        array_agg(store.id order by store.created_at, store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.stores store
+    where store.organization_id = selected_organization_id
+      and store.is_active;
+  else
+    select
+      coalesce(
+        array_agg(distinct store.id order by store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.employee_stores assignment
+    join public.stores store
+      on store.organization_id = assignment.organization_id
+      and store.id = assignment.store_id
+      and store.is_active
+    where assignment.organization_id = selected_organization_id
+      and assignment.employee_id = selected_employee_id;
+  end if;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', store.id,
+          'name', store.name
+        )
+        order by store.created_at, store.id
+      ),
+      '[]'::jsonb
+    )
+  into stores_json
+  from public.stores store
+  where store.organization_id = selected_organization_id
+    and store.id = any(effective_store_ids)
+    and store.is_active;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', register.id,
+          'storeId', register.store_id,
+          'name', register.name,
+          'code', register.code
+        )
+        order by register.name, register.id
+      ),
+      '[]'::jsonb
+    )
+  into registers_json
+  from public.registers register
+  where register.organization_id = selected_organization_id
+    and register.store_id = any(effective_store_ids)
+    and register.is_active;
+
+  select
+    coalesce(
+      jsonb_object_agg(
+        feature.feature_key,
+        feature.is_enabled
+      ),
+      '{}'::jsonb
+    )
+  into features_json
+  from public.organization_features feature
+  where feature.organization_id = selected_organization_id;
+
+  select
+    shift.id,
+    shift.store_id,
+    shift.register_id,
+    shift.opening_cash_minor,
+    shift.opened_at
+  into active_shift_record
+  from public.shifts shift
+  where shift.organization_id = selected_organization_id
+    and shift.opened_by_employee_id = selected_employee_id
+    and shift.status = 'open'
+    and shift.store_id = any(effective_store_ids)
+  order by shift.opened_at desc, shift.id
+  limit 1;
+
+  return jsonb_build_object(
+    'ok', true,
+
+    'profileId',
+      actor_profile_id,
+
+    'organization',
+      jsonb_build_object(
+        'id', organization_record.id,
+        'name', organization_record.name,
+        'currencyCode', organization_record.currency_code,
+        'timezone', organization_record.timezone,
+        'status', organization_record.status,
+        'businessType', organization_record.business_type,
+        'deviceManagementEnabled',
+          organization_record.device_management_enabled
+      ),
+
+    'employee',
+      jsonb_build_object(
+        'id', selected_employee_id,
+        'employeeNumber', selected_employee_number,
+        'jobTitle', selected_job_title,
+        'name',
+          coalesce(
+            nullif(profile_record.full_name, ''),
+            profile_record.email,
+            selected_employee_number
+          )
+      ),
+
+    'availableOrganizations',
+      available_organizations,
+
+    'roleNames',
+      to_jsonb(role_names),
+
+    'permissions',
+      to_jsonb(permissions),
+
+    'storeIds',
+      to_jsonb(effective_store_ids),
+
+    'stores',
+      stores_json,
+
+    'registers',
+      registers_json,
+
+    'features',
+      features_json,
+
+    'activeShift',
+      case
+        when active_shift_record.id is null
+          then null
+        else jsonb_build_object(
+          'id', active_shift_record.id,
+          'storeId', active_shift_record.store_id,
+          'registerId', active_shift_record.register_id,
+          'openingCashMinor', active_shift_record.opening_cash_minor,
+          'openedAt', active_shift_record.opened_at
+        )
+      end
+  );
+end;
+$$;
+
+--
+-- Name: FUNCTION "get_pos_bootstrap_core_v2"("target_organization_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."get_pos_bootstrap_core_v2"("target_organization_id" "uuid") IS 'POS V2 core bootstrap. Resolves provider-neutral identity, organization membership, RBAC, effective store scope, stores, registers, organization features, and active shift in one read-only RPC. Caller cannot provide profile or employee identity.';
+
+--
+-- Name: get_pos_catalog_product_v2("uuid", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_catalog_product_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare access_store_id uuid; catalog jsonb;
+begin
+  select access.store_id into access_store_id from private.require_pos_sync_access(target_organization_id,(current_setting('request.headers',true)::jsonb ->> 'x-tindio-pos-device-id')::uuid) access;
+  if access_store_id is null or access_store_id<>target_store_id then raise exception 'Store access is required.' using errcode='42501'; end if;
+  select coalesce(jsonb_agg(jsonb_build_object('productId',item.product_id,'variantId',item.variant_id,'categoryId',item.category_id,'productName',item.product_name,'variantName',item.variant_name,'sku',item.sku,'barcode',item.barcode,'priceMinor',item.price_minor,'unit',item.unit,'imageUrl',item.image_url,'isVariablePrice',item.is_variable_price,'allowFractionalQuantity',item.allow_fractional_quantity,'hasModifiers',exists(select 1 from public.product_modifier_groups assignment where assignment.organization_id=target_organization_id and assignment.product_id=item.product_id))),'[]'::jsonb) into catalog from public.search_pos_catalog(target_organization_id,target_store_id,'',null,0,10000) item where item.product_id=target_product_id;
+  return jsonb_build_object('organizationId',target_organization_id,'storeId',target_store_id,'productId',target_product_id,'items',catalog);
+end;
+$$;
+
+--
+-- Name: get_pos_catalog_v2("uuid", "uuid", "text", "text", "uuid", integer, integer); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_catalog_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_mode" "text" DEFAULT 'search'::"text", "target_query" "text" DEFAULT NULL::"text", "target_category_id" "uuid" DEFAULT NULL::"uuid", "target_offset" integer DEFAULT 0, "target_limit" integer DEFAULT 24) RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_profile_id uuid;
+  selected_employee_id uuid;
+  permissions text[] := '{}'::text[];
+  effective_store_ids uuid[] := '{}'::uuid[];
+  modifiers_enabled boolean := false;
+  raw_items_json jsonb := '[]'::jsonb;
+  items_json jsonb := '[]'::jsonb;
+  has_more boolean := false;
+begin
+  if target_mode is null
+    or target_mode not in ('search', 'favorites', 'recent') then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'CATALOG_MODE_INVALID'
+    );
+  end if;
+
+  if target_offset is null
+    or target_offset < 0
+    or target_offset > 10000
+    or target_limit is null
+    or target_limit < 1
+    or target_limit > 24 then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'CATALOG_PAGE_INVALID'
+    );
+  end if;
+
+  actor_profile_id := private.current_profile_id();
+
+  if actor_profile_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'IDENTITY_UNMAPPED'
+    );
+  end if;
+
+  select employee.id
+  into selected_employee_id
+  from public.employees employee
+  where employee.profile_id = actor_profile_id
+    and employee.organization_id = target_organization_id
+    and employee.status = 'active'
+  order by employee.created_at, employee.id
+  limit 1;
+
+  if selected_employee_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'ORGANIZATION_FORBIDDEN'
+    );
+  end if;
+
+  select
+    coalesce(
+      array_agg(
+        distinct role_permission.permission_code
+        order by role_permission.permission_code
+      ),
+      '{}'::text[]
+    )
+  into permissions
+  from public.employee_roles employee_role
+  join public.role_permissions role_permission
+    on role_permission.organization_id = employee_role.organization_id
+    and role_permission.role_id = employee_role.role_id
+  where employee_role.organization_id = target_organization_id
+    and employee_role.employee_id = selected_employee_id;
+
+  if not (
+    'pos.access' = any(permissions)
+    and 'sales.create' = any(permissions)
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'POS_ACCESS_FORBIDDEN'
+    );
+  end if;
+
+  if 'stores.manage' = any(permissions) then
+    select
+      coalesce(
+        array_agg(store.id order by store.created_at, store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.stores store
+    where store.organization_id = target_organization_id
+      and store.is_active;
+  else
+    select
+      coalesce(
+        array_agg(distinct store.id order by store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.employee_stores assignment
+    join public.stores store
+      on store.organization_id = assignment.organization_id
+      and store.id = assignment.store_id
+      and store.is_active
+    where assignment.organization_id = target_organization_id
+      and assignment.employee_id = selected_employee_id;
+  end if;
+
+  if target_store_id is null
+    or not target_store_id = any(effective_store_ids) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'STORE_FORBIDDEN'
+    );
+  end if;
+
+  if not exists (
+    select 1
+    from public.shifts shift
+    where shift.organization_id = target_organization_id
+      and shift.store_id = target_store_id
+      and shift.opened_by_employee_id = selected_employee_id
+      and shift.status = 'open'
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'ACTIVE_SHIFT_REQUIRED'
+    );
+  end if;
+
+  select
+    coalesce(
+      bool_or(feature.is_enabled)
+        filter (where feature.feature_key = 'modifiers'),
+      false
+    )
+  into modifiers_enabled
+  from public.organization_features feature
+  where feature.organization_id = target_organization_id;
+
+  if target_mode = 'search' then
+    select
+      coalesce(
+        jsonb_agg(to_jsonb(catalog_item)),
+        '[]'::jsonb
+      )
+    into raw_items_json
+    from public.search_pos_catalog(
+      target_organization_id,
+      target_store_id,
+      target_query,
+      target_category_id,
+      target_offset,
+      target_limit + 1
+    ) catalog_item;
+  elsif target_mode = 'favorites' then
+    select
+      coalesce(
+        jsonb_agg(to_jsonb(catalog_item)),
+        '[]'::jsonb
+      )
+    into raw_items_json
+    from (
+      select *
+      from public.get_pos_favorite_items(
+        target_organization_id,
+        target_store_id
+      )
+      offset target_offset
+      limit target_limit + 1
+    ) catalog_item;
+  else
+    select
+      coalesce(
+        jsonb_agg(to_jsonb(catalog_item)),
+        '[]'::jsonb
+      )
+    into raw_items_json
+    from (
+      select *
+      from public.get_pos_recent_items(
+        target_organization_id,
+        target_store_id,
+        least(target_offset + target_limit + 1, 24)
+      )
+      offset target_offset
+      limit target_limit + 1
+    ) catalog_item;
+  end if;
+
+  has_more := jsonb_array_length(raw_items_json) > target_limit;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'productId', item.value -> 'product_id',
+          'variantId', item.value -> 'variant_id',
+          'categoryId', item.value -> 'category_id',
+          'productName', item.value -> 'product_name',
+          'variantName', item.value -> 'variant_name',
+          'sku', item.value -> 'sku',
+          'barcode', item.value -> 'barcode',
+          'priceMinor', item.value -> 'price_minor',
+          'unit', item.value -> 'unit',
+          'imageUrl', item.value -> 'image_url',
+          'isVariablePrice', item.value -> 'is_variable_price',
+          'allowFractionalQuantity',
+            item.value -> 'allow_fractional_quantity',
+          'hasModifiers',
+            modifiers_enabled
+            and exists (
+              select 1
+              from public.product_modifier_groups assignment
+              where assignment.organization_id = target_organization_id
+                and assignment.product_id =
+                  (item.value ->> 'product_id')::uuid
+            )
+        )
+        order by item.ordinality
+      ),
+      '[]'::jsonb
+    )
+  into items_json
+  from jsonb_array_elements(raw_items_json)
+    with ordinality as item(value, ordinality)
+  where item.ordinality <= target_limit;
+
+  return jsonb_build_object(
+    'ok', true,
+    'organizationId', target_organization_id,
+    'storeId', target_store_id,
+    'mode', target_mode,
+    'offset', target_offset,
+    'limit', target_limit,
+    'items', items_json,
+    'hasMore', has_more
+  );
+end;
+$$;
+
+--
+-- Name: FUNCTION "get_pos_catalog_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_mode" "text", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."get_pos_catalog_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_mode" "text", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer) IS 'POS V2 catalog wrapper. Resolves provider-neutral identity, POS scope, active shift, modifiers feature availability, and returns catalog items in the V2 camelCase contract.';
+
+--
 -- Name: get_pos_customer_display_sessions("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -20457,6 +21379,69 @@ $_$;
 --
 
 COMMENT ON FUNCTION "public"."get_pos_customer_display_sessions_with_ids"("target_organization_id" "uuid") IS 'Returns active customer-display session IDs and scoped Realtime topics only to authorized POS users assigned to each store.';
+
+--
+-- Name: get_pos_device_sync_checkpoint("uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_device_sync_checkpoint"("target_organization_id" "uuid", "target_device_id" "uuid") RETURNS TABLE("device_id" "uuid", "server_checkpoint" bigint, "next_expected_sequence" bigint, "updated_at" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  device_store_id uuid;
+  device_register_id uuid;
+begin
+  select
+    device.store_id,
+    device.register_id
+  into
+    device_store_id,
+    device_register_id
+  from public.pos_devices device
+  where device.organization_id =
+      target_organization_id
+    and device.id =
+      target_device_id;
+
+  perform private.require_pos_sequence_access(
+    target_organization_id,
+    target_device_id,
+    device_store_id,
+    device_register_id
+  );
+
+  insert into public.pos_device_sync_checkpoints (
+    organization_id,
+    device_id
+  )
+  values (
+    target_organization_id,
+    target_device_id
+  )
+  on conflict on constraint
+    pos_device_sync_checkpoints_pkey
+  do nothing;
+
+  return query
+  select
+    checkpoint.device_id,
+    checkpoint.server_checkpoint,
+    checkpoint.server_checkpoint + 1,
+    checkpoint.updated_at
+  from public.pos_device_sync_checkpoints checkpoint
+  where checkpoint.organization_id =
+      target_organization_id
+    and checkpoint.device_id =
+      target_device_id;
+end;
+$$;
+
+--
+-- Name: FUNCTION "get_pos_device_sync_checkpoint"("target_organization_id" "uuid", "target_device_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."get_pos_device_sync_checkpoint"("target_organization_id" "uuid", "target_device_id" "uuid") IS 'Returns the durable sequence checkpoint for one authorized POS device. Recovery R1 uses the named checkpoint primary-key constraint to avoid PL/pgSQL OUT-parameter ambiguity without changing the RPC contract.';
 
 --
 -- Name: get_pos_favorite_items("uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -20539,7 +21524,7 @@ CREATE OR REPLACE FUNCTION "public"."get_pos_incoming_stock_transfers"("target_o
   join public.products product on product.id = transfer_line.product_id and product.organization_id = transfer_line.organization_id
   left join public.product_variants variant on variant.id = transfer_line.variant_id and variant.product_id = transfer_line.product_id
     and variant.organization_id = transfer_line.organization_id
-  where (select auth.uid()) is not null
+  where (select private.current_profile_id()) is not null
     and exists (select 1 from public.organizations organization where organization.id = target_organization_id and organization.status = 'active')
     and (select private.has_inventory_capability(target_organization_id, 'inventory.transfer.receive'))
     and exists (select 1 from public.organization_features feature where feature.organization_id = target_organization_id
@@ -20558,6 +21543,562 @@ $$;
 --
 
 COMMENT ON FUNCTION "public"."get_pos_incoming_stock_transfers"("target_organization_id" "uuid") IS 'Returns destination-scoped canonical dispatched and partially received physical transfers for authorized POS receivers.';
+
+--
+-- Name: get_pos_live_state_v2("uuid", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_live_state_v2"("target_organization_id" "uuid", "target_store_id" "uuid" DEFAULT NULL::"uuid", "target_register_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_profile_id uuid;
+  selected_employee_id uuid;
+
+  permissions text[] := '{}'::text[];
+  effective_store_ids uuid[] := '{}'::uuid[];
+
+  time_clock_enabled boolean := false;
+  customer_display_enabled boolean := false;
+  inventory_enabled boolean := false;
+  transfers_enabled boolean := false;
+  open_tickets_feature_enabled boolean := false;
+  incoming_transfers_enabled boolean := false;
+  open_tickets_enabled boolean := false;
+  ticket_assignees_enabled boolean := false;
+  active_shift_matches_target boolean := false;
+
+  time_clock_entry_json jsonb := 'null'::jsonb;
+  customer_display_sessions_json jsonb := '[]'::jsonb;
+  incoming_transfers_raw_json jsonb := '[]'::jsonb;
+  open_tickets_raw_json jsonb := '[]'::jsonb;
+  ticket_assignees_json jsonb := '[]'::jsonb;
+begin
+  actor_profile_id := private.current_profile_id();
+
+  if actor_profile_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'IDENTITY_UNMAPPED'
+    );
+  end if;
+
+  select employee.id
+  into selected_employee_id
+  from public.employees employee
+  where employee.profile_id = actor_profile_id
+    and employee.organization_id = target_organization_id
+    and employee.status = 'active'
+  order by employee.created_at, employee.id
+  limit 1;
+
+  if selected_employee_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'ORGANIZATION_FORBIDDEN'
+    );
+  end if;
+
+  select
+    coalesce(
+      array_agg(
+        distinct role_permission.permission_code
+        order by role_permission.permission_code
+      ),
+      '{}'::text[]
+    )
+  into permissions
+  from public.employee_roles employee_role
+  join public.role_permissions role_permission
+    on role_permission.organization_id = employee_role.organization_id
+    and role_permission.role_id = employee_role.role_id
+  where employee_role.organization_id = target_organization_id
+    and employee_role.employee_id = selected_employee_id;
+
+  if not (
+    'pos.access' = any(permissions)
+    and 'sales.create' = any(permissions)
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'POS_ACCESS_FORBIDDEN'
+    );
+  end if;
+
+  if 'stores.manage' = any(permissions) then
+    select
+      coalesce(
+        array_agg(store.id order by store.created_at, store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.stores store
+    where store.organization_id = target_organization_id
+      and store.is_active;
+  else
+    select
+      coalesce(
+        array_agg(distinct store.id order by store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.employee_stores assignment
+    join public.stores store
+      on store.organization_id = assignment.organization_id
+      and store.id = assignment.store_id
+      and store.is_active
+    where assignment.organization_id = target_organization_id
+      and assignment.employee_id = selected_employee_id;
+  end if;
+
+  if (
+    target_store_id is not null
+    and not target_store_id = any(effective_store_ids)
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'STORE_FORBIDDEN'
+    );
+  end if;
+
+  if target_register_id is not null then
+    if target_store_id is null then
+      return jsonb_build_object(
+        'ok', false,
+        'reason', 'STORE_REQUIRED_FOR_REGISTER'
+      );
+    end if;
+
+    if not exists (
+      select 1
+      from public.registers register
+      where register.organization_id = target_organization_id
+        and register.id = target_register_id
+        and register.store_id = target_store_id
+        and register.is_active
+    ) then
+      return jsonb_build_object(
+        'ok', false,
+        'reason', 'REGISTER_FORBIDDEN'
+      );
+    end if;
+  end if;
+
+  select
+    coalesce(
+      bool_or(feature.is_enabled)
+        filter (
+          where feature.feature_key = 'time_clock'
+        ),
+      false
+    ),
+    coalesce(
+      bool_or(feature.is_enabled)
+        filter (
+          where feature.feature_key = 'customer_display'
+        ),
+      false
+    ),
+    coalesce(
+      bool_or(feature.is_enabled)
+        filter (
+          where feature.feature_key = 'inventory'
+        ),
+      false
+    ),
+    coalesce(
+      bool_or(feature.is_enabled)
+        filter (
+          where feature.feature_key = 'transfers'
+        ),
+      false
+    ),
+    coalesce(
+      bool_or(feature.is_enabled)
+        filter (
+          where feature.feature_key = 'open_tickets'
+        ),
+      false
+    )
+  into
+    time_clock_enabled,
+    customer_display_enabled,
+    inventory_enabled,
+    transfers_enabled,
+    open_tickets_feature_enabled
+  from public.organization_features feature
+  where feature.organization_id = target_organization_id;
+
+  incoming_transfers_enabled :=
+    inventory_enabled
+    and transfers_enabled
+    and 'inventory.transfer.receive' = any(permissions);
+
+  open_tickets_enabled :=
+    open_tickets_feature_enabled
+    and 'tickets.manage' = any(permissions);
+
+  ticket_assignees_enabled :=
+    open_tickets_enabled
+    and 'employees.manage' = any(permissions);
+
+  if time_clock_enabled then
+    select
+      jsonb_build_object(
+        'id', entry.entry_id,
+        'employeeId', selected_employee_id,
+        'employeeName',
+          coalesce(
+            nullif(btrim(profile.full_name), ''),
+            profile.email,
+            employee.employee_number
+          ),
+        'storeId', entry.store_id,
+        'storeName', store.name,
+        'clockedInAt', entry.clocked_in_at
+      )
+    into time_clock_entry_json
+    from public.get_current_time_clock_entry(
+      target_organization_id
+    ) entry
+    join public.stores store
+      on store.organization_id = target_organization_id
+      and store.id = entry.store_id
+    join public.employees employee
+      on employee.organization_id = target_organization_id
+      and employee.id = selected_employee_id
+    left join public.profiles profile
+      on profile.id = employee.profile_id
+    where entry.store_id = any(effective_store_ids)
+    order by entry.clocked_in_at desc, entry.entry_id
+    limit 1;
+  end if;
+
+  if customer_display_enabled then
+    select
+      coalesce(
+        jsonb_agg(
+          jsonb_build_object(
+            'sessionId', session.session_id,
+            'registerId', session.register_id,
+            'realtimeTopic', session.realtime_topic
+          )
+          order by session.register_id, session.session_id
+        ),
+        '[]'::jsonb
+      )
+    into customer_display_sessions_json
+    from public.get_pos_customer_display_sessions_with_ids(
+      target_organization_id
+    ) session
+    join public.registers register
+      on register.organization_id = target_organization_id
+      and register.id = session.register_id
+      and register.is_active
+    where register.store_id = any(effective_store_ids);
+  end if;
+
+  if incoming_transfers_enabled then
+    select
+      coalesce(
+        jsonb_agg(
+          to_jsonb(transfer)
+          order by transfer.transfer_number desc, transfer.transfer_id
+        ),
+        '[]'::jsonb
+      )
+    into incoming_transfers_raw_json
+    from public.get_pos_incoming_stock_transfers(
+      target_organization_id
+    ) transfer
+    where transfer.destination_store_id = any(effective_store_ids);
+  end if;
+
+  if (
+    open_tickets_enabled
+    and target_store_id is not null
+    and target_register_id is not null
+  ) then
+    select exists (
+      select 1
+      from public.shifts shift
+      where shift.organization_id = target_organization_id
+        and shift.opened_by_employee_id = selected_employee_id
+        and shift.store_id = target_store_id
+        and shift.register_id = target_register_id
+        and shift.status = 'open'
+    )
+    into active_shift_matches_target;
+
+    if active_shift_matches_target then
+      select
+        coalesce(
+          jsonb_agg(
+            to_jsonb(ticket)
+            order by ticket.updated_at desc, ticket.ticket_id
+          ),
+          '[]'::jsonb
+        )
+      into open_tickets_raw_json
+      from public.get_pos_open_tickets(
+        target_organization_id,
+        target_store_id,
+        target_register_id
+      ) ticket;
+    end if;
+  end if;
+
+  if (
+    ticket_assignees_enabled
+    and target_store_id is not null
+  ) then
+    select
+      coalesce(
+        jsonb_agg(
+          jsonb_build_object(
+            'id', assignee.employee_id,
+            'fullName', assignee.full_name
+          )
+          order by assignee.full_name, assignee.employee_id
+        ),
+        '[]'::jsonb
+      )
+    into ticket_assignees_json
+    from public.get_pos_ticket_assignees(
+      target_organization_id,
+      target_store_id
+    ) assignee;
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'organizationId', target_organization_id,
+    'storeId', target_store_id,
+    'registerId', target_register_id,
+    'live', jsonb_build_object(
+      'timeClockEntry', time_clock_entry_json,
+      'customerDisplaySessions', customer_display_sessions_json,
+      'canReceiveIncomingTransfers', incoming_transfers_enabled,
+      'incomingTransfersRaw', incoming_transfers_raw_json,
+      'openTicketsRaw', open_tickets_raw_json,
+      'ticketAssignees', ticket_assignees_json
+    )
+  );
+end;
+$$;
+
+--
+-- Name: FUNCTION "get_pos_live_state_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."get_pos_live_state_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") IS 'POS V2 read-only live-state bundle. Resolves provider-neutral identity, active employee membership, POS permissions, organization features, and effective store/register scope server-side. Missing shifts return empty live ticket data rather than failing startup.';
+
+--
+-- Name: get_pos_modifiers_v2("uuid", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_modifiers_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_profile_id uuid;
+  selected_employee_id uuid;
+  permissions text[] := '{}'::text[];
+  effective_store_ids uuid[] := '{}'::uuid[];
+  modifiers_enabled boolean := false;
+  groups_json jsonb := '[]'::jsonb;
+begin
+  actor_profile_id := private.current_profile_id();
+
+  if actor_profile_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'IDENTITY_UNMAPPED'
+    );
+  end if;
+
+  select employee.id
+  into selected_employee_id
+  from public.employees employee
+  where employee.profile_id = actor_profile_id
+    and employee.organization_id = target_organization_id
+    and employee.status = 'active'
+  order by employee.created_at, employee.id
+  limit 1;
+
+  if selected_employee_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'ORGANIZATION_FORBIDDEN'
+    );
+  end if;
+
+  select
+    coalesce(
+      array_agg(
+        distinct role_permission.permission_code
+        order by role_permission.permission_code
+      ),
+      '{}'::text[]
+    )
+  into permissions
+  from public.employee_roles employee_role
+  join public.role_permissions role_permission
+    on role_permission.organization_id = employee_role.organization_id
+    and role_permission.role_id = employee_role.role_id
+  where employee_role.organization_id = target_organization_id
+    and employee_role.employee_id = selected_employee_id;
+
+  if not (
+    'pos.access' = any(permissions)
+    and 'sales.create' = any(permissions)
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'POS_ACCESS_FORBIDDEN'
+    );
+  end if;
+
+  if 'stores.manage' = any(permissions) then
+    select
+      coalesce(
+        array_agg(store.id order by store.created_at, store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.stores store
+    where store.organization_id = target_organization_id
+      and store.is_active;
+  else
+    select
+      coalesce(
+        array_agg(distinct store.id order by store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.employee_stores assignment
+    join public.stores store
+      on store.organization_id = assignment.organization_id
+      and store.id = assignment.store_id
+      and store.is_active
+    where assignment.organization_id = target_organization_id
+      and assignment.employee_id = selected_employee_id;
+  end if;
+
+  if target_store_id is null
+    or not target_store_id = any(effective_store_ids) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'STORE_FORBIDDEN'
+    );
+  end if;
+
+  if not exists (
+    select 1
+    from public.shifts shift
+    where shift.organization_id = target_organization_id
+      and shift.store_id = target_store_id
+      and shift.opened_by_employee_id = selected_employee_id
+      and shift.status = 'open'
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'ACTIVE_SHIFT_REQUIRED'
+    );
+  end if;
+
+  select
+    coalesce(
+      bool_or(feature.is_enabled)
+        filter (where feature.feature_key = 'modifiers'),
+      false
+    )
+  into modifiers_enabled
+  from public.organization_features feature
+  where feature.organization_id = target_organization_id;
+
+  if not modifiers_enabled then
+    return jsonb_build_object(
+      'ok', true,
+      'organizationId', target_organization_id,
+      'storeId', target_store_id,
+      'productId', target_product_id,
+      'groups', '[]'::jsonb
+    );
+  end if;
+
+  if not exists (
+    select 1
+    from public.products product
+    join public.product_store_settings setting
+      on setting.organization_id = product.organization_id
+      and setting.product_id = product.id
+      and setting.store_id = target_store_id
+      and setting.is_available
+    where product.organization_id = target_organization_id
+      and product.id = target_product_id
+      and product.status = 'active'
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'PRODUCT_FORBIDDEN'
+    );
+  end if;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', modifier_group.group_id,
+          'name', modifier_group.group_name,
+          'minSelections', modifier_group.min_selections,
+          'maxSelections', modifier_group.max_selections,
+          'options',
+            coalesce(
+              (
+                select jsonb_agg(
+                  jsonb_build_object(
+                    'id', modifier_option.value -> 'id',
+                    'name', modifier_option.value -> 'name',
+                    'priceMinor',
+                      modifier_option.value -> 'price_minor'
+                  )
+                  order by modifier_option.ordinality
+                )
+                from jsonb_array_elements(
+                  coalesce(modifier_group.options, '[]'::jsonb)
+                ) with ordinality as modifier_option(value, ordinality)
+              ),
+              '[]'::jsonb
+            )
+        )
+      ),
+      '[]'::jsonb
+    )
+  into groups_json
+  from public.get_pos_product_modifiers(
+    target_organization_id,
+    target_store_id,
+    target_product_id
+  ) modifier_group;
+
+  return jsonb_build_object(
+    'ok', true,
+    'organizationId', target_organization_id,
+    'storeId', target_store_id,
+    'productId', target_product_id,
+    'groups', groups_json
+  );
+end;
+$$;
+
+--
+-- Name: FUNCTION "get_pos_modifiers_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."get_pos_modifiers_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") IS 'POS V2 lazy modifier wrapper. Resolves provider-neutral identity, POS scope, active shift, modifiers feature availability, and returns one product''s modifier groups in the V2 camelCase contract.';
 
 --
 -- Name: get_pos_open_tickets("uuid", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -20626,7 +22167,7 @@ CREATE OR REPLACE FUNCTION "public"."get_pos_product_modifiers"("target_organiza
     SET "search_path" TO ''
     AS $$
 begin
-  if (select auth.uid()) is null
+  if (select public.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required.' using errcode = '42501';
   end if;
@@ -20741,7 +22282,7 @@ begin
     raise exception 'The POS receipt request is invalid.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create'))
     or not (select private.has_permission(target_organization_id, 'receipts.view')) then
     raise exception 'Receipt permission is required to view POS receipts.' using errcode = '42501';
@@ -20909,7 +22450,7 @@ begin
     raise exception 'The POS receipt request is invalid.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create'))
     or not (select private.has_permission(target_organization_id, 'receipts.view')) then
     raise exception 'Receipt permission is required to view POS receipts.' using errcode = '42501';
@@ -21102,6 +22643,313 @@ $$;
 COMMENT ON FUNCTION "public"."get_pos_recent_items"("target_organization_id" "uuid", "target_store_id" "uuid", "target_limit" integer) IS 'Returns current saleable items most recently completed at the caller’s assigned POS store.';
 
 --
+-- Name: get_pos_reference_bundle_v2("uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_reference_bundle_v2"("target_organization_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  actor_profile_id uuid;
+  selected_organization_id uuid;
+  selected_employee_id uuid;
+
+  permissions text[] := '{}'::text[];
+  effective_store_ids uuid[] := '{}'::uuid[];
+
+  categories_json jsonb := '[]'::jsonb;
+  payment_methods_json jsonb := '[]'::jsonb;
+  loyalty_program_json jsonb := 'null'::jsonb;
+  discounts_json jsonb := '[]'::jsonb;
+  tax_rates_json jsonb := '[]'::jsonb;
+  dining_options_json jsonb := '[]'::jsonb;
+  ticket_templates_json jsonb := '[]'::jsonb;
+  payload jsonb := '{}'::jsonb;
+begin
+  actor_profile_id := private.current_profile_id();
+
+  if actor_profile_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'IDENTITY_UNMAPPED'
+    );
+  end if;
+
+  if target_organization_id is not null then
+    select employee.organization_id
+    into selected_organization_id
+    from public.employees employee
+    where employee.profile_id = actor_profile_id
+      and employee.organization_id = target_organization_id
+      and employee.status = 'active'
+    limit 1;
+
+    if selected_organization_id is null then
+      return jsonb_build_object(
+        'ok', false,
+        'reason', 'ORGANIZATION_FORBIDDEN'
+      );
+    end if;
+  else
+    select employee.organization_id
+    into selected_organization_id
+    from public.employees employee
+    join public.organizations organization
+      on organization.id = employee.organization_id
+    where employee.profile_id = actor_profile_id
+      and employee.status = 'active'
+    order by
+      case when organization.status = 'active' then 0 else 1 end,
+      employee.created_at,
+      employee.id
+    limit 1;
+  end if;
+
+  if selected_organization_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'NO_ACTIVE_EMPLOYEE'
+    );
+  end if;
+
+  select employee.id
+  into selected_employee_id
+  from public.employees employee
+  where employee.profile_id = actor_profile_id
+    and employee.organization_id = selected_organization_id
+    and employee.status = 'active'
+  order by employee.created_at, employee.id
+  limit 1;
+
+  if selected_employee_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'NO_ACTIVE_EMPLOYEE'
+    );
+  end if;
+
+  select
+    coalesce(
+      array_agg(
+        distinct role_permission.permission_code
+        order by role_permission.permission_code
+      ),
+      '{}'::text[]
+    )
+  into permissions
+  from public.employee_roles employee_role
+  join public.role_permissions role_permission
+    on role_permission.organization_id = employee_role.organization_id
+    and role_permission.role_id = employee_role.role_id
+  where employee_role.organization_id = selected_organization_id
+    and employee_role.employee_id = selected_employee_id;
+
+  if not (
+    'pos.access' = any(permissions)
+    and 'sales.create' = any(permissions)
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'POS_ACCESS_FORBIDDEN'
+    );
+  end if;
+
+  if 'stores.manage' = any(permissions) then
+    select
+      coalesce(
+        array_agg(store.id order by store.created_at, store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.stores store
+    where store.organization_id = selected_organization_id
+      and store.is_active;
+  else
+    select
+      coalesce(
+        array_agg(distinct store.id order by store.id),
+        '{}'::uuid[]
+      )
+    into effective_store_ids
+    from public.employee_stores assignment
+    join public.stores store
+      on store.organization_id = assignment.organization_id
+      and store.id = assignment.store_id
+      and store.is_active
+    where assignment.organization_id = selected_organization_id
+      and assignment.employee_id = selected_employee_id;
+  end if;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', category.id,
+          'name', category.name,
+          'color', category.color
+        )
+        order by category.sort_order, lower(category.name), category.id
+      ),
+      '[]'::jsonb
+    )
+  into categories_json
+  from public.categories category
+  where category.organization_id = selected_organization_id
+    and not category.is_archived;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', payment_method.id,
+          'storeId', store_payment_method.store_id,
+          'name', payment_method.name,
+          'code', payment_method.code,
+          'type', payment_method.payment_type,
+          'offlinePolicy', payment_method.offline_policy,
+          'requiresReference', payment_method.requires_reference,
+          'sortOrder', payment_method.sort_order
+        )
+        order by
+          store_payment_method.store_id,
+          payment_method.sort_order,
+          lower(payment_method.name),
+          payment_method.id
+      ),
+      '[]'::jsonb
+    )
+  into payment_methods_json
+  from public.store_payment_methods store_payment_method
+  join public.payment_methods payment_method
+    on payment_method.organization_id = store_payment_method.organization_id
+    and payment_method.id = store_payment_method.payment_method_id
+  where store_payment_method.organization_id = selected_organization_id
+    and store_payment_method.store_id = any(effective_store_ids)
+    and store_payment_method.is_enabled
+    and payment_method.is_enabled
+    and not payment_method.is_loyalty_redemption;
+
+  select
+    coalesce(
+      jsonb_build_object(
+        'isEnabled', loyalty_program.is_enabled,
+        'earnSpendMinor', loyalty_program.earn_spend_minor,
+        'earnPoints', loyalty_program.earn_points,
+        'redemptionValueMinor', loyalty_program.redemption_value_minor,
+        'minimumRedemptionPoints', loyalty_program.minimum_redemption_points
+      ),
+      'null'::jsonb
+    )
+  into loyalty_program_json
+  from public.loyalty_programs loyalty_program
+  where loyalty_program.organization_id = selected_organization_id;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', discount.id,
+          'name', discount.name,
+          'discountType', discount.discount_type,
+          'percentageBps', discount.percentage_bps,
+          'amountMinor', discount.amount_minor
+        )
+        order by discount.sort_order, lower(discount.name), discount.id
+      ),
+      '[]'::jsonb
+    )
+  into discounts_json
+  from public.discounts discount
+  where discount.organization_id = selected_organization_id
+    and discount.is_active;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', tax_rate.id,
+          'name', tax_rate.name,
+          'rateBps', tax_rate.rate_bps,
+          'isInclusive', tax_rate.is_inclusive,
+          'isDefault', tax_rate.is_default
+        )
+        order by lower(tax_rate.name), tax_rate.id
+      ),
+      '[]'::jsonb
+    )
+  into tax_rates_json
+  from public.tax_rates tax_rate
+  where tax_rate.organization_id = selected_organization_id
+    and tax_rate.is_active;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', dining_option.id,
+          'name', dining_option.name,
+          'isDefault', dining_option.is_default
+        )
+        order by
+          dining_option.sort_order,
+          lower(dining_option.name),
+          dining_option.id
+      ),
+      '[]'::jsonb
+    )
+  into dining_options_json
+  from public.dining_options dining_option
+  where dining_option.organization_id = selected_organization_id
+    and dining_option.is_active;
+
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', ticket_template.id,
+          'label', ticket_template.label,
+          'note', ticket_template.note,
+          'diningOptionId', ticket_template.dining_option_id
+        )
+        order by
+          ticket_template.sort_order,
+          lower(ticket_template.label),
+          ticket_template.id
+      ),
+      '[]'::jsonb
+    )
+  into ticket_templates_json
+  from public.ticket_templates ticket_template
+  where ticket_template.organization_id = selected_organization_id
+    and ticket_template.is_active;
+
+  payload := jsonb_build_object(
+    'categories', categories_json,
+    'paymentMethods', payment_methods_json,
+    'loyaltyProgram', loyalty_program_json,
+    'discounts', discounts_json,
+    'taxRates', tax_rates_json,
+    'diningOptions', dining_options_json,
+    'ticketTemplates', ticket_templates_json
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'organizationId', selected_organization_id,
+    'referenceVersion', md5(payload::text),
+    'reference', payload
+  );
+end;
+$$;
+
+--
+-- Name: FUNCTION "get_pos_reference_bundle_v2"("target_organization_id" "uuid"); Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON FUNCTION "public"."get_pos_reference_bundle_v2"("target_organization_id" "uuid") IS 'POS V2 read-only reference bundle. Resolves provider-neutral identity, active employee membership, POS permissions, and effective store scope server-side. Caller can select only a membership-validated organization.';
+
+--
 -- Name: get_pos_shift_operational_summary("uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -21125,7 +22973,7 @@ begin
     raise exception 'The POS shift summary request is invalid.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null then
+  if (select private.current_profile_id()) is null then
     raise exception 'Sign in is required to view a shift summary.' using errcode = '42501';
   end if;
 
@@ -21221,6 +23069,52 @@ $$;
 --
 
 COMMENT ON FUNCTION "public"."get_pos_shift_operational_summary"("target_organization_id" "uuid", "target_shift_id" "uuid") IS 'Server-derived POS shift, cash-drawer, and sales summary for authorized assigned-store shift users. Blind cash remains hidden while a blind-count shift is open.';
+
+--
+-- Name: get_pos_sync_change_window("uuid", "uuid", bigint, integer); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_sync_change_window"("target_organization_id" "uuid", "target_device_id" "uuid", "target_after_revision" bigint, "target_limit" integer) RETURNS TABLE("revision" bigint, "domain" "text", "entity_id" "uuid", "operation" "text", "store_id" "uuid")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare selected_store_id uuid;
+begin
+  if target_after_revision is null or target_after_revision<0 or target_limit is null or target_limit not between 1 and 200 then raise exception 'Invalid sync cursor or limit.' using errcode='22023'; end if;
+  select access.store_id into selected_store_id from private.require_pos_sync_access(target_organization_id,target_device_id) access;
+  return query select change.revision,change.domain,change.entity_id,change.operation,change.store_id from public.pos_sync_changes change where change.organization_id=target_organization_id and change.revision>target_after_revision and (change.store_id is null or change.store_id=selected_store_id) order by change.revision asc limit target_limit+1;
+end;
+$$;
+
+--
+-- Name: get_pos_sync_customer("uuid", "uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_sync_customer"("target_organization_id" "uuid", "target_device_id" "uuid", "target_customer_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare customer jsonb;
+begin
+  perform private.require_pos_sync_access(target_organization_id,target_device_id);
+  select jsonb_build_object('id',row.id,'customerNumber',row.customer_number,'loyaltyCardCode',row.loyalty_card_code,'fullName',row.full_name,'phone',row.phone,'email',row.email,'loyaltyPoints',coalesce((select sum(transaction.points_delta) from public.loyalty_transactions transaction where transaction.organization_id=row.organization_id and transaction.customer_id=row.id),0)) into customer from public.customers row where row.organization_id=target_organization_id and row.id=target_customer_id and row.status='active';
+  return jsonb_build_object('customer',customer);
+end;
+$$;
+
+--
+-- Name: get_pos_sync_revision("uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."get_pos_sync_revision"("target_organization_id" "uuid", "target_device_id" "uuid") RETURNS TABLE("current_revision" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  perform private.require_pos_sync_access(target_organization_id,target_device_id);
+  return query select coalesce(max(change.revision),0) from public.pos_sync_changes change where change.organization_id=target_organization_id;
+end;
+$$;
 
 --
 -- Name: get_pos_ticket_assignees("uuid", "uuid"); Type: FUNCTION; Schema: public; Owner: postgres
@@ -21436,7 +23330,7 @@ CREATE OR REPLACE FUNCTION "public"."get_purchase_order_line_costs"("target_orga
   join public.purchase_orders purchase
     on purchase.id = line.purchase_order_id
    and purchase.organization_id = line.organization_id
-  where (select auth.uid()) is not null
+  where (select private.current_profile_id()) is not null
     and cardinality(requested_purchase_order_line_ids) between 1 and 100
     and line.id = any(requested_purchase_order_line_ids)
     and line.organization_id = target_organization_id
@@ -21485,7 +23379,7 @@ begin
     raise exception 'The shift audit history request is invalid.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null then
+  if (select private.current_profile_id()) is null then
     raise exception 'Sign in is required to view shift history.' using errcode = '42501';
   end if;
 
@@ -21553,7 +23447,7 @@ begin
     raise exception 'The shift audit report request is invalid.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null then
+  if (select private.current_profile_id()) is null then
     raise exception 'Sign in is required to view a shift audit report.' using errcode = '42501';
   end if;
 
@@ -21622,7 +23516,7 @@ begin
     raise exception 'The shift audit report request is invalid.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null then
+  if (select private.current_profile_id()) is null then
     raise exception 'Sign in is required to view a shift audit report.' using errcode = '42501';
   end if;
 
@@ -22037,7 +23931,7 @@ declare
   existing_card public.loyalty_cards%rowtype;
   issued_card public.loyalty_cards%rowtype;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -22184,7 +24078,7 @@ begin
     or target_replacement_receipt_number is null
     or target_replacement_receipt_number <= 0
     or target_idempotency_key is null
-    or (select auth.uid()) is null
+    or (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.refund'))
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales and refund permission are required to record an exchange.' using errcode = '42501';
@@ -22194,7 +24088,7 @@ begin
   into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active'
   order by employee.created_at
   limit 1;
@@ -22565,7 +24459,7 @@ declare
   output_unit_cost bigint;
   components_cost_known boolean := true;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'inventory.manage')) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -22918,7 +24812,7 @@ declare
   new_delivery_id uuid;
 begin
   if target_organization_id is null or target_receipt_id is null or target_idempotency_key is null
-    or (select auth.uid()) is null
+    or (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'receipts.reprint')) then
     raise exception 'Receipt reprint permission is required.' using errcode = '42501';
   end if;
@@ -23165,7 +25059,7 @@ begin
     raise exception 'The offline synchronization event is invalid.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create')) then
     raise exception 'Sales permission is required to report offline synchronization.' using errcode = '42501';
   end if;
@@ -23179,7 +25073,7 @@ begin
    and employee_store.employee_id = employee.id
    and employee_store.store_id = target_store_id
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   if actor_employee_id is null then
@@ -23520,6 +25414,52 @@ CREATE OR REPLACE FUNCTION "public"."remove_inventory_policy_override"("target_o
 $$;
 
 --
+-- Name: report_pos_device_sync_telemetry("uuid", "uuid", "uuid", "uuid", "uuid", "text", "text", "text", timestamp with time zone, bigint, bigint, integer, integer, integer, timestamp with time zone, bigint, timestamp with time zone, timestamp with time zone, integer, integer, integer, integer, integer, "text", integer); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."report_pos_device_sync_telemetry"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_employee_id" "uuid", "target_employee_name" "text", "target_connection_mode" "text", "target_app_version" "text", "target_last_successful_sync_at" timestamp with time zone, "target_device_checkpoint" bigint, "target_server_checkpoint" bigint, "target_queue_depth" integer, "target_conflict_count" integer, "target_failed_count" integer, "target_offline_since" timestamp with time zone, "target_crash_count" bigint DEFAULT 0, "target_crash_window_started_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "target_last_crash_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "target_api_average_latency_ms" integer DEFAULT 0, "target_api_max_latency_ms" integer DEFAULT 0, "target_api_failure_count" integer DEFAULT 0, "target_sync_average_latency_ms" integer DEFAULT 0, "target_sync_max_latency_ms" integer DEFAULT 0, "target_local_database_health" "text" DEFAULT 'UNKNOWN'::"text", "target_local_schema_version" integer DEFAULT 0) RETURNS TABLE("device_id" "uuid", "heartbeat_at" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare actor_employee_id uuid; verified_store_id uuid; verified_register_id uuid;
+begin
+  actor_employee_id := private.current_employee_id(target_organization_id);
+  if actor_employee_id is null or actor_employee_id <> target_employee_id or not private.has_permission(target_organization_id, 'pos.access') then
+    raise exception 'POS telemetry requires an active POS employee.' using errcode = '42501';
+  end if;
+  if target_connection_mode not in ('CLOUD_ONLINE', 'STORE_LOCAL', 'DEVICE_ISOLATED', 'RECOVERING', 'SYNC_REVIEW')
+    or target_local_database_health not in ('HEALTHY', 'CHECK_REQUIRED', 'UNAVAILABLE', 'UNKNOWN') then
+    raise exception 'Invalid POS telemetry state.' using errcode = '23514';
+  end if;
+  if target_crash_count < 0 or target_api_average_latency_ms < 0 or target_api_max_latency_ms < 0 or target_api_failure_count < 0
+    or target_sync_average_latency_ms < 0 or target_sync_max_latency_ms < 0 or target_local_schema_version < 0
+    or target_device_checkpoint < 0 or target_server_checkpoint < 0 or target_queue_depth < 0 or target_conflict_count < 0 or target_failed_count < 0 then
+    raise exception 'Invalid POS telemetry counters.' using errcode = '23514';
+  end if;
+  select device.store_id, device.register_id into verified_store_id, verified_register_id
+  from public.pos_devices device where device.organization_id = target_organization_id and device.id = target_device_id and device.status = 'active';
+  if verified_store_id is null or verified_store_id <> target_store_id or verified_register_id <> target_register_id then
+    raise exception 'POS device telemetry binding mismatch.' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.employee_stores assignment where assignment.organization_id = target_organization_id and assignment.employee_id = actor_employee_id and assignment.store_id = target_store_id) then
+    raise exception 'POS employee is not assigned to this device store.' using errcode = '42501';
+  end if;
+  insert into public.pos_device_sync_telemetry (
+    organization_id,device_id,store_id,register_id,employee_id,employee_name_snapshot,connection_mode,app_version,last_heartbeat_at,last_successful_sync_at,device_checkpoint,server_checkpoint,queue_depth,conflict_count,failed_count,offline_since,
+    crash_count,crash_window_started_at,last_crash_at,api_average_latency_ms,api_max_latency_ms,api_failure_count,sync_average_latency_ms,sync_max_latency_ms,local_database_health,local_schema_version,updated_at
+  ) values (
+    target_organization_id,target_device_id,target_store_id,target_register_id,target_employee_id,left(trim(target_employee_name),160),target_connection_mode,left(trim(target_app_version),80),now(),target_last_successful_sync_at,target_device_checkpoint,target_server_checkpoint,target_queue_depth,target_conflict_count,target_failed_count,target_offline_since,
+    target_crash_count,target_crash_window_started_at,target_last_crash_at,target_api_average_latency_ms,target_api_max_latency_ms,target_api_failure_count,target_sync_average_latency_ms,target_sync_max_latency_ms,target_local_database_health,target_local_schema_version,now()
+  ) on conflict on constraint pos_device_sync_telemetry_pkey do update set
+    store_id=excluded.store_id, register_id=excluded.register_id, employee_id=excluded.employee_id, employee_name_snapshot=excluded.employee_name_snapshot,
+    connection_mode=excluded.connection_mode, app_version=excluded.app_version, last_heartbeat_at=excluded.last_heartbeat_at, last_successful_sync_at=excluded.last_successful_sync_at,
+    device_checkpoint=excluded.device_checkpoint, server_checkpoint=excluded.server_checkpoint, queue_depth=excluded.queue_depth, conflict_count=excluded.conflict_count, failed_count=excluded.failed_count, offline_since=excluded.offline_since,
+    crash_count=excluded.crash_count, crash_window_started_at=excluded.crash_window_started_at, last_crash_at=excluded.last_crash_at, api_average_latency_ms=excluded.api_average_latency_ms, api_max_latency_ms=excluded.api_max_latency_ms, api_failure_count=excluded.api_failure_count, sync_average_latency_ms=excluded.sync_average_latency_ms, sync_max_latency_ms=excluded.sync_max_latency_ms, local_database_health=excluded.local_database_health, local_schema_version=excluded.local_schema_version, updated_at=now();
+  return query select target_device_id, now();
+end;
+$$;
+
+--
 -- Name: request_manager_approval("uuid", "text", "text", "jsonb"); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -23534,6 +25474,48 @@ CREATE OR REPLACE FUNCTION "public"."request_manager_approval"("target_organizat
     target_payload
   );
 $$;
+
+--
+-- Name: reserve_pos_device_sequence("uuid", "uuid", "uuid", "uuid", bigint, "uuid", "text"); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE FUNCTION "public"."reserve_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_local_receipt_reference" "text") RETURNS TABLE("status" "text", "server_checkpoint" bigint, "expected_sequence" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+declare current_checkpoint bigint; existing_idempotency uuid; existing_sequence bigint;
+begin
+  if target_device_sequence is null or target_device_sequence <= 0 or target_idempotency_key is null
+    or target_local_receipt_reference !~ '^OFF-[A-Z0-9]{6,32}$' then
+    raise exception 'The device sequence reservation is invalid.' using errcode = '23514';
+  end if;
+  perform private.require_pos_sequence_access(target_organization_id,target_device_id,target_store_id,target_register_id);
+  insert into public.pos_device_sync_checkpoints (organization_id,device_id) values (target_organization_id,target_device_id)
+    on conflict (organization_id,device_id) do nothing;
+  select checkpoint.server_checkpoint into current_checkpoint from public.pos_device_sync_checkpoints checkpoint
+    where checkpoint.organization_id=target_organization_id and checkpoint.device_id=target_device_id for update;
+  select receipt.idempotency_key into existing_idempotency from public.pos_device_sequence_receipts receipt
+    where receipt.organization_id=target_organization_id and receipt.device_id=target_device_id and receipt.device_sequence=target_device_sequence for update;
+  if existing_idempotency is not null then
+    status := case when existing_idempotency=target_idempotency_key then 'REPLAY' else 'DUPLICATE_SEQUENCE' end;
+    server_checkpoint := current_checkpoint; expected_sequence := current_checkpoint+1; return next; return;
+  end if;
+  select receipt.device_sequence into existing_sequence from public.pos_device_sequence_receipts receipt
+    where receipt.organization_id=target_organization_id and receipt.idempotency_key=target_idempotency_key for update;
+  if existing_sequence is not null then
+    status := 'IDEMPOTENCY_SEQUENCE_MISMATCH'; server_checkpoint := current_checkpoint; expected_sequence := current_checkpoint+1; return next; return;
+  end if;
+  if target_device_sequence > current_checkpoint+1 then
+    status := 'GAP'; server_checkpoint := current_checkpoint; expected_sequence := current_checkpoint+1; return next; return;
+  end if;
+  if target_device_sequence < current_checkpoint+1 then
+    status := 'OUT_OF_ORDER'; server_checkpoint := current_checkpoint; expected_sequence := current_checkpoint+1; return next; return;
+  end if;
+  insert into public.pos_device_sequence_receipts (organization_id,device_id,store_id,register_id,device_sequence,idempotency_key,local_receipt_reference,state)
+    values (target_organization_id,target_device_id,target_store_id,target_register_id,target_device_sequence,target_idempotency_key,target_local_receipt_reference,'RECEIVED');
+  status := 'ACCEPTED'; server_checkpoint := current_checkpoint; expected_sequence := current_checkpoint+1; return next;
+end;
+$_$;
 
 --
 -- Name: restore_tindio_payment_preset("uuid", "text", "uuid"[]); Type: FUNCTION; Schema: public; Owner: postgres
@@ -23556,7 +25538,7 @@ begin
     raise exception 'Choose the organization for this payment preset.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required to restore payment presets.' using errcode = '42501';
   end if;
@@ -23708,7 +25690,7 @@ declare
   normalized_reason text := btrim(coalesce(target_reason, ''));
   card_record public.loyalty_cards%rowtype;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -23838,7 +25820,7 @@ declare
   normalized_reason text := btrim(coalesce(target_reason, ''));
   card_record public.loyalty_cards%rowtype;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -23989,7 +25971,7 @@ begin
     raise exception 'Choose an active store for this Smart Menu.' using errcode = 'P0002';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required to configure Smart Menu.' using errcode = '42501';
   end if;
@@ -24130,96 +26112,211 @@ $$;
 --
 
 CREATE OR REPLACE FUNCTION "public"."search_pos_catalog"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text" DEFAULT NULL::"text", "target_category_id" "uuid" DEFAULT NULL::"uuid", "target_offset" integer DEFAULT 0, "target_limit" integer DEFAULT 24) RETURNS TABLE("product_id" "uuid", "variant_id" "uuid", "category_id" "uuid", "product_name" "text", "variant_name" "text", "sku" "text", "barcode" "text", "price_minor" bigint, "unit" "text", "image_url" "text", "is_variable_price" boolean, "allow_fractional_quantity" boolean)
-    LANGUAGE "sql" STABLE
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  with scope as (
-    select target_organization_id organization_id, target_store_id store_id,
-      nullif(lower(btrim(coalesce(target_query, ''))), '') search_term,
-      target_category_id category_id, target_offset result_offset, target_limit result_limit
-    where target_offset >= 0 and target_limit between 1 and 48
-      and (select auth.uid()) is not null
-      and (select private.has_permission(target_organization_id, 'sales.create'))
-      and exists (
-        select 1 from public.employees employee
-        join public.employee_stores employee_store
-          on employee_store.employee_id = employee.id
-         and employee_store.organization_id = employee.organization_id
-        join public.stores store
-          on store.id = employee_store.store_id
-         and store.organization_id = employee_store.organization_id
-        where employee.organization_id = target_organization_id
-          and employee.profile_id = (select auth.uid())
-          and employee.status = 'active'
-          and employee_store.store_id = target_store_id
-          and store.is_active
+declare
+  search_term text :=
+    nullif(
+      lower(
+        btrim(
+          coalesce(
+            target_query,
+            ''
+          )
+        )
+      ),
+      ''
+    );
+begin
+  if target_offset < 0
+    or target_limit not between 1 and 48
+  then
+    raise exception
+      'Invalid POS catalog page.'
+      using errcode = '22023';
+  end if;
+
+  perform private.require_pos_workspace_access(
+    target_organization_id,
+    target_store_id
+  );
+
+  return query
+  with saleable_items as (
+    select
+      product.id as product_id,
+      null::uuid as variant_id,
+      product.category_id,
+      product.name as product_name,
+      null::text as variant_name,
+      product.sku,
+      product.barcode,
+      coalesce(
+        setting.price_override_minor,
+        product.price_minor
+      ) as price_minor,
+      product.unit,
+      product.image_url,
+      product.is_variable_price,
+      product.allow_fractional_quantity
+
+    from public.product_store_settings setting
+
+    join public.products product
+      on product.id =
+        setting.product_id
+     and product.organization_id =
+        setting.organization_id
+
+    where setting.organization_id =
+        target_organization_id
+      and setting.store_id =
+        target_store_id
+      and setting.is_available
+      and product.status =
+        'active'
+      and product.product_type in (
+        'simple',
+        'composite'
       )
-  ), saleable_items as (
-    select product.id product_id, null::uuid variant_id, product.category_id,
-      product.name product_name, null::text variant_name, product.sku, product.barcode,
-      coalesce(setting.price_override_minor, product.price_minor) price_minor, product.unit,
-      product.image_url, product.is_variable_price, product.allow_fractional_quantity,
-      scope.search_term, scope.result_offset, scope.result_limit
-    from scope
-    join public.product_store_settings setting
-      on setting.organization_id = scope.organization_id
-     and setting.store_id = scope.store_id
-     and setting.is_available
-    join public.products product
-      on product.id = setting.product_id
-     and product.organization_id = setting.organization_id
-    where product.status = 'active'
-      and product.product_type = 'simple'
-      and (scope.category_id is null or product.category_id = scope.category_id)
+      and (
+        target_category_id is null
+        or product.category_id =
+          target_category_id
+      )
+
     union all
-    select product.id, variant.id, product.category_id, product.name, variant.name,
-      variant.sku, variant.barcode, variant.price_minor, product.unit,
-      product.image_url, false, product.allow_fractional_quantity,
-      scope.search_term, scope.result_offset, scope.result_limit
-    from scope
-    join public.product_store_settings setting
-      on setting.organization_id = scope.organization_id
-     and setting.store_id = scope.store_id
-     and setting.is_available
+
+    select
+      product.id,
+      variant.id,
+      product.category_id,
+      product.name,
+      variant.name,
+      variant.sku,
+      variant.barcode,
+      variant.price_minor,
+      product.unit,
+      product.image_url,
+      false,
+      product.allow_fractional_quantity
+
+    from public.product_store_settings setting
+
     join public.products product
-      on product.id = setting.product_id
-     and product.organization_id = setting.organization_id
+      on product.id =
+        setting.product_id
+     and product.organization_id =
+        setting.organization_id
+
     join public.product_variants variant
-      on variant.product_id = product.id
-     and variant.organization_id = product.organization_id
+      on variant.product_id =
+        product.id
+     and variant.organization_id =
+        product.organization_id
      and variant.is_active
-    where product.status = 'active'
-      and product.product_type = 'variable'
-      and (scope.category_id is null or product.category_id = scope.category_id)
+
+    where setting.organization_id =
+        target_organization_id
+      and setting.store_id =
+        target_store_id
+      and setting.is_available
+      and product.status =
+        'active'
+      and product.product_type =
+        'variable'
+      and (
+        target_category_id is null
+        or product.category_id =
+          target_category_id
+      )
   )
-  select item.product_id, item.variant_id, item.category_id, item.product_name,
-    item.variant_name, item.sku, item.barcode, item.price_minor, item.unit,
-    item.image_url, item.is_variable_price, item.allow_fractional_quantity
+
+  select
+    item.product_id,
+    item.variant_id,
+    item.category_id,
+    item.product_name,
+    item.variant_name,
+    item.sku,
+    item.barcode,
+    item.price_minor,
+    item.unit,
+    item.image_url,
+    item.is_variable_price,
+    item.allow_fractional_quantity
+
   from saleable_items item
-  where item.search_term is null
-    or lower(item.barcode) = item.search_term
-    or lower(item.sku) = item.search_term
-    or lower(item.product_name) like '%' || item.search_term || '%'
-    or lower(coalesce(item.variant_name, '')) like '%' || item.search_term || '%'
+
+  where search_term is null
+    or lower(
+      coalesce(
+        item.barcode,
+        ''
+      )
+    ) = search_term
+    or lower(
+      coalesce(
+        item.sku,
+        ''
+      )
+    ) = search_term
+    or lower(
+      item.product_name
+    ) like '%' || search_term || '%'
+    or lower(
+      coalesce(
+        item.variant_name,
+        ''
+      )
+    ) like '%' || search_term || '%'
+
   order by
     case
-      when lower(item.barcode) = item.search_term then 0
-      when lower(item.sku) = item.search_term then 1
-      when lower(item.product_name) = item.search_term
-        or lower(coalesce(item.variant_name, '')) = item.search_term then 2
+      when lower(
+        coalesce(
+          item.barcode,
+          ''
+        )
+      ) = search_term
+      then 0
+
+      when lower(
+        coalesce(
+          item.sku,
+          ''
+        )
+      ) = search_term
+      then 1
+
+      when lower(
+        item.product_name
+      ) = search_term
+        or lower(
+          coalesce(
+            item.variant_name,
+            ''
+          )
+        ) = search_term
+      then 2
+
       else 3
     end,
+
     item.product_name,
     item.variant_name nulls first
-  limit coalesce((select result_limit from scope), 0)
-  offset coalesce((select result_offset from scope), 0);
+
+  limit target_limit
+  offset target_offset;
+end;
 $$;
 
 --
 -- Name: FUNCTION "search_pos_catalog"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer); Type: COMMENT; Schema: public; Owner: postgres
 --
 
-COMMENT ON FUNCTION "public"."search_pos_catalog"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer) IS 'Returns POS saleable items with current store price, image, manual-price, and fractional-quantity configuration.';
+COMMENT ON FUNCTION "public"."search_pos_catalog"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer) IS 'Provider-neutral legacy web POS catalog boundary. Uses TINDIO identity/store/shift authorization and no longer requires authenticated-role access to the provider-owned auth schema.';
 
 --
 -- Name: search_pos_customers("uuid", "uuid", "text", integer); Type: FUNCTION; Schema: public; Owner: postgres
@@ -24247,7 +26344,7 @@ begin
     target_store_id
   );
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'sales.create'))
     or not exists (
       select 1
@@ -24257,7 +26354,7 @@ begin
        and employee_store.organization_id = employee.organization_id
        and employee_store.store_id = target_store_id
       where employee.organization_id = target_organization_id
-        and employee.profile_id = (select auth.uid())
+        and employee.profile_id = (select private.current_profile_id())
         and employee.status = 'active'
     ) then
     raise exception 'POS customer access requires an active store assignment.' using errcode = '42501';
@@ -24345,7 +26442,7 @@ CREATE OR REPLACE FUNCTION "public"."set_catalog_product_store_configuration_v3"
     AS $$
 declare actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null or not (select private.has_permission(target_organization_id, 'products.manage')) then
+  if (select private.current_profile_id()) is null or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
   if not (select private.has_store_read_scope(target_organization_id, target_store_id)) then
@@ -24443,7 +26540,7 @@ begin
     raise exception 'Choose a valid offline payment policy.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required to change offline payment policies.'
       using errcode = '42501';
@@ -24604,7 +26701,7 @@ begin
     raise exception 'Choose a payment method, active store, and availability setting.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required to configure payment methods.' using errcode = '42501';
   end if;
@@ -24935,7 +27032,7 @@ declare
   normalized_description text := nullif(btrim(role_description), '');
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'roles.manage')) then
     raise exception 'Role management permission is required.' using errcode = '42501';
   end if;
@@ -24994,7 +27091,7 @@ begin
   into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   update public.roles
@@ -25063,7 +27160,7 @@ declare
   normalized_loyalty_card_code text := nullif(btrim(coalesce(target_loyalty_card_code, '')), '');
   normalized_segment_ids uuid[] := coalesce(target_segment_ids, '{}'::uuid[]);
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'customers.manage')) then
     raise exception 'Customer management permission is required.' using errcode = '42501';
   end if;
@@ -25245,7 +27342,7 @@ begin
     raise exception 'Enter valid payment method settings.' using errcode = '23514';
   end if;
 
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required to configure payment methods.' using errcode = '42501';
   end if;
@@ -25290,7 +27387,7 @@ declare
   old_values jsonb;
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
      or not (select private.has_permission(target_organization_id, 'products.manage')) then
     raise exception 'Product management permission is required.' using errcode = '42501';
   end if;
@@ -25361,12 +27458,7 @@ declare
   normalized_provider_message_id text;
   normalized_failure_reason text;
 begin
-  if coalesce((select auth.role()), '') <> 'service_role' then
-    raise exception 'Only the configured delivery worker can update receipt delivery status.'
-      using errcode = '42501';
-  end if;
-
-  normalized_status := upper(trim(coalesce(target_status, '')));
+normalized_status := upper(trim(coalesce(target_status, '')));
   normalized_provider_message_id := nullif(trim(coalesce(target_provider_message_id, '')), '');
   normalized_failure_reason := nullif(trim(coalesce(target_failure_reason, '')), '');
 
@@ -25432,7 +27524,7 @@ declare
   normalized_footer_message text;
 begin
   if target_organization_id is null
-    or (select auth.uid()) is null
+    or (select private.current_profile_id()) is null
     or not (select private.has_permission(target_organization_id, 'settings.manage')) then
     raise exception 'Settings permission is required.' using errcode = '42501';
   end if;
@@ -25525,7 +27617,7 @@ declare
   normalized_email text := nullif(btrim(target_email), '');
   actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
+  if (select private.current_profile_id()) is null
     or (not (select private.has_permission(target_organization_id, 'inventory.manage')) and not (select private.has_inventory_capability(target_organization_id, 'purchasing.suppliers.manage'))) then
     raise exception 'Inventory permission is required.' using errcode = '42501';
   end if;
@@ -25550,7 +27642,7 @@ begin
   into actor_employee_id
   from public.employees employee
   where employee.organization_id = target_organization_id
-    and employee.profile_id = (select auth.uid())
+    and employee.profile_id = (select private.current_profile_id())
     and employee.status = 'active';
 
   update public.suppliers supplier
@@ -25662,35 +27754,12 @@ CREATE OR REPLACE FUNCTION "public"."validate_pos_device"("target_organization_i
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
+declare actor_employee_id uuid;
 begin
-  if (select auth.uid()) is null
-    or not (select private.has_permission(target_organization_id, 'sales.create')) then
-    raise exception 'Sales permission is required.' using errcode = '42501';
-  end if;
-
-  return query
-  select verified.*
-  from private.verify_pos_device_credential(
-    target_organization_id,
-    target_device_id,
-    target_secret,
-    target_app_version
-  ) verified
-  where exists (
-    select 1
-    from public.employees employee
-    join public.employee_stores employee_store
-      on employee_store.employee_id = employee.id
-     and employee_store.organization_id = employee.organization_id
-     and employee_store.store_id = verified.store_id
-    where employee.organization_id = target_organization_id
-      and employee.profile_id = (select auth.uid())
-      and employee.status = 'active'
-  );
-
-  if not found then
-    raise exception 'You are not assigned to this device store.' using errcode = '42501';
-  end if;
+  actor_employee_id := private.current_employee_id(target_organization_id);
+  if actor_employee_id is null or not (select private.has_permission(target_organization_id, 'sales.create')) then raise exception 'Sales permission is required.' using errcode = '42501'; end if;
+  return query select verified.* from private.verify_pos_device_credential(target_organization_id, target_device_id, target_secret, target_app_version) verified where exists (select 1 from public.employee_stores employee_store where employee_store.organization_id = target_organization_id and employee_store.employee_id = actor_employee_id and employee_store.store_id = verified.store_id);
+  if not found then raise exception 'You are not assigned to this device store.' using errcode = '42501'; end if;
 end;
 $$;
 
@@ -27332,6 +29401,86 @@ CREATE TABLE IF NOT EXISTS "public"."permissions" (
 COMMENT ON CONSTRAINT "permissions_code_format" ON "public"."permissions" IS 'Permission codes use lowercase dot-separated namespaces with at least two segments, for example inventory.manage or inventory.transfer.create.';
 
 --
+-- Name: pos_device_sequence_receipts; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE IF NOT EXISTS "public"."pos_device_sequence_receipts" (
+    "organization_id" "uuid" NOT NULL,
+    "device_id" "uuid" NOT NULL,
+    "store_id" "uuid" NOT NULL,
+    "register_id" "uuid" NOT NULL,
+    "device_sequence" bigint NOT NULL,
+    "idempotency_key" "uuid" NOT NULL,
+    "local_receipt_reference" "text" NOT NULL,
+    "state" "text" NOT NULL,
+    "first_seen_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "finalized_at" timestamp with time zone,
+    CONSTRAINT "pos_device_sequence_receipts_device_sequence_check" CHECK (("device_sequence" > 0)),
+    CONSTRAINT "pos_device_sequence_receipts_local_receipt_reference_check" CHECK (("local_receipt_reference" ~ '^OFF-[A-Z0-9]{6,32}$'::"text")),
+    CONSTRAINT "pos_device_sequence_receipts_state_check" CHECK (("state" = ANY (ARRAY['RECEIVED'::"text", 'APPLIED'::"text", 'CONFLICT'::"text"])))
+);
+
+--
+-- Name: pos_device_sync_checkpoints; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE IF NOT EXISTS "public"."pos_device_sync_checkpoints" (
+    "organization_id" "uuid" NOT NULL,
+    "device_id" "uuid" NOT NULL,
+    "server_checkpoint" bigint DEFAULT 0 NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "pos_device_sync_checkpoints_server_checkpoint_check" CHECK (("server_checkpoint" >= 0))
+);
+
+--
+-- Name: pos_device_sync_telemetry; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE IF NOT EXISTS "public"."pos_device_sync_telemetry" (
+    "organization_id" "uuid" NOT NULL,
+    "device_id" "uuid" NOT NULL,
+    "store_id" "uuid" NOT NULL,
+    "register_id" "uuid" NOT NULL,
+    "employee_id" "uuid" NOT NULL,
+    "employee_name_snapshot" "text" NOT NULL,
+    "connection_mode" "text" NOT NULL,
+    "app_version" "text" NOT NULL,
+    "last_heartbeat_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "last_successful_sync_at" timestamp with time zone,
+    "device_checkpoint" bigint DEFAULT 0 NOT NULL,
+    "server_checkpoint" bigint DEFAULT 0 NOT NULL,
+    "queue_depth" integer DEFAULT 0 NOT NULL,
+    "conflict_count" integer DEFAULT 0 NOT NULL,
+    "failed_count" integer DEFAULT 0 NOT NULL,
+    "offline_since" timestamp with time zone,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "crash_count" bigint DEFAULT 0 NOT NULL,
+    "crash_window_started_at" timestamp with time zone,
+    "last_crash_at" timestamp with time zone,
+    "api_average_latency_ms" integer DEFAULT 0 NOT NULL,
+    "api_max_latency_ms" integer DEFAULT 0 NOT NULL,
+    "api_failure_count" integer DEFAULT 0 NOT NULL,
+    "sync_average_latency_ms" integer DEFAULT 0 NOT NULL,
+    "sync_max_latency_ms" integer DEFAULT 0 NOT NULL,
+    "local_database_health" "text" DEFAULT 'UNKNOWN'::"text" NOT NULL,
+    "local_schema_version" integer DEFAULT 0 NOT NULL,
+    CONSTRAINT "pos_device_sync_telemetry_api_average_latency_ms_check" CHECK (("api_average_latency_ms" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_api_failure_count_check" CHECK (("api_failure_count" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_api_max_latency_ms_check" CHECK (("api_max_latency_ms" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_conflict_count_check" CHECK (("conflict_count" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_connection_mode_check" CHECK (("connection_mode" = ANY (ARRAY['CLOUD_ONLINE'::"text", 'STORE_LOCAL'::"text", 'DEVICE_ISOLATED'::"text", 'RECOVERING'::"text", 'SYNC_REVIEW'::"text"]))),
+    CONSTRAINT "pos_device_sync_telemetry_crash_count_check" CHECK (("crash_count" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_device_checkpoint_check" CHECK (("device_checkpoint" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_failed_count_check" CHECK (("failed_count" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_local_database_health_check" CHECK (("local_database_health" = ANY (ARRAY['HEALTHY'::"text", 'CHECK_REQUIRED'::"text", 'UNAVAILABLE'::"text", 'UNKNOWN'::"text"]))),
+    CONSTRAINT "pos_device_sync_telemetry_local_schema_version_check" CHECK (("local_schema_version" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_queue_depth_check" CHECK (("queue_depth" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_server_checkpoint_check" CHECK (("server_checkpoint" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_sync_average_latency_ms_check" CHECK (("sync_average_latency_ms" >= 0)),
+    CONSTRAINT "pos_device_sync_telemetry_sync_max_latency_ms_check" CHECK (("sync_max_latency_ms" >= 0))
+);
+
+--
 -- Name: pos_devices; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -27389,6 +29538,35 @@ CREATE TABLE IF NOT EXISTS "public"."pos_favorite_tiles" (
 --
 
 COMMENT ON TABLE "public"."pos_favorite_tiles" IS 'Manager-configured, store-scoped POS quick tiles; current saleable product values are resolved at read time.';
+
+--
+-- Name: pos_sync_changes; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE IF NOT EXISTS "public"."pos_sync_changes" (
+    "revision" bigint NOT NULL,
+    "organization_id" "uuid" NOT NULL,
+    "store_id" "uuid",
+    "domain" "text" NOT NULL,
+    "entity_id" "uuid",
+    "operation" "text" NOT NULL,
+    "changed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "pos_sync_changes_domain_check" CHECK (("domain" = ANY (ARRAY['CATALOG'::"text", 'REFERENCE'::"text", 'CUSTOMER'::"text", 'DEVICE'::"text", 'MODIFIERS'::"text"]))),
+    CONSTRAINT "pos_sync_changes_operation_check" CHECK (("operation" = ANY (ARRAY['UPSERT'::"text", 'DELETE'::"text", 'INVALIDATE'::"text"])))
+);
+
+--
+-- Name: pos_sync_changes_revision_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."pos_sync_changes" ALTER COLUMN "revision" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."pos_sync_changes_revision_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
 
 --
 -- Name: product_components; Type: TABLE; Schema: public; Owner: postgres
@@ -29392,6 +31570,34 @@ ALTER TABLE ONLY "public"."permissions"
     ADD CONSTRAINT "permissions_pkey" PRIMARY KEY ("code");
 
 --
+-- Name: pos_device_sequence_receipts pos_device_sequence_receipts_organization_id_idempotency_ke_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sequence_receipts"
+    ADD CONSTRAINT "pos_device_sequence_receipts_organization_id_idempotency_ke_key" UNIQUE ("organization_id", "idempotency_key");
+
+--
+-- Name: pos_device_sequence_receipts pos_device_sequence_receipts_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sequence_receipts"
+    ADD CONSTRAINT "pos_device_sequence_receipts_pkey" PRIMARY KEY ("organization_id", "device_id", "device_sequence");
+
+--
+-- Name: pos_device_sync_checkpoints pos_device_sync_checkpoints_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sync_checkpoints"
+    ADD CONSTRAINT "pos_device_sync_checkpoints_pkey" PRIMARY KEY ("organization_id", "device_id");
+
+--
+-- Name: pos_device_sync_telemetry pos_device_sync_telemetry_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sync_telemetry"
+    ADD CONSTRAINT "pos_device_sync_telemetry_pkey" PRIMARY KEY ("organization_id", "device_id");
+
+--
 -- Name: pos_devices pos_devices_id_organization_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -29425,6 +31631,13 @@ ALTER TABLE ONLY "public"."pos_favorite_tiles"
 
 ALTER TABLE ONLY "public"."pos_favorite_tiles"
     ADD CONSTRAINT "pos_favorite_tiles_position_unique" UNIQUE ("organization_id", "store_id", "position");
+
+--
+-- Name: pos_sync_changes pos_sync_changes_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_sync_changes"
+    ADD CONSTRAINT "pos_sync_changes_pkey" PRIMARY KEY ("revision");
 
 --
 -- Name: product_components product_components_identity_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
@@ -30759,6 +32972,30 @@ CREATE INDEX "payments_method_created_idx" ON "public"."payments" USING "btree" 
 CREATE INDEX "payments_sale_id_idx" ON "public"."payments" USING "btree" ("sale_id");
 
 --
+-- Name: pos_device_sequence_receipts_checkpoint_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "pos_device_sequence_receipts_checkpoint_idx" ON "public"."pos_device_sequence_receipts" USING "btree" ("organization_id", "device_id", "state", "device_sequence");
+
+--
+-- Name: pos_device_sequence_receipts_idempotency_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "pos_device_sequence_receipts_idempotency_idx" ON "public"."pos_device_sequence_receipts" USING "btree" ("organization_id", "idempotency_key");
+
+--
+-- Name: pos_device_sync_telemetry_attention_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "pos_device_sync_telemetry_attention_idx" ON "public"."pos_device_sync_telemetry" USING "btree" ("organization_id", "connection_mode", "queue_depth", "conflict_count", "failed_count");
+
+--
+-- Name: pos_device_sync_telemetry_org_store_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "pos_device_sync_telemetry_org_store_idx" ON "public"."pos_device_sync_telemetry" USING "btree" ("organization_id", "store_id", "last_heartbeat_at" DESC);
+
+--
 -- Name: pos_devices_organization_register_status_idx; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -30775,6 +33012,18 @@ CREATE INDEX "pos_devices_organization_status_seen_idx" ON "public"."pos_devices
 --
 
 CREATE INDEX "pos_favorite_tiles_store_position_idx" ON "public"."pos_favorite_tiles" USING "btree" ("organization_id", "store_id", "position");
+
+--
+-- Name: pos_sync_changes_org_revision_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "pos_sync_changes_org_revision_idx" ON "public"."pos_sync_changes" USING "btree" ("organization_id", "revision");
+
+--
+-- Name: pos_sync_changes_org_store_revision_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "pos_sync_changes_org_store_revision_idx" ON "public"."pos_sync_changes" USING "btree" ("organization_id", "store_id", "revision");
 
 --
 -- Name: product_components_component_idx; Type: INDEX; Schema: public; Owner: postgres
@@ -32167,6 +34416,102 @@ CREATE OR REPLACE TRIGGER "phase16_organization_operational_guard" BEFORE INSERT
 --
 
 CREATE OR REPLACE TRIGGER "pos_devices_set_updated_at" BEFORE UPDATE ON "public"."pos_devices" FOR EACH ROW EXECUTE FUNCTION "private"."set_updated_at"();
+
+--
+-- Name: categories pos_sync_categories; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_categories" AFTER INSERT OR DELETE OR UPDATE ON "public"."categories" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'id', '', 'UPSERT');
+
+--
+-- Name: customers pos_sync_customers; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_customers" AFTER INSERT OR DELETE OR UPDATE ON "public"."customers" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('CUSTOMER', 'id', '', 'UPSERT');
+
+--
+-- Name: pos_devices pos_sync_devices; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_devices" AFTER INSERT OR DELETE OR UPDATE ON "public"."pos_devices" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('DEVICE', 'id', 'store_id', 'UPSERT');
+
+--
+-- Name: dining_options pos_sync_dining_options; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_dining_options" AFTER INSERT OR DELETE OR UPDATE ON "public"."dining_options" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'id', '', 'UPSERT');
+
+--
+-- Name: discounts pos_sync_discounts; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_discounts" AFTER INSERT OR DELETE OR UPDATE ON "public"."discounts" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'id', '', 'UPSERT');
+
+--
+-- Name: loyalty_programs pos_sync_loyalty_programs; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_loyalty_programs" AFTER INSERT OR DELETE OR UPDATE ON "public"."loyalty_programs" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'organization_id', '', 'UPSERT');
+
+--
+-- Name: modifier_groups pos_sync_modifier_groups; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_modifier_groups" AFTER INSERT OR DELETE OR UPDATE ON "public"."modifier_groups" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('MODIFIERS', 'id', '', 'INVALIDATE');
+
+--
+-- Name: modifier_options pos_sync_modifier_options; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_modifier_options" AFTER INSERT OR DELETE OR UPDATE ON "public"."modifier_options" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('MODIFIERS', 'modifier_group_id', '', 'INVALIDATE');
+
+--
+-- Name: payment_methods pos_sync_payment_methods; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_payment_methods" AFTER INSERT OR DELETE OR UPDATE ON "public"."payment_methods" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'id', '', 'UPSERT');
+
+--
+-- Name: product_modifier_groups pos_sync_product_modifier_groups; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_product_modifier_groups" AFTER INSERT OR DELETE OR UPDATE ON "public"."product_modifier_groups" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('MODIFIERS', 'product_id', '', 'INVALIDATE');
+
+--
+-- Name: product_store_settings pos_sync_product_store_settings; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_product_store_settings" AFTER INSERT OR DELETE OR UPDATE ON "public"."product_store_settings" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('CATALOG', 'product_id', 'store_id', 'UPSERT');
+
+--
+-- Name: product_variants pos_sync_product_variants; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_product_variants" AFTER INSERT OR DELETE OR UPDATE ON "public"."product_variants" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('CATALOG', 'product_id', '', 'UPSERT');
+
+--
+-- Name: products pos_sync_products; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_products" AFTER INSERT OR DELETE OR UPDATE ON "public"."products" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('CATALOG', 'id', '', 'UPSERT');
+
+--
+-- Name: store_payment_methods pos_sync_store_payment_methods; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_store_payment_methods" AFTER INSERT OR DELETE OR UPDATE ON "public"."store_payment_methods" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'payment_method_id', 'store_id', 'UPSERT');
+
+--
+-- Name: tax_rates pos_sync_tax_rates; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_tax_rates" AFTER INSERT OR DELETE OR UPDATE ON "public"."tax_rates" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'id', '', 'UPSERT');
+
+--
+-- Name: ticket_templates pos_sync_ticket_templates; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE OR REPLACE TRIGGER "pos_sync_ticket_templates" AFTER INSERT OR DELETE OR UPDATE ON "public"."ticket_templates" FOR EACH ROW EXECUTE FUNCTION "private"."record_pos_sync_change"('REFERENCE', 'id', '', 'UPSERT');
 
 --
 -- Name: product_components product_components_set_updated_at; Type: TRIGGER; Schema: public; Owner: postgres
@@ -33602,6 +35947,55 @@ ALTER TABLE ONLY "public"."payments"
     ADD CONSTRAINT "payments_sale_organization_fkey" FOREIGN KEY ("sale_id", "organization_id") REFERENCES "public"."sales"("id", "organization_id") ON DELETE RESTRICT;
 
 --
+-- Name: pos_device_sequence_receipts pos_device_sequence_receipts_device_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sequence_receipts"
+    ADD CONSTRAINT "pos_device_sequence_receipts_device_org_fkey" FOREIGN KEY ("device_id", "organization_id") REFERENCES "public"."pos_devices"("id", "organization_id") ON DELETE RESTRICT;
+
+--
+-- Name: pos_device_sequence_receipts pos_device_sequence_receipts_register_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sequence_receipts"
+    ADD CONSTRAINT "pos_device_sequence_receipts_register_org_fkey" FOREIGN KEY ("register_id", "organization_id") REFERENCES "public"."registers"("id", "organization_id") ON DELETE RESTRICT;
+
+--
+-- Name: pos_device_sequence_receipts pos_device_sequence_receipts_store_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sequence_receipts"
+    ADD CONSTRAINT "pos_device_sequence_receipts_store_org_fkey" FOREIGN KEY ("store_id", "organization_id") REFERENCES "public"."stores"("id", "organization_id") ON DELETE RESTRICT;
+
+--
+-- Name: pos_device_sync_checkpoints pos_device_sync_checkpoints_device_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sync_checkpoints"
+    ADD CONSTRAINT "pos_device_sync_checkpoints_device_org_fkey" FOREIGN KEY ("device_id", "organization_id") REFERENCES "public"."pos_devices"("id", "organization_id") ON DELETE RESTRICT;
+
+--
+-- Name: pos_device_sync_telemetry pos_device_sync_telemetry_device_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sync_telemetry"
+    ADD CONSTRAINT "pos_device_sync_telemetry_device_org_fkey" FOREIGN KEY ("device_id", "organization_id") REFERENCES "public"."pos_devices"("id", "organization_id") ON DELETE CASCADE;
+
+--
+-- Name: pos_device_sync_telemetry pos_device_sync_telemetry_register_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sync_telemetry"
+    ADD CONSTRAINT "pos_device_sync_telemetry_register_org_fkey" FOREIGN KEY ("register_id", "organization_id") REFERENCES "public"."registers"("id", "organization_id") ON DELETE CASCADE;
+
+--
+-- Name: pos_device_sync_telemetry pos_device_sync_telemetry_store_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_device_sync_telemetry"
+    ADD CONSTRAINT "pos_device_sync_telemetry_store_org_fkey" FOREIGN KEY ("store_id", "organization_id") REFERENCES "public"."stores"("id", "organization_id") ON DELETE CASCADE;
+
+--
 -- Name: pos_devices pos_devices_organization_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -33670,6 +36064,20 @@ ALTER TABLE ONLY "public"."pos_favorite_tiles"
 
 ALTER TABLE ONLY "public"."pos_favorite_tiles"
     ADD CONSTRAINT "pos_favorite_tiles_variant_product_organization_fkey" FOREIGN KEY ("variant_id", "product_id", "organization_id") REFERENCES "public"."product_variants"("id", "product_id", "organization_id") ON DELETE RESTRICT;
+
+--
+-- Name: pos_sync_changes pos_sync_changes_organization_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_sync_changes"
+    ADD CONSTRAINT "pos_sync_changes_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE CASCADE;
+
+--
+-- Name: pos_sync_changes pos_sync_changes_store_id_organization_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY "public"."pos_sync_changes"
+    ADD CONSTRAINT "pos_sync_changes_store_id_organization_id_fkey" FOREIGN KEY ("store_id", "organization_id") REFERENCES "public"."stores"("id", "organization_id") ON DELETE CASCADE;
 
 --
 -- Name: product_components product_components_component_organization_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
@@ -34705,7 +37113,7 @@ ALTER TABLE "public"."approval_requests" ENABLE ROW LEVEL SECURITY;
 -- Name: approval_requests approval_requests_select_requester_or_store_approver; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "approval_requests_select_requester_or_store_approver" ON "public"."approval_requests" FOR SELECT TO "authenticated" USING ((("requested_by_employee_id" = ( SELECT "private"."current_employee_id"("approval_requests"."organization_id") AS "current_employee_id")) OR ((( SELECT "private"."has_permission"("approval_requests"."organization_id", 'approvals.authorize'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("approval_requests"."organization_id", 'approvals.manage'::"text") AS "has_permission")) AND (EXISTS ( SELECT 1
+CREATE POLICY "approval_requests_select_requester_or_store_approver" ON "public"."approval_requests" FOR SELECT TO "tindio_authenticated" USING ((("requested_by_employee_id" = ( SELECT "private"."current_employee_id"("approval_requests"."organization_id") AS "current_employee_id")) OR ((( SELECT "private"."has_permission"("approval_requests"."organization_id", 'approvals.authorize'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("approval_requests"."organization_id", 'approvals.manage'::"text") AS "has_permission")) AND (EXISTS ( SELECT 1
    FROM "public"."employee_stores" "employee_store"
   WHERE (("employee_store"."organization_id" = "approval_requests"."organization_id") AND ("employee_store"."employee_id" = ( SELECT "private"."current_employee_id"("approval_requests"."organization_id") AS "current_employee_id")) AND ("employee_store"."store_id" = "approval_requests"."store_id")))))));
 
@@ -34719,7 +37127,7 @@ ALTER TABLE "public"."approval_rules" ENABLE ROW LEVEL SECURITY;
 -- Name: approval_rules approval_rules_select_member; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "approval_rules_select_member" ON "public"."approval_rules" FOR SELECT TO "authenticated" USING (( SELECT "private"."is_organization_member"("approval_rules"."organization_id") AS "is_organization_member"));
+CREATE POLICY "approval_rules_select_member" ON "public"."approval_rules" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."is_organization_member"("approval_rules"."organization_id") AS "is_organization_member"));
 
 --
 -- Name: audit_logs; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -34731,7 +37139,7 @@ ALTER TABLE "public"."audit_logs" ENABLE ROW LEVEL SECURITY;
 -- Name: audit_logs audit_logs_select_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "audit_logs_select_authorized" ON "public"."audit_logs" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("audit_logs"."organization_id", 'audit.view'::"text") AS "has_permission") AND ((("store_id" IS NOT NULL) AND ( SELECT "private"."has_store_read_scope"("audit_logs"."organization_id", "audit_logs"."store_id") AS "has_store_read_scope")) OR (("store_id" IS NULL) AND ( SELECT "private"."has_permission"("audit_logs"."organization_id", 'stores.manage'::"text") AS "has_permission")))));
+CREATE POLICY "audit_logs_select_authorized" ON "public"."audit_logs" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("audit_logs"."organization_id", 'audit.view'::"text") AS "has_permission") AND ((("store_id" IS NOT NULL) AND ( SELECT "private"."has_store_read_scope"("audit_logs"."organization_id", "audit_logs"."store_id") AS "has_store_read_scope")) OR (("store_id" IS NULL) AND ( SELECT "private"."has_permission"("audit_logs"."organization_id", 'stores.manage'::"text") AS "has_permission")))));
 
 --
 -- Name: cash_movements; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -34743,7 +37151,7 @@ ALTER TABLE "public"."cash_movements" ENABLE ROW LEVEL SECURITY;
 -- Name: cash_movements cash_movements_select_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "cash_movements_select_authorized" ON "public"."cash_movements" FOR SELECT TO "authenticated" USING (( SELECT "private"."has_shift_access"("cash_movements"."organization_id", "cash_movements"."store_id") AS "has_shift_access"));
+CREATE POLICY "cash_movements_select_authorized" ON "public"."cash_movements" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."has_shift_access"("cash_movements"."organization_id", "cash_movements"."store_id") AS "has_shift_access"));
 
 --
 -- Name: categories; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -34755,19 +37163,19 @@ ALTER TABLE "public"."categories" ENABLE ROW LEVEL SECURITY;
 -- Name: categories categories_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "categories_insert_authorized" ON "public"."categories" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "private"."has_permission"("categories"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "categories_insert_authorized" ON "public"."categories" FOR INSERT TO "tindio_authenticated" WITH CHECK (( SELECT "private"."has_permission"("categories"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: categories categories_select_member; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "categories_select_member" ON "public"."categories" FOR SELECT TO "authenticated" USING (( SELECT "private"."is_organization_member"("categories"."organization_id") AS "is_organization_member"));
+CREATE POLICY "categories_select_member" ON "public"."categories" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."is_organization_member"("categories"."organization_id") AS "is_organization_member"));
 
 --
 -- Name: categories categories_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "categories_update_authorized" ON "public"."categories" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("categories"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("categories"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "categories_update_authorized" ON "public"."categories" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("categories"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("categories"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: checkout_requests; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -34791,7 +37199,7 @@ ALTER TABLE "public"."customer_segment_memberships" ENABLE ROW LEVEL SECURITY;
 -- Name: customer_segment_memberships customer_segment_memberships_select_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "customer_segment_memberships_select_manager" ON "public"."customer_segment_memberships" FOR SELECT TO "authenticated" USING (( SELECT "private"."has_permission"("customer_segment_memberships"."organization_id", 'customers.manage'::"text") AS "has_permission"));
+CREATE POLICY "customer_segment_memberships_select_manager" ON "public"."customer_segment_memberships" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("customer_segment_memberships"."organization_id", 'customers.manage'::"text") AS "has_permission"));
 
 --
 -- Name: customer_segments; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -34803,7 +37211,7 @@ ALTER TABLE "public"."customer_segments" ENABLE ROW LEVEL SECURITY;
 -- Name: customer_segments customer_segments_select_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "customer_segments_select_manager" ON "public"."customer_segments" FOR SELECT TO "authenticated" USING (( SELECT "private"."has_permission"("customer_segments"."organization_id", 'customers.manage'::"text") AS "has_permission"));
+CREATE POLICY "customer_segments_select_manager" ON "public"."customer_segments" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("customer_segments"."organization_id", 'customers.manage'::"text") AS "has_permission"));
 
 --
 -- Name: customers; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -34815,19 +37223,19 @@ ALTER TABLE "public"."customers" ENABLE ROW LEVEL SECURITY;
 -- Name: customers customers_insert_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "customers_insert_manager" ON "public"."customers" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "private"."has_permission"("customers"."organization_id", 'customers.manage'::"text") AS "has_permission"));
+CREATE POLICY "customers_insert_manager" ON "public"."customers" FOR INSERT TO "tindio_authenticated" WITH CHECK (( SELECT "private"."has_permission"("customers"."organization_id", 'customers.manage'::"text") AS "has_permission"));
 
 --
 -- Name: customers customers_select_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "customers_select_manager" ON "public"."customers" FOR SELECT TO "authenticated" USING (( SELECT "private"."has_permission"("customers"."organization_id", 'customers.manage'::"text") AS "has_permission"));
+CREATE POLICY "customers_select_manager" ON "public"."customers" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("customers"."organization_id", 'customers.manage'::"text") AS "has_permission"));
 
 --
 -- Name: customers customers_update_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "customers_update_manager" ON "public"."customers" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("customers"."organization_id", 'customers.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("customers"."organization_id", 'customers.manage'::"text") AS "has_permission"));
+CREATE POLICY "customers_update_manager" ON "public"."customers" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("customers"."organization_id", 'customers.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("customers"."organization_id", 'customers.manage'::"text") AS "has_permission"));
 
 --
 -- Name: dining_options; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -34839,19 +37247,19 @@ ALTER TABLE "public"."dining_options" ENABLE ROW LEVEL SECURITY;
 -- Name: dining_options dining_options_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "dining_options_insert_authorized" ON "public"."dining_options" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "private"."has_permission"("dining_options"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "dining_options_insert_authorized" ON "public"."dining_options" FOR INSERT TO "tindio_authenticated" WITH CHECK (( SELECT "private"."has_permission"("dining_options"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: dining_options dining_options_select_sales_or_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "dining_options_select_sales_or_manager" ON "public"."dining_options" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("dining_options"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("dining_options"."organization_id", 'products.manage'::"text") AS "has_permission")));
+CREATE POLICY "dining_options_select_sales_or_manager" ON "public"."dining_options" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("dining_options"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("dining_options"."organization_id", 'products.manage'::"text") AS "has_permission")));
 
 --
 -- Name: dining_options dining_options_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "dining_options_update_authorized" ON "public"."dining_options" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("dining_options"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("dining_options"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "dining_options_update_authorized" ON "public"."dining_options" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("dining_options"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("dining_options"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: discounts; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -34863,19 +37271,19 @@ ALTER TABLE "public"."discounts" ENABLE ROW LEVEL SECURITY;
 -- Name: discounts discounts_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "discounts_insert_authorized" ON "public"."discounts" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "private"."has_permission"("discounts"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "discounts_insert_authorized" ON "public"."discounts" FOR INSERT TO "tindio_authenticated" WITH CHECK (( SELECT "private"."has_permission"("discounts"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: discounts discounts_select_sales_or_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "discounts_select_sales_or_manager" ON "public"."discounts" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("discounts"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("discounts"."organization_id", 'products.manage'::"text") AS "has_permission")));
+CREATE POLICY "discounts_select_sales_or_manager" ON "public"."discounts" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("discounts"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("discounts"."organization_id", 'products.manage'::"text") AS "has_permission")));
 
 --
 -- Name: discounts discounts_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "discounts_update_authorized" ON "public"."discounts" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("discounts"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("discounts"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "discounts_update_authorized" ON "public"."discounts" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("discounts"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("discounts"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: employee_invitations; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -34887,21 +37295,21 @@ ALTER TABLE "public"."employee_invitations" ENABLE ROW LEVEL SECURITY;
 -- Name: employee_invitations employee_invitations_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "employee_invitations_insert_authorized" ON "public"."employee_invitations" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "private"."has_permission"("employee_invitations"."organization_id", 'employees.manage'::"text") AS "has_permission") AND ( SELECT "private"."can_grant_role"("employee_invitations"."organization_id", "employee_invitations"."role_id") AS "can_grant_role") AND (EXISTS ( SELECT 1
+CREATE POLICY "employee_invitations_insert_authorized" ON "public"."employee_invitations" FOR INSERT TO "tindio_authenticated" WITH CHECK ((( SELECT "private"."has_permission"("employee_invitations"."organization_id", 'employees.manage'::"text") AS "has_permission") AND ( SELECT "private"."can_grant_role"("employee_invitations"."organization_id", "employee_invitations"."role_id") AS "can_grant_role") AND (EXISTS ( SELECT 1
    FROM "public"."employees" "inviter"
-  WHERE (("inviter"."id" = "employee_invitations"."invited_by") AND ("inviter"."organization_id" = "employee_invitations"."organization_id") AND ("inviter"."profile_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("inviter"."status" = 'active'::"text"))))));
+  WHERE (("inviter"."id" = "employee_invitations"."invited_by") AND ("inviter"."organization_id" = "employee_invitations"."organization_id") AND ("inviter"."profile_id" = ( SELECT "public"."current_profile_id"() AS "uid")) AND ("inviter"."status" = 'active'::"text"))))));
 
 --
 -- Name: employee_invitations employee_invitations_revoke_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "employee_invitations_revoke_authorized" ON "public"."employee_invitations" FOR UPDATE TO "authenticated" USING ((("accepted_at" IS NULL) AND ( SELECT "private"."has_permission"("employee_invitations"."organization_id", 'employees.manage'::"text") AS "has_permission"))) WITH CHECK ((("accepted_at" IS NULL) AND ("revoked_at" IS NOT NULL) AND ( SELECT "private"."has_permission"("employee_invitations"."organization_id", 'employees.manage'::"text") AS "has_permission")));
+CREATE POLICY "employee_invitations_revoke_authorized" ON "public"."employee_invitations" FOR UPDATE TO "tindio_authenticated" USING ((("accepted_at" IS NULL) AND ( SELECT "private"."has_permission"("employee_invitations"."organization_id", 'employees.manage'::"text") AS "has_permission"))) WITH CHECK ((("accepted_at" IS NULL) AND ("revoked_at" IS NOT NULL) AND ( SELECT "private"."has_permission"("employee_invitations"."organization_id", 'employees.manage'::"text") AS "has_permission")));
 
 --
 -- Name: employee_invitations employee_invitations_select_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "employee_invitations_select_authorized" ON "public"."employee_invitations" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("employee_invitations"."organization_id", 'employees.manage'::"text") AS "has_permission") OR (("accepted_at" IS NULL) AND ("revoked_at" IS NULL) AND ("expires_at" > "now"()) AND ("lower"("email") = "lower"(COALESCE((( SELECT "auth"."jwt"() AS "jwt") ->> 'email'::"text"), ''::"text"))))));
+CREATE POLICY "employee_invitations_select_authorized" ON "public"."employee_invitations" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("employee_invitations"."organization_id", 'employees.manage'::"text") AS "has_permission") OR (("accepted_at" IS NULL) AND ("revoked_at" IS NULL) AND ("expires_at" > "now"()) AND (( SELECT "private"."current_identity_email_matches"("employee_invitations"."email") AS "current_identity_email_matches")))));
 
 --
 -- Name: employee_roles; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -34913,19 +37321,19 @@ ALTER TABLE "public"."employee_roles" ENABLE ROW LEVEL SECURITY;
 -- Name: employee_roles employee_roles_delete_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "employee_roles_delete_authorized" ON "public"."employee_roles" FOR DELETE TO "authenticated" USING (( SELECT "private"."has_permission"("employee_roles"."organization_id", 'employees.manage'::"text") AS "has_permission"));
+CREATE POLICY "employee_roles_delete_authorized" ON "public"."employee_roles" FOR DELETE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("employee_roles"."organization_id", 'employees.manage'::"text") AS "has_permission"));
 
 --
 -- Name: employee_roles employee_roles_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "employee_roles_insert_authorized" ON "public"."employee_roles" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "private"."is_organization_creator"("employee_roles"."organization_id") AS "is_organization_creator") OR (( SELECT "private"."has_permission"("employee_roles"."organization_id", 'employees.manage'::"text") AS "has_permission") AND ( SELECT "private"."can_grant_role"("employee_roles"."organization_id", "employee_roles"."role_id") AS "can_grant_role"))));
+CREATE POLICY "employee_roles_insert_authorized" ON "public"."employee_roles" FOR INSERT TO "tindio_authenticated" WITH CHECK ((( SELECT "private"."is_organization_creator"("employee_roles"."organization_id") AS "is_organization_creator") OR (( SELECT "private"."has_permission"("employee_roles"."organization_id", 'employees.manage'::"text") AS "has_permission") AND ( SELECT "private"."can_grant_role"("employee_roles"."organization_id", "employee_roles"."role_id") AS "can_grant_role"))));
 
 --
 -- Name: employee_roles employee_roles_select_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "employee_roles_select_authorized" ON "public"."employee_roles" FOR SELECT TO "authenticated" USING ((("employee_id" = ( SELECT "private"."current_employee_id"("employee_roles"."organization_id") AS "current_employee_id")) OR (( SELECT "private"."has_permission"("employee_roles"."organization_id", 'employees.manage'::"text") AS "has_permission") AND ( SELECT "private"."can_access_employee_store_scope"("employee_roles"."organization_id", "employee_roles"."employee_id") AS "can_access_employee_store_scope"))));
+CREATE POLICY "employee_roles_select_authorized" ON "public"."employee_roles" FOR SELECT TO "tindio_authenticated" USING ((("employee_id" = ( SELECT "private"."current_employee_id"("employee_roles"."organization_id") AS "current_employee_id")) OR (( SELECT "private"."has_permission"("employee_roles"."organization_id", 'employees.manage'::"text") AS "has_permission") AND ( SELECT "private"."can_access_employee_store_scope"("employee_roles"."organization_id", "employee_roles"."employee_id") AS "can_access_employee_store_scope"))));
 
 --
 -- Name: employee_stores; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -34937,19 +37345,19 @@ ALTER TABLE "public"."employee_stores" ENABLE ROW LEVEL SECURITY;
 -- Name: employee_stores employee_stores_delete_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "employee_stores_delete_authorized" ON "public"."employee_stores" FOR DELETE TO "authenticated" USING (( SELECT "private"."has_permission"("employee_stores"."organization_id", 'employees.manage'::"text") AS "has_permission"));
+CREATE POLICY "employee_stores_delete_authorized" ON "public"."employee_stores" FOR DELETE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("employee_stores"."organization_id", 'employees.manage'::"text") AS "has_permission"));
 
 --
 -- Name: employee_stores employee_stores_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "employee_stores_insert_authorized" ON "public"."employee_stores" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "private"."is_organization_creator"("employee_stores"."organization_id") AS "is_organization_creator") OR ( SELECT "private"."has_permission"("employee_stores"."organization_id", 'employees.manage'::"text") AS "has_permission")));
+CREATE POLICY "employee_stores_insert_authorized" ON "public"."employee_stores" FOR INSERT TO "tindio_authenticated" WITH CHECK ((( SELECT "private"."is_organization_creator"("employee_stores"."organization_id") AS "is_organization_creator") OR ( SELECT "private"."has_permission"("employee_stores"."organization_id", 'employees.manage'::"text") AS "has_permission")));
 
 --
 -- Name: employee_stores employee_stores_select_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "employee_stores_select_authorized" ON "public"."employee_stores" FOR SELECT TO "authenticated" USING ((("employee_id" = ( SELECT "private"."current_employee_id"("employee_stores"."organization_id") AS "current_employee_id")) OR (( SELECT "private"."has_permission"("employee_stores"."organization_id", 'employees.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("employee_stores"."organization_id", "employee_stores"."store_id") AS "has_store_read_scope"))));
+CREATE POLICY "employee_stores_select_authorized" ON "public"."employee_stores" FOR SELECT TO "tindio_authenticated" USING ((("employee_id" = ( SELECT "private"."current_employee_id"("employee_stores"."organization_id") AS "current_employee_id")) OR (( SELECT "private"."has_permission"("employee_stores"."organization_id", 'employees.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("employee_stores"."organization_id", "employee_stores"."store_id") AS "has_store_read_scope"))));
 
 --
 -- Name: employees; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -34961,19 +37369,19 @@ ALTER TABLE "public"."employees" ENABLE ROW LEVEL SECURITY;
 -- Name: employees employees_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "employees_insert_authorized" ON "public"."employees" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "private"."is_organization_creator"("employees"."organization_id") AS "is_organization_creator") OR ( SELECT "private"."has_permission"("employees"."organization_id", 'employees.manage'::"text") AS "has_permission")));
+CREATE POLICY "employees_insert_authorized" ON "public"."employees" FOR INSERT TO "tindio_authenticated" WITH CHECK ((( SELECT "private"."is_organization_creator"("employees"."organization_id") AS "is_organization_creator") OR ( SELECT "private"."has_permission"("employees"."organization_id", 'employees.manage'::"text") AS "has_permission")));
 
 --
 -- Name: employees employees_select_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "employees_select_authorized" ON "public"."employees" FOR SELECT TO "authenticated" USING ((("profile_id" = ( SELECT "auth"."uid"() AS "uid")) OR (( SELECT "private"."has_permission"("employees"."organization_id", 'employees.manage'::"text") AS "has_permission") AND ( SELECT "private"."can_access_employee_store_scope"("employees"."organization_id", "employees"."id") AS "can_access_employee_store_scope"))));
+CREATE POLICY "employees_select_authorized" ON "public"."employees" FOR SELECT TO "tindio_authenticated" USING ((("profile_id" = ( SELECT "public"."current_profile_id"() AS "uid")) OR (( SELECT "private"."has_permission"("employees"."organization_id", 'employees.manage'::"text") AS "has_permission") AND ( SELECT "private"."can_access_employee_store_scope"("employees"."organization_id", "employees"."id") AS "can_access_employee_store_scope"))));
 
 --
 -- Name: employees employees_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "employees_update_authorized" ON "public"."employees" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("employees"."organization_id", 'employees.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("employees"."organization_id", 'employees.manage'::"text") AS "has_permission"));
+CREATE POLICY "employees_update_authorized" ON "public"."employees" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("employees"."organization_id", 'employees.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("employees"."organization_id", 'employees.manage'::"text") AS "has_permission"));
 
 --
 -- Name: goods_receipt_lines; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -34985,7 +37393,7 @@ ALTER TABLE "public"."goods_receipt_lines" ENABLE ROW LEVEL SECURITY;
 -- Name: goods_receipt_lines goods_receipt_lines_select_purchasing_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "goods_receipt_lines_select_purchasing_scope" ON "public"."goods_receipt_lines" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("goods_receipt_lines"."organization_id", ARRAY['purchasing.view'::"text", 'purchasing.receive'::"text"]) AS "has_any_inventory_capability") AND (EXISTS ( SELECT 1
+CREATE POLICY "goods_receipt_lines_select_purchasing_scope" ON "public"."goods_receipt_lines" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("goods_receipt_lines"."organization_id", ARRAY['purchasing.view'::"text", 'purchasing.receive'::"text"]) AS "has_any_inventory_capability") AND (EXISTS ( SELECT 1
    FROM "public"."goods_receipts" "goods_receipt"
   WHERE (("goods_receipt"."id" = "goods_receipt_lines"."goods_receipt_id") AND ("goods_receipt"."organization_id" = "goods_receipt_lines"."organization_id") AND ( SELECT "private"."has_store_read_scope"("goods_receipt"."organization_id", "goods_receipt"."store_id") AS "has_store_read_scope"))))));
 
@@ -34999,7 +37407,7 @@ ALTER TABLE "public"."goods_receipts" ENABLE ROW LEVEL SECURITY;
 -- Name: goods_receipts goods_receipts_select_purchasing_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "goods_receipts_select_purchasing_scope" ON "public"."goods_receipts" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("goods_receipts"."organization_id", ARRAY['purchasing.view'::"text", 'purchasing.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_store_read_scope"("goods_receipts"."organization_id", "goods_receipts"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "goods_receipts_select_purchasing_scope" ON "public"."goods_receipts" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("goods_receipts"."organization_id", ARRAY['purchasing.view'::"text", 'purchasing.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_store_read_scope"("goods_receipts"."organization_id", "goods_receipts"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: POLICY "goods_receipts_select_purchasing_scope" ON "goods_receipts"; Type: COMMENT; Schema: public; Owner: postgres
@@ -35017,7 +37425,7 @@ ALTER TABLE "public"."inventory_adjustment_import_batches" ENABLE ROW LEVEL SECU
 -- Name: inventory_adjustment_import_batches inventory_adjustment_import_batches_select_authorized_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "inventory_adjustment_import_batches_select_authorized_scope" ON "public"."inventory_adjustment_import_batches" FOR SELECT TO "authenticated" USING (((( SELECT "private"."has_permission"("inventory_adjustment_import_batches"."organization_id", 'inventory.view'::"text") AS "has_permission") OR ( SELECT "private"."has_any_inventory_capability"("inventory_adjustment_import_batches"."organization_id", ARRAY['inventory.adjust.create'::"text", 'inventory.adjust.post'::"text"]) AS "has_any_inventory_capability")) AND ( SELECT "private"."has_store_read_scope"("inventory_adjustment_import_batches"."organization_id", "inventory_adjustment_import_batches"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "inventory_adjustment_import_batches_select_authorized_scope" ON "public"."inventory_adjustment_import_batches" FOR SELECT TO "tindio_authenticated" USING (((( SELECT "private"."has_permission"("inventory_adjustment_import_batches"."organization_id", 'inventory.view'::"text") AS "has_permission") OR ( SELECT "private"."has_any_inventory_capability"("inventory_adjustment_import_batches"."organization_id", ARRAY['inventory.adjust.create'::"text", 'inventory.adjust.post'::"text"]) AS "has_any_inventory_capability")) AND ( SELECT "private"."has_store_read_scope"("inventory_adjustment_import_batches"."organization_id", "inventory_adjustment_import_batches"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: inventory_adjustment_reasons; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35029,7 +37437,7 @@ ALTER TABLE "public"."inventory_adjustment_reasons" ENABLE ROW LEVEL SECURITY;
 -- Name: inventory_adjustment_reasons inventory_adjustment_reasons_select_adjuster; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "inventory_adjustment_reasons_select_adjuster" ON "public"."inventory_adjustment_reasons" FOR SELECT TO "authenticated" USING (( SELECT "private"."has_any_inventory_capability"("inventory_adjustment_reasons"."organization_id", ARRAY['inventory.adjust.create'::"text", 'inventory.adjust.post'::"text"]) AS "has_any_inventory_capability"));
+CREATE POLICY "inventory_adjustment_reasons_select_adjuster" ON "public"."inventory_adjustment_reasons" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."has_any_inventory_capability"("inventory_adjustment_reasons"."organization_id", ARRAY['inventory.adjust.create'::"text", 'inventory.adjust.post'::"text"]) AS "has_any_inventory_capability"));
 
 --
 -- Name: inventory_adjustments; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35041,7 +37449,7 @@ ALTER TABLE "public"."inventory_adjustments" ENABLE ROW LEVEL SECURITY;
 -- Name: inventory_adjustments inventory_adjustments_select_authorized_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "inventory_adjustments_select_authorized_scope" ON "public"."inventory_adjustments" FOR SELECT TO "authenticated" USING (((( SELECT "private"."has_permission"("inventory_adjustments"."organization_id", 'inventory.view'::"text") AS "has_permission") OR ( SELECT "private"."has_any_inventory_capability"("inventory_adjustments"."organization_id", ARRAY['inventory.adjust.create'::"text", 'inventory.adjust.post'::"text"]) AS "has_any_inventory_capability")) AND ( SELECT "private"."has_store_read_scope"("inventory_adjustments"."organization_id", "inventory_adjustments"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "inventory_adjustments_select_authorized_scope" ON "public"."inventory_adjustments" FOR SELECT TO "tindio_authenticated" USING (((( SELECT "private"."has_permission"("inventory_adjustments"."organization_id", 'inventory.view'::"text") AS "has_permission") OR ( SELECT "private"."has_any_inventory_capability"("inventory_adjustments"."organization_id", ARRAY['inventory.adjust.create'::"text", 'inventory.adjust.post'::"text"]) AS "has_any_inventory_capability")) AND ( SELECT "private"."has_store_read_scope"("inventory_adjustments"."organization_id", "inventory_adjustments"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: inventory_count_batch_documents; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35053,7 +37461,7 @@ ALTER TABLE "public"."inventory_count_batch_documents" ENABLE ROW LEVEL SECURITY
 -- Name: inventory_count_batch_documents inventory_count_batch_documents_select_authorized_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "inventory_count_batch_documents_select_authorized_scope" ON "public"."inventory_count_batch_documents" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("inventory_count_batch_documents"."organization_id", ARRAY['inventory.count.create'::"text", 'inventory.count.finalize'::"text"]) AS "has_any_inventory_capability") AND (EXISTS ( SELECT 1
+CREATE POLICY "inventory_count_batch_documents_select_authorized_scope" ON "public"."inventory_count_batch_documents" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("inventory_count_batch_documents"."organization_id", ARRAY['inventory.count.create'::"text", 'inventory.count.finalize'::"text"]) AS "has_any_inventory_capability") AND (EXISTS ( SELECT 1
    FROM "public"."inventory_counts" "count_document"
   WHERE (("count_document"."id" = "inventory_count_batch_documents"."inventory_count_id") AND ("count_document"."organization_id" = "inventory_count_batch_documents"."organization_id") AND ( SELECT "private"."has_store_read_scope"("count_document"."organization_id", "count_document"."store_id") AS "has_store_read_scope"))))));
 
@@ -35067,7 +37475,7 @@ ALTER TABLE "public"."inventory_count_batches" ENABLE ROW LEVEL SECURITY;
 -- Name: inventory_count_batches inventory_count_batches_select_authorized_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "inventory_count_batches_select_authorized_scope" ON "public"."inventory_count_batches" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("inventory_count_batches"."organization_id", ARRAY['inventory.count.create'::"text", 'inventory.count.finalize'::"text"]) AS "has_any_inventory_capability") AND (EXISTS ( SELECT 1
+CREATE POLICY "inventory_count_batches_select_authorized_scope" ON "public"."inventory_count_batches" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("inventory_count_batches"."organization_id", ARRAY['inventory.count.create'::"text", 'inventory.count.finalize'::"text"]) AS "has_any_inventory_capability") AND (EXISTS ( SELECT 1
    FROM ("public"."inventory_count_batch_documents" "batch_document"
      JOIN "public"."inventory_counts" "count_document" ON ((("count_document"."id" = "batch_document"."inventory_count_id") AND ("count_document"."organization_id" = "batch_document"."organization_id"))))
   WHERE (("batch_document"."organization_id" = "inventory_count_batches"."organization_id") AND ("batch_document"."inventory_count_batch_id" = "inventory_count_batches"."id") AND ( SELECT "private"."has_store_read_scope"("count_document"."organization_id", "count_document"."store_id") AS "has_store_read_scope"))))));
@@ -35082,7 +37490,7 @@ ALTER TABLE "public"."inventory_count_lines" ENABLE ROW LEVEL SECURITY;
 -- Name: inventory_count_lines inventory_count_lines_select_authorized_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "inventory_count_lines_select_authorized_scope" ON "public"."inventory_count_lines" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("inventory_count_lines"."organization_id", ARRAY['inventory.count.create'::"text", 'inventory.count.finalize'::"text"]) AS "has_any_inventory_capability") AND (EXISTS ( SELECT 1
+CREATE POLICY "inventory_count_lines_select_authorized_scope" ON "public"."inventory_count_lines" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("inventory_count_lines"."organization_id", ARRAY['inventory.count.create'::"text", 'inventory.count.finalize'::"text"]) AS "has_any_inventory_capability") AND (EXISTS ( SELECT 1
    FROM "public"."inventory_counts" "count_document"
   WHERE (("count_document"."id" = "inventory_count_lines"."inventory_count_id") AND ("count_document"."organization_id" = "inventory_count_lines"."organization_id") AND ( SELECT "private"."has_store_read_scope"("count_document"."organization_id", "count_document"."store_id") AS "has_store_read_scope"))))));
 
@@ -35096,7 +37504,7 @@ ALTER TABLE "public"."inventory_counts" ENABLE ROW LEVEL SECURITY;
 -- Name: inventory_counts inventory_counts_select_authorized_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "inventory_counts_select_authorized_scope" ON "public"."inventory_counts" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("inventory_counts"."organization_id", ARRAY['inventory.count.create'::"text", 'inventory.count.finalize'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_store_read_scope"("inventory_counts"."organization_id", "inventory_counts"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "inventory_counts_select_authorized_scope" ON "public"."inventory_counts" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("inventory_counts"."organization_id", ARRAY['inventory.count.create'::"text", 'inventory.count.finalize'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_store_read_scope"("inventory_counts"."organization_id", "inventory_counts"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: inventory_levels; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35108,7 +37516,7 @@ ALTER TABLE "public"."inventory_levels" ENABLE ROW LEVEL SECURITY;
 -- Name: inventory_levels inventory_levels_select_authorized_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "inventory_levels_select_authorized_scope" ON "public"."inventory_levels" FOR SELECT TO "authenticated" USING (((( SELECT "private"."has_permission"("inventory_levels"."organization_id", 'inventory.view'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("inventory_levels"."organization_id", 'inventory.manage'::"text") AS "has_permission") OR ( SELECT "private"."has_any_inventory_capability"("inventory_levels"."organization_id", ARRAY['inventory.adjust.create'::"text", 'inventory.adjust.post'::"text", 'inventory.count.create'::"text", 'inventory.count.finalize'::"text", 'inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text", 'purchasing.po.create'::"text", 'purchasing.receive'::"text", 'purchasing.return'::"text"]) AS "has_any_inventory_capability") OR (( SELECT "private"."has_permission"("inventory_levels"."organization_id", 'products.view_cost'::"text") AS "has_permission") AND ( SELECT "private"."has_inventory_capability"("inventory_levels"."organization_id", 'inventory.valuation.view'::"text") AS "has_inventory_capability"))) AND ( SELECT "private"."has_store_read_scope"("inventory_levels"."organization_id", "inventory_levels"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "inventory_levels_select_authorized_scope" ON "public"."inventory_levels" FOR SELECT TO "tindio_authenticated" USING (((( SELECT "private"."has_permission"("inventory_levels"."organization_id", 'inventory.view'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("inventory_levels"."organization_id", 'inventory.manage'::"text") AS "has_permission") OR ( SELECT "private"."has_any_inventory_capability"("inventory_levels"."organization_id", ARRAY['inventory.adjust.create'::"text", 'inventory.adjust.post'::"text", 'inventory.count.create'::"text", 'inventory.count.finalize'::"text", 'inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text", 'purchasing.po.create'::"text", 'purchasing.receive'::"text", 'purchasing.return'::"text"]) AS "has_any_inventory_capability") OR (( SELECT "private"."has_permission"("inventory_levels"."organization_id", 'products.view_cost'::"text") AS "has_permission") AND ( SELECT "private"."has_inventory_capability"("inventory_levels"."organization_id", 'inventory.valuation.view'::"text") AS "has_inventory_capability"))) AND ( SELECT "private"."has_store_read_scope"("inventory_levels"."organization_id", "inventory_levels"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: POLICY "inventory_levels_select_authorized_scope" ON "inventory_levels"; Type: COMMENT; Schema: public; Owner: postgres
@@ -35126,7 +37534,7 @@ ALTER TABLE "public"."inventory_movements" ENABLE ROW LEVEL SECURITY;
 -- Name: inventory_movements inventory_movements_select_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "inventory_movements_select_authorized" ON "public"."inventory_movements" FOR SELECT TO "authenticated" USING (((( SELECT "private"."has_permission"("inventory_movements"."organization_id", 'inventory.view'::"text") AS "has_permission") OR ( SELECT "private"."has_any_inventory_capability"("inventory_movements"."organization_id", ARRAY['inventory.adjust.create'::"text", 'inventory.adjust.post'::"text", 'inventory.count.create'::"text", 'inventory.count.finalize'::"text"]) AS "has_any_inventory_capability")) AND ( SELECT "private"."has_store_read_scope"("inventory_movements"."organization_id", "inventory_movements"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "inventory_movements_select_authorized" ON "public"."inventory_movements" FOR SELECT TO "tindio_authenticated" USING (((( SELECT "private"."has_permission"("inventory_movements"."organization_id", 'inventory.view'::"text") AS "has_permission") OR ( SELECT "private"."has_any_inventory_capability"("inventory_movements"."organization_id", ARRAY['inventory.adjust.create'::"text", 'inventory.adjust.post'::"text", 'inventory.count.create'::"text", 'inventory.count.finalize'::"text"]) AS "has_any_inventory_capability")) AND ( SELECT "private"."has_store_read_scope"("inventory_movements"."organization_id", "inventory_movements"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: inventory_policies; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35138,7 +37546,7 @@ ALTER TABLE "public"."inventory_policies" ENABLE ROW LEVEL SECURITY;
 -- Name: inventory_policies inventory_policies_select_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "inventory_policies_select_manager" ON "public"."inventory_policies" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("inventory_policies"."organization_id", 'inventory.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("inventory_policies"."organization_id", "inventory_policies"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "inventory_policies_select_manager" ON "public"."inventory_policies" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("inventory_policies"."organization_id", 'inventory.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("inventory_policies"."organization_id", "inventory_policies"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: inventory_policy_defaults; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35150,7 +37558,7 @@ ALTER TABLE "public"."inventory_policy_defaults" ENABLE ROW LEVEL SECURITY;
 -- Name: inventory_policy_defaults inventory_policy_defaults_select_inventory_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "inventory_policy_defaults_select_inventory_manager" ON "public"."inventory_policy_defaults" FOR SELECT TO "authenticated" USING (( SELECT "private"."has_permission"("inventory_policy_defaults"."organization_id", 'inventory.manage'::"text") AS "has_permission"));
+CREATE POLICY "inventory_policy_defaults_select_inventory_manager" ON "public"."inventory_policy_defaults" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("inventory_policy_defaults"."organization_id", 'inventory.manage'::"text") AS "has_permission"));
 
 --
 -- Name: inventory_replenishment_rules; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35162,7 +37570,7 @@ ALTER TABLE "public"."inventory_replenishment_rules" ENABLE ROW LEVEL SECURITY;
 -- Name: inventory_replenishment_rules inventory_replenishment_rules_select_inventory_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "inventory_replenishment_rules_select_inventory_manager" ON "public"."inventory_replenishment_rules" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("inventory_replenishment_rules"."organization_id", 'inventory.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("inventory_replenishment_rules"."organization_id", "inventory_replenishment_rules"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "inventory_replenishment_rules_select_inventory_manager" ON "public"."inventory_replenishment_rules" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("inventory_replenishment_rules"."organization_id", 'inventory.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("inventory_replenishment_rules"."organization_id", "inventory_replenishment_rules"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: kitchen_order_items; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35204,13 +37612,13 @@ ALTER TABLE "public"."loyalty_programs" ENABLE ROW LEVEL SECURITY;
 -- Name: loyalty_programs loyalty_programs_select_sales_or_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "loyalty_programs_select_sales_or_manager" ON "public"."loyalty_programs" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("loyalty_programs"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("loyalty_programs"."organization_id", 'customers.manage'::"text") AS "has_permission")));
+CREATE POLICY "loyalty_programs_select_sales_or_manager" ON "public"."loyalty_programs" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("loyalty_programs"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("loyalty_programs"."organization_id", 'customers.manage'::"text") AS "has_permission")));
 
 --
 -- Name: loyalty_programs loyalty_programs_update_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "loyalty_programs_update_settings_manager" ON "public"."loyalty_programs" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("loyalty_programs"."organization_id", 'settings.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("loyalty_programs"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "loyalty_programs_update_settings_manager" ON "public"."loyalty_programs" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("loyalty_programs"."organization_id", 'settings.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("loyalty_programs"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: loyalty_transactions; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35222,7 +37630,7 @@ ALTER TABLE "public"."loyalty_transactions" ENABLE ROW LEVEL SECURITY;
 -- Name: loyalty_transactions loyalty_transactions_select_customer_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "loyalty_transactions_select_customer_manager" ON "public"."loyalty_transactions" FOR SELECT TO "authenticated" USING (( SELECT "private"."has_permission"("loyalty_transactions"."organization_id", 'customers.manage'::"text") AS "has_permission"));
+CREATE POLICY "loyalty_transactions_select_customer_manager" ON "public"."loyalty_transactions" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("loyalty_transactions"."organization_id", 'customers.manage'::"text") AS "has_permission"));
 
 --
 -- Name: modifier_groups; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35234,19 +37642,19 @@ ALTER TABLE "public"."modifier_groups" ENABLE ROW LEVEL SECURITY;
 -- Name: modifier_groups modifier_groups_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "modifier_groups_insert_authorized" ON "public"."modifier_groups" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "private"."has_permission"("modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "modifier_groups_insert_authorized" ON "public"."modifier_groups" FOR INSERT TO "tindio_authenticated" WITH CHECK (( SELECT "private"."has_permission"("modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: modifier_groups modifier_groups_select_sales_or_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "modifier_groups_select_sales_or_manager" ON "public"."modifier_groups" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("modifier_groups"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission")));
+CREATE POLICY "modifier_groups_select_sales_or_manager" ON "public"."modifier_groups" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("modifier_groups"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission")));
 
 --
 -- Name: modifier_groups modifier_groups_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "modifier_groups_update_authorized" ON "public"."modifier_groups" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "modifier_groups_update_authorized" ON "public"."modifier_groups" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: modifier_options; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35258,19 +37666,19 @@ ALTER TABLE "public"."modifier_options" ENABLE ROW LEVEL SECURITY;
 -- Name: modifier_options modifier_options_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "modifier_options_insert_authorized" ON "public"."modifier_options" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "private"."has_permission"("modifier_options"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "modifier_options_insert_authorized" ON "public"."modifier_options" FOR INSERT TO "tindio_authenticated" WITH CHECK (( SELECT "private"."has_permission"("modifier_options"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: modifier_options modifier_options_select_sales_or_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "modifier_options_select_sales_or_manager" ON "public"."modifier_options" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("modifier_options"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("modifier_options"."organization_id", 'products.manage'::"text") AS "has_permission")));
+CREATE POLICY "modifier_options_select_sales_or_manager" ON "public"."modifier_options" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("modifier_options"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("modifier_options"."organization_id", 'products.manage'::"text") AS "has_permission")));
 
 --
 -- Name: modifier_options modifier_options_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "modifier_options_update_authorized" ON "public"."modifier_options" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("modifier_options"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("modifier_options"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "modifier_options_update_authorized" ON "public"."modifier_options" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("modifier_options"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("modifier_options"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: offline_sync_events; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35282,7 +37690,7 @@ ALTER TABLE "public"."offline_sync_events" ENABLE ROW LEVEL SECURITY;
 -- Name: offline_sync_events offline_sync_events_select_device_managers; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "offline_sync_events_select_device_managers" ON "public"."offline_sync_events" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("offline_sync_events"."organization_id", 'devices.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("offline_sync_events"."organization_id", "offline_sync_events"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "offline_sync_events_select_device_managers" ON "public"."offline_sync_events" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("offline_sync_events"."organization_id", 'devices.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("offline_sync_events"."organization_id", "offline_sync_events"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: open_tickets; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35294,7 +37702,7 @@ ALTER TABLE "public"."open_tickets" ENABLE ROW LEVEL SECURITY;
 -- Name: open_tickets open_tickets_select_active_shift_owner; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "open_tickets_select_active_shift_owner" ON "public"."open_tickets" FOR SELECT TO "authenticated" USING (( SELECT "private"."has_active_pos_shift_access"("open_tickets"."organization_id", "open_tickets"."store_id", "open_tickets"."register_id") AS "has_active_pos_shift_access"));
+CREATE POLICY "open_tickets_select_active_shift_owner" ON "public"."open_tickets" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."has_active_pos_shift_access"("open_tickets"."organization_id", "open_tickets"."store_id", "open_tickets"."register_id") AS "has_active_pos_shift_access"));
 
 --
 -- Name: organization_export_sessions; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35312,7 +37720,7 @@ ALTER TABLE "public"."organization_features" ENABLE ROW LEVEL SECURITY;
 -- Name: organization_features organization_features_select_member; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "organization_features_select_member" ON "public"."organization_features" FOR SELECT TO "authenticated" USING (( SELECT "private"."is_organization_member"("organization_features"."organization_id") AS "is_organization_member"));
+CREATE POLICY "organization_features_select_member" ON "public"."organization_features" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."is_organization_member"("organization_features"."organization_id") AS "is_organization_member"));
 
 --
 -- Name: organization_rate_limit_windows; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35336,19 +37744,19 @@ ALTER TABLE "public"."organizations" ENABLE ROW LEVEL SECURITY;
 -- Name: organizations organizations_insert_authenticated; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "organizations_insert_authenticated" ON "public"."organizations" FOR INSERT TO "authenticated" WITH CHECK (("created_by" = ( SELECT "auth"."uid"() AS "uid")));
+CREATE POLICY "organizations_insert_authenticated" ON "public"."organizations" FOR INSERT TO "tindio_authenticated" WITH CHECK (("created_by" = ( SELECT "public"."current_profile_id"() AS "uid")));
 
 --
 -- Name: organizations organizations_select_member; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "organizations_select_member" ON "public"."organizations" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_organization_membership"("organizations"."id") AS "has_organization_membership") OR ("created_by" = ( SELECT "auth"."uid"() AS "uid"))));
+CREATE POLICY "organizations_select_member" ON "public"."organizations" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_organization_membership"("organizations"."id") AS "has_organization_membership") OR ("created_by" = ( SELECT "public"."current_profile_id"() AS "uid"))));
 
 --
 -- Name: organizations organizations_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "organizations_update_authorized" ON "public"."organizations" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("organizations"."id", 'organization.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("organizations"."id", 'organization.manage'::"text") AS "has_permission"));
+CREATE POLICY "organizations_update_authorized" ON "public"."organizations" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("organizations"."id", 'organization.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("organizations"."id", 'organization.manage'::"text") AS "has_permission"));
 
 --
 -- Name: payment_methods; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35360,19 +37768,19 @@ ALTER TABLE "public"."payment_methods" ENABLE ROW LEVEL SECURITY;
 -- Name: payment_methods payment_methods_insert_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "payment_methods_insert_settings_manager" ON "public"."payment_methods" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "private"."has_permission"("payment_methods"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "payment_methods_insert_settings_manager" ON "public"."payment_methods" FOR INSERT TO "tindio_authenticated" WITH CHECK (( SELECT "private"."has_permission"("payment_methods"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: payment_methods payment_methods_select_member; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "payment_methods_select_member" ON "public"."payment_methods" FOR SELECT TO "authenticated" USING (( SELECT "private"."is_organization_member"("payment_methods"."organization_id") AS "is_organization_member"));
+CREATE POLICY "payment_methods_select_member" ON "public"."payment_methods" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."is_organization_member"("payment_methods"."organization_id") AS "is_organization_member"));
 
 --
 -- Name: payment_methods payment_methods_update_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "payment_methods_update_settings_manager" ON "public"."payment_methods" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("payment_methods"."organization_id", 'settings.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("payment_methods"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "payment_methods_update_settings_manager" ON "public"."payment_methods" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("payment_methods"."organization_id", 'settings.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("payment_methods"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: payments; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35384,7 +37792,7 @@ ALTER TABLE "public"."payments" ENABLE ROW LEVEL SECURITY;
 -- Name: payments payments_select_receipts_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "payments_select_receipts_authorized" ON "public"."payments" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("payments"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_sale_read_scope"("payments"."organization_id", "payments"."sale_id") AS "has_sale_read_scope")));
+CREATE POLICY "payments_select_receipts_authorized" ON "public"."payments" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("payments"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_sale_read_scope"("payments"."organization_id", "payments"."sale_id") AS "has_sale_read_scope")));
 
 --
 -- Name: permissions; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35396,7 +37804,31 @@ ALTER TABLE "public"."permissions" ENABLE ROW LEVEL SECURITY;
 -- Name: permissions permissions_select_authenticated; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "permissions_select_authenticated" ON "public"."permissions" FOR SELECT TO "authenticated" USING (true);
+CREATE POLICY "permissions_select_authenticated" ON "public"."permissions" FOR SELECT TO "tindio_authenticated" USING (true);
+
+--
+-- Name: pos_device_sequence_receipts; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."pos_device_sequence_receipts" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: pos_device_sync_checkpoints; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."pos_device_sync_checkpoints" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: pos_device_sync_telemetry; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."pos_device_sync_telemetry" ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: pos_device_sync_telemetry pos_device_sync_telemetry_manager_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "pos_device_sync_telemetry_manager_select" ON "public"."pos_device_sync_telemetry" FOR SELECT TO "tindio_authenticated" USING ((("private"."current_employee_id"("organization_id") IS NOT NULL) AND "private"."has_permission"("organization_id", 'devices.manage'::"text")));
 
 --
 -- Name: pos_devices; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35408,7 +37840,7 @@ ALTER TABLE "public"."pos_devices" ENABLE ROW LEVEL SECURITY;
 -- Name: pos_devices pos_devices_select_managers; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "pos_devices_select_managers" ON "public"."pos_devices" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("pos_devices"."organization_id", 'devices.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("pos_devices"."organization_id", "pos_devices"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "pos_devices_select_managers" ON "public"."pos_devices" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("pos_devices"."organization_id", 'devices.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("pos_devices"."organization_id", "pos_devices"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: pos_favorite_tiles; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35420,40 +37852,46 @@ ALTER TABLE "public"."pos_favorite_tiles" ENABLE ROW LEVEL SECURITY;
 -- Name: pos_favorite_tiles pos_favorite_tiles_delete_catalog_users; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "pos_favorite_tiles_delete_catalog_users" ON "public"."pos_favorite_tiles" FOR DELETE TO "authenticated" USING ((( SELECT "private"."has_permission"("pos_favorite_tiles"."organization_id", 'products.manage'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
+CREATE POLICY "pos_favorite_tiles_delete_catalog_users" ON "public"."pos_favorite_tiles" FOR DELETE TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("pos_favorite_tiles"."organization_id", 'products.manage'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
    FROM ("public"."employees" "employee"
      JOIN "public"."employee_stores" "employee_store" ON ((("employee_store"."employee_id" = "employee"."id") AND ("employee_store"."organization_id" = "employee"."organization_id"))))
-  WHERE (("employee"."organization_id" = "pos_favorite_tiles"."organization_id") AND ("employee"."profile_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("employee"."status" = 'active'::"text") AND ("employee_store"."store_id" = "pos_favorite_tiles"."store_id"))))));
+  WHERE (("employee"."organization_id" = "pos_favorite_tiles"."organization_id") AND ("employee"."profile_id" = ( SELECT "public"."current_profile_id"() AS "uid")) AND ("employee"."status" = 'active'::"text") AND ("employee_store"."store_id" = "pos_favorite_tiles"."store_id"))))));
 
 --
 -- Name: pos_favorite_tiles pos_favorite_tiles_insert_catalog_users; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "pos_favorite_tiles_insert_catalog_users" ON "public"."pos_favorite_tiles" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "private"."has_permission"("pos_favorite_tiles"."organization_id", 'products.manage'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
+CREATE POLICY "pos_favorite_tiles_insert_catalog_users" ON "public"."pos_favorite_tiles" FOR INSERT TO "tindio_authenticated" WITH CHECK ((( SELECT "private"."has_permission"("pos_favorite_tiles"."organization_id", 'products.manage'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
    FROM ("public"."employees" "employee"
      JOIN "public"."employee_stores" "employee_store" ON ((("employee_store"."employee_id" = "employee"."id") AND ("employee_store"."organization_id" = "employee"."organization_id"))))
-  WHERE (("employee"."organization_id" = "pos_favorite_tiles"."organization_id") AND ("employee"."profile_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("employee"."status" = 'active'::"text") AND ("employee_store"."store_id" = "pos_favorite_tiles"."store_id"))))));
+  WHERE (("employee"."organization_id" = "pos_favorite_tiles"."organization_id") AND ("employee"."profile_id" = ( SELECT "public"."current_profile_id"() AS "uid")) AND ("employee"."status" = 'active'::"text") AND ("employee_store"."store_id" = "pos_favorite_tiles"."store_id"))))));
 
 --
 -- Name: pos_favorite_tiles pos_favorite_tiles_select_pos_users; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "pos_favorite_tiles_select_pos_users" ON "public"."pos_favorite_tiles" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("pos_favorite_tiles"."organization_id", 'sales.create'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
+CREATE POLICY "pos_favorite_tiles_select_pos_users" ON "public"."pos_favorite_tiles" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("pos_favorite_tiles"."organization_id", 'sales.create'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
    FROM ("public"."employees" "employee"
      JOIN "public"."employee_stores" "employee_store" ON ((("employee_store"."employee_id" = "employee"."id") AND ("employee_store"."organization_id" = "employee"."organization_id"))))
-  WHERE (("employee"."organization_id" = "pos_favorite_tiles"."organization_id") AND ("employee"."profile_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("employee"."status" = 'active'::"text") AND ("employee_store"."store_id" = "pos_favorite_tiles"."store_id"))))));
+  WHERE (("employee"."organization_id" = "pos_favorite_tiles"."organization_id") AND ("employee"."profile_id" = ( SELECT "public"."current_profile_id"() AS "uid")) AND ("employee"."status" = 'active'::"text") AND ("employee_store"."store_id" = "pos_favorite_tiles"."store_id"))))));
 
 --
 -- Name: pos_favorite_tiles pos_favorite_tiles_update_catalog_users; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "pos_favorite_tiles_update_catalog_users" ON "public"."pos_favorite_tiles" FOR UPDATE TO "authenticated" USING ((( SELECT "private"."has_permission"("pos_favorite_tiles"."organization_id", 'products.manage'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
+CREATE POLICY "pos_favorite_tiles_update_catalog_users" ON "public"."pos_favorite_tiles" FOR UPDATE TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("pos_favorite_tiles"."organization_id", 'products.manage'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
    FROM ("public"."employees" "employee"
      JOIN "public"."employee_stores" "employee_store" ON ((("employee_store"."employee_id" = "employee"."id") AND ("employee_store"."organization_id" = "employee"."organization_id"))))
-  WHERE (("employee"."organization_id" = "pos_favorite_tiles"."organization_id") AND ("employee"."profile_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("employee"."status" = 'active'::"text") AND ("employee_store"."store_id" = "pos_favorite_tiles"."store_id")))))) WITH CHECK ((( SELECT "private"."has_permission"("pos_favorite_tiles"."organization_id", 'products.manage'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
+  WHERE (("employee"."organization_id" = "pos_favorite_tiles"."organization_id") AND ("employee"."profile_id" = ( SELECT "public"."current_profile_id"() AS "uid")) AND ("employee"."status" = 'active'::"text") AND ("employee_store"."store_id" = "pos_favorite_tiles"."store_id")))))) WITH CHECK ((( SELECT "private"."has_permission"("pos_favorite_tiles"."organization_id", 'products.manage'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
    FROM ("public"."employees" "employee"
      JOIN "public"."employee_stores" "employee_store" ON ((("employee_store"."employee_id" = "employee"."id") AND ("employee_store"."organization_id" = "employee"."organization_id"))))
-  WHERE (("employee"."organization_id" = "pos_favorite_tiles"."organization_id") AND ("employee"."profile_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("employee"."status" = 'active'::"text") AND ("employee_store"."store_id" = "pos_favorite_tiles"."store_id"))))));
+  WHERE (("employee"."organization_id" = "pos_favorite_tiles"."organization_id") AND ("employee"."profile_id" = ( SELECT "public"."current_profile_id"() AS "uid")) AND ("employee"."status" = 'active'::"text") AND ("employee_store"."store_id" = "pos_favorite_tiles"."store_id"))))));
+
+--
+-- Name: pos_sync_changes; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE "public"."pos_sync_changes" ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: product_components; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35495,19 +37933,19 @@ ALTER TABLE "public"."product_modifier_groups" ENABLE ROW LEVEL SECURITY;
 -- Name: product_modifier_groups product_modifier_groups_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "product_modifier_groups_insert_authorized" ON "public"."product_modifier_groups" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "private"."has_permission"("product_modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "product_modifier_groups_insert_authorized" ON "public"."product_modifier_groups" FOR INSERT TO "tindio_authenticated" WITH CHECK (( SELECT "private"."has_permission"("product_modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: product_modifier_groups product_modifier_groups_select_sales_or_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "product_modifier_groups_select_sales_or_manager" ON "public"."product_modifier_groups" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("product_modifier_groups"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("product_modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission")));
+CREATE POLICY "product_modifier_groups_select_sales_or_manager" ON "public"."product_modifier_groups" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("product_modifier_groups"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("product_modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission")));
 
 --
 -- Name: product_modifier_groups product_modifier_groups_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "product_modifier_groups_update_authorized" ON "public"."product_modifier_groups" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("product_modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("product_modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "product_modifier_groups_update_authorized" ON "public"."product_modifier_groups" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("product_modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("product_modifier_groups"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: product_store_settings; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35519,19 +37957,19 @@ ALTER TABLE "public"."product_store_settings" ENABLE ROW LEVEL SECURITY;
 -- Name: product_store_settings product_store_settings_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "product_store_settings_insert_authorized" ON "public"."product_store_settings" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "private"."has_permission"("product_store_settings"."organization_id", 'products.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("product_store_settings"."organization_id", "product_store_settings"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "product_store_settings_insert_authorized" ON "public"."product_store_settings" FOR INSERT TO "tindio_authenticated" WITH CHECK ((( SELECT "private"."has_permission"("product_store_settings"."organization_id", 'products.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("product_store_settings"."organization_id", "product_store_settings"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: product_store_settings product_store_settings_select_authorized_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "product_store_settings_select_authorized_scope" ON "public"."product_store_settings" FOR SELECT TO "authenticated" USING ((( SELECT "private"."is_organization_member"("product_store_settings"."organization_id") AS "is_organization_member") AND ( SELECT "private"."has_store_read_scope"("product_store_settings"."organization_id", "product_store_settings"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "product_store_settings_select_authorized_scope" ON "public"."product_store_settings" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."is_organization_member"("product_store_settings"."organization_id") AS "is_organization_member") AND ( SELECT "private"."has_store_read_scope"("product_store_settings"."organization_id", "product_store_settings"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: product_store_settings product_store_settings_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "product_store_settings_update_authorized" ON "public"."product_store_settings" FOR UPDATE TO "authenticated" USING ((( SELECT "private"."has_permission"("product_store_settings"."organization_id", 'products.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("product_store_settings"."organization_id", "product_store_settings"."store_id") AS "has_store_read_scope"))) WITH CHECK ((( SELECT "private"."has_permission"("product_store_settings"."organization_id", 'products.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("product_store_settings"."organization_id", "product_store_settings"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "product_store_settings_update_authorized" ON "public"."product_store_settings" FOR UPDATE TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("product_store_settings"."organization_id", 'products.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("product_store_settings"."organization_id", "product_store_settings"."store_id") AS "has_store_read_scope"))) WITH CHECK ((( SELECT "private"."has_permission"("product_store_settings"."organization_id", 'products.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("product_store_settings"."organization_id", "product_store_settings"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: product_units; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35573,13 +38011,13 @@ ALTER TABLE "public"."product_variants" ENABLE ROW LEVEL SECURITY;
 -- Name: product_variants product_variants_select_member; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "product_variants_select_member" ON "public"."product_variants" FOR SELECT TO "authenticated" USING (( SELECT "private"."is_organization_member"("product_variants"."organization_id") AS "is_organization_member"));
+CREATE POLICY "product_variants_select_member" ON "public"."product_variants" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."is_organization_member"("product_variants"."organization_id") AS "is_organization_member"));
 
 --
 -- Name: product_variants product_variants_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "product_variants_update_authorized" ON "public"."product_variants" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("product_variants"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("product_variants"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "product_variants_update_authorized" ON "public"."product_variants" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("product_variants"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("product_variants"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: production_run_components; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35591,7 +38029,7 @@ ALTER TABLE "public"."production_run_components" ENABLE ROW LEVEL SECURITY;
 -- Name: production_run_components production_run_components_select_authorized_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "production_run_components_select_authorized_scope" ON "public"."production_run_components" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("production_run_components"."organization_id", 'inventory.manage'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
+CREATE POLICY "production_run_components_select_authorized_scope" ON "public"."production_run_components" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("production_run_components"."organization_id", 'inventory.manage'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
    FROM "public"."production_runs" "production_run"
   WHERE (("production_run"."id" = "production_run_components"."production_run_id") AND ("production_run"."organization_id" = "production_run_components"."organization_id") AND ( SELECT "private"."has_store_read_scope"("production_run"."organization_id", "production_run"."store_id") AS "has_store_read_scope"))))));
 
@@ -35605,7 +38043,7 @@ ALTER TABLE "public"."production_runs" ENABLE ROW LEVEL SECURITY;
 -- Name: production_runs production_runs_select_authorized_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "production_runs_select_authorized_scope" ON "public"."production_runs" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("production_runs"."organization_id", 'inventory.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("production_runs"."organization_id", "production_runs"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "production_runs_select_authorized_scope" ON "public"."production_runs" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("production_runs"."organization_id", 'inventory.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("production_runs"."organization_id", "production_runs"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: products; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35617,13 +38055,13 @@ ALTER TABLE "public"."products" ENABLE ROW LEVEL SECURITY;
 -- Name: products products_select_member; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "products_select_member" ON "public"."products" FOR SELECT TO "authenticated" USING (( SELECT "private"."is_organization_member"("products"."organization_id") AS "is_organization_member"));
+CREATE POLICY "products_select_member" ON "public"."products" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."is_organization_member"("products"."organization_id") AS "is_organization_member"));
 
 --
 -- Name: products products_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "products_update_authorized" ON "public"."products" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("products"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("products"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "products_update_authorized" ON "public"."products" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("products"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("products"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: profiles; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35635,13 +38073,13 @@ ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
 -- Name: profiles profiles_select_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "profiles_select_authorized" ON "public"."profiles" FOR SELECT TO "authenticated" USING (( SELECT "private"."can_view_employee_profile"("profiles"."id") AS "can_view_employee_profile"));
+CREATE POLICY "profiles_select_authorized" ON "public"."profiles" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."can_view_employee_profile"("profiles"."id") AS "can_view_employee_profile"));
 
 --
 -- Name: profiles profiles_update_own; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "profiles_update_own" ON "public"."profiles" FOR UPDATE TO "authenticated" USING (("id" = ( SELECT "auth"."uid"() AS "uid"))) WITH CHECK (("id" = ( SELECT "auth"."uid"() AS "uid")));
+CREATE POLICY "profiles_update_own" ON "public"."profiles" FOR UPDATE TO "tindio_authenticated" USING (("id" = ( SELECT "public"."current_profile_id"() AS "uid"))) WITH CHECK (("id" = ( SELECT "public"."current_profile_id"() AS "uid")));
 
 --
 -- Name: purchase_order_lines; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35653,7 +38091,7 @@ ALTER TABLE "public"."purchase_order_lines" ENABLE ROW LEVEL SECURITY;
 -- Name: purchase_order_lines purchase_order_lines_select_purchasing_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "purchase_order_lines_select_purchasing_scope" ON "public"."purchase_order_lines" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("purchase_order_lines"."organization_id", ARRAY['purchasing.view'::"text", 'purchasing.po.create'::"text", 'purchasing.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_purchase_order_read_scope"("purchase_order_lines"."organization_id", "purchase_order_lines"."purchase_order_id") AS "has_purchase_order_read_scope")));
+CREATE POLICY "purchase_order_lines_select_purchasing_scope" ON "public"."purchase_order_lines" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("purchase_order_lines"."organization_id", ARRAY['purchasing.view'::"text", 'purchasing.po.create'::"text", 'purchasing.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_purchase_order_read_scope"("purchase_order_lines"."organization_id", "purchase_order_lines"."purchase_order_id") AS "has_purchase_order_read_scope")));
 
 --
 -- Name: purchase_orders; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35665,7 +38103,7 @@ ALTER TABLE "public"."purchase_orders" ENABLE ROW LEVEL SECURITY;
 -- Name: purchase_orders purchase_orders_select_purchasing_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "purchase_orders_select_purchasing_scope" ON "public"."purchase_orders" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("purchase_orders"."organization_id", ARRAY['purchasing.view'::"text", 'purchasing.po.create'::"text", 'purchasing.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_store_read_scope"("purchase_orders"."organization_id", "purchase_orders"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "purchase_orders_select_purchasing_scope" ON "public"."purchase_orders" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("purchase_orders"."organization_id", ARRAY['purchasing.view'::"text", 'purchasing.po.create'::"text", 'purchasing.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_store_read_scope"("purchase_orders"."organization_id", "purchase_orders"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: POLICY "purchase_orders_select_purchasing_scope" ON "purchase_orders"; Type: COMMENT; Schema: public; Owner: postgres
@@ -35683,7 +38121,7 @@ ALTER TABLE "public"."receipt_delivery_requests" ENABLE ROW LEVEL SECURITY;
 -- Name: receipt_delivery_requests receipt_delivery_requests_select_reprint_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "receipt_delivery_requests_select_reprint_authorized" ON "public"."receipt_delivery_requests" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("receipt_delivery_requests"."organization_id", 'receipts.reprint'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
+CREATE POLICY "receipt_delivery_requests_select_reprint_authorized" ON "public"."receipt_delivery_requests" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("receipt_delivery_requests"."organization_id", 'receipts.reprint'::"text") AS "has_permission") AND (EXISTS ( SELECT 1
    FROM "public"."receipts" "receipt"
   WHERE (("receipt"."id" = "receipt_delivery_requests"."receipt_id") AND ("receipt"."organization_id" = "receipt_delivery_requests"."organization_id") AND ( SELECT "private"."has_sale_read_scope"("receipt"."organization_id", "receipt"."sale_id") AS "has_sale_read_scope"))))));
 
@@ -35697,7 +38135,7 @@ ALTER TABLE "public"."receipt_settings" ENABLE ROW LEVEL SECURITY;
 -- Name: receipt_settings receipt_settings_select_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "receipt_settings_select_settings_manager" ON "public"."receipt_settings" FOR SELECT TO "authenticated" USING (( SELECT "private"."has_permission"("receipt_settings"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "receipt_settings_select_settings_manager" ON "public"."receipt_settings" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("receipt_settings"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: receipts; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35709,7 +38147,7 @@ ALTER TABLE "public"."receipts" ENABLE ROW LEVEL SECURITY;
 -- Name: receipts receipts_select_receipts_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "receipts_select_receipts_authorized" ON "public"."receipts" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("receipts"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_sale_read_scope"("receipts"."organization_id", "receipts"."sale_id") AS "has_sale_read_scope")));
+CREATE POLICY "receipts_select_receipts_authorized" ON "public"."receipts" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("receipts"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_sale_read_scope"("receipts"."organization_id", "receipts"."sale_id") AS "has_sale_read_scope")));
 
 --
 -- Name: refund_items; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35721,7 +38159,7 @@ ALTER TABLE "public"."refund_items" ENABLE ROW LEVEL SECURITY;
 -- Name: refund_items refund_items_select_receipts_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "refund_items_select_receipts_authorized" ON "public"."refund_items" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("refund_items"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_refund_read_scope"("refund_items"."organization_id", "refund_items"."refund_id") AS "has_refund_read_scope")));
+CREATE POLICY "refund_items_select_receipts_authorized" ON "public"."refund_items" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("refund_items"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_refund_read_scope"("refund_items"."organization_id", "refund_items"."refund_id") AS "has_refund_read_scope")));
 
 --
 -- Name: refund_payments; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35733,7 +38171,7 @@ ALTER TABLE "public"."refund_payments" ENABLE ROW LEVEL SECURITY;
 -- Name: refund_payments refund_payments_select_receipts_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "refund_payments_select_receipts_authorized" ON "public"."refund_payments" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("refund_payments"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_refund_read_scope"("refund_payments"."organization_id", "refund_payments"."refund_id") AS "has_refund_read_scope")));
+CREATE POLICY "refund_payments_select_receipts_authorized" ON "public"."refund_payments" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("refund_payments"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_refund_read_scope"("refund_payments"."organization_id", "refund_payments"."refund_id") AS "has_refund_read_scope")));
 
 --
 -- Name: refund_requests; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35751,7 +38189,7 @@ ALTER TABLE "public"."refunds" ENABLE ROW LEVEL SECURITY;
 -- Name: refunds refunds_select_receipts_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "refunds_select_receipts_authorized" ON "public"."refunds" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("refunds"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("refunds"."organization_id", "refunds"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "refunds_select_receipts_authorized" ON "public"."refunds" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("refunds"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("refunds"."organization_id", "refunds"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: registers; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35763,19 +38201,19 @@ ALTER TABLE "public"."registers" ENABLE ROW LEVEL SECURITY;
 -- Name: registers registers_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "registers_insert_authorized" ON "public"."registers" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "private"."is_organization_creator"("registers"."organization_id") AS "is_organization_creator") OR ( SELECT "private"."has_permission"("registers"."organization_id", 'registers.manage'::"text") AS "has_permission")));
+CREATE POLICY "registers_insert_authorized" ON "public"."registers" FOR INSERT TO "tindio_authenticated" WITH CHECK ((( SELECT "private"."is_organization_creator"("registers"."organization_id") AS "is_organization_creator") OR ( SELECT "private"."has_permission"("registers"."organization_id", 'registers.manage'::"text") AS "has_permission")));
 
 --
 -- Name: registers registers_select_authorized_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "registers_select_authorized_scope" ON "public"."registers" FOR SELECT TO "authenticated" USING ((( SELECT "private"."is_organization_creator"("registers"."organization_id") AS "is_organization_creator") OR ( SELECT "private"."has_store_read_scope"("registers"."organization_id", "registers"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "registers_select_authorized_scope" ON "public"."registers" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."is_organization_creator"("registers"."organization_id") AS "is_organization_creator") OR ( SELECT "private"."has_store_read_scope"("registers"."organization_id", "registers"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: registers registers_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "registers_update_authorized" ON "public"."registers" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("registers"."organization_id", 'registers.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("registers"."organization_id", 'registers.manage'::"text") AS "has_permission"));
+CREATE POLICY "registers_update_authorized" ON "public"."registers" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("registers"."organization_id", 'registers.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("registers"."organization_id", 'registers.manage'::"text") AS "has_permission"));
 
 --
 -- Name: role_permissions; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35787,7 +38225,7 @@ ALTER TABLE "public"."role_permissions" ENABLE ROW LEVEL SECURITY;
 -- Name: role_permissions role_permissions_delete_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "role_permissions_delete_authorized" ON "public"."role_permissions" FOR DELETE TO "authenticated" USING ((( SELECT "private"."has_permission"("role_permissions"."organization_id", 'roles.manage'::"text") AS "has_permission") AND ( SELECT "private"."can_grant_role"("role_permissions"."organization_id", "role_permissions"."role_id") AS "can_grant_role") AND (EXISTS ( SELECT 1
+CREATE POLICY "role_permissions_delete_authorized" ON "public"."role_permissions" FOR DELETE TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("role_permissions"."organization_id", 'roles.manage'::"text") AS "has_permission") AND ( SELECT "private"."can_grant_role"("role_permissions"."organization_id", "role_permissions"."role_id") AS "can_grant_role") AND (EXISTS ( SELECT 1
    FROM "public"."roles" "role"
   WHERE (("role"."id" = "role_permissions"."role_id") AND ("role"."organization_id" = "role_permissions"."organization_id") AND (NOT "role"."is_system"))))));
 
@@ -35795,7 +38233,7 @@ CREATE POLICY "role_permissions_delete_authorized" ON "public"."role_permissions
 -- Name: role_permissions role_permissions_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "role_permissions_insert_authorized" ON "public"."role_permissions" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "private"."is_organization_creator"("role_permissions"."organization_id") AS "is_organization_creator") OR (( SELECT "private"."has_permission"("role_permissions"."organization_id", 'roles.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_permission"("role_permissions"."organization_id", "role_permissions"."permission_code") AS "has_permission") AND (EXISTS ( SELECT 1
+CREATE POLICY "role_permissions_insert_authorized" ON "public"."role_permissions" FOR INSERT TO "tindio_authenticated" WITH CHECK ((( SELECT "private"."is_organization_creator"("role_permissions"."organization_id") AS "is_organization_creator") OR (( SELECT "private"."has_permission"("role_permissions"."organization_id", 'roles.manage'::"text") AS "has_permission") AND ( SELECT "private"."has_permission"("role_permissions"."organization_id", "role_permissions"."permission_code") AS "has_permission") AND (EXISTS ( SELECT 1
    FROM "public"."roles" "role"
   WHERE (("role"."id" = "role_permissions"."role_id") AND ("role"."organization_id" = "role_permissions"."organization_id") AND (NOT "role"."is_system")))))));
 
@@ -35803,7 +38241,7 @@ CREATE POLICY "role_permissions_insert_authorized" ON "public"."role_permissions
 -- Name: role_permissions role_permissions_select_member; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "role_permissions_select_member" ON "public"."role_permissions" FOR SELECT TO "authenticated" USING (( SELECT "private"."is_organization_member"("role_permissions"."organization_id") AS "is_organization_member"));
+CREATE POLICY "role_permissions_select_member" ON "public"."role_permissions" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."is_organization_member"("role_permissions"."organization_id") AS "is_organization_member"));
 
 --
 -- Name: roles; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35815,19 +38253,19 @@ ALTER TABLE "public"."roles" ENABLE ROW LEVEL SECURITY;
 -- Name: roles roles_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "roles_insert_authorized" ON "public"."roles" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "private"."is_organization_creator"("roles"."organization_id") AS "is_organization_creator") OR ( SELECT "private"."has_permission"("roles"."organization_id", 'roles.manage'::"text") AS "has_permission")));
+CREATE POLICY "roles_insert_authorized" ON "public"."roles" FOR INSERT TO "tindio_authenticated" WITH CHECK ((( SELECT "private"."is_organization_creator"("roles"."organization_id") AS "is_organization_creator") OR ( SELECT "private"."has_permission"("roles"."organization_id", 'roles.manage'::"text") AS "has_permission")));
 
 --
 -- Name: roles roles_select_member; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "roles_select_member" ON "public"."roles" FOR SELECT TO "authenticated" USING ((( SELECT "private"."is_organization_member"("roles"."organization_id") AS "is_organization_member") OR ( SELECT "private"."is_organization_creator"("roles"."organization_id") AS "is_organization_creator")));
+CREATE POLICY "roles_select_member" ON "public"."roles" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."is_organization_member"("roles"."organization_id") AS "is_organization_member") OR ( SELECT "private"."is_organization_creator"("roles"."organization_id") AS "is_organization_creator")));
 
 --
 -- Name: roles roles_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "roles_update_authorized" ON "public"."roles" FOR UPDATE TO "authenticated" USING (((NOT "is_system") AND ( SELECT "private"."has_permission"("roles"."organization_id", 'roles.manage'::"text") AS "has_permission"))) WITH CHECK (((NOT "is_system") AND ( SELECT "private"."has_permission"("roles"."organization_id", 'roles.manage'::"text") AS "has_permission")));
+CREATE POLICY "roles_update_authorized" ON "public"."roles" FOR UPDATE TO "tindio_authenticated" USING (((NOT "is_system") AND ( SELECT "private"."has_permission"("roles"."organization_id", 'roles.manage'::"text") AS "has_permission"))) WITH CHECK (((NOT "is_system") AND ( SELECT "private"."has_permission"("roles"."organization_id", 'roles.manage'::"text") AS "has_permission")));
 
 --
 -- Name: sale_exchanges; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35839,7 +38277,7 @@ ALTER TABLE "public"."sale_exchanges" ENABLE ROW LEVEL SECURITY;
 -- Name: sale_exchanges sale_exchanges_select_receipts_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "sale_exchanges_select_receipts_authorized" ON "public"."sale_exchanges" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("sale_exchanges"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_refund_read_scope"("sale_exchanges"."organization_id", "sale_exchanges"."refund_id") AS "has_refund_read_scope")));
+CREATE POLICY "sale_exchanges_select_receipts_authorized" ON "public"."sale_exchanges" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("sale_exchanges"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_refund_read_scope"("sale_exchanges"."organization_id", "sale_exchanges"."refund_id") AS "has_refund_read_scope")));
 
 --
 -- Name: sale_items; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35851,7 +38289,7 @@ ALTER TABLE "public"."sale_items" ENABLE ROW LEVEL SECURITY;
 -- Name: sale_items sale_items_select_receipts_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "sale_items_select_receipts_authorized" ON "public"."sale_items" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("sale_items"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_sale_read_scope"("sale_items"."organization_id", "sale_items"."sale_id") AS "has_sale_read_scope")));
+CREATE POLICY "sale_items_select_receipts_authorized" ON "public"."sale_items" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("sale_items"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_sale_read_scope"("sale_items"."organization_id", "sale_items"."sale_id") AS "has_sale_read_scope")));
 
 --
 -- Name: sales; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35863,7 +38301,7 @@ ALTER TABLE "public"."sales" ENABLE ROW LEVEL SECURITY;
 -- Name: sales sales_select_receipts_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "sales_select_receipts_authorized" ON "public"."sales" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("sales"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("sales"."organization_id", "sales"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "sales_select_receipts_authorized" ON "public"."sales" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("sales"."organization_id", 'receipts.view'::"text") AS "has_permission") AND ( SELECT "private"."has_store_read_scope"("sales"."organization_id", "sales"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: shifts; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35875,7 +38313,7 @@ ALTER TABLE "public"."shifts" ENABLE ROW LEVEL SECURITY;
 -- Name: shifts shifts_select_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "shifts_select_authorized" ON "public"."shifts" FOR SELECT TO "authenticated" USING (( SELECT "private"."has_shift_access"("shifts"."organization_id", "shifts"."store_id") AS "has_shift_access"));
+CREATE POLICY "shifts_select_authorized" ON "public"."shifts" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."has_shift_access"("shifts"."organization_id", "shifts"."store_id") AS "has_shift_access"));
 
 --
 -- Name: smart_menu_categories; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35887,25 +38325,25 @@ ALTER TABLE "public"."smart_menu_categories" ENABLE ROW LEVEL SECURITY;
 -- Name: smart_menu_categories smart_menu_categories_delete_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "smart_menu_categories_delete_settings_manager" ON "public"."smart_menu_categories" FOR DELETE TO "authenticated" USING (( SELECT "private"."has_permission"("smart_menu_categories"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "smart_menu_categories_delete_settings_manager" ON "public"."smart_menu_categories" FOR DELETE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("smart_menu_categories"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: smart_menu_categories smart_menu_categories_insert_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "smart_menu_categories_insert_settings_manager" ON "public"."smart_menu_categories" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "private"."has_permission"("smart_menu_categories"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "smart_menu_categories_insert_settings_manager" ON "public"."smart_menu_categories" FOR INSERT TO "tindio_authenticated" WITH CHECK (( SELECT "private"."has_permission"("smart_menu_categories"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: smart_menu_categories smart_menu_categories_select_member; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "smart_menu_categories_select_member" ON "public"."smart_menu_categories" FOR SELECT TO "authenticated" USING (( SELECT "private"."is_organization_member"("smart_menu_categories"."organization_id") AS "is_organization_member"));
+CREATE POLICY "smart_menu_categories_select_member" ON "public"."smart_menu_categories" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."is_organization_member"("smart_menu_categories"."organization_id") AS "is_organization_member"));
 
 --
 -- Name: smart_menu_categories smart_menu_categories_update_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "smart_menu_categories_update_settings_manager" ON "public"."smart_menu_categories" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("smart_menu_categories"."organization_id", 'settings.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("smart_menu_categories"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "smart_menu_categories_update_settings_manager" ON "public"."smart_menu_categories" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("smart_menu_categories"."organization_id", 'settings.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("smart_menu_categories"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: smart_menu_products; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35917,25 +38355,25 @@ ALTER TABLE "public"."smart_menu_products" ENABLE ROW LEVEL SECURITY;
 -- Name: smart_menu_products smart_menu_products_delete_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "smart_menu_products_delete_settings_manager" ON "public"."smart_menu_products" FOR DELETE TO "authenticated" USING (( SELECT "private"."has_permission"("smart_menu_products"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "smart_menu_products_delete_settings_manager" ON "public"."smart_menu_products" FOR DELETE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("smart_menu_products"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: smart_menu_products smart_menu_products_insert_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "smart_menu_products_insert_settings_manager" ON "public"."smart_menu_products" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "private"."has_permission"("smart_menu_products"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "smart_menu_products_insert_settings_manager" ON "public"."smart_menu_products" FOR INSERT TO "tindio_authenticated" WITH CHECK (( SELECT "private"."has_permission"("smart_menu_products"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: smart_menu_products smart_menu_products_select_member; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "smart_menu_products_select_member" ON "public"."smart_menu_products" FOR SELECT TO "authenticated" USING (( SELECT "private"."is_organization_member"("smart_menu_products"."organization_id") AS "is_organization_member"));
+CREATE POLICY "smart_menu_products_select_member" ON "public"."smart_menu_products" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."is_organization_member"("smart_menu_products"."organization_id") AS "is_organization_member"));
 
 --
 -- Name: smart_menu_products smart_menu_products_update_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "smart_menu_products_update_settings_manager" ON "public"."smart_menu_products" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("smart_menu_products"."organization_id", 'settings.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("smart_menu_products"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "smart_menu_products_update_settings_manager" ON "public"."smart_menu_products" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("smart_menu_products"."organization_id", 'settings.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("smart_menu_products"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: smart_menus; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35947,25 +38385,25 @@ ALTER TABLE "public"."smart_menus" ENABLE ROW LEVEL SECURITY;
 -- Name: smart_menus smart_menus_delete_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "smart_menus_delete_settings_manager" ON "public"."smart_menus" FOR DELETE TO "authenticated" USING (( SELECT "private"."has_permission"("smart_menus"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "smart_menus_delete_settings_manager" ON "public"."smart_menus" FOR DELETE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("smart_menus"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: smart_menus smart_menus_insert_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "smart_menus_insert_settings_manager" ON "public"."smart_menus" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "private"."has_permission"("smart_menus"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "smart_menus_insert_settings_manager" ON "public"."smart_menus" FOR INSERT TO "tindio_authenticated" WITH CHECK (( SELECT "private"."has_permission"("smart_menus"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: smart_menus smart_menus_select_member; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "smart_menus_select_member" ON "public"."smart_menus" FOR SELECT TO "authenticated" USING (( SELECT "private"."is_organization_member"("smart_menus"."organization_id") AS "is_organization_member"));
+CREATE POLICY "smart_menus_select_member" ON "public"."smart_menus" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."is_organization_member"("smart_menus"."organization_id") AS "is_organization_member"));
 
 --
 -- Name: smart_menus smart_menus_update_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "smart_menus_update_settings_manager" ON "public"."smart_menus" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("smart_menus"."organization_id", 'settings.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("smart_menus"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "smart_menus_update_settings_manager" ON "public"."smart_menus" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("smart_menus"."organization_id", 'settings.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("smart_menus"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: stock_request_discrepancies; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35977,7 +38415,7 @@ ALTER TABLE "public"."stock_request_discrepancies" ENABLE ROW LEVEL SECURITY;
 -- Name: stock_request_discrepancies stock_request_discrepancies_select_inventory_transfer_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "stock_request_discrepancies_select_inventory_transfer_scope" ON "public"."stock_request_discrepancies" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("stock_request_discrepancies"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_stock_request_read_scope"("stock_request_discrepancies"."organization_id", "stock_request_discrepancies"."stock_request_id") AS "has_stock_request_read_scope")));
+CREATE POLICY "stock_request_discrepancies_select_inventory_transfer_scope" ON "public"."stock_request_discrepancies" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("stock_request_discrepancies"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_stock_request_read_scope"("stock_request_discrepancies"."organization_id", "stock_request_discrepancies"."stock_request_id") AS "has_stock_request_read_scope")));
 
 --
 -- Name: stock_request_lines; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -35989,7 +38427,7 @@ ALTER TABLE "public"."stock_request_lines" ENABLE ROW LEVEL SECURITY;
 -- Name: stock_request_lines stock_request_lines_select_inventory_transfer_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "stock_request_lines_select_inventory_transfer_scope" ON "public"."stock_request_lines" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("stock_request_lines"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_stock_request_read_scope"("stock_request_lines"."organization_id", "stock_request_lines"."stock_request_id") AS "has_stock_request_read_scope")));
+CREATE POLICY "stock_request_lines_select_inventory_transfer_scope" ON "public"."stock_request_lines" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("stock_request_lines"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_stock_request_read_scope"("stock_request_lines"."organization_id", "stock_request_lines"."stock_request_id") AS "has_stock_request_read_scope")));
 
 --
 -- Name: stock_requests; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -36001,7 +38439,7 @@ ALTER TABLE "public"."stock_requests" ENABLE ROW LEVEL SECURITY;
 -- Name: stock_requests stock_requests_select_inventory_transfer_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "stock_requests_select_inventory_transfer_scope" ON "public"."stock_requests" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("stock_requests"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_stock_request_read_scope"("stock_requests"."organization_id", "stock_requests"."id") AS "has_stock_request_read_scope")));
+CREATE POLICY "stock_requests_select_inventory_transfer_scope" ON "public"."stock_requests" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("stock_requests"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_stock_request_read_scope"("stock_requests"."organization_id", "stock_requests"."id") AS "has_stock_request_read_scope")));
 
 --
 -- Name: stock_transfer_lines; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -36013,7 +38451,7 @@ ALTER TABLE "public"."stock_transfer_lines" ENABLE ROW LEVEL SECURITY;
 -- Name: stock_transfer_lines stock_transfer_lines_select_inventory_transfer_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "stock_transfer_lines_select_inventory_transfer_scope" ON "public"."stock_transfer_lines" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("stock_transfer_lines"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_stock_transfer_read_scope"("stock_transfer_lines"."organization_id", "stock_transfer_lines"."stock_transfer_id") AS "has_stock_transfer_read_scope")));
+CREATE POLICY "stock_transfer_lines_select_inventory_transfer_scope" ON "public"."stock_transfer_lines" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("stock_transfer_lines"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_stock_transfer_read_scope"("stock_transfer_lines"."organization_id", "stock_transfer_lines"."stock_transfer_id") AS "has_stock_transfer_read_scope")));
 
 --
 -- Name: stock_transfer_receipt_lines; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -36025,7 +38463,7 @@ ALTER TABLE "public"."stock_transfer_receipt_lines" ENABLE ROW LEVEL SECURITY;
 -- Name: stock_transfer_receipt_lines stock_transfer_receipt_lines_select_inventory_transfer_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "stock_transfer_receipt_lines_select_inventory_transfer_scope" ON "public"."stock_transfer_receipt_lines" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("stock_transfer_receipt_lines"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text"]) AS "has_any_inventory_capability") AND (EXISTS ( SELECT 1
+CREATE POLICY "stock_transfer_receipt_lines_select_inventory_transfer_scope" ON "public"."stock_transfer_receipt_lines" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("stock_transfer_receipt_lines"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text"]) AS "has_any_inventory_capability") AND (EXISTS ( SELECT 1
    FROM "public"."stock_transfer_receipts" "receipt"
   WHERE (("receipt"."id" = "stock_transfer_receipt_lines"."stock_transfer_receipt_id") AND ("receipt"."organization_id" = "stock_transfer_receipt_lines"."organization_id") AND ( SELECT "private"."has_stock_transfer_read_scope"("receipt"."organization_id", "receipt"."stock_transfer_id") AS "has_stock_transfer_read_scope"))))));
 
@@ -36039,7 +38477,7 @@ ALTER TABLE "public"."stock_transfer_receipts" ENABLE ROW LEVEL SECURITY;
 -- Name: stock_transfer_receipts stock_transfer_receipts_select_inventory_transfer_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "stock_transfer_receipts_select_inventory_transfer_scope" ON "public"."stock_transfer_receipts" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("stock_transfer_receipts"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_stock_transfer_read_scope"("stock_transfer_receipts"."organization_id", "stock_transfer_receipts"."stock_transfer_id") AS "has_stock_transfer_read_scope")));
+CREATE POLICY "stock_transfer_receipts_select_inventory_transfer_scope" ON "public"."stock_transfer_receipts" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("stock_transfer_receipts"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_stock_transfer_read_scope"("stock_transfer_receipts"."organization_id", "stock_transfer_receipts"."stock_transfer_id") AS "has_stock_transfer_read_scope")));
 
 --
 -- Name: stock_transfers; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -36051,7 +38489,7 @@ ALTER TABLE "public"."stock_transfers" ENABLE ROW LEVEL SECURITY;
 -- Name: stock_transfers stock_transfers_select_inventory_transfer_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "stock_transfers_select_inventory_transfer_scope" ON "public"."stock_transfers" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("stock_transfers"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_stock_transfer_read_scope"("stock_transfers"."organization_id", "stock_transfers"."id") AS "has_stock_transfer_read_scope")));
+CREATE POLICY "stock_transfers_select_inventory_transfer_scope" ON "public"."stock_transfers" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("stock_transfers"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text", 'inventory.transfer.receive'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_stock_transfer_read_scope"("stock_transfers"."organization_id", "stock_transfers"."id") AS "has_stock_transfer_read_scope")));
 
 --
 -- Name: store_payment_methods; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -36063,22 +38501,22 @@ ALTER TABLE "public"."store_payment_methods" ENABLE ROW LEVEL SECURITY;
 -- Name: store_payment_methods store_payment_methods_insert_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "store_payment_methods_insert_settings_manager" ON "public"."store_payment_methods" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "private"."has_permission"("store_payment_methods"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "store_payment_methods_insert_settings_manager" ON "public"."store_payment_methods" FOR INSERT TO "tindio_authenticated" WITH CHECK (( SELECT "private"."has_permission"("store_payment_methods"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: store_payment_methods store_payment_methods_select_assigned_or_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "store_payment_methods_select_assigned_or_manager" ON "public"."store_payment_methods" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("store_payment_methods"."organization_id", 'settings.manage'::"text") AS "has_permission") OR (EXISTS ( SELECT 1
+CREATE POLICY "store_payment_methods_select_assigned_or_manager" ON "public"."store_payment_methods" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("store_payment_methods"."organization_id", 'settings.manage'::"text") AS "has_permission") OR (EXISTS ( SELECT 1
    FROM ("public"."employees" "employee"
      JOIN "public"."employee_stores" "employee_store" ON ((("employee_store"."employee_id" = "employee"."id") AND ("employee_store"."organization_id" = "employee"."organization_id"))))
-  WHERE (("employee"."organization_id" = "store_payment_methods"."organization_id") AND ("employee_store"."store_id" = "store_payment_methods"."store_id") AND ("employee"."profile_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("employee"."status" = 'active'::"text"))))));
+  WHERE (("employee"."organization_id" = "store_payment_methods"."organization_id") AND ("employee_store"."store_id" = "store_payment_methods"."store_id") AND ("employee"."profile_id" = ( SELECT "public"."current_profile_id"() AS "uid")) AND ("employee"."status" = 'active'::"text"))))));
 
 --
 -- Name: store_payment_methods store_payment_methods_update_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "store_payment_methods_update_settings_manager" ON "public"."store_payment_methods" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("store_payment_methods"."organization_id", 'settings.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("store_payment_methods"."organization_id", 'settings.manage'::"text") AS "has_permission"));
+CREATE POLICY "store_payment_methods_update_settings_manager" ON "public"."store_payment_methods" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("store_payment_methods"."organization_id", 'settings.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("store_payment_methods"."organization_id", 'settings.manage'::"text") AS "has_permission"));
 
 --
 -- Name: stores; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -36090,19 +38528,19 @@ ALTER TABLE "public"."stores" ENABLE ROW LEVEL SECURITY;
 -- Name: stores stores_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "stores_insert_authorized" ON "public"."stores" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "private"."is_organization_creator"("stores"."organization_id") AS "is_organization_creator") OR ( SELECT "private"."has_permission"("stores"."organization_id", 'stores.manage'::"text") AS "has_permission")));
+CREATE POLICY "stores_insert_authorized" ON "public"."stores" FOR INSERT TO "tindio_authenticated" WITH CHECK ((( SELECT "private"."is_organization_creator"("stores"."organization_id") AS "is_organization_creator") OR ( SELECT "private"."has_permission"("stores"."organization_id", 'stores.manage'::"text") AS "has_permission")));
 
 --
 -- Name: stores stores_select_authorized_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "stores_select_authorized_scope" ON "public"."stores" FOR SELECT TO "authenticated" USING ((( SELECT "private"."is_organization_creator"("stores"."organization_id") AS "is_organization_creator") OR ( SELECT "private"."has_store_read_scope"("stores"."organization_id", "stores"."id") AS "has_store_read_scope")));
+CREATE POLICY "stores_select_authorized_scope" ON "public"."stores" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."is_organization_creator"("stores"."organization_id") AS "is_organization_creator") OR ( SELECT "private"."has_store_read_scope"("stores"."organization_id", "stores"."id") AS "has_store_read_scope")));
 
 --
 -- Name: stores stores_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "stores_update_authorized" ON "public"."stores" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("stores"."organization_id", 'stores.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("stores"."organization_id", 'stores.manage'::"text") AS "has_permission"));
+CREATE POLICY "stores_update_authorized" ON "public"."stores" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("stores"."organization_id", 'stores.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("stores"."organization_id", 'stores.manage'::"text") AS "has_permission"));
 
 --
 -- Name: supplier_return_lines; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -36114,7 +38552,7 @@ ALTER TABLE "public"."supplier_return_lines" ENABLE ROW LEVEL SECURITY;
 -- Name: supplier_return_lines supplier_return_lines_select_purchasing_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "supplier_return_lines_select_purchasing_scope" ON "public"."supplier_return_lines" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("supplier_return_lines"."organization_id", ARRAY['purchasing.view'::"text", 'purchasing.return'::"text"]) AS "has_any_inventory_capability") AND (EXISTS ( SELECT 1
+CREATE POLICY "supplier_return_lines_select_purchasing_scope" ON "public"."supplier_return_lines" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("supplier_return_lines"."organization_id", ARRAY['purchasing.view'::"text", 'purchasing.return'::"text"]) AS "has_any_inventory_capability") AND (EXISTS ( SELECT 1
    FROM "public"."supplier_returns" "supplier_return"
   WHERE (("supplier_return"."id" = "supplier_return_lines"."supplier_return_id") AND ("supplier_return"."organization_id" = "supplier_return_lines"."organization_id") AND ( SELECT "private"."has_store_read_scope"("supplier_return"."organization_id", "supplier_return"."store_id") AS "has_store_read_scope"))))));
 
@@ -36128,7 +38566,7 @@ ALTER TABLE "public"."supplier_returns" ENABLE ROW LEVEL SECURITY;
 -- Name: supplier_returns supplier_returns_select_purchasing_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "supplier_returns_select_purchasing_scope" ON "public"."supplier_returns" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("supplier_returns"."organization_id", ARRAY['purchasing.view'::"text", 'purchasing.return'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_store_read_scope"("supplier_returns"."organization_id", "supplier_returns"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "supplier_returns_select_purchasing_scope" ON "public"."supplier_returns" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("supplier_returns"."organization_id", ARRAY['purchasing.view'::"text", 'purchasing.return'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_store_read_scope"("supplier_returns"."organization_id", "supplier_returns"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: POLICY "supplier_returns_select_purchasing_scope" ON "supplier_returns"; Type: COMMENT; Schema: public; Owner: postgres
@@ -36146,7 +38584,7 @@ ALTER TABLE "public"."suppliers" ENABLE ROW LEVEL SECURITY;
 -- Name: suppliers suppliers_select_purchasing_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "suppliers_select_purchasing_scope" ON "public"."suppliers" FOR SELECT TO "authenticated" USING (( SELECT "private"."has_any_inventory_capability"("suppliers"."organization_id", ARRAY['purchasing.view'::"text", 'purchasing.po.create'::"text", 'purchasing.receive'::"text", 'purchasing.suppliers.manage'::"text", 'purchasing.return'::"text"]) AS "has_any_inventory_capability"));
+CREATE POLICY "suppliers_select_purchasing_scope" ON "public"."suppliers" FOR SELECT TO "tindio_authenticated" USING (( SELECT "private"."has_any_inventory_capability"("suppliers"."organization_id", ARRAY['purchasing.view'::"text", 'purchasing.po.create'::"text", 'purchasing.receive'::"text", 'purchasing.suppliers.manage'::"text", 'purchasing.return'::"text"]) AS "has_any_inventory_capability"));
 
 --
 -- Name: POLICY "suppliers_select_purchasing_scope" ON "suppliers"; Type: COMMENT; Schema: public; Owner: postgres
@@ -36164,7 +38602,7 @@ ALTER TABLE "public"."supply_chain_warehouses" ENABLE ROW LEVEL SECURITY;
 -- Name: supply_chain_warehouses supply_chain_warehouses_select_inventory_transfer_scope; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "supply_chain_warehouses_select_inventory_transfer_scope" ON "public"."supply_chain_warehouses" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("supply_chain_warehouses"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_store_read_scope"("supply_chain_warehouses"."organization_id", "supply_chain_warehouses"."store_id") AS "has_store_read_scope")));
+CREATE POLICY "supply_chain_warehouses_select_inventory_transfer_scope" ON "public"."supply_chain_warehouses" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_any_inventory_capability"("supply_chain_warehouses"."organization_id", ARRAY['inventory.transfer.create'::"text", 'inventory.transfer.send'::"text"]) AS "has_any_inventory_capability") AND ( SELECT "private"."has_store_read_scope"("supply_chain_warehouses"."organization_id", "supply_chain_warehouses"."store_id") AS "has_store_read_scope")));
 
 --
 -- Name: tax_rates; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -36176,19 +38614,19 @@ ALTER TABLE "public"."tax_rates" ENABLE ROW LEVEL SECURITY;
 -- Name: tax_rates tax_rates_insert_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "tax_rates_insert_authorized" ON "public"."tax_rates" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "private"."has_permission"("tax_rates"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "tax_rates_insert_authorized" ON "public"."tax_rates" FOR INSERT TO "tindio_authenticated" WITH CHECK (( SELECT "private"."has_permission"("tax_rates"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: tax_rates tax_rates_select_sales_or_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "tax_rates_select_sales_or_manager" ON "public"."tax_rates" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("tax_rates"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("tax_rates"."organization_id", 'products.manage'::"text") AS "has_permission")));
+CREATE POLICY "tax_rates_select_sales_or_manager" ON "public"."tax_rates" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("tax_rates"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("tax_rates"."organization_id", 'products.manage'::"text") AS "has_permission")));
 
 --
 -- Name: tax_rates tax_rates_update_authorized; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "tax_rates_update_authorized" ON "public"."tax_rates" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("tax_rates"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("tax_rates"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "tax_rates_update_authorized" ON "public"."tax_rates" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("tax_rates"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("tax_rates"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: ticket_templates; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -36200,19 +38638,19 @@ ALTER TABLE "public"."ticket_templates" ENABLE ROW LEVEL SECURITY;
 -- Name: ticket_templates ticket_templates_insert_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "ticket_templates_insert_manager" ON "public"."ticket_templates" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "private"."has_permission"("ticket_templates"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "ticket_templates_insert_manager" ON "public"."ticket_templates" FOR INSERT TO "tindio_authenticated" WITH CHECK (( SELECT "private"."has_permission"("ticket_templates"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: ticket_templates ticket_templates_select_sales_or_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "ticket_templates_select_sales_or_manager" ON "public"."ticket_templates" FOR SELECT TO "authenticated" USING ((( SELECT "private"."has_permission"("ticket_templates"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("ticket_templates"."organization_id", 'products.manage'::"text") AS "has_permission")));
+CREATE POLICY "ticket_templates_select_sales_or_manager" ON "public"."ticket_templates" FOR SELECT TO "tindio_authenticated" USING ((( SELECT "private"."has_permission"("ticket_templates"."organization_id", 'sales.create'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("ticket_templates"."organization_id", 'products.manage'::"text") AS "has_permission")));
 
 --
 -- Name: ticket_templates ticket_templates_update_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "ticket_templates_update_manager" ON "public"."ticket_templates" FOR UPDATE TO "authenticated" USING (( SELECT "private"."has_permission"("ticket_templates"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("ticket_templates"."organization_id", 'products.manage'::"text") AS "has_permission"));
+CREATE POLICY "ticket_templates_update_manager" ON "public"."ticket_templates" FOR UPDATE TO "tindio_authenticated" USING (( SELECT "private"."has_permission"("ticket_templates"."organization_id", 'products.manage'::"text") AS "has_permission")) WITH CHECK (( SELECT "private"."has_permission"("ticket_templates"."organization_id", 'products.manage'::"text") AS "has_permission"));
 
 --
 -- Name: time_clock_entries; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -36224,28 +38662,28 @@ ALTER TABLE "public"."time_clock_entries" ENABLE ROW LEVEL SECURITY;
 -- Name: time_clock_entries time_clock_entries_select_self_or_settings_manager; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY "time_clock_entries_select_self_or_settings_manager" ON "public"."time_clock_entries" FOR SELECT TO "authenticated" USING ((("employee_id" = ( SELECT "private"."current_employee_id"("time_clock_entries"."organization_id") AS "current_employee_id")) OR ((( SELECT "private"."has_permission"("time_clock_entries"."organization_id", 'settings.manage'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("time_clock_entries"."organization_id", 'employees.manage'::"text") AS "has_permission")) AND ( SELECT "private"."has_store_read_scope"("time_clock_entries"."organization_id", "time_clock_entries"."store_id") AS "has_store_read_scope"))));
+CREATE POLICY "time_clock_entries_select_self_or_settings_manager" ON "public"."time_clock_entries" FOR SELECT TO "tindio_authenticated" USING ((("employee_id" = ( SELECT "private"."current_employee_id"("time_clock_entries"."organization_id") AS "current_employee_id")) OR ((( SELECT "private"."has_permission"("time_clock_entries"."organization_id", 'settings.manage'::"text") AS "has_permission") OR ( SELECT "private"."has_permission"("time_clock_entries"."organization_id", 'employees.manage'::"text") AS "has_permission")) AND ( SELECT "private"."has_store_read_scope"("time_clock_entries"."organization_id", "time_clock_entries"."store_id") AS "has_store_read_scope"))));
 
 --
 -- Name: SCHEMA "private"; Type: ACL; Schema: -; Owner: postgres
 --
 
-GRANT USAGE ON SCHEMA "private" TO "authenticated";
+GRANT USAGE ON SCHEMA "private" TO "tindio_authenticated";
 
 --
 -- Name: SCHEMA "public"; Type: ACL; Schema: -; Owner: pg_database_owner
 --
 
-GRANT USAGE ON SCHEMA "public" TO "anon";
-GRANT USAGE ON SCHEMA "public" TO "authenticated";
-GRANT USAGE ON SCHEMA "public" TO "service_role";
+GRANT USAGE ON SCHEMA "public" TO "tindio_anon";
+GRANT USAGE ON SCHEMA "public" TO "tindio_authenticated";
+GRANT USAGE ON SCHEMA "public" TO "tindio_service";
 
 --
 -- Name: FUNCTION "accept_employee_invitation"("invitation_token_hash" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."accept_employee_invitation"("invitation_token_hash" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."accept_employee_invitation"("invitation_token_hash" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."accept_employee_invitation"("invitation_token_hash" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "activate_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_operation_code" "text", "target_expected_payload" "jsonb", "target_execution_idempotency_key" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -36270,7 +38708,7 @@ REVOKE ALL ON FUNCTION "private"."apply_inventory_change"("target_organization_i
 --
 
 REVOKE ALL ON FUNCTION "private"."apply_inventory_change_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_movement_type" "text", "target_actor_employee_id" "uuid", "target_reason" "text", "target_source_type" "text", "target_source_id" "uuid", "target_unit_cost_minor" bigint, "target_reason_code" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."apply_inventory_change_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_movement_type" "text", "target_actor_employee_id" "uuid", "target_reason" "text", "target_source_type" "text", "target_source_id" "uuid", "target_unit_cost_minor" bigint, "target_reason_code" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."apply_inventory_change_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_movement_type" "text", "target_actor_employee_id" "uuid", "target_reason" "text", "target_source_type" "text", "target_source_id" "uuid", "target_unit_cost_minor" bigint, "target_reason_code" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "approval_decision"("target_organization_id" "uuid", "target_operation_code" "text", "target_amount_minor" bigint); Type: ACL; Schema: private; Owner: postgres
@@ -36289,21 +38727,21 @@ REVOKE ALL ON FUNCTION "private"."approval_operation_permission"("target_operati
 --
 
 REVOKE ALL ON FUNCTION "private"."approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "approve_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_approver_employee_number" "text", "target_pin" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."approve_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_approver_employee_number" "text", "target_pin" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."approve_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_approver_employee_number" "text", "target_pin" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."approve_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_approver_employee_number" "text", "target_pin" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "approve_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."approve_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."approve_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."approve_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "assert_archive_export_delivered"(); Type: ACL; Schema: private; Owner: postgres
@@ -36382,7 +38820,7 @@ REVOKE ALL ON FUNCTION "private"."audit_sale_exchange_link"() FROM PUBLIC;
 --
 
 REVOKE ALL ON FUNCTION "private"."authorize_sensitive_operation"("target_organization_id" "uuid", "target_operation_code" "text", "target_approval_request_id" "uuid", "target_expected_payload" "jsonb", "target_execution_idempotency_key" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."authorize_sensitive_operation"("target_organization_id" "uuid", "target_operation_code" "text", "target_approval_request_id" "uuid", "target_expected_payload" "jsonb", "target_execution_idempotency_key" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."authorize_sensitive_operation"("target_organization_id" "uuid", "target_operation_code" "text", "target_approval_request_id" "uuid", "target_expected_payload" "jsonb", "target_execution_idempotency_key" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "broadcast_kitchen_order_change"(); Type: ACL; Schema: private; Owner: postgres
@@ -36407,42 +38845,42 @@ REVOKE ALL ON FUNCTION "private"."calculate_shift_cash"("target_shift_id" "uuid"
 --
 
 REVOKE ALL ON FUNCTION "private"."can_access_employee_store_scope"("target_organization_id" "uuid", "target_employee_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."can_access_employee_store_scope"("target_organization_id" "uuid", "target_employee_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."can_access_employee_store_scope"("target_organization_id" "uuid", "target_employee_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "can_access_kitchen_realtime_topic"("target_topic" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."can_access_kitchen_realtime_topic"("target_topic" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."can_access_kitchen_realtime_topic"("target_topic" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."can_access_kitchen_realtime_topic"("target_topic" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "can_grant_role"("target_organization_id" "uuid", "target_role_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."can_grant_role"("target_organization_id" "uuid", "target_role_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."can_grant_role"("target_organization_id" "uuid", "target_role_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."can_grant_role"("target_organization_id" "uuid", "target_role_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "can_view_employee_profile"("target_profile_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."can_view_employee_profile"("target_profile_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."can_view_employee_profile"("target_profile_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."can_view_employee_profile"("target_profile_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "cancel_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_note" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."cancel_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_note" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."cancel_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_note" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."cancel_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_note" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "cancel_open_ticket"("target_organization_id" "uuid", "target_ticket_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -36473,21 +38911,21 @@ REVOKE ALL ON FUNCTION "private"."capture_stock_transfer_line_cost_truth"() FROM
 --
 
 REVOKE ALL ON FUNCTION "private"."change_employee_lifecycle"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_action" "text", "target_reason" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."change_employee_lifecycle"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_action" "text", "target_reason" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."change_employee_lifecycle"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_action" "text", "target_reason" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "checkout_advanced_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer, "target_discount_id" "uuid", "target_tax_rate_id" "uuid", "target_dining_option_id" "uuid", "target_open_ticket_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."checkout_advanced_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer, "target_discount_id" "uuid", "target_tax_rate_id" "uuid", "target_dining_option_id" "uuid", "target_open_ticket_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."checkout_advanced_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer, "target_discount_id" "uuid", "target_tax_rate_id" "uuid", "target_dining_option_id" "uuid", "target_open_ticket_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."checkout_advanced_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer, "target_discount_id" "uuid", "target_tax_rate_id" "uuid", "target_dining_option_id" "uuid", "target_open_ticket_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "checkout_cash_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_cash_tendered_minor" bigint, "target_idempotency_key" "uuid", "target_items" "jsonb"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."checkout_cash_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_cash_tendered_minor" bigint, "target_idempotency_key" "uuid", "target_items" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."checkout_cash_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_cash_tendered_minor" bigint, "target_idempotency_key" "uuid", "target_items" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."checkout_cash_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_cash_tendered_minor" bigint, "target_idempotency_key" "uuid", "target_items" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "checkout_catalog_special_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb"); Type: ACL; Schema: private; Owner: postgres
@@ -36500,14 +38938,14 @@ REVOKE ALL ON FUNCTION "private"."checkout_catalog_special_sale"("target_organiz
 --
 
 REVOKE ALL ON FUNCTION "private"."checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "private"."checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "checkout_sale_v1"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb"); Type: ACL; Schema: private; Owner: postgres
@@ -36526,28 +38964,28 @@ REVOKE ALL ON FUNCTION "private"."claim_product_unit_operation"("target_organiza
 --
 
 REVOKE ALL ON FUNCTION "private"."clock_in_employee"("target_organization_id" "uuid", "target_store_id" "uuid", "target_clock_in_note" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."clock_in_employee"("target_organization_id" "uuid", "target_store_id" "uuid", "target_clock_in_note" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."clock_in_employee"("target_organization_id" "uuid", "target_store_id" "uuid", "target_clock_in_note" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "clock_in_employee_with_pin"("target_organization_id" "uuid", "target_store_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."clock_in_employee_with_pin"("target_organization_id" "uuid", "target_store_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."clock_in_employee_with_pin"("target_organization_id" "uuid", "target_store_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."clock_in_employee_with_pin"("target_organization_id" "uuid", "target_store_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "clock_out_employee"("target_organization_id" "uuid", "target_clock_out_note" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."clock_out_employee"("target_organization_id" "uuid", "target_clock_out_note" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."clock_out_employee"("target_organization_id" "uuid", "target_clock_out_note" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."clock_out_employee"("target_organization_id" "uuid", "target_clock_out_note" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "clock_out_employee_with_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."clock_out_employee_with_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."clock_out_employee_with_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."clock_out_employee_with_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "close_register_shift"("target_organization_id" "uuid", "target_shift_id" "uuid", "target_counted_cash_minor" bigint, "target_closing_note" "text"); Type: ACL; Schema: private; Owner: postgres
@@ -36584,35 +39022,35 @@ REVOKE ALL ON FUNCTION "private"."consume_organization_rate_limit"("target_organ
 --
 
 REVOKE ALL ON FUNCTION "private"."create_catalog_product"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."create_catalog_product"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."create_catalog_product"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_catalog_product_v2"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."create_catalog_product_v2"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."create_catalog_product_v2"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "private"."create_catalog_product_v2"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_direct_stock_transfer"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."create_direct_stock_transfer"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."create_direct_stock_transfer"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."create_direct_stock_transfer"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_inventory_adjustment_reason"("target_organization_id" "uuid", "target_code" "text", "target_name" "text", "target_movement_type" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."create_inventory_adjustment_reason"("target_organization_id" "uuid", "target_code" "text", "target_name" "text", "target_movement_type" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."create_inventory_adjustment_reason"("target_organization_id" "uuid", "target_code" "text", "target_name" "text", "target_movement_type" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."create_inventory_adjustment_reason"("target_organization_id" "uuid", "target_code" "text", "target_name" "text", "target_movement_type" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_inventory_count_batch"("target_organization_id" "uuid", "target_name" "text", "target_note" "text", "target_store_ids" "uuid"[], "target_count_mode" "text", "target_sort_mode" "text", "target_include_zero_stock" boolean); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."create_inventory_count_batch"("target_organization_id" "uuid", "target_name" "text", "target_note" "text", "target_store_ids" "uuid"[], "target_count_mode" "text", "target_sort_mode" "text", "target_include_zero_stock" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."create_inventory_count_batch"("target_organization_id" "uuid", "target_name" "text", "target_note" "text", "target_store_ids" "uuid"[], "target_count_mode" "text", "target_sort_mode" "text", "target_include_zero_stock" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "private"."create_inventory_count_batch"("target_organization_id" "uuid", "target_name" "text", "target_note" "text", "target_store_ids" "uuid"[], "target_count_mode" "text", "target_sort_mode" "text", "target_include_zero_stock" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_inventory_count_draft"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text"); Type: ACL; Schema: private; Owner: postgres
@@ -36625,14 +39063,14 @@ REVOKE ALL ON FUNCTION "private"."create_inventory_count_draft"("target_organiza
 --
 
 REVOKE ALL ON FUNCTION "private"."create_inventory_count_plan"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_scope_reference_id" "uuid", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."create_inventory_count_plan"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_scope_reference_id" "uuid", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "private"."create_inventory_count_plan"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_scope_reference_id" "uuid", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_purchase_order"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_expected_at" "date", "target_lines" "jsonb", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -36645,28 +39083,28 @@ REVOKE ALL ON FUNCTION "private"."create_purchase_order"("target_organization_id
 --
 
 REVOKE ALL ON FUNCTION "private"."create_stock_request"("target_organization_id" "uuid", "target_requesting_store_id" "uuid", "target_source_warehouse_id" "uuid", "target_note" "text", "target_lines" "jsonb", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."create_stock_request"("target_organization_id" "uuid", "target_requesting_store_id" "uuid", "target_source_warehouse_id" "uuid", "target_note" "text", "target_lines" "jsonb", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."create_stock_request"("target_organization_id" "uuid", "target_requesting_store_id" "uuid", "target_source_warehouse_id" "uuid", "target_note" "text", "target_lines" "jsonb", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_supplier"("target_organization_id" "uuid", "target_name" "text", "target_contact_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_notes" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."create_supplier"("target_organization_id" "uuid", "target_name" "text", "target_contact_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_notes" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."create_supplier"("target_organization_id" "uuid", "target_name" "text", "target_contact_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_notes" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."create_supplier"("target_organization_id" "uuid", "target_name" "text", "target_contact_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_notes" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_supply_chain_warehouse"("target_organization_id" "uuid", "target_store_id" "uuid", "target_code" "text", "target_name" "text", "target_notes" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."create_supply_chain_warehouse"("target_organization_id" "uuid", "target_store_id" "uuid", "target_code" "text", "target_name" "text", "target_notes" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."create_supply_chain_warehouse"("target_organization_id" "uuid", "target_store_id" "uuid", "target_code" "text", "target_name" "text", "target_notes" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."create_supply_chain_warehouse"("target_organization_id" "uuid", "target_store_id" "uuid", "target_code" "text", "target_name" "text", "target_notes" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "current_employee_id"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."current_employee_id"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."current_employee_id"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."current_employee_id"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "current_identity_subject"(); Type: ACL; Schema: private; Owner: postgres
@@ -36721,21 +39159,21 @@ REVOKE ALL ON FUNCTION "private"."default_purchase_order_expected_at_from_suppli
 --
 
 REVOKE ALL ON FUNCTION "private"."delete_catalog_product_if_eligible"("target_organization_id" "uuid", "target_product_id" "uuid", "target_confirmation_name" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."delete_catalog_product_if_eligible"("target_organization_id" "uuid", "target_product_id" "uuid", "target_confirmation_name" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."delete_catalog_product_if_eligible"("target_organization_id" "uuid", "target_product_id" "uuid", "target_confirmation_name" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "delete_employee_if_eligible"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_confirmation_number" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."delete_employee_if_eligible"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_confirmation_number" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."delete_employee_if_eligible"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_confirmation_number" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."delete_employee_if_eligible"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_confirmation_number" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "dispatch_inventory_transfer_core"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid", "allow_request_transfer" boolean); Type: ACL; Schema: private; Owner: postgres
@@ -36748,7 +39186,7 @@ REVOKE ALL ON FUNCTION "private"."dispatch_inventory_transfer_core"("target_orga
 --
 
 REVOKE ALL ON FUNCTION "private"."dispatch_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."dispatch_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."dispatch_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "employee_dependency_tables"("target_employee_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -36761,7 +39199,7 @@ REVOKE ALL ON FUNCTION "private"."employee_dependency_tables"("target_employee_i
 --
 
 REVOKE ALL ON FUNCTION "private"."employee_has_permission"("target_organization_id" "uuid", "target_employee_id" "uuid", "requested_permission" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."employee_has_permission"("target_organization_id" "uuid", "target_employee_id" "uuid", "requested_permission" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."employee_has_permission"("target_organization_id" "uuid", "target_employee_id" "uuid", "requested_permission" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "enforce_inventory_movement_insert"(); Type: ACL; Schema: private; Owner: postgres
@@ -36792,28 +39230,28 @@ REVOKE ALL ON FUNCTION "private"."ensure_catalog_identifier_unique"() FROM PUBLI
 --
 
 REVOKE ALL ON FUNCTION "private"."generate_catalog_identifiers"("target_organization_id" "uuid", "target_product_name" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."generate_catalog_identifiers"("target_organization_id" "uuid", "target_product_name" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."generate_catalog_identifiers"("target_organization_id" "uuid", "target_product_name" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_attendance_employees"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."get_attendance_employees"("target_organization_id" "uuid", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."get_attendance_employees"("target_organization_id" "uuid", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."get_attendance_employees"("target_organization_id" "uuid", "target_store_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_catalog_costs"("target_organization_id" "uuid", "requested_product_ids" "uuid"[]); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."get_catalog_costs"("target_organization_id" "uuid", "requested_product_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."get_catalog_costs"("target_organization_id" "uuid", "requested_product_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "private"."get_catalog_costs"("target_organization_id" "uuid", "requested_product_ids" "uuid"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid", "target_sale_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -36826,56 +39264,56 @@ REVOKE ALL ON FUNCTION "private"."get_checkout_stock_warning"("target_organizati
 --
 
 REVOKE ALL ON FUNCTION "private"."get_current_time_clock_entry"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."get_current_time_clock_entry"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."get_current_time_clock_entry"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_customer_display_management_sessions"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."get_customer_display_management_sessions"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."get_customer_display_management_sessions"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."get_customer_display_management_sessions"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_employee_management_detail"("target_organization_id" "uuid", "target_employee_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."get_employee_management_detail"("target_organization_id" "uuid", "target_employee_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."get_employee_management_detail"("target_organization_id" "uuid", "target_employee_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."get_employee_management_detail"("target_organization_id" "uuid", "target_employee_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_inventory_count_awareness"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."get_inventory_count_awareness"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."get_inventory_count_awareness"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."get_inventory_count_awareness"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_kitchen_orders"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."get_kitchen_orders"("target_organization_id" "uuid", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."get_kitchen_orders"("target_organization_id" "uuid", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."get_kitchen_orders"("target_organization_id" "uuid", "target_store_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_kitchen_station_routes"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."get_kitchen_station_routes"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."get_kitchen_station_routes"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."get_kitchen_station_routes"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_pos_customer_display_sessions"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."get_pos_customer_display_sessions"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."get_pos_customer_display_sessions"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."get_pos_customer_display_sessions"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_pos_customer_display_sessions_with_ids"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."get_pos_customer_display_sessions_with_ids"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."get_pos_customer_display_sessions_with_ids"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."get_pos_customer_display_sessions_with_ids"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_reporting_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid", "target_required_permission" "text"); Type: ACL; Schema: private; Owner: postgres
@@ -36888,7 +39326,7 @@ REVOKE ALL ON FUNCTION "private"."get_reporting_snapshot"("target_organization_i
 --
 
 REVOKE ALL ON FUNCTION "private"."get_scoped_reporting_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid", "target_required_permission" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."get_scoped_reporting_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid", "target_required_permission" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."get_scoped_reporting_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid", "target_required_permission" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_shift_cash_summary"("target_organization_id" "uuid", "target_shift_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -36973,49 +39411,47 @@ REVOKE ALL ON FUNCTION "private"."guard_supplier_return_evidence"() FROM PUBLIC;
 --
 
 REVOKE ALL ON FUNCTION "private"."has_active_pos_shift_access"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_active_pos_shift_access"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."has_active_pos_shift_access"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "has_all_inventory_capabilities"("target_organization_id" "uuid", "requested_capabilities" "text"[]); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."has_all_inventory_capabilities"("target_organization_id" "uuid", "requested_capabilities" "text"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_all_inventory_capabilities"("target_organization_id" "uuid", "requested_capabilities" "text"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "private"."has_all_inventory_capabilities"("target_organization_id" "uuid", "requested_capabilities" "text"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "has_any_inventory_capability"("target_organization_id" "uuid", "requested_capabilities" "text"[]); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."has_any_inventory_capability"("target_organization_id" "uuid", "requested_capabilities" "text"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_any_inventory_capability"("target_organization_id" "uuid", "requested_capabilities" "text"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "private"."has_any_inventory_capability"("target_organization_id" "uuid", "requested_capabilities" "text"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "has_inventory_capability"("target_organization_id" "uuid", "requested_capability" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."has_inventory_capability"("target_organization_id" "uuid", "requested_capability" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_inventory_capability"("target_organization_id" "uuid", "requested_capability" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."has_inventory_capability"("target_organization_id" "uuid", "requested_capability" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "has_organization_export_access"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."has_organization_export_access"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_organization_export_access"("target_organization_id" "uuid") TO "authenticated";
 
 --
 -- Name: FUNCTION "has_organization_lifecycle_access"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."has_organization_lifecycle_access"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_organization_lifecycle_access"("target_organization_id" "uuid") TO "authenticated";
 
 --
 -- Name: FUNCTION "has_organization_membership"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."has_organization_membership"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_organization_membership"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."has_organization_membership"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "has_organization_recovery_manage_access"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -37040,56 +39476,56 @@ REVOKE ALL ON FUNCTION "private"."has_organization_store_scope"("target_organiza
 --
 
 REVOKE ALL ON FUNCTION "private"."has_permission"("target_organization_id" "uuid", "requested_permission" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_permission"("target_organization_id" "uuid", "requested_permission" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."has_permission"("target_organization_id" "uuid", "requested_permission" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "has_purchase_order_read_scope"("target_organization_id" "uuid", "target_purchase_order_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."has_purchase_order_read_scope"("target_organization_id" "uuid", "target_purchase_order_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_purchase_order_read_scope"("target_organization_id" "uuid", "target_purchase_order_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."has_purchase_order_read_scope"("target_organization_id" "uuid", "target_purchase_order_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "has_refund_read_scope"("target_organization_id" "uuid", "target_refund_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."has_refund_read_scope"("target_organization_id" "uuid", "target_refund_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_refund_read_scope"("target_organization_id" "uuid", "target_refund_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."has_refund_read_scope"("target_organization_id" "uuid", "target_refund_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "has_sale_read_scope"("target_organization_id" "uuid", "target_sale_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."has_sale_read_scope"("target_organization_id" "uuid", "target_sale_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_sale_read_scope"("target_organization_id" "uuid", "target_sale_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."has_sale_read_scope"("target_organization_id" "uuid", "target_sale_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "has_shift_access"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."has_shift_access"("target_organization_id" "uuid", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_shift_access"("target_organization_id" "uuid", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."has_shift_access"("target_organization_id" "uuid", "target_store_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "has_stock_request_read_scope"("target_organization_id" "uuid", "target_stock_request_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."has_stock_request_read_scope"("target_organization_id" "uuid", "target_stock_request_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_stock_request_read_scope"("target_organization_id" "uuid", "target_stock_request_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."has_stock_request_read_scope"("target_organization_id" "uuid", "target_stock_request_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "has_stock_transfer_read_scope"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."has_stock_transfer_read_scope"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_stock_transfer_read_scope"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."has_stock_transfer_read_scope"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "has_store_read_scope"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."has_store_read_scope"("target_organization_id" "uuid", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."has_store_read_scope"("target_organization_id" "uuid", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."has_store_read_scope"("target_organization_id" "uuid", "target_store_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb"); Type: ACL; Schema: private; Owner: postgres
@@ -37102,7 +39538,7 @@ REVOKE ALL ON FUNCTION "private"."import_catalog_products_v3"("target_organizati
 --
 
 REVOKE ALL ON FUNCTION "private"."import_customers_csv"("target_organization_id" "uuid", "target_rows" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."import_customers_csv"("target_organization_id" "uuid", "target_rows" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."import_customers_csv"("target_organization_id" "uuid", "target_rows" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "import_inventory_adjustments_csv"("target_organization_id" "uuid", "target_store_id" "uuid", "target_reason_code" "text", "target_rows" "jsonb"); Type: ACL; Schema: private; Owner: postgres
@@ -37115,21 +39551,21 @@ REVOKE ALL ON FUNCTION "private"."import_inventory_adjustments_csv"("target_orga
 --
 
 REVOKE ALL ON FUNCTION "private"."import_inventory_adjustments_csv"("target_organization_id" "uuid", "target_store_id" "uuid", "target_reason_code" "text", "target_rows" "jsonb", "target_operation_id" "uuid", "target_approval_request_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."import_inventory_adjustments_csv"("target_organization_id" "uuid", "target_store_id" "uuid", "target_reason_code" "text", "target_rows" "jsonb", "target_operation_id" "uuid", "target_approval_request_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."import_inventory_adjustments_csv"("target_organization_id" "uuid", "target_store_id" "uuid", "target_reason_code" "text", "target_rows" "jsonb", "target_operation_id" "uuid", "target_approval_request_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "import_inventory_count_lines"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_rows" "jsonb"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."import_inventory_count_lines"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_rows" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."import_inventory_count_lines"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_rows" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."import_inventory_count_lines"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_rows" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "import_suppliers_csv"("target_organization_id" "uuid", "target_rows" "jsonb"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."import_suppliers_csv"("target_organization_id" "uuid", "target_rows" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."import_suppliers_csv"("target_organization_id" "uuid", "target_rows" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."import_suppliers_csv"("target_organization_id" "uuid", "target_rows" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "initialize_inventory_levels_for_setting"(); Type: ACL; Schema: private; Owner: postgres
@@ -37156,6 +39592,12 @@ REVOKE ALL ON FUNCTION "private"."inventory_actor"("target_organization_id" "uui
 REVOKE ALL ON FUNCTION "private"."inventory_count_actor"("target_organization_id" "uuid", "target_store_id" "uuid") FROM PUBLIC;
 
 --
+-- Name: FUNCTION "inventory_count_actor"("target_organization_id" "uuid", "target_store_id" "uuid", "requested_capabilities" "text"[]); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."inventory_count_actor"("target_organization_id" "uuid", "target_store_id" "uuid", "requested_capabilities" "text"[]) FROM PUBLIC;
+
+--
 -- Name: FUNCTION "inventory_organization_actor"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
@@ -37178,14 +39620,14 @@ REVOKE ALL ON FUNCTION "private"."is_made_to_order_composite"("target_organizati
 --
 
 REVOKE ALL ON FUNCTION "private"."is_organization_creator"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."is_organization_creator"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."is_organization_creator"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "is_organization_member"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."is_organization_member"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."is_organization_member"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."is_organization_member"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "issue_kitchen_order_from_completed_sale"(); Type: ACL; Schema: private; Owner: postgres
@@ -37252,7 +39694,7 @@ REVOKE ALL ON FUNCTION "private"."post_inventory_count"("target_organization_id"
 --
 
 REVOKE ALL ON FUNCTION "private"."post_inventory_count_idempotent"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."post_inventory_count_idempotent"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."post_inventory_count_idempotent"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "prepare_organization_export"("target_organization_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -37307,7 +39749,7 @@ REVOKE ALL ON FUNCTION "private"."protect_product_unit_identity"() FROM PUBLIC;
 --
 
 REVOKE ALL ON FUNCTION "private"."provision_customer_display_session"("target_organization_id" "uuid", "target_register_id" "uuid", "target_access_token_hash" "text", "target_realtime_topic" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."provision_customer_display_session"("target_organization_id" "uuid", "target_register_id" "uuid", "target_access_token_hash" "text", "target_realtime_topic" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."provision_customer_display_session"("target_organization_id" "uuid", "target_register_id" "uuid", "target_access_token_hash" "text", "target_realtime_topic" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "quote_checkout_subtotal"("target_organization_id" "uuid", "target_store_id" "uuid", "target_items" "jsonb"); Type: ACL; Schema: private; Owner: postgres
@@ -37326,7 +39768,7 @@ REVOKE ALL ON FUNCTION "private"."reallocate_open_ticket_lines"("target_organiza
 --
 
 REVOKE ALL ON FUNCTION "private"."receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_legacy_in_transit" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_legacy_in_transit" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "private"."receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_legacy_in_transit" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "receive_inventory_transfer_core"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid", "allow_request_transfer" boolean); Type: ACL; Schema: private; Owner: postgres
@@ -37345,14 +39787,14 @@ REVOKE ALL ON FUNCTION "private"."receive_purchase_order"("target_organization_i
 --
 
 REVOKE ALL ON FUNCTION "private"."receive_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."receive_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."receive_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "receive_stock_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."receive_stock_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."receive_stock_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."receive_stock_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "record_archive_request_time"(); Type: ACL; Schema: private; Owner: postgres
@@ -37377,7 +39819,7 @@ REVOKE ALL ON FUNCTION "private"."record_composite_component_movements"() FROM P
 --
 
 REVOKE ALL ON FUNCTION "private"."record_inventory_adjustment"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."record_inventory_adjustment"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."record_inventory_adjustment"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "record_inventory_adjustment_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text"); Type: ACL; Schema: private; Owner: postgres
@@ -37386,18 +39828,24 @@ GRANT ALL ON FUNCTION "private"."record_inventory_adjustment"("target_organizati
 REVOKE ALL ON FUNCTION "private"."record_inventory_adjustment_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text") FROM PUBLIC;
 
 --
+-- Name: FUNCTION "record_pos_sync_change"(); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."record_pos_sync_change"() FROM PUBLIC;
+
+--
 -- Name: FUNCTION "refund_sale"("target_organization_id" "uuid", "target_sale_id" "uuid", "target_payment_method_id" "uuid", "target_idempotency_key" "uuid", "target_reason" "text", "target_reference_number" "text", "target_items" "jsonb"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."refund_sale"("target_organization_id" "uuid", "target_sale_id" "uuid", "target_payment_method_id" "uuid", "target_idempotency_key" "uuid", "target_reason" "text", "target_reference_number" "text", "target_items" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."refund_sale"("target_organization_id" "uuid", "target_sale_id" "uuid", "target_payment_method_id" "uuid", "target_idempotency_key" "uuid", "target_reason" "text", "target_reference_number" "text", "target_items" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."refund_sale"("target_organization_id" "uuid", "target_sale_id" "uuid", "target_payment_method_id" "uuid", "target_idempotency_key" "uuid", "target_reason" "text", "target_reference_number" "text", "target_items" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "remove_inventory_policy_override"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."remove_inventory_policy_override"("target_organization_id" "uuid", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."remove_inventory_policy_override"("target_organization_id" "uuid", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."remove_inventory_policy_override"("target_organization_id" "uuid", "target_store_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "remove_offline_checkout_total_marker"(); Type: ACL; Schema: private; Owner: postgres
@@ -37410,7 +39858,7 @@ REVOKE ALL ON FUNCTION "private"."remove_offline_checkout_total_marker"() FROM P
 --
 
 REVOKE ALL ON FUNCTION "private"."request_manager_approval"("target_organization_id" "uuid", "target_operation_code" "text", "target_reason" "text", "target_payload" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."request_manager_approval"("target_organization_id" "uuid", "target_operation_code" "text", "target_reason" "text", "target_payload" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."request_manager_approval"("target_organization_id" "uuid", "target_operation_code" "text", "target_reason" "text", "target_payload" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "require_active_device_binding"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
@@ -37455,6 +39903,18 @@ REVOKE ALL ON FUNCTION "private"."require_employee_manager_target"("target_organ
 REVOKE ALL ON FUNCTION "private"."require_pos_capabilities"("target_organization_id" "uuid", "required_permission_codes" "text"[]) FROM PUBLIC;
 
 --
+-- Name: FUNCTION "require_pos_sequence_access"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."require_pos_sequence_access"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") FROM PUBLIC;
+
+--
+-- Name: FUNCTION "require_pos_sync_access"("target_organization_id" "uuid", "target_device_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "private"."require_pos_sync_access"("target_organization_id" "uuid", "target_device_id" "uuid") FROM PUBLIC;
+
+--
 -- Name: FUNCTION "require_pos_workspace_access"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
@@ -37489,7 +39949,7 @@ REVOKE ALL ON FUNCTION "private"."reverse_loyalty_earnings_for_refund"() FROM PU
 --
 
 REVOKE ALL ON FUNCTION "private"."save_inventory_count_line"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_counted_quantity" numeric) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."save_inventory_count_line"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_counted_quantity" numeric) TO "authenticated";
+GRANT ALL ON FUNCTION "private"."save_inventory_count_line"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_counted_quantity" numeric) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "save_open_ticket"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_ticket_id" "uuid", "target_customer_id" "uuid", "target_dining_option_id" "uuid", "target_label" "text", "target_note" "text", "target_cart" "jsonb"); Type: ACL; Schema: private; Owner: postgres
@@ -37568,14 +40028,14 @@ REVOKE ALL ON FUNCTION "private"."set_catalog_product_archived_safely"("target_o
 --
 
 REVOKE ALL ON FUNCTION "private"."set_catalog_product_store_availability"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."set_catalog_product_store_availability"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "private"."set_catalog_product_store_availability"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_ids" "uuid"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_customer_display_state"("target_organization_id" "uuid", "target_session_id" "uuid", "target_state" "jsonb"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."set_customer_display_state"("target_organization_id" "uuid", "target_session_id" "uuid", "target_state" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."set_customer_display_state"("target_organization_id" "uuid", "target_session_id" "uuid", "target_state" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."set_customer_display_state"("target_organization_id" "uuid", "target_session_id" "uuid", "target_state" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_employee_invitation_snapshots"(); Type: ACL; Schema: private; Owner: postgres
@@ -37588,21 +40048,21 @@ REVOKE ALL ON FUNCTION "private"."set_employee_invitation_snapshots"() FROM PUBL
 --
 
 REVOKE ALL ON FUNCTION "private"."set_employee_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."set_employee_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."set_employee_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_kitchen_order_priority"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_priority" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."set_kitchen_order_priority"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_priority" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."set_kitchen_order_priority"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_priority" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."set_kitchen_order_priority"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_priority" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_kitchen_station_category_route"("target_organization_id" "uuid", "target_category_id" "uuid", "target_station" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."set_kitchen_station_category_route"("target_organization_id" "uuid", "target_category_id" "uuid", "target_station" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."set_kitchen_station_category_route"("target_organization_id" "uuid", "target_category_id" "uuid", "target_station" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."set_kitchen_station_category_route"("target_organization_id" "uuid", "target_category_id" "uuid", "target_station" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_updated_at"(); Type: ACL; Schema: private; Owner: postgres
@@ -37645,21 +40105,21 @@ REVOKE ALL ON FUNCTION "private"."snapshot_sale_item_cost"() FROM PUBLIC;
 --
 
 REVOKE ALL ON FUNCTION "private"."start_stock_request_picking"("target_organization_id" "uuid", "target_stock_request_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."start_stock_request_picking"("target_organization_id" "uuid", "target_stock_request_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."start_stock_request_picking"("target_organization_id" "uuid", "target_stock_request_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "submit_inventory_count_for_review"("target_organization_id" "uuid", "target_inventory_count_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."submit_inventory_count_for_review"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."submit_inventory_count_for_review"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."submit_inventory_count_for_review"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "sync_auth_user_profile"(); Type: ACL; Schema: private; Owner: postgres
@@ -37708,7 +40168,7 @@ REVOKE ALL ON FUNCTION "private"."transfer_stock"("target_organization_id" "uuid
 --
 
 REVOKE ALL ON FUNCTION "private"."update_approval_rule"("target_organization_id" "uuid", "target_operation_code" "text", "target_decision" "text", "target_amount_threshold_minor" bigint, "target_is_enabled" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."update_approval_rule"("target_organization_id" "uuid", "target_operation_code" "text", "target_decision" "text", "target_amount_threshold_minor" bigint, "target_is_enabled" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "private"."update_approval_rule"("target_organization_id" "uuid", "target_operation_code" "text", "target_decision" "text", "target_amount_threshold_minor" bigint, "target_is_enabled" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_business_profile_features"("target_organization_id" "uuid", "target_business_type" "text", "target_feature_settings" "jsonb"); Type: ACL; Schema: private; Owner: postgres
@@ -37721,49 +40181,49 @@ REVOKE ALL ON FUNCTION "private"."update_business_profile_features"("target_orga
 --
 
 REVOKE ALL ON FUNCTION "private"."update_catalog_product_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."update_catalog_product_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "private"."update_catalog_product_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_employee_assignments_unscoped"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_job_title" "text", "target_status" "text", "target_role_ids" "uuid"[], "target_store_ids" "uuid"[]); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."update_employee_assignments_unscoped"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_job_title" "text", "target_status" "text", "target_role_ids" "uuid"[], "target_store_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."update_employee_assignments_unscoped"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_job_title" "text", "target_status" "text", "target_role_ids" "uuid"[], "target_store_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "private"."update_employee_assignments_unscoped"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_job_title" "text", "target_status" "text", "target_role_ids" "uuid"[], "target_store_ids" "uuid"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_employee_profile"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_full_name" "text", "target_phone" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."update_employee_profile"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_full_name" "text", "target_phone" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."update_employee_profile"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_full_name" "text", "target_phone" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."update_employee_profile"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_full_name" "text", "target_phone" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_inventory_policy"("target_organization_id" "uuid", "target_store_id" "uuid", "target_negative_stock_policy" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."update_inventory_policy"("target_organization_id" "uuid", "target_store_id" "uuid", "target_negative_stock_policy" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."update_inventory_policy"("target_organization_id" "uuid", "target_store_id" "uuid", "target_negative_stock_policy" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."update_inventory_policy"("target_organization_id" "uuid", "target_store_id" "uuid", "target_negative_stock_policy" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_kitchen_order_item_status"("target_organization_id" "uuid", "target_kitchen_order_item_id" "uuid", "target_status" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."update_kitchen_order_item_status"("target_organization_id" "uuid", "target_kitchen_order_item_id" "uuid", "target_status" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."update_kitchen_order_item_status"("target_organization_id" "uuid", "target_kitchen_order_item_id" "uuid", "target_status" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."update_kitchen_order_item_status"("target_organization_id" "uuid", "target_kitchen_order_item_id" "uuid", "target_status" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_kitchen_order_status"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_status" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."update_kitchen_order_status"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_status" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."update_kitchen_order_status"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_status" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."update_kitchen_order_status"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_status" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_organization_inventory_policy"("target_organization_id" "uuid", "target_negative_stock_policy" "text"); Type: ACL; Schema: private; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "private"."update_organization_inventory_policy"("target_organization_id" "uuid", "target_negative_stock_policy" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."update_organization_inventory_policy"("target_organization_id" "uuid", "target_negative_stock_policy" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "private"."update_organization_inventory_policy"("target_organization_id" "uuid", "target_negative_stock_policy" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_shift_cash_close_setting"("target_organization_id" "uuid", "target_show_expected_cash_before_close" boolean); Type: ACL; Schema: private; Owner: postgres
@@ -37776,7 +40236,7 @@ REVOKE ALL ON FUNCTION "private"."update_shift_cash_close_setting"("target_organ
 --
 
 REVOKE ALL ON FUNCTION "private"."update_supplier_lead_time"("target_organization_id" "uuid", "target_supplier_id" "uuid", "target_lead_time_days" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."update_supplier_lead_time"("target_organization_id" "uuid", "target_supplier_id" "uuid", "target_lead_time_days" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "private"."update_supplier_lead_time"("target_organization_id" "uuid", "target_supplier_id" "uuid", "target_lead_time_days" integer) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "upsert_inventory_replenishment_rule"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric); Type: ACL; Schema: private; Owner: postgres
@@ -37861,21 +40321,21 @@ REVOKE ALL ON FUNCTION "private"."write_audit_log"("target_organization_id" "uui
 --
 
 REVOKE ALL ON FUNCTION "public"."accept_employee_invitation"("invitation_token_hash" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."accept_employee_invitation"("invitation_token_hash" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."accept_employee_invitation"("invitation_token_hash" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "add_loyalty_card_stamp"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_reason" "text", "target_sale_id" "uuid", "target_idempotency_key" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."add_loyalty_card_stamp"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_reason" "text", "target_sale_id" "uuid", "target_idempotency_key" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."add_loyalty_card_stamp"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_reason" "text", "target_sale_id" "uuid", "target_idempotency_key" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."add_loyalty_card_stamp"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_reason" "text", "target_sale_id" "uuid", "target_idempotency_key" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "adjust_customer_loyalty_points"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_points_delta" integer, "target_reason" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."adjust_customer_loyalty_points"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_points_delta" integer, "target_reason" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."adjust_customer_loyalty_points"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_points_delta" integer, "target_reason" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."adjust_customer_loyalty_points"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_points_delta" integer, "target_reason" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "adjust_inventory"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_movement_type" "text", "target_reason" "text", "target_approval_request_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
@@ -37888,112 +40348,112 @@ REVOKE ALL ON FUNCTION "public"."adjust_inventory"("target_organization_id" "uui
 --
 
 REVOKE ALL ON FUNCTION "public"."approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."approve_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "approve_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_approver_employee_number" "text", "target_pin" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."approve_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_approver_employee_number" "text", "target_pin" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."approve_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_approver_employee_number" "text", "target_pin" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."approve_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_approver_employee_number" "text", "target_pin" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "approve_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."approve_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."approve_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."approve_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "bootstrap_organization"("organization_name" "text", "store_name" "text", "register_name" "text", "currency_code" "text", "timezone_name" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."bootstrap_organization"("organization_name" "text", "store_name" "text", "register_name" "text", "currency_code" "text", "timezone_name" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."bootstrap_organization"("organization_name" "text", "store_name" "text", "register_name" "text", "currency_code" "text", "timezone_name" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."bootstrap_organization"("organization_name" "text", "store_name" "text", "register_name" "text", "currency_code" "text", "timezone_name" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "bootstrap_organization_v2"("organization_name" "text", "store_name" "text", "register_name" "text", "currency_code" "text", "timezone_name" "text", "business_type" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."bootstrap_organization_v2"("organization_name" "text", "store_name" "text", "register_name" "text", "currency_code" "text", "timezone_name" "text", "business_type" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."bootstrap_organization_v2"("organization_name" "text", "store_name" "text", "register_name" "text", "currency_code" "text", "timezone_name" "text", "business_type" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."bootstrap_organization_v2"("organization_name" "text", "store_name" "text", "register_name" "text", "currency_code" "text", "timezone_name" "text", "business_type" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "cancel_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_note" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."cancel_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_note" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."cancel_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_note" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."cancel_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_note" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."cancel_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "cancel_open_ticket"("uuid", "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."cancel_open_ticket"("uuid", "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."cancel_open_ticket"("uuid", "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."cancel_open_ticket"("uuid", "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "cancel_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_note" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."cancel_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_note" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."cancel_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_note" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."cancel_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_note" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "change_employee_lifecycle"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_action" "text", "target_reason" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."change_employee_lifecycle"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_action" "text", "target_reason" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."change_employee_lifecycle"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_action" "text", "target_reason" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."change_employee_lifecycle"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_action" "text", "target_reason" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "change_pos_device_register"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."change_pos_device_register"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."change_pos_device_register"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."change_pos_device_register"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "checkout_advanced_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer, "target_discount_id" "uuid", "target_tax_rate_id" "uuid", "target_dining_option_id" "uuid", "target_open_ticket_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."checkout_advanced_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer, "target_discount_id" "uuid", "target_tax_rate_id" "uuid", "target_dining_option_id" "uuid", "target_open_ticket_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."checkout_advanced_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer, "target_discount_id" "uuid", "target_tax_rate_id" "uuid", "target_dining_option_id" "uuid", "target_open_ticket_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."checkout_advanced_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer, "target_discount_id" "uuid", "target_tax_rate_id" "uuid", "target_dining_option_id" "uuid", "target_open_ticket_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "checkout_cash_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_cash_tendered_minor" bigint, "target_idempotency_key" "uuid", "target_items" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."checkout_cash_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_cash_tendered_minor" bigint, "target_idempotency_key" "uuid", "target_items" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."checkout_cash_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_cash_tendered_minor" bigint, "target_idempotency_key" "uuid", "target_items" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."checkout_cash_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_cash_tendered_minor" bigint, "target_idempotency_key" "uuid", "target_items" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."checkout_sale"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_idempotency_key" "uuid", "target_items" "jsonb", "target_payments" "jsonb", "target_customer_id" "uuid", "target_loyalty_redemption_points" integer) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "claim_loyalty_card_reward"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_reason" "text", "target_sale_id" "uuid", "target_idempotency_key" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."claim_loyalty_card_reward"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_reason" "text", "target_sale_id" "uuid", "target_idempotency_key" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."claim_loyalty_card_reward"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_reason" "text", "target_sale_id" "uuid", "target_idempotency_key" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."claim_loyalty_card_reward"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_reason" "text", "target_sale_id" "uuid", "target_idempotency_key" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "clock_in_employee"("target_organization_id" "uuid", "target_store_id" "uuid", "target_clock_in_note" "text"); Type: ACL; Schema: public; Owner: postgres
@@ -38006,7 +40466,7 @@ REVOKE ALL ON FUNCTION "public"."clock_in_employee"("target_organization_id" "uu
 --
 
 REVOKE ALL ON FUNCTION "public"."clock_in_employee_with_pin"("target_organization_id" "uuid", "target_store_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."clock_in_employee_with_pin"("target_organization_id" "uuid", "target_store_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."clock_in_employee_with_pin"("target_organization_id" "uuid", "target_store_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "clock_out_employee"("target_organization_id" "uuid", "target_clock_out_note" "text"); Type: ACL; Schema: public; Owner: postgres
@@ -38019,436 +40479,513 @@ REVOKE ALL ON FUNCTION "public"."clock_out_employee"("target_organization_id" "u
 --
 
 REVOKE ALL ON FUNCTION "public"."clock_out_employee_with_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."clock_out_employee_with_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."clock_out_employee_with_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text", "target_request_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "close_register_shift"("target_organization_id" "uuid", "target_shift_id" "uuid", "target_counted_cash_minor" bigint, "target_closing_note" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."close_register_shift"("target_organization_id" "uuid", "target_shift_id" "uuid", "target_counted_cash_minor" bigint, "target_closing_note" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."close_register_shift"("target_organization_id" "uuid", "target_shift_id" "uuid", "target_counted_cash_minor" bigint, "target_closing_note" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."close_register_shift"("target_organization_id" "uuid", "target_shift_id" "uuid", "target_counted_cash_minor" bigint, "target_closing_note" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "complete_organization_export"("target_export_session_id" "uuid", "target_record_count" integer, "target_manifest" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."complete_organization_export"("target_export_session_id" "uuid", "target_record_count" integer, "target_manifest" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."complete_organization_export"("target_export_session_id" "uuid", "target_record_count" integer, "target_manifest" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."complete_organization_export"("target_export_session_id" "uuid", "target_record_count" integer, "target_manifest" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_catalog_product"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_catalog_product"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_catalog_product"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_catalog_product"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_catalog_product_v2"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_catalog_product_v2"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_catalog_product_v2"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_catalog_product_v2"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_catalog_product_v3"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_catalog_product_v3"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_catalog_product_v3"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_catalog_product_v3"("target_organization_id" "uuid", "target_category_id" "uuid", "target_name" "text", "target_description" "text", "target_product_type" "text", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_store_ids" "uuid"[], "target_variants" "jsonb", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_custom_role"("target_organization_id" "uuid", "role_name" "text", "role_code" "text", "role_description" "text", "permission_codes" "text"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_custom_role"("target_organization_id" "uuid", "role_name" "text", "role_code" "text", "role_description" "text", "permission_codes" "text"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_custom_role"("target_organization_id" "uuid", "role_name" "text", "role_code" "text", "role_description" "text", "permission_codes" "text"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_custom_role"("target_organization_id" "uuid", "role_name" "text", "role_code" "text", "role_description" "text", "permission_codes" "text"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_customer_segment"("target_organization_id" "uuid", "target_name" "text", "target_description" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_customer_segment"("target_organization_id" "uuid", "target_name" "text", "target_description" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_customer_segment"("target_organization_id" "uuid", "target_name" "text", "target_description" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_customer_segment"("target_organization_id" "uuid", "target_name" "text", "target_description" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_direct_stock_transfer"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_direct_stock_transfer"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_direct_stock_transfer"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_direct_stock_transfer"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_inventory_adjustment_reason"("target_organization_id" "uuid", "target_code" "text", "target_name" "text", "target_movement_type" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_inventory_adjustment_reason"("target_organization_id" "uuid", "target_code" "text", "target_name" "text", "target_movement_type" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_inventory_adjustment_reason"("target_organization_id" "uuid", "target_code" "text", "target_name" "text", "target_movement_type" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_inventory_adjustment_reason"("target_organization_id" "uuid", "target_code" "text", "target_name" "text", "target_movement_type" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_inventory_count_batch"("target_organization_id" "uuid", "target_name" "text", "target_note" "text", "target_store_ids" "uuid"[], "target_count_mode" "text", "target_sort_mode" "text", "target_include_zero_stock" boolean); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_inventory_count_batch"("target_organization_id" "uuid", "target_name" "text", "target_note" "text", "target_store_ids" "uuid"[], "target_count_mode" "text", "target_sort_mode" "text", "target_include_zero_stock" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_inventory_count_batch"("target_organization_id" "uuid", "target_name" "text", "target_note" "text", "target_store_ids" "uuid"[], "target_count_mode" "text", "target_sort_mode" "text", "target_include_zero_stock" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_inventory_count_batch"("target_organization_id" "uuid", "target_name" "text", "target_note" "text", "target_store_ids" "uuid"[], "target_count_mode" "text", "target_sort_mode" "text", "target_include_zero_stock" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_inventory_count_plan_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean, "target_scope_reference_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_inventory_count_plan_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean, "target_scope_reference_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_inventory_count_plan_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean, "target_scope_reference_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_inventory_count_plan_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_note" "text", "target_count_mode" "text", "target_scope_type" "text", "target_selected_items" "jsonb", "target_sort_mode" "text", "target_include_zero_stock" boolean, "target_scope_reference_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_inventory_transfer_draft"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_product_unit"("target_organization_id" "uuid", "target_product_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_product_unit"("target_organization_id" "uuid", "target_product_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_product_unit"("target_organization_id" "uuid", "target_product_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_product_unit"("target_organization_id" "uuid", "target_product_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_purchase_order_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_lines" "jsonb", "target_operation_id" "uuid", "target_expected_at" "date"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_purchase_order_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_lines" "jsonb", "target_operation_id" "uuid", "target_expected_at" "date") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_purchase_order_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_lines" "jsonb", "target_operation_id" "uuid", "target_expected_at" "date") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_purchase_order_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_notes" "text", "target_lines" "jsonb", "target_operation_id" "uuid", "target_expected_at" "date") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_stock_request"("target_organization_id" "uuid", "target_requesting_store_id" "uuid", "target_source_warehouse_id" "uuid", "target_note" "text", "target_lines" "jsonb", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_stock_request"("target_organization_id" "uuid", "target_requesting_store_id" "uuid", "target_source_warehouse_id" "uuid", "target_note" "text", "target_lines" "jsonb", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_stock_request"("target_organization_id" "uuid", "target_requesting_store_id" "uuid", "target_source_warehouse_id" "uuid", "target_note" "text", "target_lines" "jsonb", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_stock_request"("target_organization_id" "uuid", "target_requesting_store_id" "uuid", "target_source_warehouse_id" "uuid", "target_note" "text", "target_lines" "jsonb", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_store_scoped_payment_method"("target_organization_id" "uuid", "target_name" "text", "target_code" "text", "target_payment_type" "text", "target_requires_reference" boolean, "target_store_ids" "uuid"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_store_scoped_payment_method"("target_organization_id" "uuid", "target_name" "text", "target_code" "text", "target_payment_type" "text", "target_requires_reference" boolean, "target_store_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_store_scoped_payment_method"("target_organization_id" "uuid", "target_name" "text", "target_code" "text", "target_payment_type" "text", "target_requires_reference" boolean, "target_store_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_store_scoped_payment_method"("target_organization_id" "uuid", "target_name" "text", "target_code" "text", "target_payment_type" "text", "target_requires_reference" boolean, "target_store_ids" "uuid"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_supplier"("target_organization_id" "uuid", "target_name" "text", "target_contact_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_notes" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_supplier"("target_organization_id" "uuid", "target_name" "text", "target_contact_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_notes" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_supplier"("target_organization_id" "uuid", "target_name" "text", "target_contact_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_notes" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_supplier"("target_organization_id" "uuid", "target_name" "text", "target_contact_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_notes" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "create_supply_chain_warehouse"("target_organization_id" "uuid", "target_store_id" "uuid", "target_code" "text", "target_name" "text", "target_notes" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."create_supply_chain_warehouse"("target_organization_id" "uuid", "target_store_id" "uuid", "target_code" "text", "target_name" "text", "target_notes" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."create_supply_chain_warehouse"("target_organization_id" "uuid", "target_store_id" "uuid", "target_code" "text", "target_name" "text", "target_notes" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_supply_chain_warehouse"("target_organization_id" "uuid", "target_store_id" "uuid", "target_code" "text", "target_name" "text", "target_notes" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "current_profile_id"(); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."current_profile_id"() FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."current_profile_id"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."current_profile_id"() TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "decide_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_decision" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."decide_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_decision" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."decide_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_decision" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."decide_manager_approval"("target_organization_id" "uuid", "target_approval_request_id" "uuid", "target_decision" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "delete_catalog_product_if_eligible"("target_organization_id" "uuid", "target_product_id" "uuid", "target_confirmation_name" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."delete_catalog_product_if_eligible"("target_organization_id" "uuid", "target_product_id" "uuid", "target_confirmation_name" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."delete_catalog_product_if_eligible"("target_organization_id" "uuid", "target_product_id" "uuid", "target_confirmation_name" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."delete_catalog_product_if_eligible"("target_organization_id" "uuid", "target_product_id" "uuid", "target_confirmation_name" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "delete_employee_if_eligible"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_confirmation_number" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."delete_employee_if_eligible"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_confirmation_number" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."delete_employee_if_eligible"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_confirmation_number" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."delete_employee_if_eligible"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_confirmation_number" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "delete_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."delete_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."delete_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."delete_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "delete_unused_setup_record"("target_organization_id" "uuid", "target_record_type" "text", "target_record_id" "uuid", "target_confirmation_name" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."delete_unused_setup_record"("target_organization_id" "uuid", "target_record_type" "text", "target_record_id" "uuid", "target_confirmation_name" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."delete_unused_setup_record"("target_organization_id" "uuid", "target_record_type" "text", "target_record_id" "uuid", "target_confirmation_name" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."delete_unused_setup_record"("target_organization_id" "uuid", "target_record_type" "text", "target_record_id" "uuid", "target_confirmation_name" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."dispatch_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "dispatch_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."dispatch_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."dispatch_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."dispatch_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "ensure_current_identity_profile"("target_email" "text", "target_full_name" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."ensure_current_identity_profile"("target_email" "text", "target_full_name" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."ensure_current_identity_profile"("target_email" "text", "target_full_name" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."ensure_current_identity_profile"("target_email" "text", "target_full_name" "text") TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "finalize_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_final_state" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."finalize_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_final_state" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."finalize_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_final_state" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "generate_catalog_identifiers"("target_organization_id" "uuid", "target_product_name" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."generate_catalog_identifiers"("target_organization_id" "uuid", "target_product_name" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."generate_catalog_identifiers"("target_organization_id" "uuid", "target_product_name" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."generate_catalog_identifiers"("target_organization_id" "uuid", "target_product_name" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_attendance_employees"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_attendance_employees"("target_organization_id" "uuid", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_attendance_employees"("target_organization_id" "uuid", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_attendance_employees"("target_organization_id" "uuid", "target_store_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_catalog_costs"("target_organization_id" "uuid", "requested_product_ids" "uuid"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_catalog_costs"("target_organization_id" "uuid", "requested_product_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_catalog_costs"("target_organization_id" "uuid", "requested_product_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_catalog_costs"("target_organization_id" "uuid", "requested_product_ids" "uuid"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid", "target_sale_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid", "target_sale_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid", "target_sale_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_checkout_stock_warning"("target_organization_id" "uuid", "target_store_id" "uuid", "target_sale_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_current_time_clock_entry"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_current_time_clock_entry"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_current_time_clock_entry"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_current_time_clock_entry"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_customer_display_bootstrap"("target_access_token_hash" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_customer_display_bootstrap"("target_access_token_hash" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_customer_display_bootstrap"("target_access_token_hash" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_customer_display_bootstrap"("target_access_token_hash" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_customer_display_bootstrap"("target_access_token_hash" "text") TO "tindio_anon";
+GRANT ALL ON FUNCTION "public"."get_customer_display_bootstrap"("target_access_token_hash" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_customer_display_management_sessions"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_customer_display_management_sessions"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_customer_display_management_sessions"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_customer_display_management_sessions"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_customer_display_receipt"("target_access_token_hash" "text", "target_sale_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_customer_display_receipt"("target_access_token_hash" "text", "target_sale_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_customer_display_receipt"("target_access_token_hash" "text", "target_sale_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_customer_display_receipt"("target_access_token_hash" "text", "target_sale_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_customer_display_receipt"("target_access_token_hash" "text", "target_sale_id" "uuid") TO "tindio_anon";
+GRANT ALL ON FUNCTION "public"."get_customer_display_receipt"("target_access_token_hash" "text", "target_sale_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_customer_loyalty_card_events"("target_organization_id" "uuid", "target_customer_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_customer_loyalty_card_events"("target_organization_id" "uuid", "target_customer_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_customer_loyalty_card_events"("target_organization_id" "uuid", "target_customer_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_customer_loyalty_card_events"("target_organization_id" "uuid", "target_customer_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_customer_loyalty_cards"("target_organization_id" "uuid", "target_customer_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_customer_loyalty_cards"("target_organization_id" "uuid", "target_customer_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_customer_loyalty_cards"("target_organization_id" "uuid", "target_customer_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_customer_loyalty_cards"("target_organization_id" "uuid", "target_customer_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_customer_purchase_history"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_limit" integer); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_customer_purchase_history"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_limit" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_customer_purchase_history"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_limit" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_customer_purchase_history"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_limit" integer) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_customer_summary"("target_organization_id" "uuid", "target_customer_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_customer_summary"("target_organization_id" "uuid", "target_customer_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_customer_summary"("target_organization_id" "uuid", "target_customer_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_customer_summary"("target_organization_id" "uuid", "target_customer_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_dashboard_operational_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_dashboard_operational_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_dashboard_operational_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_dashboard_operational_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_dashboard_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_dashboard_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_dashboard_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_dashboard_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_employee_management_detail"("target_organization_id" "uuid", "target_employee_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_employee_management_detail"("target_organization_id" "uuid", "target_employee_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_employee_management_detail"("target_organization_id" "uuid", "target_employee_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_employee_management_detail"("target_organization_id" "uuid", "target_employee_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_inventory_count_awareness"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_inventory_count_awareness"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_inventory_count_awareness"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_inventory_count_awareness"("target_organization_id" "uuid") TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "get_inventory_count_batch_documents_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_batch_ids" "uuid"[]); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_inventory_count_batch_documents_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_batch_ids" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_inventory_count_batch_documents_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_batch_ids" "uuid"[]) TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "get_inventory_count_batches_workspace_v2"("target_organization_id" "uuid", "target_limit" integer); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_inventory_count_batches_workspace_v2"("target_organization_id" "uuid", "target_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_inventory_count_batches_workspace_v2"("target_organization_id" "uuid", "target_limit" integer) TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "get_inventory_count_lines_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_ids" "uuid"[]); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_inventory_count_lines_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_ids" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_inventory_count_lines_workspace_v2"("target_organization_id" "uuid", "target_inventory_count_ids" "uuid"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_inventory_count_suppliers"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_inventory_count_suppliers"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_inventory_count_suppliers"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_inventory_count_suppliers"("target_organization_id" "uuid") TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "get_inventory_counts_workspace_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_limit" integer); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_inventory_counts_workspace_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_inventory_counts_workspace_v2"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_limit" integer) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_inventory_health_awareness"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_inventory_health_awareness"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_inventory_health_awareness"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_inventory_health_awareness"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_inventory_movement_costs"("target_organization_id" "uuid", "requested_movement_ids" "uuid"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_inventory_movement_costs"("target_organization_id" "uuid", "requested_movement_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_inventory_movement_costs"("target_organization_id" "uuid", "requested_movement_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_inventory_movement_costs"("target_organization_id" "uuid", "requested_movement_ids" "uuid"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_inventory_schema_contract"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_inventory_schema_contract"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_inventory_schema_contract"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_inventory_schema_contract"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_inventory_stock_page"("target_organization_id" "uuid", "requested_store_id" "uuid", "requested_search" "text", "requested_category_id" "uuid", "requested_status" "text", "requested_restock_policy" "text", "requested_sort" "text", "requested_page" integer, "requested_page_size" integer); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_inventory_stock_page"("target_organization_id" "uuid", "requested_store_id" "uuid", "requested_search" "text", "requested_category_id" "uuid", "requested_status" "text", "requested_restock_policy" "text", "requested_sort" "text", "requested_page" integer, "requested_page_size" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_inventory_stock_page"("target_organization_id" "uuid", "requested_store_id" "uuid", "requested_search" "text", "requested_category_id" "uuid", "requested_status" "text", "requested_restock_policy" "text", "requested_sort" "text", "requested_page" integer, "requested_page_size" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_inventory_stock_page"("target_organization_id" "uuid", "requested_store_id" "uuid", "requested_search" "text", "requested_category_id" "uuid", "requested_status" "text", "requested_restock_policy" "text", "requested_sort" "text", "requested_page" integer, "requested_page_size" integer) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_inventory_valuation"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_inventory_valuation"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_inventory_valuation"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_inventory_valuation"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_kitchen_orders"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_kitchen_orders"("target_organization_id" "uuid", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_kitchen_orders"("target_organization_id" "uuid", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_kitchen_orders"("target_organization_id" "uuid", "target_store_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_kitchen_station_routes"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_kitchen_station_routes"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_kitchen_station_routes"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_kitchen_station_routes"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_organization_export_page"("target_export_session_id" "uuid", "target_section" "text", "target_after_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_organization_export_page"("target_export_session_id" "uuid", "target_section" "text", "target_after_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_organization_export_page"("target_export_session_id" "uuid", "target_section" "text", "target_after_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_organization_export_page"("target_export_session_id" "uuid", "target_section" "text", "target_after_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_organization_readiness_access"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_organization_readiness_access"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_organization_readiness_access"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_organization_readiness_access"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_organization_recovery_snapshot"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_organization_recovery_snapshot"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_organization_recovery_snapshot"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_organization_recovery_snapshot"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_organization_usage_snapshot"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_organization_usage_snapshot"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_organization_usage_snapshot"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_organization_usage_snapshot"("target_organization_id" "uuid") TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "get_pos_bootstrap_core_v2"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_bootstrap_core_v2"("target_organization_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_bootstrap_core_v2"("target_organization_id" "uuid") TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "get_pos_catalog_product_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_catalog_product_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_catalog_product_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "get_pos_catalog_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_mode" "text", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_catalog_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_mode" "text", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_catalog_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_mode" "text", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_pos_customer_display_sessions"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_pos_customer_display_sessions"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_pos_customer_display_sessions"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_pos_customer_display_sessions"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_pos_customer_display_sessions_with_ids"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_pos_customer_display_sessions_with_ids"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_pos_customer_display_sessions_with_ids"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_pos_customer_display_sessions_with_ids"("target_organization_id" "uuid") TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "get_pos_device_sync_checkpoint"("target_organization_id" "uuid", "target_device_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_device_sync_checkpoint"("target_organization_id" "uuid", "target_device_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_device_sync_checkpoint"("target_organization_id" "uuid", "target_device_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_pos_favorite_items"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_pos_favorite_items"("target_organization_id" "uuid", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_pos_favorite_items"("target_organization_id" "uuid", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_pos_favorite_items"("target_organization_id" "uuid", "target_store_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_pos_incoming_stock_transfers"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_pos_incoming_stock_transfers"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_pos_incoming_stock_transfers"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_pos_incoming_stock_transfers"("target_organization_id" "uuid") TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "get_pos_live_state_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_live_state_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_live_state_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "get_pos_modifiers_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_modifiers_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_modifiers_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_pos_open_tickets"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_pos_open_tickets"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_pos_open_tickets"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_pos_open_tickets"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_pos_product_modifiers"("target_organization_id" "uuid", "target_product_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
@@ -38461,78 +40998,106 @@ REVOKE ALL ON FUNCTION "public"."get_pos_product_modifiers"("target_organization
 --
 
 REVOKE ALL ON FUNCTION "public"."get_pos_product_modifiers"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_pos_product_modifiers"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_pos_product_modifiers"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_pos_receipt_detail"("target_organization_id" "uuid", "target_receipt_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_pos_receipt_detail"("target_organization_id" "uuid", "target_receipt_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_pos_receipt_detail"("target_organization_id" "uuid", "target_receipt_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_pos_receipt_detail"("target_organization_id" "uuid", "target_receipt_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_pos_receipt_history"("target_organization_id" "uuid", "target_query" "text", "target_before_receipt_number" bigint, "target_limit" integer); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_pos_receipt_history"("target_organization_id" "uuid", "target_query" "text", "target_before_receipt_number" bigint, "target_limit" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_pos_receipt_history"("target_organization_id" "uuid", "target_query" "text", "target_before_receipt_number" bigint, "target_limit" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_pos_receipt_history"("target_organization_id" "uuid", "target_query" "text", "target_before_receipt_number" bigint, "target_limit" integer) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_pos_recent_items"("target_organization_id" "uuid", "target_store_id" "uuid", "target_limit" integer); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_pos_recent_items"("target_organization_id" "uuid", "target_store_id" "uuid", "target_limit" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_pos_recent_items"("target_organization_id" "uuid", "target_store_id" "uuid", "target_limit" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_pos_recent_items"("target_organization_id" "uuid", "target_store_id" "uuid", "target_limit" integer) TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "get_pos_reference_bundle_v2"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_reference_bundle_v2"("target_organization_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_reference_bundle_v2"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_pos_shift_operational_summary"("target_organization_id" "uuid", "target_shift_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_pos_shift_operational_summary"("target_organization_id" "uuid", "target_shift_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_pos_shift_operational_summary"("target_organization_id" "uuid", "target_shift_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_pos_shift_operational_summary"("target_organization_id" "uuid", "target_shift_id" "uuid") TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "get_pos_sync_change_window"("target_organization_id" "uuid", "target_device_id" "uuid", "target_after_revision" bigint, "target_limit" integer); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_sync_change_window"("target_organization_id" "uuid", "target_device_id" "uuid", "target_after_revision" bigint, "target_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_sync_change_window"("target_organization_id" "uuid", "target_device_id" "uuid", "target_after_revision" bigint, "target_limit" integer) TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "get_pos_sync_customer"("target_organization_id" "uuid", "target_device_id" "uuid", "target_customer_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_sync_customer"("target_organization_id" "uuid", "target_device_id" "uuid", "target_customer_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_sync_customer"("target_organization_id" "uuid", "target_device_id" "uuid", "target_customer_id" "uuid") TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "get_pos_sync_revision"("target_organization_id" "uuid", "target_device_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."get_pos_sync_revision"("target_organization_id" "uuid", "target_device_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_pos_sync_revision"("target_organization_id" "uuid", "target_device_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_pos_ticket_assignees"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_pos_ticket_assignees"("target_organization_id" "uuid", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_pos_ticket_assignees"("target_organization_id" "uuid", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_pos_ticket_assignees"("target_organization_id" "uuid", "target_store_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_public_smart_menu"("target_menu_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_public_smart_menu"("target_menu_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_public_smart_menu"("target_menu_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_public_smart_menu"("target_menu_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_public_smart_menu"("target_menu_id" "uuid") TO "tindio_anon";
+GRANT ALL ON FUNCTION "public"."get_public_smart_menu"("target_menu_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_purchase_order_line_costs"("target_organization_id" "uuid", "requested_purchase_order_line_ids" "uuid"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_purchase_order_line_costs"("target_organization_id" "uuid", "requested_purchase_order_line_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_purchase_order_line_costs"("target_organization_id" "uuid", "requested_purchase_order_line_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_purchase_order_line_costs"("target_organization_id" "uuid", "requested_purchase_order_line_ids" "uuid"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_reports_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_reports_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_reports_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_reports_snapshot"("target_organization_id" "uuid", "target_start_date" "date", "target_end_date" "date", "target_store_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_shift_audit_history"("target_organization_id" "uuid", "target_limit" integer); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_shift_audit_history"("target_organization_id" "uuid", "target_limit" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_shift_audit_history"("target_organization_id" "uuid", "target_limit" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_shift_audit_history"("target_organization_id" "uuid", "target_limit" integer) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_shift_audit_report"("target_organization_id" "uuid", "target_shift_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."get_shift_audit_report"("target_organization_id" "uuid", "target_shift_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_shift_audit_report"("target_organization_id" "uuid", "target_shift_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_shift_audit_report"("target_organization_id" "uuid", "target_shift_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "get_shift_audit_report_internal"("target_organization_id" "uuid", "target_shift_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
@@ -38545,21 +41110,21 @@ REVOKE ALL ON FUNCTION "public"."get_shift_audit_report_internal"("target_organi
 --
 
 REVOKE ALL ON FUNCTION "public"."get_shift_cash_summary"("target_organization_id" "uuid", "target_shift_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_shift_cash_summary"("target_organization_id" "uuid", "target_shift_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_shift_cash_summary"("target_organization_id" "uuid", "target_shift_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."import_catalog_products_v3"("target_organization_id" "uuid", "target_store_ids" "uuid"[], "target_rows" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "import_customers_csv"("target_organization_id" "uuid", "target_rows" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."import_customers_csv"("target_organization_id" "uuid", "target_rows" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."import_customers_csv"("target_organization_id" "uuid", "target_rows" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."import_customers_csv"("target_organization_id" "uuid", "target_rows" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "import_inventory_adjustments_csv"("target_organization_id" "uuid", "target_store_id" "uuid", "target_reason_code" "text", "target_rows" "jsonb"); Type: ACL; Schema: public; Owner: postgres
@@ -38572,133 +41137,133 @@ REVOKE ALL ON FUNCTION "public"."import_inventory_adjustments_csv"("target_organ
 --
 
 REVOKE ALL ON FUNCTION "public"."import_inventory_adjustments_csv"("target_organization_id" "uuid", "target_store_id" "uuid", "target_reason_code" "text", "target_rows" "jsonb", "target_operation_id" "uuid", "target_approval_request_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."import_inventory_adjustments_csv"("target_organization_id" "uuid", "target_store_id" "uuid", "target_reason_code" "text", "target_rows" "jsonb", "target_operation_id" "uuid", "target_approval_request_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."import_inventory_adjustments_csv"("target_organization_id" "uuid", "target_store_id" "uuid", "target_reason_code" "text", "target_rows" "jsonb", "target_operation_id" "uuid", "target_approval_request_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "import_inventory_count_lines"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_rows" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."import_inventory_count_lines"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_rows" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."import_inventory_count_lines"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_rows" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."import_inventory_count_lines"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_rows" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "import_suppliers_csv"("target_organization_id" "uuid", "target_rows" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."import_suppliers_csv"("target_organization_id" "uuid", "target_rows" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."import_suppliers_csv"("target_organization_id" "uuid", "target_rows" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."import_suppliers_csv"("target_organization_id" "uuid", "target_rows" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "issue_loyalty_card"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_card_code" "text", "target_verification_token" "text", "target_replaces_card_id" "uuid", "target_reason" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."issue_loyalty_card"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_card_code" "text", "target_verification_token" "text", "target_replaces_card_id" "uuid", "target_reason" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."issue_loyalty_card"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_card_code" "text", "target_verification_token" "text", "target_replaces_card_id" "uuid", "target_reason" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."issue_loyalty_card"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_card_code" "text", "target_verification_token" "text", "target_replaces_card_id" "uuid", "target_reason" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "link_sale_exchange"("target_organization_id" "uuid", "target_refund_id" "uuid", "target_replacement_receipt_number" bigint, "target_idempotency_key" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."link_sale_exchange"("target_organization_id" "uuid", "target_refund_id" "uuid", "target_replacement_receipt_number" bigint, "target_idempotency_key" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."link_sale_exchange"("target_organization_id" "uuid", "target_refund_id" "uuid", "target_replacement_receipt_number" bigint, "target_idempotency_key" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."link_sale_exchange"("target_organization_id" "uuid", "target_refund_id" "uuid", "target_replacement_receipt_number" bigint, "target_idempotency_key" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "manage_organization_lifecycle"("target_organization_id" "uuid", "target_action" "text", "target_reason" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."manage_organization_lifecycle"("target_organization_id" "uuid", "target_action" "text", "target_reason" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."manage_organization_lifecycle"("target_organization_id" "uuid", "target_action" "text", "target_reason" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."manage_organization_lifecycle"("target_organization_id" "uuid", "target_action" "text", "target_reason" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "merge_open_tickets"("target_organization_id" "uuid", "target_source_ticket_id" "uuid", "target_destination_ticket_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."merge_open_tickets"("target_organization_id" "uuid", "target_source_ticket_id" "uuid", "target_destination_ticket_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."merge_open_tickets"("target_organization_id" "uuid", "target_source_ticket_id" "uuid", "target_destination_ticket_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."merge_open_tickets"("target_organization_id" "uuid", "target_source_ticket_id" "uuid", "target_destination_ticket_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "move_open_ticket_lines"("target_organization_id" "uuid", "target_source_ticket_id" "uuid", "target_destination_ticket_id" "uuid", "target_lines" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."move_open_ticket_lines"("target_organization_id" "uuid", "target_source_ticket_id" "uuid", "target_destination_ticket_id" "uuid", "target_lines" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."move_open_ticket_lines"("target_organization_id" "uuid", "target_source_ticket_id" "uuid", "target_destination_ticket_id" "uuid", "target_lines" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."move_open_ticket_lines"("target_organization_id" "uuid", "target_source_ticket_id" "uuid", "target_destination_ticket_id" "uuid", "target_lines" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "open_register_shift"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_opening_cash_minor" bigint, "target_opening_note" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."open_register_shift"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_opening_cash_minor" bigint, "target_opening_note" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."open_register_shift"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_opening_cash_minor" bigint, "target_opening_note" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."open_register_shift"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_opening_cash_minor" bigint, "target_opening_note" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "post_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."post_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."post_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."post_inventory_count"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "prepare_organization_export"("target_organization_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."prepare_organization_export"("target_organization_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."prepare_organization_export"("target_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."prepare_organization_export"("target_organization_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."produce_composite"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity" numeric, "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "provision_customer_display_session"("target_organization_id" "uuid", "target_register_id" "uuid", "target_access_token_hash" "text", "target_realtime_topic" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."provision_customer_display_session"("target_organization_id" "uuid", "target_register_id" "uuid", "target_access_token_hash" "text", "target_realtime_topic" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."provision_customer_display_session"("target_organization_id" "uuid", "target_register_id" "uuid", "target_access_token_hash" "text", "target_realtime_topic" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."provision_customer_display_session"("target_organization_id" "uuid", "target_register_id" "uuid", "target_access_token_hash" "text", "target_realtime_topic" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "queue_receipt_delivery"("target_organization_id" "uuid", "target_receipt_id" "uuid", "target_delivery_channel" "text", "target_recipient" "text", "target_idempotency_key" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."queue_receipt_delivery"("target_organization_id" "uuid", "target_receipt_id" "uuid", "target_delivery_channel" "text", "target_recipient" "text", "target_idempotency_key" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."queue_receipt_delivery"("target_organization_id" "uuid", "target_receipt_id" "uuid", "target_delivery_channel" "text", "target_recipient" "text", "target_idempotency_key" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."queue_receipt_delivery"("target_organization_id" "uuid", "target_receipt_id" "uuid", "target_delivery_channel" "text", "target_recipient" "text", "target_idempotency_key" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."receive_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "receive_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."receive_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."receive_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."receive_purchase_order"("target_organization_id" "uuid", "target_purchase_order_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "receive_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."receive_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."receive_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."receive_stock_request"("target_organization_id" "uuid", "target_stock_request_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "receive_stock_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."receive_stock_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."receive_stock_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."receive_stock_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "record_cash_movement"("target_organization_id" "uuid", "target_shift_id" "uuid", "target_movement_type" "text", "target_amount_minor" bigint, "target_reason" "text", "target_idempotency_key" "uuid", "target_approval_request_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."record_cash_movement"("target_organization_id" "uuid", "target_shift_id" "uuid", "target_movement_type" "text", "target_amount_minor" bigint, "target_reason" "text", "target_idempotency_key" "uuid", "target_approval_request_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."record_cash_movement"("target_organization_id" "uuid", "target_shift_id" "uuid", "target_movement_type" "text", "target_amount_minor" bigint, "target_reason" "text", "target_idempotency_key" "uuid", "target_approval_request_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."record_cash_movement"("target_organization_id" "uuid", "target_shift_id" "uuid", "target_movement_type" "text", "target_amount_minor" bigint, "target_reason" "text", "target_idempotency_key" "uuid", "target_approval_request_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "record_inventory_adjustment_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text"); Type: ACL; Schema: public; Owner: postgres
@@ -38711,196 +41276,210 @@ REVOKE ALL ON FUNCTION "public"."record_inventory_adjustment_v2"("target_organiz
 --
 
 REVOKE ALL ON FUNCTION "public"."record_inventory_adjustment_v3"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid", "target_variant_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."record_inventory_adjustment_v3"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid", "target_variant_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."record_inventory_adjustment_v3"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_quantity_delta" numeric, "target_reason_code" "text", "target_note" "text", "target_operation_id" "uuid", "target_approval_request_id" "uuid", "target_variant_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "record_offline_sync_event"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_shift_id" "uuid", "target_device_id" "uuid", "target_idempotency_key" "uuid", "target_local_receipt_reference" "text", "target_local_created_at" timestamp with time zone, "target_state" "text", "target_conflict_type" "text", "target_failure_message" "text", "target_official_receipt_number" bigint); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."record_offline_sync_event"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_shift_id" "uuid", "target_device_id" "uuid", "target_idempotency_key" "uuid", "target_local_receipt_reference" "text", "target_local_created_at" timestamp with time zone, "target_state" "text", "target_conflict_type" "text", "target_failure_message" "text", "target_official_receipt_number" bigint) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."record_offline_sync_event"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_shift_id" "uuid", "target_device_id" "uuid", "target_idempotency_key" "uuid", "target_local_receipt_reference" "text", "target_local_created_at" timestamp with time zone, "target_state" "text", "target_conflict_type" "text", "target_failure_message" "text", "target_official_receipt_number" bigint) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."record_offline_sync_event"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_shift_id" "uuid", "target_device_id" "uuid", "target_idempotency_key" "uuid", "target_local_receipt_reference" "text", "target_local_created_at" timestamp with time zone, "target_state" "text", "target_conflict_type" "text", "target_failure_message" "text", "target_official_receipt_number" bigint) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "record_organization_recovery_drill"("target_organization_id" "uuid", "target_drill_type" "text", "target_outcome" "text", "target_recovery_point_at" timestamp with time zone, "target_duration_minutes" integer, "target_notes" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."record_organization_recovery_drill"("target_organization_id" "uuid", "target_drill_type" "text", "target_outcome" "text", "target_recovery_point_at" timestamp with time zone, "target_duration_minutes" integer, "target_notes" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."record_organization_recovery_drill"("target_organization_id" "uuid", "target_drill_type" "text", "target_outcome" "text", "target_recovery_point_at" timestamp with time zone, "target_duration_minutes" integer, "target_notes" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."record_organization_recovery_drill"("target_organization_id" "uuid", "target_drill_type" "text", "target_outcome" "text", "target_recovery_point_at" timestamp with time zone, "target_duration_minutes" integer, "target_notes" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "refund_sale"("target_organization_id" "uuid", "target_sale_id" "uuid", "target_payment_method_id" "uuid", "target_idempotency_key" "uuid", "target_reason" "text", "target_reference_number" "text", "target_items" "jsonb", "target_approval_request_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."refund_sale"("target_organization_id" "uuid", "target_sale_id" "uuid", "target_payment_method_id" "uuid", "target_idempotency_key" "uuid", "target_reason" "text", "target_reference_number" "text", "target_items" "jsonb", "target_approval_request_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."refund_sale"("target_organization_id" "uuid", "target_sale_id" "uuid", "target_payment_method_id" "uuid", "target_idempotency_key" "uuid", "target_reason" "text", "target_reference_number" "text", "target_items" "jsonb", "target_approval_request_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."refund_sale"("target_organization_id" "uuid", "target_sale_id" "uuid", "target_payment_method_id" "uuid", "target_idempotency_key" "uuid", "target_reason" "text", "target_reference_number" "text", "target_items" "jsonb", "target_approval_request_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "register_pos_device"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_device_id" "uuid", "target_name" "text", "target_app_version" "text", "target_secret" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."register_pos_device"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_device_id" "uuid", "target_name" "text", "target_app_version" "text", "target_secret" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."register_pos_device"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_device_id" "uuid", "target_name" "text", "target_app_version" "text", "target_secret" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."register_pos_device"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_device_id" "uuid", "target_name" "text", "target_app_version" "text", "target_secret" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "remove_inventory_policy_override"("target_organization_id" "uuid", "target_store_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."remove_inventory_policy_override"("target_organization_id" "uuid", "target_store_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."remove_inventory_policy_override"("target_organization_id" "uuid", "target_store_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."remove_inventory_policy_override"("target_organization_id" "uuid", "target_store_id" "uuid") TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "report_pos_device_sync_telemetry"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_employee_id" "uuid", "target_employee_name" "text", "target_connection_mode" "text", "target_app_version" "text", "target_last_successful_sync_at" timestamp with time zone, "target_device_checkpoint" bigint, "target_server_checkpoint" bigint, "target_queue_depth" integer, "target_conflict_count" integer, "target_failed_count" integer, "target_offline_since" timestamp with time zone, "target_crash_count" bigint, "target_crash_window_started_at" timestamp with time zone, "target_last_crash_at" timestamp with time zone, "target_api_average_latency_ms" integer, "target_api_max_latency_ms" integer, "target_api_failure_count" integer, "target_sync_average_latency_ms" integer, "target_sync_max_latency_ms" integer, "target_local_database_health" "text", "target_local_schema_version" integer); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."report_pos_device_sync_telemetry"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_employee_id" "uuid", "target_employee_name" "text", "target_connection_mode" "text", "target_app_version" "text", "target_last_successful_sync_at" timestamp with time zone, "target_device_checkpoint" bigint, "target_server_checkpoint" bigint, "target_queue_depth" integer, "target_conflict_count" integer, "target_failed_count" integer, "target_offline_since" timestamp with time zone, "target_crash_count" bigint, "target_crash_window_started_at" timestamp with time zone, "target_last_crash_at" timestamp with time zone, "target_api_average_latency_ms" integer, "target_api_max_latency_ms" integer, "target_api_failure_count" integer, "target_sync_average_latency_ms" integer, "target_sync_max_latency_ms" integer, "target_local_database_health" "text", "target_local_schema_version" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."report_pos_device_sync_telemetry"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_employee_id" "uuid", "target_employee_name" "text", "target_connection_mode" "text", "target_app_version" "text", "target_last_successful_sync_at" timestamp with time zone, "target_device_checkpoint" bigint, "target_server_checkpoint" bigint, "target_queue_depth" integer, "target_conflict_count" integer, "target_failed_count" integer, "target_offline_since" timestamp with time zone, "target_crash_count" bigint, "target_crash_window_started_at" timestamp with time zone, "target_last_crash_at" timestamp with time zone, "target_api_average_latency_ms" integer, "target_api_max_latency_ms" integer, "target_api_failure_count" integer, "target_sync_average_latency_ms" integer, "target_sync_max_latency_ms" integer, "target_local_database_health" "text", "target_local_schema_version" integer) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "request_manager_approval"("target_organization_id" "uuid", "target_operation_code" "text", "target_reason" "text", "target_payload" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."request_manager_approval"("target_organization_id" "uuid", "target_operation_code" "text", "target_reason" "text", "target_payload" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."request_manager_approval"("target_organization_id" "uuid", "target_operation_code" "text", "target_reason" "text", "target_payload" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."request_manager_approval"("target_organization_id" "uuid", "target_operation_code" "text", "target_reason" "text", "target_payload" "jsonb") TO "tindio_authenticated";
+
+--
+-- Name: FUNCTION "reserve_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_local_receipt_reference" "text"); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION "public"."reserve_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_local_receipt_reference" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."reserve_pos_device_sequence"("target_organization_id" "uuid", "target_device_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_device_sequence" bigint, "target_idempotency_key" "uuid", "target_local_receipt_reference" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "restore_tindio_payment_preset"("target_organization_id" "uuid", "target_preset_code" "text", "target_store_ids" "uuid"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."restore_tindio_payment_preset"("target_organization_id" "uuid", "target_preset_code" "text", "target_store_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."restore_tindio_payment_preset"("target_organization_id" "uuid", "target_preset_code" "text", "target_store_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."restore_tindio_payment_preset"("target_organization_id" "uuid", "target_preset_code" "text", "target_store_ids" "uuid"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."return_to_supplier"("target_organization_id" "uuid", "target_store_id" "uuid", "target_supplier_id" "uuid", "target_lines" "jsonb", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "revoke_loyalty_card"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_reason" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."revoke_loyalty_card"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_reason" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."revoke_loyalty_card"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_reason" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."revoke_loyalty_card"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_reason" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "revoke_pos_device"("target_organization_id" "uuid", "target_device_id" "uuid", "target_reason" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."revoke_pos_device"("target_organization_id" "uuid", "target_device_id" "uuid", "target_reason" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."revoke_pos_device"("target_organization_id" "uuid", "target_device_id" "uuid", "target_reason" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."revoke_pos_device"("target_organization_id" "uuid", "target_device_id" "uuid", "target_reason" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "rotate_loyalty_card_qr"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_verification_token" "text", "target_reason" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."rotate_loyalty_card_qr"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_verification_token" "text", "target_reason" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."rotate_loyalty_card_qr"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_verification_token" "text", "target_reason" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."rotate_loyalty_card_qr"("target_organization_id" "uuid", "target_loyalty_card_id" "uuid", "target_verification_token" "text", "target_reason" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "save_inventory_count_line_v2"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_counted_quantity" numeric, "target_variant_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."save_inventory_count_line_v2"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_counted_quantity" numeric, "target_variant_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."save_inventory_count_line_v2"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_counted_quantity" numeric, "target_variant_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."save_inventory_count_line_v2"("target_organization_id" "uuid", "target_inventory_count_id" "uuid", "target_product_id" "uuid", "target_counted_quantity" numeric, "target_variant_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "save_open_ticket"("uuid", "uuid", "uuid", "uuid", "uuid", "uuid", "text", "text", "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."save_open_ticket"("uuid", "uuid", "uuid", "uuid", "uuid", "uuid", "text", "text", "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."save_open_ticket"("uuid", "uuid", "uuid", "uuid", "uuid", "uuid", "text", "text", "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."save_open_ticket"("uuid", "uuid", "uuid", "uuid", "uuid", "uuid", "text", "text", "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "save_open_ticket_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_ticket_id" "uuid", "target_customer_id" "uuid", "target_dining_option_id" "uuid", "target_assigned_employee_id" "uuid", "target_label" "text", "target_note" "text", "target_cart" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."save_open_ticket_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_ticket_id" "uuid", "target_customer_id" "uuid", "target_dining_option_id" "uuid", "target_assigned_employee_id" "uuid", "target_label" "text", "target_note" "text", "target_cart" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."save_open_ticket_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_ticket_id" "uuid", "target_customer_id" "uuid", "target_dining_option_id" "uuid", "target_assigned_employee_id" "uuid", "target_label" "text", "target_note" "text", "target_cart" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."save_open_ticket_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_ticket_id" "uuid", "target_customer_id" "uuid", "target_dining_option_id" "uuid", "target_assigned_employee_id" "uuid", "target_label" "text", "target_note" "text", "target_cart" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "save_smart_menu_configuration"("target_store_id" "uuid", "target_is_enabled" boolean, "target_show_prices" boolean, "target_show_images" boolean, "target_show_unavailable" boolean, "target_show_variants" boolean, "target_show_modifiers" boolean, "target_category_ids" "uuid"[], "target_product_ids" "uuid"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."save_smart_menu_configuration"("target_store_id" "uuid", "target_is_enabled" boolean, "target_show_prices" boolean, "target_show_images" boolean, "target_show_unavailable" boolean, "target_show_variants" boolean, "target_show_modifiers" boolean, "target_category_ids" "uuid"[], "target_product_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."save_smart_menu_configuration"("target_store_id" "uuid", "target_is_enabled" boolean, "target_show_prices" boolean, "target_show_images" boolean, "target_show_unavailable" boolean, "target_show_variants" boolean, "target_show_modifiers" boolean, "target_category_ids" "uuid"[], "target_product_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."save_smart_menu_configuration"("target_store_id" "uuid", "target_is_enabled" boolean, "target_show_prices" boolean, "target_show_images" boolean, "target_show_unavailable" boolean, "target_show_variants" boolean, "target_show_modifiers" boolean, "target_category_ids" "uuid"[], "target_product_ids" "uuid"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "search_pos_catalog"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."search_pos_catalog"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."search_pos_catalog"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_pos_catalog"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text", "target_category_id" "uuid", "target_offset" integer, "target_limit" integer) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "search_pos_customers"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text", "target_limit" integer); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."search_pos_customers"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text", "target_limit" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."search_pos_customers"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text", "target_limit" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."search_pos_customers"("target_organization_id" "uuid", "target_store_id" "uuid", "target_query" "text", "target_limit" integer) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_catalog_product_archived_safely"("target_organization_id" "uuid", "target_product_id" "uuid", "target_is_archived" boolean); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."set_catalog_product_archived_safely"("target_organization_id" "uuid", "target_product_id" "uuid", "target_is_archived" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."set_catalog_product_archived_safely"("target_organization_id" "uuid", "target_product_id" "uuid", "target_is_archived" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_catalog_product_archived_safely"("target_organization_id" "uuid", "target_product_id" "uuid", "target_is_archived" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_catalog_product_store_availability"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_ids" "uuid"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."set_catalog_product_store_availability"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."set_catalog_product_store_availability"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_catalog_product_store_availability"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_ids" "uuid"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_catalog_product_store_configuration_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_restock_policy" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."set_catalog_product_store_configuration_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_restock_policy" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."set_catalog_product_store_configuration_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_restock_policy" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_catalog_product_store_configuration_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_store_id" "uuid", "target_price_override_minor" bigint, "target_restock_policy" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_customer_display_state"("target_organization_id" "uuid", "target_session_id" "uuid", "target_state" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."set_customer_display_state"("target_organization_id" "uuid", "target_session_id" "uuid", "target_state" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."set_customer_display_state"("target_organization_id" "uuid", "target_session_id" "uuid", "target_state" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_customer_display_state"("target_organization_id" "uuid", "target_session_id" "uuid", "target_state" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_employee_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."set_employee_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."set_employee_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_employee_pin"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_pin" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_kitchen_order_priority"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_priority" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."set_kitchen_order_priority"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_priority" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."set_kitchen_order_priority"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_priority" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_kitchen_order_priority"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_priority" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_kitchen_station_category_route"("target_organization_id" "uuid", "target_category_id" "uuid", "target_station" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."set_kitchen_station_category_route"("target_organization_id" "uuid", "target_category_id" "uuid", "target_station" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."set_kitchen_station_category_route"("target_organization_id" "uuid", "target_category_id" "uuid", "target_station" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_kitchen_station_category_route"("target_organization_id" "uuid", "target_category_id" "uuid", "target_station" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_payment_method_offline_policy"("target_organization_id" "uuid", "target_payment_method_id" "uuid", "target_offline_policy" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."set_payment_method_offline_policy"("target_organization_id" "uuid", "target_payment_method_id" "uuid", "target_offline_policy" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."set_payment_method_offline_policy"("target_organization_id" "uuid", "target_payment_method_id" "uuid", "target_offline_policy" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_payment_method_offline_policy"("target_organization_id" "uuid", "target_payment_method_id" "uuid", "target_offline_policy" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_pos_favorite_tile"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_is_favorite" boolean); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."set_pos_favorite_tile"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_is_favorite" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."set_pos_favorite_tile"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_is_favorite" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_pos_favorite_tile"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_variant_id" "uuid", "target_is_favorite" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "set_store_payment_method_configuration"("target_organization_id" "uuid", "target_store_id" "uuid", "target_payment_method_id" "uuid", "target_is_enabled" boolean); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."set_store_payment_method_configuration"("target_organization_id" "uuid", "target_store_id" "uuid", "target_payment_method_id" "uuid", "target_is_enabled" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."set_store_payment_method_configuration"("target_organization_id" "uuid", "target_store_id" "uuid", "target_payment_method_id" "uuid", "target_is_enabled" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_store_payment_method_configuration"("target_organization_id" "uuid", "target_store_id" "uuid", "target_payment_method_id" "uuid", "target_is_enabled" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "ship_stock_transfer"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text"); Type: ACL; Schema: public; Owner: postgres
@@ -38913,28 +41492,28 @@ REVOKE ALL ON FUNCTION "public"."ship_stock_transfer"("target_organization_id" "
 --
 
 REVOKE ALL ON FUNCTION "public"."split_open_ticket"("target_organization_id" "uuid", "target_source_ticket_id" "uuid", "target_label" "text", "target_lines" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."split_open_ticket"("target_organization_id" "uuid", "target_source_ticket_id" "uuid", "target_label" "text", "target_lines" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."split_open_ticket"("target_organization_id" "uuid", "target_source_ticket_id" "uuid", "target_label" "text", "target_lines" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "start_stock_request_picking"("target_organization_id" "uuid", "target_stock_request_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."start_stock_request_picking"("target_organization_id" "uuid", "target_stock_request_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."start_stock_request_picking"("target_organization_id" "uuid", "target_stock_request_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."start_stock_request_picking"("target_organization_id" "uuid", "target_stock_request_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "submit_inventory_count_for_review"("target_organization_id" "uuid", "target_inventory_count_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."submit_inventory_count_for_review"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."submit_inventory_count_for_review"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."submit_inventory_count_for_review"("target_organization_id" "uuid", "target_inventory_count_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."submit_inventory_transfer"("target_organization_id" "uuid", "target_stock_transfer_id" "uuid", "target_note" "text", "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "transfer_stock"("target_organization_id" "uuid", "target_source_store_id" "uuid", "target_destination_store_id" "uuid", "target_lines" "jsonb", "target_note" "text"); Type: ACL; Schema: public; Owner: postgres
@@ -38947,1459 +41526,1473 @@ REVOKE ALL ON FUNCTION "public"."transfer_stock"("target_organization_id" "uuid"
 --
 
 REVOKE ALL ON FUNCTION "public"."update_approval_rule"("target_organization_id" "uuid", "target_operation_code" "text", "target_decision" "text", "target_amount_threshold_minor" bigint, "target_is_enabled" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_approval_rule"("target_organization_id" "uuid", "target_operation_code" "text", "target_decision" "text", "target_amount_threshold_minor" bigint, "target_is_enabled" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_approval_rule"("target_organization_id" "uuid", "target_operation_code" "text", "target_decision" "text", "target_amount_threshold_minor" bigint, "target_is_enabled" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_business_profile_features"("target_organization_id" "uuid", "target_business_type" "text", "target_feature_settings" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_business_profile_features"("target_organization_id" "uuid", "target_business_type" "text", "target_feature_settings" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_business_profile_features"("target_organization_id" "uuid", "target_business_type" "text", "target_feature_settings" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_business_profile_features"("target_organization_id" "uuid", "target_business_type" "text", "target_feature_settings" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_catalog_product_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_catalog_product_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_catalog_product_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_catalog_product_v2"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_catalog_product_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_catalog_product_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_catalog_product_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_catalog_product_v3"("target_organization_id" "uuid", "target_product_id" "uuid", "target_name" "text", "target_description" "text", "target_category_id" "uuid", "target_sku" "text", "target_barcode" "text", "target_price_minor" bigint, "target_cost_minor" bigint, "target_track_inventory" boolean, "target_unit" "text", "target_image_url" "text", "target_is_variable_price" boolean, "target_allow_fractional_quantity" boolean, "target_composite_inventory_mode" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_custom_role"("target_organization_id" "uuid", "target_role_id" "uuid", "role_name" "text", "role_description" "text", "permission_codes" "text"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_custom_role"("target_organization_id" "uuid", "target_role_id" "uuid", "role_name" "text", "role_description" "text", "permission_codes" "text"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_custom_role"("target_organization_id" "uuid", "target_role_id" "uuid", "role_name" "text", "role_description" "text", "permission_codes" "text"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_custom_role"("target_organization_id" "uuid", "target_role_id" "uuid", "role_name" "text", "role_description" "text", "permission_codes" "text"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_customer_profile"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_full_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_birthday" "date", "target_notes" "text", "target_loyalty_card_code" "text", "target_segment_ids" "uuid"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_customer_profile"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_full_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_birthday" "date", "target_notes" "text", "target_loyalty_card_code" "text", "target_segment_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_customer_profile"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_full_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_birthday" "date", "target_notes" "text", "target_loyalty_card_code" "text", "target_segment_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_customer_profile"("target_organization_id" "uuid", "target_customer_id" "uuid", "target_full_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_birthday" "date", "target_notes" "text", "target_loyalty_card_code" "text", "target_segment_ids" "uuid"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_employee_assignments"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_job_title" "text", "target_status" "text", "target_role_ids" "uuid"[], "target_store_ids" "uuid"[]); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_employee_assignments"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_job_title" "text", "target_status" "text", "target_role_ids" "uuid"[], "target_store_ids" "uuid"[]) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_employee_assignments"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_job_title" "text", "target_status" "text", "target_role_ids" "uuid"[], "target_store_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_employee_assignments"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_job_title" "text", "target_status" "text", "target_role_ids" "uuid"[], "target_store_ids" "uuid"[]) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_employee_profile"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_full_name" "text", "target_phone" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_employee_profile"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_full_name" "text", "target_phone" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_employee_profile"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_full_name" "text", "target_phone" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_employee_profile"("target_organization_id" "uuid", "target_employee_id" "uuid", "target_full_name" "text", "target_phone" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_inventory_policy"("target_organization_id" "uuid", "target_store_id" "uuid", "target_negative_stock_policy" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_inventory_policy"("target_organization_id" "uuid", "target_store_id" "uuid", "target_negative_stock_policy" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_inventory_policy"("target_organization_id" "uuid", "target_store_id" "uuid", "target_negative_stock_policy" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_inventory_policy"("target_organization_id" "uuid", "target_store_id" "uuid", "target_negative_stock_policy" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_kitchen_order_item_status"("target_organization_id" "uuid", "target_kitchen_order_item_id" "uuid", "target_status" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_kitchen_order_item_status"("target_organization_id" "uuid", "target_kitchen_order_item_id" "uuid", "target_status" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_kitchen_order_item_status"("target_organization_id" "uuid", "target_kitchen_order_item_id" "uuid", "target_status" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_kitchen_order_item_status"("target_organization_id" "uuid", "target_kitchen_order_item_id" "uuid", "target_status" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_kitchen_order_status"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_status" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_kitchen_order_status"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_status" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_kitchen_order_status"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_status" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_kitchen_order_status"("target_organization_id" "uuid", "target_kitchen_order_id" "uuid", "target_status" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_organization_inventory_policy"("target_organization_id" "uuid", "target_negative_stock_policy" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_organization_inventory_policy"("target_organization_id" "uuid", "target_negative_stock_policy" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_organization_inventory_policy"("target_organization_id" "uuid", "target_negative_stock_policy" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_organization_inventory_policy"("target_organization_id" "uuid", "target_negative_stock_policy" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_payment_method_configuration"("target_organization_id" "uuid", "target_payment_method_id" "uuid", "target_name" "text", "target_is_enabled" boolean, "target_requires_reference" boolean, "target_sort_order" integer); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_payment_method_configuration"("target_organization_id" "uuid", "target_payment_method_id" "uuid", "target_name" "text", "target_is_enabled" boolean, "target_requires_reference" boolean, "target_sort_order" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_payment_method_configuration"("target_organization_id" "uuid", "target_payment_method_id" "uuid", "target_name" "text", "target_is_enabled" boolean, "target_requires_reference" boolean, "target_sort_order" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_payment_method_configuration"("target_organization_id" "uuid", "target_payment_method_id" "uuid", "target_name" "text", "target_is_enabled" boolean, "target_requires_reference" boolean, "target_sort_order" integer) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_product_unit"("target_organization_id" "uuid", "target_unit_id" "uuid", "target_unit_code" "text", "target_unit_name" "text", "target_factor_to_base" numeric, "target_is_sale_unit" boolean, "target_is_purchase_unit" boolean, "target_operation_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_receipt_delivery_status"("target_delivery_request_id" "uuid", "target_status" "text", "target_provider_message_id" "text", "target_failure_reason" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_receipt_delivery_status"("target_delivery_request_id" "uuid", "target_status" "text", "target_provider_message_id" "text", "target_failure_reason" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_receipt_delivery_status"("target_delivery_request_id" "uuid", "target_status" "text", "target_provider_message_id" "text", "target_failure_reason" "text") TO "service_role";
+GRANT ALL ON FUNCTION "public"."update_receipt_delivery_status"("target_delivery_request_id" "uuid", "target_status" "text", "target_provider_message_id" "text", "target_failure_reason" "text") TO "tindio_service";
 
 --
 -- Name: FUNCTION "update_receipt_settings"("target_organization_id" "uuid", "target_business_name" "text", "target_business_address" "text", "target_business_phone" "text", "target_business_email" "text", "target_business_tax_id" "text", "target_business_website" "text", "target_header_message" "text", "target_footer_message" "text", "target_paper_width_mm" smallint, "target_show_store_address" boolean, "target_show_store_phone" boolean, "target_show_cashier" boolean, "target_show_register" boolean, "target_show_payment_details" boolean); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_receipt_settings"("target_organization_id" "uuid", "target_business_name" "text", "target_business_address" "text", "target_business_phone" "text", "target_business_email" "text", "target_business_tax_id" "text", "target_business_website" "text", "target_header_message" "text", "target_footer_message" "text", "target_paper_width_mm" smallint, "target_show_store_address" boolean, "target_show_store_phone" boolean, "target_show_cashier" boolean, "target_show_register" boolean, "target_show_payment_details" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_receipt_settings"("target_organization_id" "uuid", "target_business_name" "text", "target_business_address" "text", "target_business_phone" "text", "target_business_email" "text", "target_business_tax_id" "text", "target_business_website" "text", "target_header_message" "text", "target_footer_message" "text", "target_paper_width_mm" smallint, "target_show_store_address" boolean, "target_show_store_phone" boolean, "target_show_cashier" boolean, "target_show_register" boolean, "target_show_payment_details" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_receipt_settings"("target_organization_id" "uuid", "target_business_name" "text", "target_business_address" "text", "target_business_phone" "text", "target_business_email" "text", "target_business_tax_id" "text", "target_business_website" "text", "target_header_message" "text", "target_footer_message" "text", "target_paper_width_mm" smallint, "target_show_store_address" boolean, "target_show_store_phone" boolean, "target_show_cashier" boolean, "target_show_register" boolean, "target_show_payment_details" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_shift_cash_close_setting"("target_organization_id" "uuid", "target_show_expected_cash_before_close" boolean); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_shift_cash_close_setting"("target_organization_id" "uuid", "target_show_expected_cash_before_close" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_shift_cash_close_setting"("target_organization_id" "uuid", "target_show_expected_cash_before_close" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_shift_cash_close_setting"("target_organization_id" "uuid", "target_show_expected_cash_before_close" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_supplier"("target_organization_id" "uuid", "target_supplier_id" "uuid", "target_name" "text", "target_contact_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_notes" "text", "target_is_active" boolean); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_supplier"("target_organization_id" "uuid", "target_supplier_id" "uuid", "target_name" "text", "target_contact_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_notes" "text", "target_is_active" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_supplier"("target_organization_id" "uuid", "target_supplier_id" "uuid", "target_name" "text", "target_contact_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_notes" "text", "target_is_active" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_supplier"("target_organization_id" "uuid", "target_supplier_id" "uuid", "target_name" "text", "target_contact_name" "text", "target_email" "text", "target_phone" "text", "target_address" "text", "target_notes" "text", "target_is_active" boolean) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "update_supplier_lead_time"("target_organization_id" "uuid", "target_supplier_id" "uuid", "target_lead_time_days" integer); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."update_supplier_lead_time"("target_organization_id" "uuid", "target_supplier_id" "uuid", "target_lead_time_days" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_supplier_lead_time"("target_organization_id" "uuid", "target_supplier_id" "uuid", "target_lead_time_days" integer) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_supplier_lead_time"("target_organization_id" "uuid", "target_supplier_id" "uuid", "target_lead_time_days" integer) TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "upsert_inventory_replenishment_rule_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric, "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."upsert_inventory_replenishment_rule_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric, "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."upsert_inventory_replenishment_rule_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric, "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."upsert_inventory_replenishment_rule_v2"("target_organization_id" "uuid", "target_store_id" "uuid", "target_product_id" "uuid", "target_reorder_point" numeric, "target_target_stock" numeric, "target_variant_id" "uuid", "target_preferred_warehouse_id" "uuid") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "validate_pos_cart_stock"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_items" "jsonb"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."validate_pos_cart_stock"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_items" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."validate_pos_cart_stock"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_items" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."validate_pos_cart_stock"("target_organization_id" "uuid", "target_store_id" "uuid", "target_register_id" "uuid", "target_items" "jsonb") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "validate_pos_device"("target_organization_id" "uuid", "target_device_id" "uuid", "target_secret" "text", "target_app_version" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."validate_pos_device"("target_organization_id" "uuid", "target_device_id" "uuid", "target_secret" "text", "target_app_version" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."validate_pos_device"("target_organization_id" "uuid", "target_device_id" "uuid", "target_secret" "text", "target_app_version" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."validate_pos_device"("target_organization_id" "uuid", "target_device_id" "uuid", "target_secret" "text", "target_app_version" "text") TO "tindio_authenticated";
 
 --
 -- Name: FUNCTION "verify_loyalty_card_qr"("target_loyalty_card_id" "uuid", "target_verification_token" "text"); Type: ACL; Schema: public; Owner: postgres
 --
 
 REVOKE ALL ON FUNCTION "public"."verify_loyalty_card_qr"("target_loyalty_card_id" "uuid", "target_verification_token" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."verify_loyalty_card_qr"("target_loyalty_card_id" "uuid", "target_verification_token" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."verify_loyalty_card_qr"("target_loyalty_card_id" "uuid", "target_verification_token" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."verify_loyalty_card_qr"("target_loyalty_card_id" "uuid", "target_verification_token" "text") TO "tindio_anon";
+GRANT ALL ON FUNCTION "public"."verify_loyalty_card_qr"("target_loyalty_card_id" "uuid", "target_verification_token" "text") TO "tindio_authenticated";
 
 --
 -- Name: TABLE "advanced_checkout_requests"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."advanced_checkout_requests" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."advanced_checkout_requests" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "approval_requests"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."approval_requests" TO "anon";
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."approval_requests" TO "authenticated";
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."approval_requests" TO "service_role";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."approval_requests" TO "tindio_anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."approval_requests" TO "tindio_authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."approval_requests" TO "tindio_service";
 
 --
 -- Name: TABLE "approval_rules"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."approval_rules" TO "anon";
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."approval_rules" TO "authenticated";
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."approval_rules" TO "service_role";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."approval_rules" TO "tindio_anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."approval_rules" TO "tindio_authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."approval_rules" TO "tindio_service";
 
 --
 -- Name: TABLE "audit_logs"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."audit_logs" TO "anon";
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."audit_logs" TO "authenticated";
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."audit_logs" TO "service_role";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."audit_logs" TO "tindio_anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."audit_logs" TO "tindio_authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."audit_logs" TO "tindio_service";
 
 --
 -- Name: TABLE "cash_movements"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."cash_movements" TO "authenticated";
+GRANT SELECT ON TABLE "public"."cash_movements" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "categories"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,INSERT ON TABLE "public"."categories" TO "authenticated";
+GRANT SELECT,INSERT ON TABLE "public"."categories" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "categories"."name"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("name") ON TABLE "public"."categories" TO "authenticated";
+GRANT UPDATE("name") ON TABLE "public"."categories" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "categories"."description"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("description") ON TABLE "public"."categories" TO "authenticated";
+GRANT UPDATE("description") ON TABLE "public"."categories" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "categories"."icon"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("icon") ON TABLE "public"."categories" TO "authenticated";
+GRANT UPDATE("icon") ON TABLE "public"."categories" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "categories"."color"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("color") ON TABLE "public"."categories" TO "authenticated";
+GRANT UPDATE("color") ON TABLE "public"."categories" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "categories"."sort_order"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("sort_order") ON TABLE "public"."categories" TO "authenticated";
+GRANT UPDATE("sort_order") ON TABLE "public"."categories" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "categories"."is_archived"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("is_archived") ON TABLE "public"."categories" TO "authenticated";
+GRANT UPDATE("is_archived") ON TABLE "public"."categories" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "checkout_requests"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."checkout_requests" TO "service_role";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."checkout_requests" TO "tindio_service";
 
 --
 -- Name: TABLE "customer_display_sessions"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."customer_display_sessions" TO "service_role";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."customer_display_sessions" TO "tindio_service";
 
 --
 -- Name: TABLE "customer_segment_memberships"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."customer_segment_memberships" TO "authenticated";
+GRANT SELECT ON TABLE "public"."customer_segment_memberships" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "customer_segments"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."customer_segments" TO "authenticated";
+GRANT SELECT ON TABLE "public"."customer_segments" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "customers"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,INSERT ON TABLE "public"."customers" TO "authenticated";
+GRANT SELECT,INSERT ON TABLE "public"."customers" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "customers"."full_name"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("full_name") ON TABLE "public"."customers" TO "authenticated";
+GRANT UPDATE("full_name") ON TABLE "public"."customers" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "customers"."email"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("email") ON TABLE "public"."customers" TO "authenticated";
+GRANT UPDATE("email") ON TABLE "public"."customers" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "customers"."phone"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("phone") ON TABLE "public"."customers" TO "authenticated";
+GRANT UPDATE("phone") ON TABLE "public"."customers" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "customers"."address"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("address") ON TABLE "public"."customers" TO "authenticated";
+GRANT UPDATE("address") ON TABLE "public"."customers" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "customers"."birthday"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("birthday") ON TABLE "public"."customers" TO "authenticated";
+GRANT UPDATE("birthday") ON TABLE "public"."customers" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "customers"."notes"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("notes") ON TABLE "public"."customers" TO "authenticated";
+GRANT UPDATE("notes") ON TABLE "public"."customers" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "customers"."status"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("status") ON TABLE "public"."customers" TO "authenticated";
+GRANT UPDATE("status") ON TABLE "public"."customers" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "dining_options"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."dining_options" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."dining_options" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "discounts"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."discounts" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."discounts" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "employee_invitations"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."employee_invitations" TO "service_role";
-GRANT SELECT,INSERT ON TABLE "public"."employee_invitations" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."employee_invitations" TO "tindio_service";
+GRANT SELECT,INSERT ON TABLE "public"."employee_invitations" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "employee_invitations"."revoked_at"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("revoked_at") ON TABLE "public"."employee_invitations" TO "authenticated";
+GRANT UPDATE("revoked_at") ON TABLE "public"."employee_invitations" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "employee_roles"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."employee_roles" TO "service_role";
-GRANT SELECT,INSERT,DELETE ON TABLE "public"."employee_roles" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."employee_roles" TO "tindio_service";
+GRANT SELECT,INSERT,DELETE ON TABLE "public"."employee_roles" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "employee_stores"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."employee_stores" TO "service_role";
-GRANT SELECT,INSERT,DELETE ON TABLE "public"."employee_stores" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."employee_stores" TO "tindio_service";
+GRANT SELECT,INSERT,DELETE ON TABLE "public"."employee_stores" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "employees"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."employees" TO "service_role";
-GRANT SELECT,INSERT ON TABLE "public"."employees" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."employees" TO "tindio_service";
+GRANT SELECT,INSERT ON TABLE "public"."employees" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "employees"."employee_number"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("employee_number") ON TABLE "public"."employees" TO "authenticated";
+GRANT UPDATE("employee_number") ON TABLE "public"."employees" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "employees"."job_title"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("job_title") ON TABLE "public"."employees" TO "authenticated";
+GRANT UPDATE("job_title") ON TABLE "public"."employees" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "employees"."status"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("status") ON TABLE "public"."employees" TO "authenticated";
+GRANT UPDATE("status") ON TABLE "public"."employees" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "goods_receipt_lines"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."goods_receipt_lines" TO "authenticated";
+GRANT SELECT ON TABLE "public"."goods_receipt_lines" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "goods_receipts"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."goods_receipts" TO "authenticated";
+GRANT SELECT ON TABLE "public"."goods_receipts" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "inventory_adjustment_import_batches"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."inventory_adjustment_import_batches" TO "authenticated";
+GRANT SELECT ON TABLE "public"."inventory_adjustment_import_batches" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "inventory_adjustment_reasons"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."inventory_adjustment_reasons" TO "authenticated";
+GRANT SELECT ON TABLE "public"."inventory_adjustment_reasons" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "inventory_adjustments"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."inventory_adjustments" TO "authenticated";
+GRANT SELECT ON TABLE "public"."inventory_adjustments" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "inventory_count_batch_documents"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."inventory_count_batch_documents" TO "service_role";
-GRANT SELECT ON TABLE "public"."inventory_count_batch_documents" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."inventory_count_batch_documents" TO "tindio_service";
+GRANT SELECT ON TABLE "public"."inventory_count_batch_documents" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "inventory_count_batches"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."inventory_count_batches" TO "service_role";
-GRANT SELECT ON TABLE "public"."inventory_count_batches" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."inventory_count_batches" TO "tindio_service";
+GRANT SELECT ON TABLE "public"."inventory_count_batches" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "inventory_count_lines"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."inventory_count_lines" TO "authenticated";
+GRANT SELECT ON TABLE "public"."inventory_count_lines" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "inventory_counts"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."inventory_counts" TO "authenticated";
+GRANT SELECT ON TABLE "public"."inventory_counts" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_levels"."id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("id") ON TABLE "public"."inventory_levels" TO "authenticated";
+GRANT SELECT("id") ON TABLE "public"."inventory_levels" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_levels"."organization_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("organization_id") ON TABLE "public"."inventory_levels" TO "authenticated";
+GRANT SELECT("organization_id") ON TABLE "public"."inventory_levels" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_levels"."store_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("store_id") ON TABLE "public"."inventory_levels" TO "authenticated";
+GRANT SELECT("store_id") ON TABLE "public"."inventory_levels" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_levels"."product_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("product_id") ON TABLE "public"."inventory_levels" TO "authenticated";
+GRANT SELECT("product_id") ON TABLE "public"."inventory_levels" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_levels"."variant_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("variant_id") ON TABLE "public"."inventory_levels" TO "authenticated";
+GRANT SELECT("variant_id") ON TABLE "public"."inventory_levels" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_levels"."quantity"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("quantity") ON TABLE "public"."inventory_levels" TO "authenticated";
+GRANT SELECT("quantity") ON TABLE "public"."inventory_levels" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_levels"."updated_at"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("updated_at") ON TABLE "public"."inventory_levels" TO "authenticated";
+GRANT SELECT("updated_at") ON TABLE "public"."inventory_levels" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("id") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("id") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."organization_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("organization_id") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("organization_id") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."store_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("store_id") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("store_id") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."product_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("product_id") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("product_id") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."variant_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("variant_id") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("variant_id") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."quantity_delta"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("quantity_delta") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("quantity_delta") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."quantity_before"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("quantity_before") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("quantity_before") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."quantity_after"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("quantity_after") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("quantity_after") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."movement_type"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("movement_type") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("movement_type") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."actor_employee_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("actor_employee_id") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("actor_employee_id") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."reason"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("reason") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("reason") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."source_type"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("source_type") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("source_type") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."source_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("source_id") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("source_id") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."created_at"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("created_at") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("created_at") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."reason_code"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("reason_code") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("reason_code") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "inventory_movements"."unit_snapshot"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("unit_snapshot") ON TABLE "public"."inventory_movements" TO "authenticated";
+GRANT SELECT("unit_snapshot") ON TABLE "public"."inventory_movements" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "inventory_policies"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."inventory_policies" TO "authenticated";
+GRANT SELECT ON TABLE "public"."inventory_policies" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "inventory_policy_defaults"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."inventory_policy_defaults" TO "authenticated";
+GRANT SELECT ON TABLE "public"."inventory_policy_defaults" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "inventory_replenishment_rules"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."inventory_replenishment_rules" TO "authenticated";
+GRANT SELECT ON TABLE "public"."inventory_replenishment_rules" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "loyalty_programs"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."loyalty_programs" TO "authenticated";
+GRANT SELECT ON TABLE "public"."loyalty_programs" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "loyalty_programs"."is_enabled"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("is_enabled") ON TABLE "public"."loyalty_programs" TO "authenticated";
+GRANT UPDATE("is_enabled") ON TABLE "public"."loyalty_programs" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "loyalty_programs"."earn_spend_minor"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("earn_spend_minor") ON TABLE "public"."loyalty_programs" TO "authenticated";
+GRANT UPDATE("earn_spend_minor") ON TABLE "public"."loyalty_programs" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "loyalty_programs"."earn_points"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("earn_points") ON TABLE "public"."loyalty_programs" TO "authenticated";
+GRANT UPDATE("earn_points") ON TABLE "public"."loyalty_programs" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "loyalty_programs"."redemption_value_minor"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("redemption_value_minor") ON TABLE "public"."loyalty_programs" TO "authenticated";
+GRANT UPDATE("redemption_value_minor") ON TABLE "public"."loyalty_programs" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "loyalty_programs"."minimum_redemption_points"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("minimum_redemption_points") ON TABLE "public"."loyalty_programs" TO "authenticated";
+GRANT UPDATE("minimum_redemption_points") ON TABLE "public"."loyalty_programs" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "loyalty_transactions"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."loyalty_transactions" TO "authenticated";
+GRANT SELECT ON TABLE "public"."loyalty_transactions" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "modifier_groups"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."modifier_groups" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."modifier_groups" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "modifier_options"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."modifier_options" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."modifier_options" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "offline_sync_events"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."offline_sync_events" TO "authenticated";
+GRANT SELECT ON TABLE "public"."offline_sync_events" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "open_tickets"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."open_tickets" TO "authenticated";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."open_tickets" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "organization_features"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."organization_features" TO "authenticated";
+GRANT SELECT ON TABLE "public"."organization_features" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "organizations"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."organizations" TO "service_role";
-GRANT SELECT,INSERT ON TABLE "public"."organizations" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."organizations" TO "tindio_service";
+GRANT SELECT,INSERT ON TABLE "public"."organizations" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "organizations"."name"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("name") ON TABLE "public"."organizations" TO "authenticated";
+GRANT UPDATE("name") ON TABLE "public"."organizations" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "organizations"."currency_code"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("currency_code") ON TABLE "public"."organizations" TO "authenticated";
+GRANT UPDATE("currency_code") ON TABLE "public"."organizations" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "organizations"."timezone"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("timezone") ON TABLE "public"."organizations" TO "authenticated";
+GRANT UPDATE("timezone") ON TABLE "public"."organizations" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "payment_methods"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."payment_methods" TO "service_role";
-GRANT SELECT ON TABLE "public"."payment_methods" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."payment_methods" TO "tindio_service";
+GRANT SELECT ON TABLE "public"."payment_methods" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "payments"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."payments" TO "service_role";
-GRANT SELECT ON TABLE "public"."payments" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."payments" TO "tindio_service";
+GRANT SELECT ON TABLE "public"."payments" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "permissions"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."permissions" TO "service_role";
-GRANT SELECT ON TABLE "public"."permissions" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."permissions" TO "tindio_service";
+GRANT SELECT ON TABLE "public"."permissions" TO "tindio_authenticated";
+
+--
+-- Name: TABLE "pos_device_sync_telemetry"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT ON TABLE "public"."pos_device_sync_telemetry" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "pos_devices"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."pos_devices" TO "authenticated";
+GRANT SELECT ON TABLE "public"."pos_devices" TO "tindio_authenticated";
+
+--
+-- Name: SEQUENCE "pos_sync_changes_revision_seq"; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT UPDATE ON SEQUENCE "public"."pos_sync_changes_revision_seq" TO "tindio_anon";
+GRANT UPDATE ON SEQUENCE "public"."pos_sync_changes_revision_seq" TO "tindio_authenticated";
+GRANT UPDATE ON SEQUENCE "public"."pos_sync_changes_revision_seq" TO "tindio_service";
 
 --
 -- Name: TABLE "product_components"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE "public"."product_components" TO "authenticated";
+GRANT ALL ON TABLE "public"."product_components" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "product_modifier_groups"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."product_modifier_groups" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."product_modifier_groups" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "product_store_settings"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."product_store_settings" TO "authenticated";
+GRANT SELECT ON TABLE "public"."product_store_settings" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_store_settings"."organization_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT INSERT("organization_id") ON TABLE "public"."product_store_settings" TO "authenticated";
+GRANT INSERT("organization_id") ON TABLE "public"."product_store_settings" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_store_settings"."store_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT INSERT("store_id") ON TABLE "public"."product_store_settings" TO "authenticated";
+GRANT INSERT("store_id") ON TABLE "public"."product_store_settings" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_store_settings"."product_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT INSERT("product_id") ON TABLE "public"."product_store_settings" TO "authenticated";
+GRANT INSERT("product_id") ON TABLE "public"."product_store_settings" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_store_settings"."is_available"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT INSERT("is_available"),UPDATE("is_available") ON TABLE "public"."product_store_settings" TO "authenticated";
+GRANT INSERT("is_available"),UPDATE("is_available") ON TABLE "public"."product_store_settings" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_store_settings"."price_override_minor"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("price_override_minor"),INSERT("price_override_minor"),UPDATE("price_override_minor") ON TABLE "public"."product_store_settings" TO "authenticated";
+GRANT SELECT("price_override_minor"),INSERT("price_override_minor"),UPDATE("price_override_minor") ON TABLE "public"."product_store_settings" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_store_settings"."low_stock_level"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("low_stock_level") ON TABLE "public"."product_store_settings" TO "authenticated";
+GRANT SELECT("low_stock_level") ON TABLE "public"."product_store_settings" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "product_units"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."product_units" TO "authenticated";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."product_units" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_variants"."id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("id") ON TABLE "public"."product_variants" TO "authenticated";
+GRANT SELECT("id") ON TABLE "public"."product_variants" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_variants"."organization_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("organization_id") ON TABLE "public"."product_variants" TO "authenticated";
+GRANT SELECT("organization_id") ON TABLE "public"."product_variants" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_variants"."product_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("product_id") ON TABLE "public"."product_variants" TO "authenticated";
+GRANT SELECT("product_id") ON TABLE "public"."product_variants" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_variants"."name"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("name") ON TABLE "public"."product_variants" TO "authenticated";
+GRANT SELECT("name") ON TABLE "public"."product_variants" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_variants"."option_values"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("option_values") ON TABLE "public"."product_variants" TO "authenticated";
+GRANT SELECT("option_values") ON TABLE "public"."product_variants" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_variants"."sku"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("sku") ON TABLE "public"."product_variants" TO "authenticated";
+GRANT SELECT("sku") ON TABLE "public"."product_variants" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_variants"."barcode"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("barcode") ON TABLE "public"."product_variants" TO "authenticated";
+GRANT SELECT("barcode") ON TABLE "public"."product_variants" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_variants"."price_minor"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("price_minor") ON TABLE "public"."product_variants" TO "authenticated";
+GRANT SELECT("price_minor") ON TABLE "public"."product_variants" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_variants"."sort_order"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("sort_order") ON TABLE "public"."product_variants" TO "authenticated";
+GRANT SELECT("sort_order") ON TABLE "public"."product_variants" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_variants"."is_active"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("is_active"),UPDATE("is_active") ON TABLE "public"."product_variants" TO "authenticated";
+GRANT SELECT("is_active"),UPDATE("is_active") ON TABLE "public"."product_variants" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_variants"."created_at"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("created_at") ON TABLE "public"."product_variants" TO "authenticated";
+GRANT SELECT("created_at") ON TABLE "public"."product_variants" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "product_variants"."updated_at"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("updated_at") ON TABLE "public"."product_variants" TO "authenticated";
+GRANT SELECT("updated_at") ON TABLE "public"."product_variants" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "production_run_components"."id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("id") ON TABLE "public"."production_run_components" TO "authenticated";
+GRANT SELECT("id") ON TABLE "public"."production_run_components" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "production_run_components"."organization_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("organization_id") ON TABLE "public"."production_run_components" TO "authenticated";
+GRANT SELECT("organization_id") ON TABLE "public"."production_run_components" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "production_run_components"."production_run_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("production_run_id") ON TABLE "public"."production_run_components" TO "authenticated";
+GRANT SELECT("production_run_id") ON TABLE "public"."production_run_components" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "production_run_components"."component_product_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("component_product_id") ON TABLE "public"."production_run_components" TO "authenticated";
+GRANT SELECT("component_product_id") ON TABLE "public"."production_run_components" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "production_run_components"."component_variant_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("component_variant_id") ON TABLE "public"."production_run_components" TO "authenticated";
+GRANT SELECT("component_variant_id") ON TABLE "public"."production_run_components" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "production_run_components"."quantity_per_composite_snapshot"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("quantity_per_composite_snapshot") ON TABLE "public"."production_run_components" TO "authenticated";
+GRANT SELECT("quantity_per_composite_snapshot") ON TABLE "public"."production_run_components" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "production_run_components"."quantity_consumed"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("quantity_consumed") ON TABLE "public"."production_run_components" TO "authenticated";
+GRANT SELECT("quantity_consumed") ON TABLE "public"."production_run_components" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "production_run_components"."unit_snapshot"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("unit_snapshot") ON TABLE "public"."production_run_components" TO "authenticated";
+GRANT SELECT("unit_snapshot") ON TABLE "public"."production_run_components" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "production_run_components"."created_at"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("created_at") ON TABLE "public"."production_run_components" TO "authenticated";
+GRANT SELECT("created_at") ON TABLE "public"."production_run_components" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "production_runs"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."production_runs" TO "authenticated";
+GRANT SELECT ON TABLE "public"."production_runs" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("id") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("id") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."organization_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("organization_id") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("organization_id") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."category_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("category_id") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("category_id") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."name"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("name") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("name") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."description"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("description") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("description") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."product_type"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("product_type") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("product_type") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."sku"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("sku") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("sku") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."barcode"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("barcode") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("barcode") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."price_minor"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("price_minor") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("price_minor") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."track_inventory"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("track_inventory") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("track_inventory") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."unit"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("unit") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("unit") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."status"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("status"),UPDATE("status") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("status"),UPDATE("status") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."created_at"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("created_at") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("created_at") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."updated_at"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("updated_at") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("updated_at") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."image_url"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("image_url"),UPDATE("image_url") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("image_url"),UPDATE("image_url") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."is_variable_price"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("is_variable_price"),UPDATE("is_variable_price") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("is_variable_price"),UPDATE("is_variable_price") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."allow_fractional_quantity"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("allow_fractional_quantity"),UPDATE("allow_fractional_quantity") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("allow_fractional_quantity"),UPDATE("allow_fractional_quantity") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."is_composite"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("is_composite"),UPDATE("is_composite") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("is_composite"),UPDATE("is_composite") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "products"."composite_inventory_mode"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("composite_inventory_mode") ON TABLE "public"."products" TO "authenticated";
+GRANT SELECT("composite_inventory_mode") ON TABLE "public"."products" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "profiles"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."profiles" TO "service_role";
-GRANT SELECT ON TABLE "public"."profiles" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."profiles" TO "tindio_service";
+GRANT SELECT ON TABLE "public"."profiles" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "profiles"."full_name"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("full_name") ON TABLE "public"."profiles" TO "authenticated";
+GRANT UPDATE("full_name") ON TABLE "public"."profiles" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "profiles"."phone"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("phone") ON TABLE "public"."profiles" TO "authenticated";
+GRANT UPDATE("phone") ON TABLE "public"."profiles" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "profiles"."avatar_url"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("avatar_url") ON TABLE "public"."profiles" TO "authenticated";
+GRANT UPDATE("avatar_url") ON TABLE "public"."profiles" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "purchase_order_lines"."id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("id") ON TABLE "public"."purchase_order_lines" TO "authenticated";
+GRANT SELECT("id") ON TABLE "public"."purchase_order_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "purchase_order_lines"."organization_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("organization_id") ON TABLE "public"."purchase_order_lines" TO "authenticated";
+GRANT SELECT("organization_id") ON TABLE "public"."purchase_order_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "purchase_order_lines"."purchase_order_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("purchase_order_id") ON TABLE "public"."purchase_order_lines" TO "authenticated";
+GRANT SELECT("purchase_order_id") ON TABLE "public"."purchase_order_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "purchase_order_lines"."product_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("product_id") ON TABLE "public"."purchase_order_lines" TO "authenticated";
+GRANT SELECT("product_id") ON TABLE "public"."purchase_order_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "purchase_order_lines"."variant_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("variant_id") ON TABLE "public"."purchase_order_lines" TO "authenticated";
+GRANT SELECT("variant_id") ON TABLE "public"."purchase_order_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "purchase_order_lines"."product_name_snapshot"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("product_name_snapshot") ON TABLE "public"."purchase_order_lines" TO "authenticated";
+GRANT SELECT("product_name_snapshot") ON TABLE "public"."purchase_order_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "purchase_order_lines"."variant_name_snapshot"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("variant_name_snapshot") ON TABLE "public"."purchase_order_lines" TO "authenticated";
+GRANT SELECT("variant_name_snapshot") ON TABLE "public"."purchase_order_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "purchase_order_lines"."unit_snapshot"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("unit_snapshot") ON TABLE "public"."purchase_order_lines" TO "authenticated";
+GRANT SELECT("unit_snapshot") ON TABLE "public"."purchase_order_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "purchase_order_lines"."ordered_quantity"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("ordered_quantity") ON TABLE "public"."purchase_order_lines" TO "authenticated";
+GRANT SELECT("ordered_quantity") ON TABLE "public"."purchase_order_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "purchase_order_lines"."received_quantity"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("received_quantity") ON TABLE "public"."purchase_order_lines" TO "authenticated";
+GRANT SELECT("received_quantity") ON TABLE "public"."purchase_order_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "purchase_order_lines"."purchase_unit_code_snapshot"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("purchase_unit_code_snapshot") ON TABLE "public"."purchase_order_lines" TO "authenticated";
+GRANT SELECT("purchase_unit_code_snapshot") ON TABLE "public"."purchase_order_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "purchase_order_lines"."purchase_unit_factor_to_base"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("purchase_unit_factor_to_base") ON TABLE "public"."purchase_order_lines" TO "authenticated";
+GRANT SELECT("purchase_unit_factor_to_base") ON TABLE "public"."purchase_order_lines" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "purchase_orders"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."purchase_orders" TO "authenticated";
+GRANT SELECT ON TABLE "public"."purchase_orders" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "receipt_delivery_requests"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."receipt_delivery_requests" TO "authenticated";
+GRANT SELECT ON TABLE "public"."receipt_delivery_requests" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "receipt_settings"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."receipt_settings" TO "authenticated";
+GRANT SELECT ON TABLE "public"."receipt_settings" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "receipts"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."receipts" TO "service_role";
-GRANT SELECT ON TABLE "public"."receipts" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."receipts" TO "tindio_service";
+GRANT SELECT ON TABLE "public"."receipts" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "refund_items"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."refund_items" TO "authenticated";
+GRANT SELECT ON TABLE "public"."refund_items" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "refund_payments"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."refund_payments" TO "authenticated";
+GRANT SELECT ON TABLE "public"."refund_payments" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "refunds"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."refunds" TO "authenticated";
+GRANT SELECT ON TABLE "public"."refunds" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "registers"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."registers" TO "service_role";
-GRANT SELECT,INSERT ON TABLE "public"."registers" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."registers" TO "tindio_service";
+GRANT SELECT,INSERT ON TABLE "public"."registers" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "registers"."name"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("name") ON TABLE "public"."registers" TO "authenticated";
+GRANT UPDATE("name") ON TABLE "public"."registers" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "registers"."code"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("code") ON TABLE "public"."registers" TO "authenticated";
+GRANT UPDATE("code") ON TABLE "public"."registers" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "registers"."is_active"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("is_active") ON TABLE "public"."registers" TO "authenticated";
+GRANT UPDATE("is_active") ON TABLE "public"."registers" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "role_permissions"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."role_permissions" TO "service_role";
-GRANT SELECT,INSERT,DELETE ON TABLE "public"."role_permissions" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."role_permissions" TO "tindio_service";
+GRANT SELECT,INSERT,DELETE ON TABLE "public"."role_permissions" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "roles"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."roles" TO "service_role";
-GRANT SELECT,INSERT ON TABLE "public"."roles" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."roles" TO "tindio_service";
+GRANT SELECT,INSERT ON TABLE "public"."roles" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "roles"."name"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("name") ON TABLE "public"."roles" TO "authenticated";
+GRANT UPDATE("name") ON TABLE "public"."roles" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "roles"."description"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("description") ON TABLE "public"."roles" TO "authenticated";
+GRANT UPDATE("description") ON TABLE "public"."roles" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "sale_exchanges"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."sale_exchanges" TO "authenticated";
+GRANT SELECT ON TABLE "public"."sale_exchanges" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "sale_items"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."sale_items" TO "service_role";
-GRANT SELECT ON TABLE "public"."sale_items" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."sale_items" TO "tindio_service";
+GRANT SELECT ON TABLE "public"."sale_items" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "sales"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."sales" TO "service_role";
-GRANT SELECT ON TABLE "public"."sales" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."sales" TO "tindio_service";
+GRANT SELECT ON TABLE "public"."sales" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "shifts"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."shifts" TO "authenticated";
+GRANT SELECT ON TABLE "public"."shifts" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "smart_menu_categories"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."smart_menu_categories" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."smart_menu_categories" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "smart_menu_products"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."smart_menu_products" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."smart_menu_products" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "smart_menus"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."smart_menus" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."smart_menus" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "stock_request_discrepancies"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."stock_request_discrepancies" TO "authenticated";
+GRANT SELECT ON TABLE "public"."stock_request_discrepancies" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "stock_request_lines"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."stock_request_lines" TO "authenticated";
+GRANT SELECT ON TABLE "public"."stock_request_lines" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "stock_requests"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."stock_requests" TO "authenticated";
+GRANT SELECT ON TABLE "public"."stock_requests" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "stock_transfer_lines"."id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("id") ON TABLE "public"."stock_transfer_lines" TO "authenticated";
+GRANT SELECT("id") ON TABLE "public"."stock_transfer_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "stock_transfer_lines"."organization_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("organization_id") ON TABLE "public"."stock_transfer_lines" TO "authenticated";
+GRANT SELECT("organization_id") ON TABLE "public"."stock_transfer_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "stock_transfer_lines"."stock_transfer_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("stock_transfer_id") ON TABLE "public"."stock_transfer_lines" TO "authenticated";
+GRANT SELECT("stock_transfer_id") ON TABLE "public"."stock_transfer_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "stock_transfer_lines"."product_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("product_id") ON TABLE "public"."stock_transfer_lines" TO "authenticated";
+GRANT SELECT("product_id") ON TABLE "public"."stock_transfer_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "stock_transfer_lines"."variant_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("variant_id") ON TABLE "public"."stock_transfer_lines" TO "authenticated";
+GRANT SELECT("variant_id") ON TABLE "public"."stock_transfer_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "stock_transfer_lines"."quantity"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("quantity") ON TABLE "public"."stock_transfer_lines" TO "authenticated";
+GRANT SELECT("quantity") ON TABLE "public"."stock_transfer_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "stock_transfer_lines"."received_quantity"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("received_quantity") ON TABLE "public"."stock_transfer_lines" TO "authenticated";
+GRANT SELECT("received_quantity") ON TABLE "public"."stock_transfer_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "stock_transfer_lines"."stock_request_line_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("stock_request_line_id") ON TABLE "public"."stock_transfer_lines" TO "authenticated";
+GRANT SELECT("stock_request_line_id") ON TABLE "public"."stock_transfer_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "stock_transfer_lines"."short_quantity"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("short_quantity") ON TABLE "public"."stock_transfer_lines" TO "authenticated";
+GRANT SELECT("short_quantity") ON TABLE "public"."stock_transfer_lines" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "stock_transfer_receipt_lines"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."stock_transfer_receipt_lines" TO "authenticated";
+GRANT SELECT ON TABLE "public"."stock_transfer_receipt_lines" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "stock_transfer_receipts"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."stock_transfer_receipts" TO "authenticated";
+GRANT SELECT ON TABLE "public"."stock_transfer_receipts" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "stock_transfers"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."stock_transfers" TO "authenticated";
+GRANT SELECT ON TABLE "public"."stock_transfers" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "store_payment_methods"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."store_payment_methods" TO "service_role";
-GRANT SELECT ON TABLE "public"."store_payment_methods" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."store_payment_methods" TO "tindio_service";
+GRANT SELECT ON TABLE "public"."store_payment_methods" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "stores"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."stores" TO "service_role";
-GRANT SELECT,INSERT ON TABLE "public"."stores" TO "authenticated";
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."stores" TO "tindio_service";
+GRANT SELECT,INSERT ON TABLE "public"."stores" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "stores"."name"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("name") ON TABLE "public"."stores" TO "authenticated";
+GRANT UPDATE("name") ON TABLE "public"."stores" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "stores"."code"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("code") ON TABLE "public"."stores" TO "authenticated";
+GRANT UPDATE("code") ON TABLE "public"."stores" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "stores"."address"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("address") ON TABLE "public"."stores" TO "authenticated";
+GRANT UPDATE("address") ON TABLE "public"."stores" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "stores"."phone"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("phone") ON TABLE "public"."stores" TO "authenticated";
+GRANT UPDATE("phone") ON TABLE "public"."stores" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "stores"."is_active"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT UPDATE("is_active") ON TABLE "public"."stores" TO "authenticated";
+GRANT UPDATE("is_active") ON TABLE "public"."stores" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "supplier_return_lines"."id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("id") ON TABLE "public"."supplier_return_lines" TO "authenticated";
+GRANT SELECT("id") ON TABLE "public"."supplier_return_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "supplier_return_lines"."organization_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("organization_id") ON TABLE "public"."supplier_return_lines" TO "authenticated";
+GRANT SELECT("organization_id") ON TABLE "public"."supplier_return_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "supplier_return_lines"."supplier_return_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("supplier_return_id") ON TABLE "public"."supplier_return_lines" TO "authenticated";
+GRANT SELECT("supplier_return_id") ON TABLE "public"."supplier_return_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "supplier_return_lines"."product_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("product_id") ON TABLE "public"."supplier_return_lines" TO "authenticated";
+GRANT SELECT("product_id") ON TABLE "public"."supplier_return_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "supplier_return_lines"."variant_id"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("variant_id") ON TABLE "public"."supplier_return_lines" TO "authenticated";
+GRANT SELECT("variant_id") ON TABLE "public"."supplier_return_lines" TO "tindio_authenticated";
 
 --
 -- Name: COLUMN "supplier_return_lines"."quantity"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT("quantity") ON TABLE "public"."supplier_return_lines" TO "authenticated";
+GRANT SELECT("quantity") ON TABLE "public"."supplier_return_lines" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "supplier_returns"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."supplier_returns" TO "authenticated";
+GRANT SELECT ON TABLE "public"."supplier_returns" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "suppliers"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."suppliers" TO "authenticated";
+GRANT SELECT ON TABLE "public"."suppliers" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "supply_chain_warehouses"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."supply_chain_warehouses" TO "authenticated";
+GRANT SELECT ON TABLE "public"."supply_chain_warehouses" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "tax_rates"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."tax_rates" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."tax_rates" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "ticket_templates"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,INSERT,UPDATE ON TABLE "public"."ticket_templates" TO "authenticated";
+GRANT SELECT,INSERT,UPDATE ON TABLE "public"."ticket_templates" TO "tindio_authenticated";
 
 --
 -- Name: TABLE "time_clock_entries"; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT ON TABLE "public"."time_clock_entries" TO "authenticated";
+GRANT SELECT ON TABLE "public"."time_clock_entries" TO "tindio_authenticated";
 
 --
 -- Name: DEFAULT PRIVILEGES FOR SEQUENCES; Type: DEFAULT ACL; Schema: public; Owner: postgres
@@ -40410,9 +43003,9 @@ GRANT SELECT ON TABLE "public"."time_clock_entries" TO "authenticated";
 --
 
 -- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "postgres";
--- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "anon";
--- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "authenticated";
--- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "service_role";
+-- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "tindio_anon";
+-- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "tindio_authenticated";
+-- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON SEQUENCES TO "tindio_service";
 
 --
 -- Name: DEFAULT PRIVILEGES FOR FUNCTIONS; Type: DEFAULT ACL; Schema: public; Owner: postgres
@@ -40423,9 +43016,9 @@ GRANT SELECT ON TABLE "public"."time_clock_entries" TO "authenticated";
 --
 
 -- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "postgres";
--- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "anon";
--- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "authenticated";
--- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "service_role";
+-- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "tindio_anon";
+-- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "tindio_authenticated";
+-- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON FUNCTIONS TO "tindio_service";
 
 --
 -- Name: DEFAULT PRIVILEGES FOR TABLES; Type: DEFAULT ACL; Schema: public; Owner: postgres
@@ -40436,13 +43029,10 @@ GRANT SELECT ON TABLE "public"."time_clock_entries" TO "authenticated";
 --
 
 -- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
--- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON TABLES TO "anon";
--- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON TABLES TO "authenticated";
--- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
+-- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON TABLES TO "tindio_anon";
+-- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON TABLES TO "tindio_authenticated";
+-- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public" GRANT ALL ON TABLES TO "tindio_service";
 
 --
 -- PostgreSQL database dump complete
 --
-
--- \unrestrict mqL9jxPOMwNPGpdodmePZtwgwr3Dz990eXXoqyFOoFNktVSH7gemc4AuwN8GZ2B
-

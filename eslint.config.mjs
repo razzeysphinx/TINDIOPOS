@@ -38,10 +38,12 @@ const eslintConfig = defineConfig([
       "src/features/**/service.ts",
       "src/features/**/ticket-service.ts",
       "src/features/**/pos-transfer-service.ts",
+      "src/features/**/replenishment-data.ts",
       // Backend modules whose filename does not follow the data/service
       // convention but which carry "import \"server-only\"":
       "src/features/reports/reporting.ts",
       "src/features/checkout/checkout-service.ts",
+      "src/features/offline/pos-v2-offline-checkout-service.ts",
     ],
     rules: {
       "@typescript-eslint/no-restricted-imports": [
@@ -80,6 +82,7 @@ const eslintConfig = defineConfig([
       "src/features/**/service.ts",
       "src/features/**/ticket-service.ts",
       "src/features/**/pos-transfer-service.ts",
+      "src/features/**/replenishment-data.ts",
       "src/lib/server/**/*.ts",
     ],
     rules: {

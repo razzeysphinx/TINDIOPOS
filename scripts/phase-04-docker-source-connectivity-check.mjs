@@ -33,8 +33,10 @@ const result =
       cwd:
         process.cwd(),
 
-      env:
-        process.env,
+      env: {
+        ...process.env,
+        SUPABASE_TELEMETRY_DISABLED: "1",
+      },
 
       capture:
         true,

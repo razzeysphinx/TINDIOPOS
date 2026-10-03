@@ -12,8 +12,8 @@ async function source(relativePath) {
 
 test("controlled adjustments use one approval-aware, idempotent command", async () => {
   const [migration, correction] = await Promise.all([
-    source("supabase/migrations/20260906125656_controlled_inventory_adjustments.sql"),
-    source("supabase/migrations/20260906131442_fix_controlled_adjustment_number_variable.sql"),
+    source("archive/database/supabase-migrations/20260906125656_controlled_inventory_adjustments.sql"),
+    source("archive/database/supabase-migrations/20260906131442_fix_controlled_adjustment_number_variable.sql"),
   ]);
 
   assert.match(migration, /create or replace function private\.record_inventory_adjustment\(/);

@@ -25,10 +25,9 @@ import {
   type StockRestockTab,
 } from "@/features/inventory/inventory-workspace-navigation";
 import { hasAnyInventoryCapability, hasInventoryCapability } from "@/features/inventory/inventory-permissions";
-import { RECEIVABLE_TRANSFER_QUERY_STATUSES } from "@/features/inventory/inventory-transfer-reader-contract";
+import { loadReplenishmentWorkspaceData } from "@/features/inventory/replenishment-data";
 import { resolveBackOfficeStoreScope } from "@/lib/server/back-office-store-scope";
 import { hasPermission, requireBackOfficePermission } from "@/lib/auth/dal";
-import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Stock & Restock" };
 
@@ -155,55 +154,31 @@ export default async function ReplenishmentPage({
     return <FeatureState title="Restock items access required" description="Your role needs transfer or inventory-management access to work with stock requests." />;
   }
 
-  const supabase = await createClient();
   const organizationId = context.organization.id;
   const canViewCosts = hasPermission(context, "products.view_cost");
-  const loadSupplyChain = activeTab === "replenishment";
   const stockPageSize = 50;
-  const [
-    storesResult,
-    categoriesResult,
-    stockPageResult,
-    productsResult,
-    variantsResult,
-    settingsResult,
-    levelsResult,
-    warehousesResult,
-    rulesResult,
-    requestsResult,
-    suppliersResult,
-    purchaseOrdersResult,
-    archivedProductsResult,
-  ] = await Promise.all([
-    supabase.from("stores").select("id, name").eq("organization_id", organizationId).eq("is_active", true).order("created_at"),
-    supabase.from("categories").select("id, name").eq("organization_id", organizationId).eq("is_archived", false).order("name"),
-    activeTab === "levels"
-      ? supabase.rpc("get_inventory_stock_page", {
-          requested_category_id: stockFilters.categoryId ?? undefined,
-          requested_page: stockPage,
-          requested_page_size: stockPageSize,
-          requested_restock_policy: stockFilters.restockPolicy,
-          requested_search: stockFilters.search || undefined,
-          requested_sort: stockFilters.sort,
-          requested_status: stockFilters.status,
-          requested_store_id: storeScope.selectedStoreId ?? undefined,
-          target_organization_id: organizationId,
-        })
-      : Promise.resolve({ data: null, error: null }),
-    loadSupplyChain ? supabase.from("products").select("id, category_id, name, sku, barcode, product_type, unit, status, track_inventory").eq("organization_id", organizationId).eq("status", "active").eq("track_inventory", true).order("name") : Promise.resolve({ data: null, error: null }),
-    loadSupplyChain ? supabase.from("product_variants").select("id, product_id, name, sku, barcode, sort_order").eq("organization_id", organizationId).eq("is_active", true).order("sort_order") : Promise.resolve({ data: null, error: null }),
-    loadSupplyChain ? supabase.from("product_store_settings").select("product_id, store_id, is_available, restock_policy, updated_at").eq("organization_id", organizationId) : Promise.resolve({ data: null, error: null }),
-    loadSupplyChain ? supabase.from("inventory_levels").select("id, store_id, product_id, variant_id, quantity, updated_at").eq("organization_id", organizationId) : Promise.resolve({ data: null, error: null }),
-    loadSupplyChain ? supabase.from("supply_chain_warehouses").select("id, store_id, code, name").eq("organization_id", organizationId).eq("is_active", true).order("name") : Promise.resolve({ data: null, error: null }),
-    loadSupplyChain ? supabase.from("inventory_replenishment_rules").select("id, store_id, product_id, variant_id, preferred_warehouse_id, reorder_point, target_stock").eq("organization_id", organizationId).order("updated_at", { ascending: false }) : Promise.resolve({ data: null, error: null }),
-    loadSupplyChain ? supabase.from("stock_requests").select("id, request_number, requesting_store_id, source_warehouse_id, status, note, requested_at, approved_at, picked_at, dispatched_at, received_at, updated_at").eq("organization_id", organizationId).order("requested_at", { ascending: false }).limit(30) : Promise.resolve({ data: null, error: null }),
-    loadSupplyChain ? supabase.from("suppliers").select("id, name, lead_time_days").eq("organization_id", organizationId).eq("is_active", true).order("name") : Promise.resolve({ data: null, error: null }),
-    loadSupplyChain ? supabase.from("purchase_orders").select("id, order_number, supplier_id, store_id, status, expected_at").eq("organization_id", organizationId).in("status", ["ordered", "partially_received"]).order("created_at", { ascending: false }).limit(20) : Promise.resolve({ data: null, error: null }),
-    activeTab === "levels" ? supabase.from("products").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "archived") : Promise.resolve({ count: 0, data: null, error: null }),
-  ]);
-
-  const firstError = [storesResult, categoriesResult, stockPageResult, productsResult, variantsResult, settingsResult, levelsResult, warehousesResult, rulesResult, requestsResult, suppliersResult, purchaseOrdersResult, archivedProductsResult].find((result) => result.error)?.error;
-  if (firstError) throw new Error(`Unable to load replenishment: ${firstError.message}`);
+  const readModel = await loadReplenishmentWorkspaceData({
+    activeTab,
+    organizationId,
+    storeIds: storeScope.storeIds,
+    stockFilters,
+    stockPage,
+    stockPageSize,
+  });
+  const bundle = readModel.bundle;
+  const storesResult = { data: bundle.stores, error: null };
+  const categoriesResult = { data: bundle.categories, error: null };
+  const stockPageResult = { data: readModel.stockPageEntries, error: null };
+  const productsResult = { data: bundle.products, error: null };
+  const variantsResult = { data: bundle.variants, error: null };
+  const settingsResult = { data: bundle.productStoreSettings, error: null };
+  const levelsResult = { data: bundle.inventoryLevels, error: null };
+  const warehousesResult = { data: bundle.warehouses, error: null };
+  const rulesResult = { data: bundle.replenishmentRules, error: null };
+  const requestsResult = { data: bundle.stockRequests, error: null };
+  const suppliersResult = { data: bundle.suppliers, error: null };
+  const purchaseOrdersResult = { data: bundle.openPurchaseOrders, error: null };
+  const archivedProductsResult = { count: bundle.archivedProductCount, data: null, error: null };
 
   const authorizedStore = (storeId: string) => storeScope.storeIds === null || storeScope.storeIds.includes(storeId);
   const visibleStore = (storeId: string) => authorizedStore(storeId) && (
@@ -265,35 +240,18 @@ export default async function ReplenishmentPage({
   const requestIds = requests.map((request) => request.id);
   const purchaseOrderIds = purchaseOrders.map((order) => order.id);
 
-  const [requestLinesResult, stockTransfersResult, openStockTransfersResult, purchaseOrderLinesResult, discrepanciesResult] = await Promise.all([
-    requestIds.length
-      ? supabase.from("stock_request_lines").select("id, stock_request_id, product_name_snapshot, variant_name_snapshot, unit_snapshot, requested_quantity, approved_quantity, picked_quantity, dispatched_quantity, received_quantity, short_quantity").eq("organization_id", organizationId).in("stock_request_id", requestIds)
-      : Promise.resolve({ data: [], error: null }),
-    requestIds.length
-      ? supabase.from("stock_transfers").select("id, stock_request_id, destination_store_id, status, transfer_number").eq("organization_id", organizationId).in("stock_request_id", requestIds)
-      : Promise.resolve({ data: [], error: null }),
-    loadSupplyChain
-      ? supabase.from("stock_transfers").select("id, stock_request_id, destination_store_id, status, transfer_number").eq("organization_id", organizationId).in("status", [...RECEIVABLE_TRANSFER_QUERY_STATUSES])
-      : Promise.resolve({ data: [], error: null }),
-    purchaseOrderIds.length
-      ? supabase.from("purchase_order_lines").select("purchase_order_id, product_id, variant_id, ordered_quantity, received_quantity").eq("organization_id", organizationId).in("purchase_order_id", purchaseOrderIds)
-      : Promise.resolve({ data: [], error: null }),
-    requestIds.length
-      ? supabase.from("stock_request_discrepancies").select("stock_request_id, stock_request_line_id, short_quantity, note, reported_at").eq("organization_id", organizationId).in("stock_request_id", requestIds).order("reported_at", { ascending: true })
-      : Promise.resolve({ data: [], error: null }),
-  ]);
-  const secondError = [requestLinesResult, stockTransfersResult, openStockTransfersResult, purchaseOrderLinesResult, discrepanciesResult].find((result) => result.error)?.error;
-  if (secondError) throw new Error(`Unable to load replenishment details: ${secondError.message}`);
+  const requestLinesResult = { data: bundle.stockRequestLines.filter((line) => requestIds.includes(line.stock_request_id)), error: null };
+  const stockTransfersResult = { data: bundle.requestStockTransfers.filter((transfer) => transfer.stock_request_id !== null && requestIds.includes(transfer.stock_request_id)), error: null };
+  const openStockTransfersResult = { data: bundle.receivableStockTransfers, error: null };
+  const purchaseOrderLinesResult = { data: bundle.openPurchaseOrderLines.filter((line) => purchaseOrderIds.includes(line.purchase_order_id)), error: null };
+  const discrepanciesResult = { data: bundle.stockRequestDiscrepancies.filter((discrepancy) => requestIds.includes(discrepancy.stock_request_id)), error: null };
 
   const stockTransfers = stockTransfersResult.data ?? [];
-  const allRelevantTransfers = Array.from(new Map(
+  const allRelevantTransfers = [...new Map(
     [...stockTransfers, ...(openStockTransfersResult.data ?? [])].map((transfer) => [transfer.id, transfer]),
-  ).values());
+  ).values()];
   const stockTransferIds = allRelevantTransfers.map((transfer) => transfer.id);
-  const stockTransferLinesResult = stockTransferIds.length
-    ? await supabase.from("stock_transfer_lines").select("id, stock_transfer_id, stock_request_line_id, product_id, variant_id, quantity, received_quantity, short_quantity").eq("organization_id", organizationId).in("stock_transfer_id", stockTransferIds)
-    : { data: [], error: null };
-  if (stockTransferLinesResult.error) throw new Error(`Unable to load transfer receiving details: ${stockTransferLinesResult.error.message}`);
+  const stockTransferLinesResult = { data: bundle.stockTransferLines.filter((line) => stockTransferIds.includes(line.stock_transfer_id)), error: null };
 
   const storeNames = new Map(authorizedStores.map((store) => [store.id, store.name]));
   const productById = new Map(products.map((product) => [product.id, product]));

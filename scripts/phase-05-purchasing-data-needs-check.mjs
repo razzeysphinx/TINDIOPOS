@@ -94,7 +94,11 @@ test("Purchasing has an early render path before Stock Control query and mapping
 
   assert.match(page, /getInventoryWorkspaceDataNeeds\(/);
   assert.match(page, /if \(workspace === "purchasing"\) \{\s*return renderPurchasingWorkspace\(/);
-  const purchasingPath = page.match(/async function renderPurchasingWorkspace\([\s\S]*?\n}\n\nexport default async function InventoryPage/)?.[0] ?? "";
+  const purchasingStart = page.indexOf("async function renderPurchasingWorkspace");
+  const inventoryPageStart = page.indexOf("export default async function InventoryPage");
+  const purchasingPath = purchasingStart >= 0 && inventoryPageStart > purchasingStart
+    ? page.slice(purchasingStart, inventoryPageStart)
+    : "";
   assert.ok(purchasingPath, "Purchasing early render path was not found");
   for (const table of ["inventory_levels", "inventory_movements", "inventory_replenishment_rules", "inventory_policies", "inventory_policy_defaults", "inventory_adjustment_reasons", "stock_transfers", "inventory_counts", "offline_sync_events"]) {
     assert.doesNotMatch(purchasingPath, new RegExp(`\\.from\\("${table}"\\)`));

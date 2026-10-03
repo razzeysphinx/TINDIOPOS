@@ -1,0 +1,84 @@
+{
+  "formatVersion": 1,
+  "source": "CERTIFIED_LOCAL_SUPABASE_POSTGRESQL",
+  "targetPurpose": "R2_CANONICAL_TINDIO_SCHEMA_SNAPSHOT",
+  "historicalAncestor": "2d48e2ead33d783aef6c61dedb661ba74714ea9a",
+  "baselineSha256": "b3a0fd6bac3f670b251680698c315e229eff940e05fc1370f5f392b198d50a87",
+  "baselineBytes": 1984211,
+  "baselineLines": 43039,
+  "migrationEvidence": {
+    "historicalMigrationCount": 211,
+    "recoveryForwardMigrationCount": 2,
+    "activeMigrationCount": 213,
+    "recoveryForwardMigrations": [
+      "20260930111500_recovery_r1_pos_shift_rls_execute_grant.sql",
+      "20260930113000_recovery_r1_device_checkpoint_ambiguity_repair.sql"
+    ],
+    "migrationSetSha256": "7aad8dcf1152cc5c43df27190ae39552f827d22e693fd66c55b7b11b5983b246"
+  },
+  "sourceSchemaCounts": {
+    "publicTables": 100,
+    "privateTables": 7,
+    "publicIndexes": 409,
+    "publicPolicies": 149,
+    "publicTriggers": 204,
+    "privateTriggers": 2,
+    "publicFunctions": 196,
+    "publicSequences": 0,
+    "authUidFunctions": 132,
+    "privateFunctions": 257,
+    "privateSequences": 10,
+    "authUserIdFunctions": 0,
+    "providerCoupledPolicies": 10
+  },
+  "baselinePortabilityInventory": {
+    "authUidReferences": 0,
+    "authUserIdReferences": 0,
+    "providerRoleReferences": 0,
+    "postgrestReloadReferences": 0,
+    "authSchemaReferences": 0,
+    "storageSchemaReferences": 0,
+    "realtimeSchemaReferences": 1,
+    "authJwtReferences": 0,
+    "authRoleReferences": 0,
+    "providerCoupledPolicies": 0
+  },
+  "r3ProviderNeutralIdentity": {
+    "status": "COMPLETE",
+    "r2BaselineSha256": "c2c8183c6f02327e80e561b4b2b504887140586b0d5d03e068ae97132e18ef46",
+    "sourceDirectAuthUidFunctions": 132,
+    "sourceAuthUidReferences": 167,
+    "businessFunctionsRewritten": 131,
+    "baselineAuthUidReferencesAfter": 0,
+    "baselineAuthUserIdReferencesAfter": 0,
+    "baselineAuthJwtReferencesAfter": 0,
+    "baselineAuthRoleReferencesDeferredToR4": 1,
+    "canonicalMigration": "database/migrations/0002_provider_neutral_business_identity.sql",
+    "providerAdapters": [
+      "database/provider/local/01_identity.sql",
+      "database/provider/neon/01_identity.sql"
+    ]
+  },
+  "r4RoleSecurityNormalization": {
+    "status": "COMPLETE",
+    "r3BaselineSha256": "2a43bafc014116efde776ee1b66c9e9426c2a6b5fd4c56ffc013f37354e47d43",
+    "totalPolicies": 149,
+    "authenticatedPoliciesRewritten": 141,
+    "providerCoupledPoliciesRewritten": 11,
+    "sourceProviderGrantStatements": 532,
+    "sourceQuotedProviderRoleIdentifiers": 682,
+    "baselineProviderRoleIdentifiersAfter": 0,
+    "baselineProviderAuthReferencesAfter": 0,
+    "baselineAuthRoleReferencesAfter": 0,
+    "canonicalRoles": [
+      "tindio_anon",
+      "tindio_authenticated",
+      "tindio_service"
+    ],
+    "canonicalMigration": "database/migrations/0003_provider_neutral_roles_rls.sql",
+    "providerRoleAdapters": [
+      "database/provider/local/00_roles.sql",
+      "database/provider/neon/00_roles.sql"
+    ]
+  }
+}

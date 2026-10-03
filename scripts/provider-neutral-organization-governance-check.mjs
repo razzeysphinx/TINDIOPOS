@@ -8,8 +8,9 @@ import process from "node:process";
 const ROOT = process.cwd();
 const MIGRATIONS_ROOT = path.join(
   ROOT,
-  "supabase",
-  "migrations",
+  "archive",
+  "database",
+  "supabase-migrations",
 );
 
 const TARGET_FUNCTIONS = [

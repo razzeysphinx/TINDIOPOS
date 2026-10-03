@@ -15,6 +15,7 @@ import {
 } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
 import { createBusinessContextClient } from "@/lib/supabase/context-client";
+import { loadPosBootstrapBundleResult } from "@/features/pos/pos-bootstrap-data";
 import type {
   PosActiveShift,
   PosCatalogItem,
@@ -123,57 +124,8 @@ export async function loadPosSupportWorkspace(
     && hasPermission(context, "inventory.transfer.receive");
   const supabase = await createBusinessContextClient(context);
   const database = supabase as unknown as { from: (table: string) => any };
-  const [storesResult, categoriesResult, registersResult, paymentMethodsResult, storePaymentMethodsResult, openShiftsResult, loyaltyProgramResult, discountsResult, taxRatesResult, diningOptionsResult, ticketTemplatesResult, customerDisplaySessionsResult, timeClockResult, incomingTransfersResult] = await Promise.all([
-    supabase
-      .from("stores")
-      .select("id, name")
-      .eq("organization_id", context.organization.id)
-      .eq("is_active", true)
-      .in("id", context.storeIds)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("categories")
-      .select("id, name, color")
-      .eq("organization_id", context.organization.id)
-      .eq("is_archived", false)
-      .order("sort_order", { ascending: true })
-      .order("name", { ascending: true }),
-    supabase
-      .from("registers")
-      .select("id, store_id, name, code")
-      .eq("organization_id", context.organization.id)
-      .eq("is_active", true)
-      .in("store_id", context.storeIds)
-      .order("name", { ascending: true }),
-    supabase
-      .from("payment_methods")
-      .select("id, name, code, payment_type, offline_policy, requires_reference, sort_order, is_loyalty_redemption")
-      .eq("organization_id", context.organization.id)
-      .eq("is_enabled", true)
-      .order("sort_order", { ascending: true })
-      .order("name", { ascending: true }),
-    supabase
-      .from("store_payment_methods")
-      .select("store_id, payment_method_id")
-      .eq("organization_id", context.organization.id)
-      .eq("is_enabled", true)
-      .in("store_id", context.storeIds),
-    supabase
-      .from("shifts")
-      .select("id, store_id, register_id, opening_cash_minor, opened_at")
-      .eq("organization_id", context.organization.id)
-      .eq("opened_by_employee_id", context.employee.id)
-      .eq("status", "open")
-      .limit(1),
-    supabase
-      .from("loyalty_programs")
-      .select("is_enabled, earn_spend_minor, earn_points, redemption_value_minor, minimum_redemption_points")
-      .eq("organization_id", context.organization.id)
-      .maybeSingle(),
-    database.from("discounts").select("id, name, discount_type, percentage_bps, amount_minor").eq("organization_id", context.organization.id).eq("is_active", true).order("sort_order", { ascending: true }).order("name", { ascending: true }),
-    database.from("tax_rates").select("id, name, rate_bps, is_inclusive, is_default").eq("organization_id", context.organization.id).eq("is_active", true).order("name", { ascending: true }),
-    database.from("dining_options").select("id, name, is_default").eq("organization_id", context.organization.id).eq("is_active", true).order("sort_order", { ascending: true }).order("name", { ascending: true }),
-    supabase.from("ticket_templates").select("id, label, note, dining_option_id").eq("organization_id", context.organization.id).eq("is_active", true).order("sort_order", { ascending: true }).order("label", { ascending: true }),
+  const [bootstrapResult, customerDisplaySessionsResult, timeClockResult, incomingTransfersResult] = await Promise.all([
+    loadPosBootstrapBundleResult({ client: supabase as unknown as Parameters<typeof loadPosBootstrapBundleResult>[0]["client"], organizationId: context.organization.id, storeIds: context.storeIds, employeeId: context.employee.id }),
     features.customer_display
       ? supabase.rpc("get_pos_customer_display_sessions_with_ids", {
           target_organization_id: context.organization.id,
@@ -192,17 +144,7 @@ export async function loadPosSupportWorkspace(
   ]);
 
   const baseError = [
-    storesResult,
-    categoriesResult,
-    registersResult,
-    paymentMethodsResult,
-    storePaymentMethodsResult,
-    openShiftsResult,
-    loyaltyProgramResult,
-    discountsResult,
-    taxRatesResult,
-    diningOptionsResult,
-    ticketTemplatesResult,
+    bootstrapResult,
     customerDisplaySessionsResult,
     timeClockResult,
     incomingTransfersResult,
@@ -213,6 +155,18 @@ export async function loadPosSupportWorkspace(
   if (baseError) {
     throw new Error(`Unable to open the POS: ${baseError.message}`);
   }
+
+  const storesResult = { data: bootstrapResult.data.stores as any[], error: null };
+  const categoriesResult = { data: bootstrapResult.data.categories as any[], error: null };
+  const registersResult = { data: bootstrapResult.data.registers as any[], error: null };
+  const paymentMethodsResult = { data: bootstrapResult.data.paymentMethods as any[], error: null };
+  const storePaymentMethodsResult = { data: bootstrapResult.data.storePaymentMethods as any[], error: null };
+  const openShiftsResult = { data: bootstrapResult.data.openShifts as any[], error: null };
+  const loyaltyProgramResult = { data: bootstrapResult.data.loyaltyPrograms[0] as any ?? null, error: null };
+  const discountsResult = { data: bootstrapResult.data.discounts as any[], error: null };
+  const taxRatesResult = { data: bootstrapResult.data.taxRates as any[], error: null };
+  const diningOptionsResult = { data: bootstrapResult.data.diningOptions as any[], error: null };
+  const ticketTemplatesResult = { data: bootstrapResult.data.ticketTemplates as any[], error: null };
 
   const stores = storesResult.data ?? [];
   const categories = categoriesResult.data ?? [];

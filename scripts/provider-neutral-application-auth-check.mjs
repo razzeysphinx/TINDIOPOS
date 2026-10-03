@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 
-const migrationsDirectory = new URL("../supabase/migrations/", import.meta.url);
+const migrationsDirectory = new URL("../archive/database/supabase-migrations/", import.meta.url);
 const migrationNamePattern = /^\d+_current_profile_identity_rpc\.sql$/;
 const migrationNames = (await readdir(migrationsDirectory)).filter((name) => migrationNamePattern.test(name));
 
@@ -12,7 +13,7 @@ test("current-profile RPC migration exists exactly once", () => {
 });
 
 const migrationName = migrationNames[0];
-const migration = await readFile(new URL(`../supabase/migrations/${migrationName}`, import.meta.url), "utf8");
+const migration = await readFile(new URL(`../archive/database/supabase-migrations/${migrationName}`, import.meta.url), "utf8");
 const identity = await readFile(new URL("../src/lib/auth/identity.ts", import.meta.url), "utf8");
 const dal = await readFile(new URL("../src/lib/auth/dal.ts", import.meta.url), "utf8");
 const databaseTypes = await readFile(new URL("../src/lib/supabase/database.types.ts", import.meta.url), "utf8");
@@ -80,14 +81,14 @@ test("deterministic runtime test certifies split identity resolution and rollbac
   assert.match(runtimeTest, /rollback;/i);
 });
 
-test("new migration is non-destructive, tracked, and clean in the repository", () => {
+test("archived migration is non-destructive, tracked, and hash-preserved", async () => {
   assert.doesNotMatch(
     migration,
     /drop\s+(table|column|policy)|alter\s+table[\s\S]*?drop|truncate|create\s+policy/i,
   );
 
   const migrationRelativePath =
-    `supabase/migrations/${migrationName}`;
+    `archive/database/supabase-migrations/${migrationName}`;
 
   const trackedMigration =
     execFileSync(
@@ -117,27 +118,21 @@ test("new migration is non-destructive, tracked, and clean in the repository", (
     migrationRelativePath,
   );
 
-  const migrationStatus =
-    execFileSync(
-      "git",
-      [
-        "status",
-        "--porcelain",
-        "--",
-        migrationRelativePath,
-      ],
-      {
-        cwd:
-          process.cwd(),
-
-        encoding:
-          "utf8",
-      },
-    );
-
+  const archiveManifest = JSON.parse(
+    await readFile(
+      new URL("../archive/database/supabase-migrations.manifest.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const archived = archiveManifest.migrations.find(({ archivePath }) => archivePath === migrationRelativePath);
+  assert.ok(archived, "the archived provider-neutral identity migration must have a manifest record");
+  const committedMigration = execFileSync("git", ["show", `HEAD:${migrationRelativePath}`], {
+    cwd: process.cwd(),
+    maxBuffer: 32 * 1024 * 1024,
+  });
   assert.equal(
-    migrationStatus.trim(),
-    "",
-    "the committed provider-neutral identity migration must be clean relative to HEAD",
+    createHash("sha256").update(committedMigration).digest("hex"),
+    archived.sha256,
+    "the archived provider-neutral identity migration must retain its recorded bytes",
   );
 });

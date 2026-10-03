@@ -52,7 +52,10 @@ export type OfflineConflictType =
   | "INVENTORY_CONFLICT"
   | "PERMISSION_CHANGED"
   | "REGISTER_REVOKED"
-  | "DEVICE_REVOKED";
+  | "DEVICE_REVOKED"
+  | "SEQUENCE_GAP"
+  | "SEQUENCE_CONFLICT"
+  | "SEQUENCE_OUT_OF_ORDER";
 
 export type OfflineLineSnapshot = {
   productId: string;

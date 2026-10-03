@@ -4,13 +4,14 @@ import test from "node:test";
 
 const source = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-const [page, health, detail, navigation, migration, clockMigration] = await Promise.all([
+const [page, health, detail, navigation, migration, clockMigration, purchasingMigration] = await Promise.all([
   source("../src/app/(back-office)/back-office/inventory/page.tsx"),
   source("../src/features/inventory/inventory-health-workspace.tsx"),
   source("../src/features/inventory/inventory-product-detail.tsx"),
   source("../src/features/inventory/inventory-workspace-navigation.tsx"),
-  source("../supabase/migrations/20260905090200_inventory_count_awareness.sql"),
-  source("../supabase/migrations/20260905090300_inventory_health_awareness_clock.sql"),
+  source("../archive/database/supabase-migrations/20260905090200_inventory_count_awareness.sql"),
+  source("../archive/database/supabase-migrations/20260905090300_inventory_health_awareness_clock.sql"),
+  source("../database/migrations/0006_inventory_purchasing_read_model.sql"),
 ]);
 
 test("Stock health is merged into the attention-first Inventory Overview", () => {
@@ -37,7 +38,9 @@ test("Phase 2 turns the Overview into a permission-aware owner control tower", (
   assert.match(health, /Compare the same authorized Stock Levels positions by store/);
   for (const column of ["In stock", "Low", "Out", "Negative", "In transit"]) assert.match(health, new RegExp(`>${column}<`));
   assert.match(page, /const valuationQuery = \["overview", "valuation"\]\.includes\(activeTab\) && canViewValuation/);
-  assert.match(page, /openPurchaseOrdersCountQuery\?\.in\("store_id", scopedStoreIds\)/);
+  assert.match(page, /loadInventoryPurchasingBundleResult/);
+  assert.match(purchasingMigration, /'openPurchaseOrdersCount'/);
+  assert.match(purchasingMigration, /target_store_ids is null or purchase_order\.store_id = any\(target_store_ids\)/);
   assert.match(page, /const stockPositionCountsByStore = new Map/);
   assert.match(page, /href: stockLevelsHref\(undefined, store\.id\)/);
   assert.match(page, /overviewMetrics=\{overviewMetrics\}/);

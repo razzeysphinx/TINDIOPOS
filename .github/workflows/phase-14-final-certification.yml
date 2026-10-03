@@ -90,7 +90,7 @@ jobs:
 
       - name: Verify migration and generated-type tree remains clean
         run: |
-          test -z "$(git status --porcelain --untracked-files=all -- supabase/migrations src/lib/supabase/database.types.ts)"
+          test -z "$(git status --porcelain --untracked-files=all -- archive/database/supabase-migrations src/lib/supabase/database.types.ts)"
 
       - name: Final whitespace validation
         run: git diff --check

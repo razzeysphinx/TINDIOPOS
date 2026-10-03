@@ -30,7 +30,7 @@ test("Inventory Count Workspace is the only live count lifecycle", async () => {
     source("src/features/inventory/advanced-inventory-schema.ts"),
     source("src/features/inventory/advanced-inventory-workflows.tsx"),
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
-    source("supabase/migrations/20260906121112_inventory_count_concurrent_reconciliation.sql"),
+    source("archive/database/supabase-migrations/20260906121112_inventory_count_concurrent_reconciliation.sql"),
   ]);
 
   assert.match(workspace, /New inventory count/);

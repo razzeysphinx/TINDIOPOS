@@ -7,6 +7,7 @@ import type {
 } from "@/features/catalog/catalog-types";
 import type { BusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
+import { loadCatalogReadBundleResult } from "@/features/catalog/catalog-read-model";
 
 function normalizeRestockPolicy(
   value: string,
@@ -44,74 +45,10 @@ export async function loadCatalogWorkspace(
   const supabase = await createClient();
   const organizationId = context.organization.id;
 
-  const [categoriesResult, storesResult, productsResult, variantsResult, settingsResult, inventoryLevelsResult, replenishmentRulesResult, unitsResult, componentsResult] =
-    await Promise.all([
-      supabase
-        .from("categories")
-        .select("id, name, is_archived")
-        .eq("organization_id", organizationId)
-        .order("sort_order", { ascending: true })
-        .order("name", { ascending: true }),
-      supabase
-        .from("stores")
-        .select("id, name, is_active")
-        .eq("organization_id", organizationId)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("products")
-        .select(
-          "id, category_id, name, description, product_type, sku, barcode, price_minor, track_inventory, unit, image_url, is_variable_price, allow_fractional_quantity, is_composite, composite_inventory_mode, status, created_at",
-        )
-        .eq("organization_id", organizationId)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("product_variants")
-        .select(
-          "id, product_id, name, sku, barcode, price_minor, sort_order, is_active",
-        )
-        .eq("organization_id", organizationId)
-        .order("sort_order", { ascending: true }),
-      supabase
-        .from("product_store_settings")
-        .select("product_id, store_id, is_available, price_override_minor, low_stock_level, restock_policy")
-        .eq("organization_id", organizationId),
-      supabase
-        .from("inventory_levels")
-        .select("product_id, variant_id, store_id, quantity")
-        .eq("organization_id", organizationId),
-      supabase
-        .from("inventory_replenishment_rules")
-        .select("product_id, variant_id, store_id, reorder_point")
-        .eq("organization_id", organizationId),
-      supabase
-        .from("product_units")
-        .select("id, product_id, unit_code, unit_name, factor_to_base, is_base, is_sale_unit, is_purchase_unit")
-        .eq("organization_id", organizationId)
-        .order("is_base", { ascending: false })
-        .order("unit_name", { ascending: true }),
-      supabase
-        .from("product_components")
-        .select("id, product_id, component_product_id, component_variant_id, quantity_per_composite")
-        .eq("organization_id", organizationId),
-    ]);
+  const bundle = await loadCatalogReadBundleResult({ client: supabase, organizationId, needs: ["categories", "stores", "products", "variants", "productStoreSettings", "inventoryLevels", "replenishmentRules", "productUnits", "productComponents"] });
+  if (bundle.error) throw new Error(`Unable to load the catalog: ${bundle.error.message}`);
 
-  const baseError = [
-    categoriesResult,
-    storesResult,
-    productsResult,
-    variantsResult,
-    settingsResult,
-    inventoryLevelsResult,
-    replenishmentRulesResult,
-    unitsResult,
-    componentsResult,
-  ].find((result) => result.error)?.error;
-
-  if (baseError) {
-    throw new Error(`Unable to load the catalog: ${baseError.message}`);
-  }
-
-  const products = (productsResult.data ?? []).map((product) => ({
+  const products = bundle.data.products.map((product) => ({
     ...product,
     composite_inventory_mode: normalizeCompositeInventoryMode(product.composite_inventory_mode),
   }));
@@ -130,19 +67,19 @@ export async function loadCatalogWorkspace(
   }
 
   return {
-    categories: categoriesResult.data ?? [],
-    stores: storesResult.data ?? [],
+    categories: bundle.data.categories,
+    stores: bundle.data.stores,
     products,
-    variants: variantsResult.data ?? [],
-    settings: (settingsResult.data ?? []).map((setting) => ({
+    variants: bundle.data.variants,
+    settings: bundle.data.productStoreSettings.map((setting) => ({
       ...setting,
       restock_policy: normalizeRestockPolicy(setting.restock_policy),
     })),
     costs,
-    inventoryLevels: inventoryLevelsResult.data ?? [],
-    replenishmentRules: replenishmentRulesResult.data ?? [],
-    units: unitsResult.data ?? [],
-    components: componentsResult.data ?? [],
+    inventoryLevels: bundle.data.inventoryLevels,
+    replenishmentRules: bundle.data.replenishmentRules,
+    units: bundle.data.productUnits,
+    components: bundle.data.productComponents,
   };
 }
 
@@ -153,28 +90,12 @@ export async function loadCatalogExportData(
   const supabase = await createClient();
   const organizationId = context.organization.id;
 
-  const [categoriesResult, productsResult] = await Promise.all([
-    supabase
-      .from("categories")
-      .select("id, name")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("products")
-      .select(
-        "id, category_id, name, description, sku, barcode, price_minor, track_inventory, unit, image_url, is_variable_price, allow_fractional_quantity",
-      )
-      .eq("organization_id", organizationId)
-      .eq("product_type", "simple")
-      .eq("is_composite", false)
-      .eq("status", "active")
-      .order("name", { ascending: true }),
-  ]);
-
-  if (categoriesResult.error || productsResult.error) {
+  const bundle = await loadCatalogReadBundleResult({ client: supabase, organizationId, needs: ["categories", "products"] });
+  if (bundle.error) {
     return { ok: false, stage: "catalog" };
   }
 
-  const products = productsResult.data ?? [];
+  const products = bundle.data.products.filter((product) => product.product_type === "simple" && product.is_composite === false && product.status === "active").sort((left, right) => left.name.localeCompare(right.name));
   let costs: CatalogCostEntry[] = [];
 
   if (includeCosts && products.length > 0) {
@@ -191,7 +112,7 @@ export async function loadCatalogExportData(
 
   return {
     ok: true,
-    categories: categoriesResult.data ?? [],
+    categories: bundle.data.categories,
     products,
     costs,
   };

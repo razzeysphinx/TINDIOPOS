@@ -1,0 +1,12 @@
+{
+  "generatedAt": "2026-10-02T11:18:32.979Z",
+  "exactBusinessContent": "PASS",
+  "controlledIdentityMetadataDrift": "PASS",
+  "unexplainedDrift": 0,
+  "rowCounts": "PASS",
+  "ids": "PASS",
+  "content": "PASS_WITH_STRICT_IDENTITY_UPDATED_AT_CONTRACT",
+  "relationships": "PASS",
+  "businessAuthoritativeWrites": 0,
+  "controlledCertificationMetadataWrites": 2
+}

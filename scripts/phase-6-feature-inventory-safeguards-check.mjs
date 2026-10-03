@@ -23,7 +23,7 @@ const inventoryActions = await readFile(
   "utf8",
 );
 const inventoryMigration = await readFile(
-  new URL("../supabase/migrations/20260824170000_improvement_9_inventory_integrity_workflows.sql", import.meta.url),
+  new URL("../archive/database/supabase-migrations/20260824170000_improvement_9_inventory_integrity_workflows.sql", import.meta.url),
   "utf8",
 );
 

@@ -27,7 +27,7 @@ test("Phase 07 complete foundation remains persistent, tenant-scoped, and phase-
   const sync = read("apps/mobile/app/(app)/sync-status.tsx");
   const localSource = dbFiles.map(read).join("\n");
 
-  assert.match(schema, /TINDIO_LOCAL_SCHEMA_VERSION\s*=\s*2/);
+  assert.match(schema, /TINDIO_LOCAL_SCHEMA_VERSION\s*=\s*7/);
   assert.match(schema, /version:\s*1/);
   assert.match(schema, /version:\s*2/);
   for (const table of ["local_metadata", "business_context_snapshots", "local_cache_state", "reference_snapshots", "catalog_items", "customer_cache", "shift_snapshots", "receipt_summaries"]) assert.match(schema, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
@@ -46,7 +46,7 @@ test("Phase 07 complete foundation remains persistent, tenant-scoped, and phase-
   for (const requirement of ["PRAGMA quick_check", "closeTindioDatabase", "armPhase07RestartProof", "readPhase07RestartProof"]) assert.match(health, new RegExp(requirement));
   assert.match(database, /WAL/);
   assert.match(database, /foreign_keys/);
-  for (const phase of ["PHASE 08", "PHASE 09", "PHASE 10", "PHASE 11", "PHASE 12"]) assert.match(sync, new RegExp(phase));
-  assert.doesNotMatch(schema, /CREATE TABLE[^;]*(outbox|device_sequence|server_checkpoint|delta_cursor|conflicts|sync_queue)/i);
+  for (const phase of ["Phase 08", "Phase 09", "PHASE 10", "PHASE 11", "PHASE 12"]) assert.match(sync, new RegExp(phase));
+  for (const table of ["outbox_events", "device_sync_state", "sync_cursors", "store_hub_state"]) assert.match(schema, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
   assert.doesNotMatch(localSource, /(access_token|refresh_token|credential\.secret|device\.secret|DATABASE_URL|DATABASE_URL_UNPOOLED|service_role)/i);
 });

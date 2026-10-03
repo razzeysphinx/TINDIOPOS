@@ -4,18 +4,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const targetRelativePath = "supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql";
+const targetRelativePath = "archive/database/supabase-migrations/20260910142940_granular_inventory_transfer_rbac.sql";
 const targetPath = path.join(repositoryRoot, targetRelativePath);
 
 const canonicalSources = {
-  transfer_stock: "supabase/migrations/20260821153703_phase_9_advanced_inventory.sql",
-  create_stock_request: "supabase/migrations/20260906074121_transfer_lifecycle_operation_integrity.sql",
-  approve_stock_request: "supabase/migrations/20260824210000_improvement_14_supply_chain_replenishment.sql",
-  start_stock_request_picking: "supabase/migrations/20260824210000_improvement_14_supply_chain_replenishment.sql",
-  dispatch_stock_request: "supabase/migrations/20260906074121_transfer_lifecycle_operation_integrity.sql",
-  receive_stock_request: "supabase/migrations/20260906074121_transfer_lifecycle_operation_integrity.sql",
-  create_direct_stock_transfer: "supabase/migrations/20260910140907_direct_store_transfer_lifecycle.sql",
-  receive_stock_transfer: "supabase/migrations/20260910140907_direct_store_transfer_lifecycle.sql",
+  transfer_stock: "archive/database/supabase-migrations/20260821153703_phase_9_advanced_inventory.sql",
+  create_stock_request: "archive/database/supabase-migrations/20260906074121_transfer_lifecycle_operation_integrity.sql",
+  approve_stock_request: "archive/database/supabase-migrations/20260824210000_improvement_14_supply_chain_replenishment.sql",
+  start_stock_request_picking: "archive/database/supabase-migrations/20260824210000_improvement_14_supply_chain_replenishment.sql",
+  dispatch_stock_request: "archive/database/supabase-migrations/20260906074121_transfer_lifecycle_operation_integrity.sql",
+  receive_stock_request: "archive/database/supabase-migrations/20260906074121_transfer_lifecycle_operation_integrity.sql",
+  create_direct_stock_transfer: "archive/database/supabase-migrations/20260910140907_direct_store_transfer_lifecycle.sql",
+  receive_stock_transfer: "archive/database/supabase-migrations/20260910140907_direct_store_transfer_lifecycle.sql",
 };
 
 const capabilityMatrix = new Map([

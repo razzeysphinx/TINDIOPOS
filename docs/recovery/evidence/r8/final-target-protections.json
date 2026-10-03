@@ -1,0 +1,15 @@
+{
+  "generatedAt": "2026-10-02T12:00:05.068Z",
+  "status": "PASS",
+  "providerPolicies": 0,
+  "crossTenantStores": 0,
+  "negativeInventory": 0,
+  "operationalGuards": 78,
+  "crossTenantInventory": 0,
+  "publicTablesWithoutRls": [],
+  "productUnitsSetUpdatedAt": 1,
+  "productUnitsProtectIdentity": 1,
+  "unexpectedUnvalidatedForeignKeys": 0,
+  "rls": "PASS",
+  "tenantStoreIsolation": "PASS"
+}

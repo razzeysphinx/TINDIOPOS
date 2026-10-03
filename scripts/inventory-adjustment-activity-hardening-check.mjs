@@ -38,7 +38,7 @@ test(
   async () => {
     const migration =
       await source(
-        "supabase/migrations/20260911021727_inventory_adjustment_activity_hardening.sql",
+        "archive/database/supabase-migrations/20260911021727_inventory_adjustment_activity_hardening.sql",
       );
 
     assert.match(
@@ -86,10 +86,11 @@ test(
 test(
   "activity history fetches one lookahead row, renders one page, and preserves selected filters",
   async () => {
-    const page =
-      await source(
-        "src/app/(back-office)/back-office/inventory/page.tsx",
-      );
+    const [page, coreLoader, bundleMigration] = await Promise.all([
+      source("src/app/(back-office)/back-office/inventory/page.tsx"),
+      source("src/features/inventory/inventory-core-data.ts"),
+      source("database/migrations/0005_inventory_core_read_model_extension.sql"),
+    ]);
 
     assert.match(
       page,
@@ -101,15 +102,10 @@ test(
       /resolveActivityPage\(parameters\.activityPage\)/,
     );
 
-    assert.match(
-      page,
-      /order\("created_at", \{ ascending: false \}\)\s*\.order\("id", \{ ascending: false \}\)/,
-    );
-
-    assert.match(
-      page,
-      /recentMovementsQuery\?\.range\(\s*activityPageOffset,\s*activityPageOffset \+ INVENTORY_ACTIVITY_PAGE_SIZE,\s*\)/s,
-    );
+    assert.match(page, /const activityLimit = activeTab === "activity" \? INVENTORY_ACTIVITY_PAGE_SIZE \+ 1 : 30/);
+    assert.match(page, /const activityOffset = activeTab === "activity" \? activityPageOffset : 0/);
+    assert.match(coreLoader, /activityLimit, activityOffset/);
+    assert.match(bundleMigration, /order by created_at desc,id desc offset v_activity_offset limit v_activity_limit/);
 
     assert.match(
       page,

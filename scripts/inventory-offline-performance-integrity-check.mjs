@@ -10,6 +10,8 @@ const [
   catalogRoute,
   posContract,
   inventoryPage,
+  inventoryCoreLoader,
+  inventoryBundleMigration,
   offlineDatabaseTest,
 ] = await Promise.all([
   source("../src/features/offline/offline-sync.ts"),
@@ -17,6 +19,8 @@ const [
   source("../src/lib/auth/pos-v2-catalog.ts"),
   source("../src/contracts/pos.ts"),
   source("../src/app/(back-office)/back-office/inventory/page.tsx"),
+  source("../src/features/inventory/inventory-core-data.ts"),
+  source("../database/migrations/0005_inventory_core_read_model_extension.sql"),
   source("../supabase/tests/database/improvement_13_offline_sync_foundation.test.sql"),
 ]);
 
@@ -59,13 +63,15 @@ test("POS V2 catalogue loading stays bearer-authorized and page-bounded", () => 
 
 test("Inventory activity remains bounded and implements correct page look-ahead", () => {
   assert.match(inventoryPage, /const INVENTORY_ACTIVITY_PAGE_SIZE = 50;/);
-  assert.match(inventoryPage, /const recentMovementsQuery\s*=\s*\["overview", "activity"\]\.includes\(activeTab\)/);
-  assert.match(inventoryPage, /recentMovementsQuery\?\.range\(\s*activityPageOffset,\s*activityPageOffset \+ INVENTORY_ACTIVITY_PAGE_SIZE,\s*\);/);
-  assert.match(inventoryPage, /recentMovementsQuery\?\.limit\(30\)/);
+  assert.match(inventoryPage, /const activityLimit = activeTab === "activity" \? INVENTORY_ACTIVITY_PAGE_SIZE \+ 1 : 30/);
+  assert.match(inventoryPage, /const activityOffset = activeTab === "activity" \? activityPageOffset : 0/);
+  assert.match(inventoryCoreLoader, /if \(activeTab === "overview" \|\| activeTab === "activity"\) coreNeeds\.push\("movements"\)/);
+  assert.match(inventoryCoreLoader, /activityLimit, activityOffset/);
+  assert.match(inventoryBundleMigration, /offset v_activity_offset limit v_activity_limit/);
   assert.match(inventoryPage, /const movements = activeTab === "activity"\s*\?\s*loadedMovements\.slice\(0, INVENTORY_ACTIVITY_PAGE_SIZE\)/);
   assert.match(inventoryPage, /loadedMovements\.length > INVENTORY_ACTIVITY_PAGE_SIZE/);
   assert.match(inventoryPage, /const selectedDetailLevel\s*=\s*selectedDetailLevelId\s*\?/);
   assert.match(inventoryPage, /const selectedDetailPosition:\s*InventoryDetailPosition \| null\s*=\s*selectedDetailLevel/);
   assert.match(inventoryPage, /const detailActivityLimit = activeTab === "activity" \? 50 : 12;/);
-  assert.match(inventoryPage, /const detailMovementsResult = selectedDetailPosition\s*\?\s*await loadInventoryItemActivity\(\{[\s\S]*?limit: detailActivityLimit/);
+  assert.match(inventoryPage, /const activityReferenceResult = await loadInventoryActivityReferenceBundleResult\(\{[\s\S]*?detailStoreId: selectedDetailPosition\?\.store_id \?\? null,[\s\S]*?limit: detailActivityLimit/);
 });

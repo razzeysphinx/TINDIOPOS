@@ -4,7 +4,7 @@ import test from "node:test";
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const [migration, actions, schema, workflows, catalogService, catalogData, catalogWorkspace, inventoryPage, checkoutMigration] = await Promise.all([
-  source("supabase/migrations/20260918193000_canonical_composite_production.sql"),
+  source("archive/database/supabase-migrations/20260918193000_canonical_composite_production.sql"),
   source("src/features/inventory/advanced-inventory-actions.ts"),
   source("src/features/inventory/advanced-inventory-schema.ts"),
   source("src/features/inventory/inventory-integrity-workflows.tsx"),
@@ -12,7 +12,7 @@ const [migration, actions, schema, workflows, catalogService, catalogData, catal
   source("src/features/catalog/data.ts"),
   source("src/features/catalog/catalog-product-workspace.tsx"),
   source("src/app/(back-office)/back-office/inventory/page.tsx"),
-  source("supabase/migrations/20260921190000_made_to_order_composite_checkout_stock.sql"),
+  source("archive/database/supabase-migrations/20260921190000_made_to_order_composite_checkout_stock.sql"),
 ]);
 
 test("composite recipe consumption has one explicit mode contract", () => {

@@ -5,7 +5,7 @@ import test from "node:test";
 const source = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 const [migration, databaseTest] = await Promise.all([
-  source("../supabase/migrations/20260906062727_inventory_ledger_integrity_metadata.sql"),
+  source("../archive/database/supabase-migrations/20260906062727_inventory_ledger_integrity_metadata.sql"),
   source("../supabase/tests/database/inventory_ledger_integrity.test.sql"),
 ]);
 

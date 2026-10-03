@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  Activity,
   BarChart3,
   ChefHat,
   ChevronDown,
@@ -254,6 +255,15 @@ const navigationGroups: NavigationGroup[] = [
         pageTitle: "Offline Sync",
         accessibleLabel: "Offline Sync",
         icon: CloudUpload,
+        isVisible: (access) => access.canManageDevices === true,
+      },
+      {
+        href: "/back-office/observability",
+        label: "Observability",
+        breadcrumbLabel: "Production Observability",
+        pageTitle: "Production Observability",
+        accessibleLabel: "Production Observability",
+        icon: Activity,
         isVisible: (access) => access.canManageDevices === true,
       },
     ],

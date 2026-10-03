@@ -1,0 +1,11 @@
+{
+  "generatedAt": "2026-10-02T08:41:45.966Z",
+  "table": "public.employee_stores",
+  "rowsNormalized": 2,
+  "fields": [
+    "created_at"
+  ],
+  "triggerBypass": false,
+  "targetOnlySyncChangesCleared": true,
+  "status": "PASS"
+}

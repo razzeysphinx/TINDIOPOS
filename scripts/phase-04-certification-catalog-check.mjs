@@ -66,7 +66,7 @@ test(
 );
 
 test(
-  "Phase 14 remains automated but runs only after clean local database replay",
+  "Phase 14 remains automated but runs only after canonical local database installation",
   () => {
     assert.ok(
       Object.hasOwn(
@@ -102,20 +102,20 @@ test(
         ),
       );
 
-    const replayIndex =
+    const installIndex =
       databaseCertification.indexOf(
-        '"Clean local migration replay"',
+        '"Canonical local schema installation"',
       );
 
     const integrationIndex =
       databaseCertification.indexOf(
         "localDatabaseIntegrationTests",
-        replayIndex,
+        installIndex,
       );
 
     assert.ok(
-      replayIndex >= 0,
-      "Unable to locate clean local migration replay.",
+      installIndex >= 0,
+      "Unable to locate canonical local database installation.",
     );
 
     assert.ok(
@@ -124,8 +124,8 @@ test(
     );
 
     assert.ok(
-      replayIndex < integrationIndex,
-      "Phase 14 integration must run after clean local migration replay.",
+      installIndex < integrationIndex,
+      "Phase 14 integration must run after canonical local database installation.",
     );
   },
 );

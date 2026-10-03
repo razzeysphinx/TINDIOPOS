@@ -5,7 +5,7 @@ import test from "node:test";
 const source = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("POS incoming-transfer query is capability- and destination-store-scoped", async () => {
-  const migration = await source("../supabase/migrations/20260917073801_canonical_request_transfer_migration.sql");
+  const migration = await source("../archive/database/supabase-migrations/20260917073801_canonical_request_transfer_migration.sql");
   const reader = migration.match(/create or replace function public\.get_pos_incoming_stock_transfers[\s\S]*?\n\$\$;/i)?.[0] ?? "";
 
   assert.match(reader, /public\.get_pos_incoming_stock_transfers/);

@@ -14,22 +14,18 @@ export async function loadReportStores(
   }
 
   const supabase = await createClient();
-  let query = supabase
-    .from("stores")
-    .select("id, name")
-    .eq("organization_id", context.organization.id)
-    .eq("is_active", true)
-    .order("name");
-
-  if (!hasOrganizationReportingScope(context)) {
-    query = query.in("id", assignedStoreIds);
-  }
-
-  const { data, error } = await query;
+  const { data, error } = await (supabase as unknown as {
+    rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+  }).rpc("get_reports_store_reference_v1", {
+    target_organization_id: context.organization.id,
+    target_store_ids: hasOrganizationReportingScope(context) ? null : assignedStoreIds,
+  });
 
   if (error) {
     throw new Error(`Unable to load stores for reporting: ${error.message}`);
   }
 
-  return data ?? [];
+  return Array.isArray(data)
+    ? data.flatMap((row) => row && typeof row === "object" && !Array.isArray(row) && typeof row.id === "string" && typeof row.name === "string" ? [{ id: row.id, name: row.name }] : [])
+    : [];
 }

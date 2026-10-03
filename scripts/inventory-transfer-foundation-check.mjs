@@ -15,14 +15,15 @@ const [
   posTypes,
   posInbox,
   inventoryPage,
+  inventoryCoreLoader,
   integrityWorkflows,
   sqlTest,
   readerContract,
 ] = await Promise.all([
-  source("../supabase/migrations/20260917033614_canonical_inventory_transfer_foundation.sql"),
-  source("../supabase/migrations/20260917070409_phase_05_direct_transfer_contract_repair.sql"),
-  source("../supabase/migrations/20260917073801_canonical_request_transfer_migration.sql"),
-  source("../supabase/migrations/20260910142940_granular_inventory_transfer_rbac.sql"),
+  source("../archive/database/supabase-migrations/20260917033614_canonical_inventory_transfer_foundation.sql"),
+  source("../archive/database/supabase-migrations/20260917070409_phase_05_direct_transfer_contract_repair.sql"),
+  source("../archive/database/supabase-migrations/20260917073801_canonical_request_transfer_migration.sql"),
+  source("../archive/database/supabase-migrations/20260910142940_granular_inventory_transfer_rbac.sql"),
   Promise.all([
     source("../src/features/inventory/advanced-inventory-actions.ts"),
     source("../src/features/inventory/pos-transfer-service.ts"),
@@ -35,6 +36,7 @@ const [
   source("../src/features/pos/pos-types.ts"),
   source("../src/features/pos/pos-incoming-transfer-inbox.tsx"),
   source("../src/app/(back-office)/back-office/inventory/page.tsx"),
+  source("../src/features/inventory/inventory-core-data.ts"),
   source("../src/features/inventory/inventory-integrity-workflows.tsx"),
   source("../supabase/tests/database/canonical_inventory_transfer_foundation.test.sql"),
   source("../src/features/inventory/inventory-transfer-reader-contract.ts"),
@@ -134,7 +136,8 @@ test("all active receiving readers accept only canonical receivable states", () 
   assert.match(posData, /isReceivableTransferState/);
   assert.match(posTypes, /ReceivableTransferStatus/);
   assert.match(posInbox, /transferStatusLabels[\s\S]*dispatched: "Dispatched"/);
-  assert.match(inventoryPage, /RECEIVABLE_TRANSFER_QUERY_STATUSES/);
+  assert.match(inventoryCoreLoader, /\["receivableStockTransfers", "stockTransferLines"\]/);
+  assert.match(inventoryPage, /transferBundle\.receivableStockTransfers/);
   assert.match(inventoryPage, /isReceivableTransferState/);
   assert.match(integrityWorkflows, /ReceivableTransferStatus/);
 });

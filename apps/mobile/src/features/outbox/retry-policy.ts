@@ -1,0 +1,1 @@
+export function outboxRetryDelayMs(attempts:number){return Math.min(60000,1000*2**Math.min(Math.max(attempts-1,0),6));}export function nextOutboxRetryAt(attempts:number,now=Date.now()){return new Date(now+outboxRetryDelayMs(attempts)).toISOString();}

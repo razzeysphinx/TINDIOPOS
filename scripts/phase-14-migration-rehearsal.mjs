@@ -17,10 +17,10 @@ function fail(message) {
   throw new Error(message);
 }
 
-function command(name, args, capture = false) {
+function command(name, args, capture = false, env = process.env) {
   const result = runCommand(name, args, {
     cwd: ROOT,
-    env: process.env,
+    env,
     capture,
   });
 
@@ -139,12 +139,16 @@ async function typeHash() {
 }
 
 async function replay(label, container) {
-  console.log(`=== ${label}: clean local migration replay ===`);
+  console.log(`=== ${label}: clean canonical local installation ===`);
 
   command(
     "pnpm",
-    ["exec", "supabase", "db", "reset", "--local"],
+    ["run", "db:install:local"],
     true,
+    {
+      ...process.env,
+      TINDIO_DATABASE_INSTALL: "YES",
+    },
   );
 
   command(
@@ -153,20 +157,19 @@ async function replay(label, container) {
     true,
   );
 
-  const migrationCount = Number(
-    query(
-      container,
-      "select count(*) from supabase_migrations.schema_migrations;",
-    ),
+  const canonicalSchemaReady = query(
+    container,
+    "select to_regclass('public.organizations') is not null and to_regprocedure('public.current_profile_id()') is not null;",
   );
 
-  assert.ok(
-    Number.isInteger(migrationCount) && migrationCount > 0,
-    "Migration history must be populated after replay.",
+  assert.equal(
+    canonicalSchemaReady,
+    "t",
+    "Canonical installation did not provide the required application schema.",
   );
 
   return {
-    migrationCount,
+    canonicalSchemaReady,
     typeHash: await typeHash(),
   };
 }
@@ -210,9 +213,9 @@ async function main() {
   );
 
   assert.equal(
-    first.migrationCount,
-    second.migrationCount,
-    "Two clean migration replays produced different migration-history counts.",
+    first.canonicalSchemaReady,
+    second.canonicalSchemaReady,
+    "Two clean canonical installations produced different schema readiness results.",
   );
 
   const migrationStatus = command(
@@ -222,7 +225,7 @@ async function main() {
       "--porcelain",
       "--untracked-files=all",
       "--",
-      "supabase/migrations",
+      "archive/database/supabase-migrations",
       "src/lib/supabase/database.types.ts",
     ],
     true,
@@ -235,7 +238,7 @@ async function main() {
   );
 
   console.log(JSON.stringify({
-    migrationCount: first.migrationCount,
+    canonicalSchemaReady: first.canonicalSchemaReady === "t",
     replayATypeHash: first.typeHash,
     replayBTypeHash: second.typeHash,
   }, null, 2));

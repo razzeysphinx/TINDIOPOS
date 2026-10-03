@@ -13,7 +13,7 @@ const [page, workspace, forms, dialog, detailDrawer, data, actions, exportRoute,
   source("src/features/catalog/data.ts"),
   source("src/features/catalog/actions.ts"),
   source("src/app/api/catalog/export/route.ts"),
-  source("supabase/migrations/20260903093657_controlled_catalog_product_delete.sql"),
+  source("archive/database/supabase-migrations/20260903093657_controlled_catalog_product_delete.sql"),
 ]);
 
 assert.match(page, /requireBackOfficePermission\("products\.manage"\)/, "Catalog route must retain its server permission boundary");
@@ -48,7 +48,8 @@ assert.match(forms, /<summary[^>]*>Advanced settings<\/summary>/, "The add-produ
 assert.match(forms, /max-h-44[^\n]*overflow-y-auto/, "Large store lists must remain bounded");
 assert.match(dialog, /nonBlocking/, "The shared drawer primitive must support an inspection-panel mode");
 
-for (const relation of ["inventory_levels", "product_units", "product_components"]) assert.match(data, new RegExp(`from\\("${relation}"\\)`));
+assert.match(data, /loadCatalogReadBundleResult/, "Catalog data must use the canonical bounded read bundle");
+for (const need of ["inventoryLevels", "productUnits", "productComponents"]) assert.match(data, new RegExp(`"${need}"`));
 assert.match(actions, /deleteCatalogProductAction/, "Deletion must pass through a server action");
 assert.match(exportRoute, /\.\.\.\(includeCosts \? \["cost"\] : \[\]\)/, "Unauthorized exports must omit the cost column entirely");
 assert.match(migration, /private\.has_permission\(target_organization_id, 'products\.manage'\)/, "Delete RPC must enforce product management permission");

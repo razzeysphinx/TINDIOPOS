@@ -11,7 +11,7 @@ const shiftActions = (await Promise.all([
   readFile(new URL("../src/features/shifts/service.ts", import.meta.url), "utf8"),
 ])).join("\n");
 const shiftMigration = await readFile(
-  new URL("../supabase/migrations/20260821120000_phase_6_register_shifts.sql", import.meta.url),
+  new URL("../archive/database/supabase-migrations/20260821120000_phase_6_register_shifts.sql", import.meta.url),
   "utf8",
 );
 

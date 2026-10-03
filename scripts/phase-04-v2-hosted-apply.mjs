@@ -50,10 +50,10 @@ if (
 }
 
 const migrations = [
-  "../supabase/migrations/20260924_phase_04_pos_bootstrap_v2_core.sql",
-  "../supabase/migrations/20260924071716_phase_04_pos_reference_v2.sql",
-  "../supabase/migrations/20260924075521_phase_04_pos_live_v2.sql",
-  "../supabase/migrations/20260924081131_phase_04_pos_catalog_v2.sql",
+  "../archive/database/supabase-migrations/20260924_phase_04_pos_bootstrap_v2_core.sql",
+  "../archive/database/supabase-migrations/20260924071716_phase_04_pos_reference_v2.sql",
+  "../archive/database/supabase-migrations/20260924075521_phase_04_pos_live_v2.sql",
+  "../archive/database/supabase-migrations/20260924081131_phase_04_pos_catalog_v2.sql",
 ];
 
 const forbiddenBusinessMutation =

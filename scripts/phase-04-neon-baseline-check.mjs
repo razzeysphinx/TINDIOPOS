@@ -35,7 +35,7 @@ const [
       "database/provider/neon/01_identity.sql",
     ),
     source(
-      "supabase/migrations/20260922180000_neon_portability_foundation.sql",
+      "archive/database/supabase-migrations/20260922180000_neon_portability_foundation.sql",
     ),
   ]);
 
@@ -94,9 +94,7 @@ test(
       const helper
       of [
         "auth.user_id()",
-        "auth.uid()",
         "auth.jwt()",
-        "auth.session()",
       ]
     ) {
       assert.match(
@@ -111,6 +109,12 @@ test(
         `${helper} must be verified by the Neon provider adapter`,
       );
     }
+
+    assert.doesNotMatch(
+      identity,
+      /\bauth\.uid\s*\(/i,
+      "R3 keeps auth.uid() isolated to the local provider adapter.",
+    );
 
     assert.match(
       identity,
@@ -189,12 +193,12 @@ test(
   () => {
     assert.match(
       baseline,
-      /\bTO\s+"?authenticated"?\b/i,
+      /\bTO\s+"?tindio_authenticated"?\b/i,
     );
 
     assert.match(
       baseline,
-      /\bTO\s+"?service_role"?\b/i,
+      /\bTO\s+"?tindio_service"?\b/i,
     );
 
     assert.match(

@@ -74,7 +74,7 @@ The last verified working tree contained exactly:
 
 ```text
  M scripts/certify-repository.mjs
-?? supabase/migrations/20260916100000_inventory_stock_page_lint_repair.sql
+?? archive/database/supabase-migrations/20260916100000_inventory_stock_page_lint_repair.sql
 ?? supabase/tests/database/inventory_stock_page_execution.test.sql
 ```
 
@@ -422,7 +422,7 @@ These are follow-up review points, not already verified behavior.
 
 ### B. Forward SQL migration
 
-`supabase/migrations/20260916100000_inventory_stock_page_lint_repair.sql`
+`archive/database/supabase-migrations/20260916100000_inventory_stock_page_lint_repair.sql`
 
 This recreates `get_inventory_stock_page` using its existing signature and logic, with explicit qualification in the metrics and filtering CTEs.
 

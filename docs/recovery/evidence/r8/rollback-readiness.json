@@ -1,0 +1,22 @@
+{
+  "generatedAt": "2026-10-02T07:57:47.699Z",
+  "status": "READY_FOR_AUTHORIZED_CUTOVER_ONLY",
+  "currentProduction": {
+    "deployment": "tindiopos-4d8ra0tyx-razzeysphinx.vercel.app",
+    "dataApi": {
+      "host": "ep-steep-bonus-ay5df74y.apirest.c-5.us-east-2.aws.neon.tech",
+      "path": "/neondb/rest/v1",
+      "valueSha256": "05a17431cd556414d1c84786718a9c2072dc5226ff53c9ca0801cbb949c82606"
+    }
+  },
+  "candidateTarget": {
+    "project": "divine-sound-41148108",
+    "branch": "r6-clean-canonical-20261002",
+    "database": "tindio_r6_recovery",
+    "dataApiHost": "ep-wandering-voice-b5w9m9db.apirest.c-7.us-east-2.aws.neon.tech",
+    "dataApiPath": "/tindio_r6_recovery/rest/v1"
+  },
+  "rollbackProcedure": "During an explicitly authorized incident response, restore the fingerprinted old-source NEON_DATA_API_URL, deploy or promote the verified old-source configuration, then run the approved read-only health checks. Do not execute this procedure during pre-cutover readiness.",
+  "rawSecretsPersisted": false,
+  "productionChanged": false
+}

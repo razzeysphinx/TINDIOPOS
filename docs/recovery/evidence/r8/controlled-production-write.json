@@ -1,0 +1,61 @@
+{
+  "generatedAt": "2026-10-02T12:05:15.127Z",
+  "status": "PASS",
+  "deploymentHost": "tindiopos.vercel.app",
+  "targetDataApiHost": "ep-wandering-voice-b5w9m9db.apirest.c-7.us-east-2.aws.neon.tech",
+  "fixtureContract": "existing tracked Phase 04F Certification Item only",
+  "fixtureIdentitySha256": "4b3671399a0444aa57ef39f132a0ca7432040aabdac581cebe415c2e15aa69d0",
+  "saleIdentitySha256": "5b1a6edda18f6e378be2008b96afe8c174a05d7529b873c299bfcabc6fe2e4a7",
+  "refundIdentitySha256": "cc389cfa9e7b78357d1e876cdd584576824af3db363a30e34f00219aa8263d59",
+  "firstBusinessAuthoritativeTargetWrite": "2026-10-02T11:48:29.088634+00:00",
+  "checkout": {
+    "committed": true,
+    "replayWasNoOp": true
+  },
+  "receiptAndPaymentLinkage": "PASS",
+  "refund": {
+    "committed": true,
+    "separateFromSale": true,
+    "replayWasNoOp": true,
+    "returnedToStock": true
+  },
+  "certificationFootprint": {
+    "inventoryCounts": 2,
+    "inventoryCountLines": 2,
+    "sales": 1,
+    "saleItems": 1,
+    "payments": 1,
+    "receipts": 1,
+    "refunds": 1,
+    "refundItems": 1,
+    "refundPayments": 1,
+    "checkoutRequests": 1,
+    "refundRequests": 1,
+    "productMovements": 4
+  },
+  "replayVerificationObservedDeltas": {
+    "sales": 0,
+    "saleItems": 0,
+    "payments": 0,
+    "receipts": 0,
+    "refunds": 0,
+    "refundItems": 0,
+    "refundPayments": 0,
+    "checkoutRequests": 0,
+    "refundRequests": 0,
+    "inventoryCounts": 0,
+    "inventoryCountLines": 0,
+    "productMovements": 0
+  },
+  "inventoryCounts": {
+    "stockInIdentitySha256": "61cc4c7859342fcb218d92c84f9f48ad87d5785d1a456b551fda4967c743cb93",
+    "stockOutIdentitySha256": "1255646a54f17bab96fc4355834090dd420b6be161754e2ac310a61ecc2086b6",
+    "postReplayWasNoOp": true,
+    "activationBaselineRestored": true
+  },
+  "stockPolicy": "block",
+  "inventoryNetQuantityDelta": 0,
+  "unexplainedBusinessDelta": 0,
+  "blindOldSourceFailbackSafe": false,
+  "rawPiiPersisted": false
+}

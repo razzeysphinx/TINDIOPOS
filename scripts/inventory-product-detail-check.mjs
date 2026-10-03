@@ -37,10 +37,10 @@ test("Item activity is read from the existing ledger only after an authorized st
   assert.match(inventoryPage, /const selectedDetailLevel = selectedDetailLevelId/);
   assert.match(inventoryPage, /if \(selectedDetailLevelId && !selectedDetailLevel\) notFound\(\);/);
   assert.match(inventoryPage, /const detailActivityLimit = activeTab === "activity" \? 50 : 12;/);
-  assert.match(inventoryPage, /await loadInventoryItemActivity\(/);
-  assert.match(inventoryPage, /\.eq\("store_id", storeId\)/);
-  assert.match(inventoryPage, /\.eq\("product_id", productId\)/);
-  assert.match(inventoryPage, /\.limit\(limit\)/);
+  assert.match(inventoryPage, /await loadInventoryActivityReferenceBundleResult\(/);
+  assert.match(inventoryPage, /detailStoreId: selectedDetailPosition\?\.store_id \?\? null/);
+  assert.match(inventoryPage, /detailProductId: selectedDetailPosition\?\.product_id \?\? null/);
+  assert.match(inventoryPage, /limit: detailActivityLimit/);
   assert.match(inventoryPage, /hasPermission\(context, "receipts\.view"\)/);
   assert.match(inventoryPage, /<InventoryProductDetail detail=\{inventoryDetail\}/);
   assert.match(inventoryPage, /const selectedDetailPosition: InventoryDetailPosition/);
@@ -51,14 +51,16 @@ test("Item activity is read from the existing ledger only after an authorized st
 });
 
 test("Phase 3 preserves financial and employee-data boundaries", async () => {
-  const [inventoryPage, detail] = await Promise.all([
+  const [inventoryPage, detail, specializedData] = await Promise.all([
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
     source("src/features/inventory/inventory-product-detail.tsx"),
+    source("src/features/inventory/inventory-specialized-data.ts"),
   ]);
 
   assert.match(inventoryPage, /hasPermission\(context, "employees\.manage"\)/);
   assert.match(inventoryPage, /averageCostMinor: canViewCosts\s+\? averageCostByStockLevel\.get/);
   assert.match(inventoryPage, /rpc\("get_inventory_valuation"/);
   assert.doesNotMatch(detail, /averageCostMinor|unitCostMinor|valueDeltaMinor/);
-  assert.match(inventoryPage, /source_type, source_id/);
+  assert.match(specializedData, /source_type[\s\S]*source_id/);
+  assert.match(specializedData, /get_inventory_activity_reference_bundle_v1/);
 });

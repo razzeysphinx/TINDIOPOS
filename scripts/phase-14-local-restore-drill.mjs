@@ -116,8 +116,6 @@ function queryDatabase(
 function evidenceSql() {
   return `
 select jsonb_build_object(
-  'migrations',
-    (select count(*) from supabase_migrations.schema_migrations),
   'inventory_levels',
     (select count(*) from public.inventory_levels),
   'inventory_movements',

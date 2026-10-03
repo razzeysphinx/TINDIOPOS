@@ -44,6 +44,7 @@ export type CheckoutSaleActionResult =
         wasReplayed: boolean;
         inventoryWarning: string | null;
       };
+      sync?: CheckoutSequenceInfo;
     }
   | {
       ok: false;
@@ -60,5 +61,16 @@ export type CheckoutSaleActionResult =
         | "INVENTORY_CONFLICT"
         | "PERMISSION_CHANGED"
         | "REGISTER_REVOKED"
-        | "DEVICE_REVOKED";
+        | "DEVICE_REVOKED"
+        | "SEQUENCE_GAP"
+        | "SEQUENCE_CONFLICT"
+        | "SEQUENCE_OUT_OF_ORDER";
+      sync?: CheckoutSequenceInfo;
     };
+
+export type CheckoutSequenceInfo = {
+  deviceSequence: number;
+  serverCheckpoint: number;
+  expectedSequence: number;
+  status: "ACCEPTED" | "REPLAY" | "GAP" | "DUPLICATE_SEQUENCE" | "OUT_OF_ORDER" | "IDEMPOTENCY_SEQUENCE_MISMATCH";
+};

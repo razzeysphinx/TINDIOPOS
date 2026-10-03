@@ -11,13 +11,17 @@ async function source(relativePath) {
 }
 
 test("inventory activity filters one immutable source operation through the existing source index", async () => {
-  const [page, migration] = await Promise.all([
+  const [page, migration, bundleMigration] = await Promise.all([
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
-    source("supabase/migrations/20260906062727_inventory_ledger_integrity_metadata.sql"),
+    source("archive/database/supabase-migrations/20260906062727_inventory_ledger_integrity_metadata.sql"),
+    source("database/migrations/0005_inventory_core_read_model_extension.sql"),
   ]);
 
   assert.match(page, /const activitySourceFilter = activitySourceType && activitySourceId/);
-  assert.match(page, /eq\("source_type", activitySourceFilter\.type\)\.eq\("source_id", activitySourceFilter\.id\)/);
+  assert.match(page, /activitySourceType: activitySourceFilter\?\.type \?\? null/);
+  assert.match(page, /activitySourceId: activitySourceFilter\?\.id \?\? null/);
+  assert.match(bundleMigration, /requested_activity_source_type is null or source_type::text=requested_activity_source_type/);
+  assert.match(bundleMigration, /requested_activity_source_id is null or source_id::text=requested_activity_source_id/);
   assert.match(page, /function InventoryActivitySourceContext/);
   assert.match(migration, /inventory_movements_source_lookup_idx/);
 });
@@ -40,13 +44,16 @@ test("activity resolves canonical source labels without exposing raw source UUID
 });
 
 test("historical display survives catalog changes without broadening cost access", async () => {
-  const [page, migration] = await Promise.all([
+  const [page, migration, coreLoader, bundleMigration] = await Promise.all([
     source("src/app/(back-office)/back-office/inventory/page.tsx"),
-    source("supabase/migrations/20260907090000_inventory_activity_history_access.sql"),
+    source("archive/database/supabase-migrations/20260907090000_inventory_activity_history_access.sql"),
+    source("src/features/inventory/inventory-core-data.ts"),
+    source("database/migrations/0005_inventory_core_read_model_extension.sql"),
   ]);
 
-  assert.match(page, /activityProductsQuery/);
-  assert.match(page, /activityStoresQuery/);
+  assert.match(coreLoader, /coreNeeds\.push\("activityProducts", "activityStores"\)/);
+  assert.match(bundleMigration, /'activityProducts'[\s\S]{0,280}select id,name,unit from public\.products/);
+  assert.match(bundleMigration, /'activityStores'[\s\S]{0,280}select id,name from public\.stores/);
   assert.match(page, /unit: movement\.unit_snapshot \|\| product\?\.unit \|\| "units"/);
   assert.match(migration, /grant select \(unit_snapshot\) on table public\.inventory_movements to authenticated/);
   assert.doesNotMatch(migration, /grant select \(.*unit_cost_minor/);

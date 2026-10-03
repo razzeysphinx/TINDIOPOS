@@ -11,7 +11,7 @@ async function source(relativePath) {
 }
 
 const [phaseTwoMigration, phaseTwoDatabaseTest] = await Promise.all([
-  source("supabase/migrations/20260906070329_purchase_order_receiving_operation_integrity.sql"),
+  source("archive/database/supabase-migrations/20260906070329_purchase_order_receiving_operation_integrity.sql"),
   source("supabase/tests/database/inventory_purchase_order_receiving_integrity.test.sql"),
 ]);
 
@@ -97,21 +97,24 @@ test("Phase 6 keeps cost visibility and receiving mutations on the existing safe
 
 test("Phase 6 bounds purchase and receipt history reads and reuses shared inventory data", async () => {
   const page = await source("src/app/(back-office)/back-office/inventory/page.tsx");
+  const purchasingData = await source("src/features/inventory/inventory-purchasing-data.ts");
+  const migration = await source("database/migrations/0006_inventory_purchasing_read_model.sql");
 
-  assert.match(page, /from\("purchase_orders"\)/);
-  assert.match(page, /\.limit\(30\)/);
-  assert.match(page, /from\("purchase_order_lines"\)/);
-  assert.match(page, /\.in\("purchase_order_id", purchaseOrderIds\)/);
-  assert.match(page, /from\("goods_receipts"\)/);
-  assert.match(page, /\.limit\(50\)/);
-  assert.match(page, /from\("goods_receipt_lines"\)/);
+  assert.match(page, /loadInventoryPurchasingBundleResult/);
+  assert.match(purchasingData, /get_inventory_purchasing_bundle_v1/);
+  assert.doesNotMatch(purchasingData, /\.from\s*\(/);
+  assert.match(migration, /purchase_order\.created_at desc limit 30/i);
+  assert.match(migration, /receipt\.received_at desc limit 50/i);
+  for (const table of ["purchase_orders", "purchase_order_lines", "goods_receipts", "goods_receipt_lines"]) {
+    assert.doesNotMatch(page, new RegExp(`from\\("${table}"\\)`));
+  }
   assert.match(page, /purchaseOrders=\{purchaseOrderHistory\}/);
   assert.match(page, /receipts=\{recentGoodsReceipts\}/);
   assert.match(page, /canViewCosts=\{canViewCosts\}/);
 });
 
 test("Phase 6 scopes goods-receipt history with existing store authority and no grants", async () => {
-  const migration = await source("supabase/migrations/20260829124244_goods_receipt_store_scope.sql");
+  const migration = await source("archive/database/supabase-migrations/20260829124244_goods_receipt_store_scope.sql");
 
   assert.match(migration, /goods_receipts_select_authorized_scope/);
   assert.match(migration, /goods_receipt_lines_select_authorized_scope/);

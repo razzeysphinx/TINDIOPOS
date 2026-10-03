@@ -1,0 +1,3 @@
+# Keep the immutable historical SQL archive byte-stable across platforms.
+archive/database/supabase-migrations/*.sql text eol=lf
+archive/database/supabase-migrations.manifest.json text eol=lf

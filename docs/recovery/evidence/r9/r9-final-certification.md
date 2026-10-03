@@ -1,6 +1,6 @@
 # TINDIO R9 Final Local Certification
 
-Status: **COMPLETE LOCALLY — AWAITING REPOSITORY CLOSURE**
+Status: **COMPLETE — REPOSITORY CLOSURE ATTESTED**
 
 R9 establishes one canonical local installer and one canonical Neon installer,
 archives the immutable 213-file historical Supabase migration chain with byte
@@ -25,6 +25,8 @@ Final local gates completed:
 - R9 final closure contract
 - Git branch, conflict, staged-state, and R4 handover preservation checks
 
-No R9 push, default-branch merge, Git branch deletion, Neon resource deletion,
-production deployment, production write, or retained-source write is part of
-this local closure.
+The protected recovery implementation merged normally into
+`TINDIO-PREPRODUCTION` as `71dcd409c14ba9b8caef783d255614e4b47457e9` after the
+required `certify` and Vercel checks passed. No branch deletion, Neon resource
+deletion, production deployment, production write, or retained-source write
+occurred during repository closure.

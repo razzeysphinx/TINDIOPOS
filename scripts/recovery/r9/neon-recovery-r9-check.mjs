@@ -81,7 +81,17 @@ for (const migration of archiveManifest.migrations) {
   assert.equal(sha256, migration.sha256, `Historical migration changed: ${migration.archivePath}`);
 }
 
-assert.equal(git("branch", "--show-current"), "recovery/neon-canonical-rebuild", "R9 must run on the recovery branch.");
+const recoveryBranch = "recovery/neon-canonical-rebuild";
+const checkedOutBranch = git("branch", "--show-current");
+if (checkedOutBranch) {
+  assert.equal(checkedOutBranch, recoveryBranch, "R9 must run on the recovery branch.");
+} else {
+  assert.equal(
+    process.env.GITHUB_HEAD_REF,
+    recoveryBranch,
+    "A detached R9 check must be a GitHub pull-request checkout of the recovery branch.",
+  );
+}
 assert.equal(git("ls-files", "-u"), "", "Unresolved merge conflicts are not allowed.");
 const r4HandoverPath = "docs/recovery/TINDIO_NEON_RECOVERY_R4_HANDOVER.md";
 assert.equal(git("ls-files", r4HandoverPath), r4HandoverPath, "The preserved R4 handover must remain tracked.");

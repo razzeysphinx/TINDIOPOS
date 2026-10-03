@@ -87,14 +87,15 @@ for (const migration of archiveManifest.migrations) {
 }
 
 const recoveryBranch = "recovery/neon-canonical-rebuild";
+const closureAttestationBranch = "recovery/neon-recovery-closure-attestation";
+const allowedBranches = new Set([recoveryBranch, closureAttestationBranch]);
 const checkedOutBranch = git("branch", "--show-current");
 if (checkedOutBranch) {
-  assert.equal(checkedOutBranch, recoveryBranch, "R9 must run on the recovery branch.");
+  assert.ok(allowedBranches.has(checkedOutBranch), "R9 must run on the recovery or closure-attestation branch.");
 } else {
-  assert.equal(
-    process.env.GITHUB_HEAD_REF,
-    recoveryBranch,
-    "A detached R9 check must be a GitHub pull-request checkout of the recovery branch.",
+  assert.ok(
+    allowedBranches.has(process.env.GITHUB_HEAD_REF),
+    "A detached R9 check must be a GitHub pull-request checkout of an authorized R9 branch.",
   );
 }
 assert.equal(git("ls-files", "-u"), "", "Unresolved merge conflicts are not allowed.");

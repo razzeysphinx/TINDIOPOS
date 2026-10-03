@@ -936,15 +936,16 @@ Exit:
 TINDIO NEON RECOVERY = CLOSED
 ```
 
-Local closure state:
+Repository closure state:
 
 ```text
-CLOSED LOCALLY / AWAITING REPOSITORY CLOSURE
+CLOSED — REPOSITORY ATTESTED
 ```
 
-The recovery branch still requires a separately authorized push and merge into
-the intended default branch before repository closure is complete. No branch or
-database resource deletion is authorized by local R9 completion.
+The recovery implementation merged normally into `TINDIO-PREPRODUCTION` as
+`71dcd409c14ba9b8caef783d255614e4b47457e9` after protected certification and
+preview checks passed. Repository closure is attested by the documentation-only
+closure record; no branch or database resource deletion is authorized.
 
 ---
 

@@ -1011,3 +1011,15 @@ production observability
 ```
 
 The current recovery branch is also:
+
+---
+
+# Post-R9 certification-tenant lifecycle note
+
+The guarded certification-tenant physical-delete dry run was intentionally
+blocked by immutable terminal inventory-count history and rolled back without
+deleting data or resources. Physical deletion is therefore unsupported for
+that tenant. The chosen cleanup model is the existing generic organization
+archive/deactivation lifecycle: retain history and identity linkage, remove
+operational eligibility, block future writes, and exclude archived tenants
+from normal selection. No production archival occurred in this design packet.

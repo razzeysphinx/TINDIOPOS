@@ -1,0 +1,657 @@
+{
+  "captured_at": "2026-10-05T09:00:00Z",
+  "canonical_neon": {
+    "project_id": "divine-sound-41148108",
+    "branch": "r6-clean-canonical-20261002",
+    "branch_id": "br-snowy-heart-b5nf6q3n",
+    "database": "tindio_r6_recovery"
+  },
+  "target": {
+    "organization_id": "baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9",
+    "organization_name": "TINDIO Phase 04 Certification"
+  },
+  "preflight_sha256": "CF0A03682BDCB9320C56C173F16DA4898B97D512E64F6D9C348B648A1BE06939",
+  "direct_tenant_table_counts": [
+    {
+      "relation": "public.organizations",
+      "row_count": 1,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "private.kitchen_order_change_events",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "private.organization_data_governance",
+      "row_count": 1,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "private.organization_recovery_drills",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "private.product_unit_operations",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "private.stock_transfer_operations",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.advanced_checkout_requests",
+      "row_count": 1,
+      "earliest_timestamp": "2026-10-02 11:50:35.655717+00",
+      "latest_timestamp": "2026-10-02 11:50:35.655717+00"
+    },
+    {
+      "relation": "public.approval_requests",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.approval_rules",
+      "row_count": 9,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "public.audit_logs",
+      "row_count": 11,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-10-02 11:50:44.277111+00"
+    },
+    {
+      "relation": "public.cash_movements",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.categories",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.checkout_requests",
+      "row_count": 1,
+      "earliest_timestamp": "2026-10-02 11:50:35.655717+00",
+      "latest_timestamp": "2026-10-02 11:50:35.655717+00"
+    },
+    {
+      "relation": "public.customer_display_sessions",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.customer_segment_memberships",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.customer_segments",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.customers",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.dining_options",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.discounts",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.employee_invitations",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.employee_roles",
+      "row_count": 1,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "public.employee_stores",
+      "row_count": 1,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "public.employees",
+      "row_count": 1,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "public.goods_receipt_lines",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.goods_receipts",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.inventory_adjustment_import_batches",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.inventory_adjustment_reasons",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.inventory_adjustments",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.inventory_count_batch_documents",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.inventory_count_batches",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.inventory_count_lines",
+      "row_count": 2,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.inventory_counts",
+      "row_count": 2,
+      "earliest_timestamp": "2026-10-02 11:50:30.528938+00",
+      "latest_timestamp": "2026-10-02 11:50:44.280404+00"
+    },
+    {
+      "relation": "public.inventory_levels",
+      "row_count": 1,
+      "earliest_timestamp": "2026-10-02 11:50:44.277111+00",
+      "latest_timestamp": "2026-10-02 11:50:44.277111+00"
+    },
+    {
+      "relation": "public.inventory_movements",
+      "row_count": 4,
+      "earliest_timestamp": "2026-10-02 11:50:30.507785+00",
+      "latest_timestamp": "2026-10-02 11:50:44.277111+00"
+    },
+    {
+      "relation": "public.inventory_policies",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.inventory_policy_defaults",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.inventory_replenishment_rules",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.kitchen_order_items",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.kitchen_orders",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.kitchen_station_category_routes",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.loyalty_card_events",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.loyalty_cards",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.loyalty_programs",
+      "row_count": 1,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "public.loyalty_transactions",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.modifier_groups",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.modifier_options",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.offline_sync_events",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.open_tickets",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.organization_export_sessions",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.organization_features",
+      "row_count": 14,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "public.organization_rate_limit_windows",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.organization_usage_daily",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.payment_methods",
+      "row_count": 6,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "public.payments",
+      "row_count": 1,
+      "earliest_timestamp": "2026-10-02 11:50:35.655717+00",
+      "latest_timestamp": "2026-10-02 11:50:35.655717+00"
+    },
+    {
+      "relation": "public.pos_device_sequence_receipts",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.pos_device_sync_checkpoints",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.pos_device_sync_telemetry",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.pos_devices",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.pos_favorite_tiles",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.pos_sync_changes",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.product_components",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.product_modifier_groups",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.product_store_settings",
+      "row_count": 1,
+      "earliest_timestamp": "2026-09-24 11:01:08.69393+00",
+      "latest_timestamp": "2026-09-24 11:01:08.69393+00"
+    },
+    {
+      "relation": "public.product_units",
+      "row_count": 1,
+      "earliest_timestamp": "2026-09-24 11:01:08.69393+00",
+      "latest_timestamp": "2026-09-24 11:01:08.69393+00"
+    },
+    {
+      "relation": "public.product_variants",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.production_run_components",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.production_runs",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.products",
+      "row_count": 1,
+      "earliest_timestamp": "2026-09-24 11:01:08.69393+00",
+      "latest_timestamp": "2026-09-24 11:01:08.69393+00"
+    },
+    {
+      "relation": "public.purchase_order_lines",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.purchase_orders",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.receipt_delivery_requests",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.receipt_settings",
+      "row_count": 1,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "public.receipts",
+      "row_count": 1,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.refund_items",
+      "row_count": 1,
+      "earliest_timestamp": "2026-10-02 11:50:37.541975+00",
+      "latest_timestamp": "2026-10-02 11:50:37.541975+00"
+    },
+    {
+      "relation": "public.refund_payments",
+      "row_count": 1,
+      "earliest_timestamp": "2026-10-02 11:50:37.541975+00",
+      "latest_timestamp": "2026-10-02 11:50:37.541975+00"
+    },
+    {
+      "relation": "public.refund_requests",
+      "row_count": 1,
+      "earliest_timestamp": "2026-10-02 11:50:37.541975+00",
+      "latest_timestamp": "2026-10-02 11:50:37.541975+00"
+    },
+    {
+      "relation": "public.refunds",
+      "row_count": 1,
+      "earliest_timestamp": "2026-10-02 11:50:37.541975+00",
+      "latest_timestamp": "2026-10-02 11:50:37.541975+00"
+    },
+    {
+      "relation": "public.registers",
+      "row_count": 1,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "public.role_permissions",
+      "row_count": 193,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "public.roles",
+      "row_count": 5,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "public.sale_exchanges",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.sale_items",
+      "row_count": 1,
+      "earliest_timestamp": "2026-10-02 11:50:35.655717+00",
+      "latest_timestamp": "2026-10-02 11:50:35.655717+00"
+    },
+    {
+      "relation": "public.sales",
+      "row_count": 1,
+      "earliest_timestamp": "2026-10-02 11:50:35.655717+00",
+      "latest_timestamp": "2026-10-02 11:50:35.655717+00"
+    },
+    {
+      "relation": "public.shifts",
+      "row_count": 1,
+      "earliest_timestamp": "2026-09-24 10:54:18.513506+00",
+      "latest_timestamp": "2026-09-24 10:54:18.513506+00"
+    },
+    {
+      "relation": "public.smart_menu_categories",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.smart_menu_products",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.smart_menus",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.stock_request_discrepancies",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.stock_request_lines",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.stock_requests",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.stock_transfer_lines",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.stock_transfer_receipt_lines",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.stock_transfer_receipts",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.stock_transfers",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.store_payment_methods",
+      "row_count": 6,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "public.stores",
+      "row_count": 1,
+      "earliest_timestamp": "2026-09-23 02:32:58.105209+00",
+      "latest_timestamp": "2026-09-23 02:32:58.105209+00"
+    },
+    {
+      "relation": "public.supplier_return_lines",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.supplier_returns",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.suppliers",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.supply_chain_warehouses",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.tax_rates",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.ticket_templates",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    },
+    {
+      "relation": "public.time_clock_entries",
+      "row_count": 0,
+      "earliest_timestamp": null,
+      "latest_timestamp": null
+    }
+  ],
+  "aggregates": {
+    "sales": 1,
+    "sale_items": 1,
+    "payments": 1,
+    "receipts": 1,
+    "refunds": 1,
+    "inventory_movements": 4,
+    "employees": 1,
+    "stores": 1,
+    "roles": 5,
+    "role_permissions": 193,
+    "audit_logs": 11,
+    "approval_rules": 9,
+    "kitchen_outbox_events": 0
+  },
+  "identity": {
+    "profile_id": "f076a587-ea0b-44b9-83a3-6f7319feb9e5",
+    "identity_provider": "supabase",
+    "linked_auth_user_exists": true,
+    "shared_with_other_organization": false,
+    "auth_user_action": "preserve"
+  }
+}
+

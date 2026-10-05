@@ -29,6 +29,20 @@ async function ensureOwnActiveMembership(organizationId: string) {
     return null;
   }
 
+  // Membership state alone is not an operational authorization grant. Re-read
+  // the organization lifecycle state on the server so a forged action or
+  // stale client selection cannot install a suspended/archived tenant cookie.
+  const { data: organization, error: organizationError } = await supabase
+    .from("organizations")
+    .select("id")
+    .eq("id", organizationId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (organizationError || !organization) {
+    return null;
+  }
+
   return { user, supabase };
 }
 
@@ -44,7 +58,7 @@ export async function setActiveOrganization(
   const membership = await ensureOwnActiveMembership(parsedOrganizationId.data);
 
   if (!membership) {
-    return { ok: false, message: "You do not have access to that organization." };
+    return { ok: false, message: "Choose an active organization you can access." };
   }
 
   const cookieStore = await cookies();

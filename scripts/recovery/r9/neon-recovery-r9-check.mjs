@@ -89,10 +89,16 @@ for (const migration of archiveManifest.migrations) {
 const recoveryBranch = "recovery/neon-canonical-rebuild";
 const closureAttestationBranch = "recovery/neon-recovery-closure-attestation";
 const postR9HardeningBranch = "recovery/post-r9-neon-single-source";
-const allowedBranches = new Set([recoveryBranch, closureAttestationBranch, postR9HardeningBranch]);
+const postR9ArchiveDesignBranch = "post-r9/certification-tenant-archive-design";
+const allowedBranches = new Set([
+  recoveryBranch,
+  closureAttestationBranch,
+  postR9HardeningBranch,
+  postR9ArchiveDesignBranch,
+]);
 const checkedOutBranch = git("branch", "--show-current");
 if (checkedOutBranch) {
-  assert.ok(allowedBranches.has(checkedOutBranch), "R9 must run on the recovery or closure-attestation branch.");
+  assert.ok(allowedBranches.has(checkedOutBranch), "R9 must run on an authorized recovery, closure, hardening, or archive-design branch.");
 } else {
   assert.ok(
     allowedBranches.has(process.env.GITHUB_HEAD_REF),

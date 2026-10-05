@@ -1,0 +1,1625 @@
+{
+  "generated_at": "2026-10-05T09:05:00Z",
+  "canonical_neon": {
+    "project_id": "divine-sound-41148108",
+    "branch_id": "br-snowy-heart-b5nf6q3n",
+    "database": "tindio_r6_recovery"
+  },
+  "target": {
+    "organization_id": "baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9",
+    "organization_name": "TINDIO Phase 04 Certification"
+  },
+  "preflight_sha256": "CF0A03682BDCB9320C56C173F16DA4898B97D512E64F6D9C348B648A1BE06939",
+  "snapshot_sha256": "0DC8589629900B74B784FDBE7DFE86CDD9E2D3392BE5E88ED889395C8664237B",
+  "graph": {
+    "approved_nonzero_relations": 34,
+    "active_fk_edges": 81,
+    "excluded_edge": {
+      "constraint_name": "organizations_archive_request_actor_fkey",
+      "reason": "target organization archive_requested_by_employee_id is NULL; the edge has no target row and cannot block this row-set delete"
+    },
+    "cycles": [],
+    "tie_break": "schema name, then table name"
+  },
+  "steps": [
+    {
+      "sequence": 1,
+      "relation": "private.organization_data_governance",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.organizations.",
+      "child_constraints": [
+        "organization_data_governance_organization_id_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 2,
+      "relation": "public.advanced_checkout_requests",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.employees, public.organizations, public.sales.",
+      "child_constraints": [
+        "advanced_checkout_requests_actor_organization_fkey",
+        "advanced_checkout_requests_organization_id_fkey",
+        "advanced_checkout_requests_sale_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 3,
+      "relation": "public.approval_rules",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 9,
+      "fk_reason": "Deleted before public.organizations.",
+      "child_constraints": [
+        "approval_rules_organization_id_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 4,
+      "relation": "public.audit_logs",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 11,
+      "fk_reason": "Deleted before public.employees, public.organizations, public.registers, public.stores.",
+      "child_constraints": [
+        "audit_logs_actor_employee_organization_fkey",
+        "audit_logs_subject_employee_organization_fkey",
+        "audit_logs_organization_id_fkey",
+        "audit_logs_register_organization_fkey",
+        "audit_logs_store_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 5,
+      "relation": "public.checkout_requests",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.employees, public.organizations, public.sales.",
+      "child_constraints": [
+        "checkout_requests_actor_organization_fkey",
+        "checkout_requests_organization_id_fkey",
+        "checkout_requests_sale_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 6,
+      "relation": "public.employee_roles",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.employees, public.organizations, public.roles.",
+      "child_constraints": [
+        "employee_roles_employee_organization_fkey",
+        "employee_roles_organization_id_fkey",
+        "employee_roles_role_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "CASCADE",
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 7,
+      "relation": "public.employee_stores",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.employees, public.organizations, public.stores.",
+      "child_constraints": [
+        "employee_stores_employee_organization_fkey",
+        "employee_stores_organization_id_fkey",
+        "employee_stores_store_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "CASCADE",
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 8,
+      "relation": "public.inventory_count_lines",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 2,
+      "fk_reason": "Deleted before public.inventory_counts, public.products.",
+      "child_constraints": [
+        "inventory_count_lines_count_organization_fkey",
+        "inventory_count_lines_product_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 9,
+      "relation": "public.inventory_counts",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 2,
+      "fk_reason": "Deleted before public.employees, public.organizations, public.stores.",
+      "child_constraints": [
+        "inventory_counts_completer_organization_fkey",
+        "inventory_counts_starter_organization_fkey",
+        "inventory_counts_organization_id_fkey",
+        "inventory_counts_store_organization_fkey"
+      ],
+      "parent_constraints": [
+        "inventory_count_lines_count_organization_fkey"
+      ],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 10,
+      "relation": "public.inventory_levels",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.organizations, public.products, public.stores.",
+      "child_constraints": [
+        "inventory_levels_organization_id_fkey",
+        "inventory_levels_product_organization_fkey",
+        "inventory_levels_store_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 11,
+      "relation": "public.inventory_movements",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 4,
+      "fk_reason": "Deleted before public.employees, public.organizations, public.products, public.stores.",
+      "child_constraints": [
+        "inventory_movements_actor_organization_fkey",
+        "inventory_movements_organization_id_fkey",
+        "inventory_movements_product_organization_fkey",
+        "inventory_movements_store_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 12,
+      "relation": "public.loyalty_programs",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.organizations.",
+      "child_constraints": [
+        "loyalty_programs_organization_id_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 13,
+      "relation": "public.organization_features",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 14,
+      "fk_reason": "Deleted before public.employees, public.organizations.",
+      "child_constraints": [
+        "organization_features_updated_by_employee_fkey",
+        "organization_features_organization_id_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 14,
+      "relation": "public.payments",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.payment_methods, public.sales.",
+      "child_constraints": [
+        "payments_method_organization_fkey",
+        "payments_sale_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 15,
+      "relation": "public.product_store_settings",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.organizations, public.products, public.stores.",
+      "child_constraints": [
+        "product_store_settings_organization_id_fkey",
+        "product_store_settings_product_organization_fkey",
+        "product_store_settings_store_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "CASCADE",
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 16,
+      "relation": "public.product_units",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.organizations, public.products.",
+      "child_constraints": [
+        "product_units_organization_id_fkey",
+        "product_units_product_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "CASCADE",
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 17,
+      "relation": "public.receipt_settings",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.organizations.",
+      "child_constraints": [
+        "receipt_settings_organization_id_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 18,
+      "relation": "public.receipts",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.sales.",
+      "child_constraints": [
+        "receipts_sale_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 19,
+      "relation": "public.refund_items",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.products, public.refunds, public.sale_items.",
+      "child_constraints": [
+        "refund_items_product_organization_fkey",
+        "refund_items_refund_organization_fkey",
+        "refund_items_sale_item_id_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 20,
+      "relation": "public.refund_payments",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.payment_methods, public.refunds.",
+      "child_constraints": [
+        "refund_payments_method_organization_fkey",
+        "refund_payments_refund_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 21,
+      "relation": "public.refund_requests",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.employees, public.organizations, public.refunds.",
+      "child_constraints": [
+        "refund_requests_actor_organization_fkey",
+        "refund_requests_organization_id_fkey",
+        "refund_requests_refund_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 22,
+      "relation": "public.refunds",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.employees, public.organizations, public.registers, public.sales, public.shifts, public.stores.",
+      "child_constraints": [
+        "refunds_employee_organization_fkey",
+        "refunds_organization_id_fkey",
+        "refunds_register_organization_fkey",
+        "refunds_sale_organization_fkey",
+        "refunds_shift_organization_fkey",
+        "refunds_store_organization_fkey"
+      ],
+      "parent_constraints": [
+        "refund_items_refund_organization_fkey",
+        "refund_payments_refund_organization_fkey",
+        "refund_requests_refund_organization_fkey"
+      ],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 23,
+      "relation": "public.role_permissions",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 193,
+      "fk_reason": "Deleted before public.organizations, public.roles.",
+      "child_constraints": [
+        "role_permissions_organization_id_fkey",
+        "role_permissions_role_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "CASCADE",
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 24,
+      "relation": "public.roles",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 5,
+      "fk_reason": "Deleted before public.organizations.",
+      "child_constraints": [
+        "roles_organization_id_fkey"
+      ],
+      "parent_constraints": [
+        "employee_roles_role_organization_fkey",
+        "role_permissions_role_organization_fkey"
+      ],
+      "cascade_behavior": [
+        "CASCADE",
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 25,
+      "relation": "public.sale_items",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.products, public.sales.",
+      "child_constraints": [
+        "sale_items_product_organization_fkey",
+        "sale_items_sale_organization_fkey"
+      ],
+      "parent_constraints": [
+        "refund_items_sale_item_id_fkey"
+      ],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 26,
+      "relation": "public.products",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.organizations.",
+      "child_constraints": [
+        "products_organization_id_fkey"
+      ],
+      "parent_constraints": [
+        "inventory_count_lines_product_organization_fkey",
+        "inventory_levels_product_organization_fkey",
+        "inventory_movements_product_organization_fkey",
+        "product_store_settings_product_organization_fkey",
+        "product_units_product_organization_fkey",
+        "refund_items_product_organization_fkey",
+        "sale_items_product_organization_fkey"
+      ],
+      "cascade_behavior": [
+        "CASCADE",
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 27,
+      "relation": "public.sales",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.employees, public.organizations, public.registers, public.shifts, public.stores.",
+      "child_constraints": [
+        "sales_cashier_organization_fkey",
+        "sales_organization_id_fkey",
+        "sales_register_organization_fkey",
+        "sales_shift_organization_fkey",
+        "sales_store_organization_fkey"
+      ],
+      "parent_constraints": [
+        "advanced_checkout_requests_sale_organization_fkey",
+        "checkout_requests_sale_organization_fkey",
+        "payments_sale_organization_fkey",
+        "receipts_sale_organization_fkey",
+        "refunds_sale_organization_fkey",
+        "sale_items_sale_organization_fkey"
+      ],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 28,
+      "relation": "public.shifts",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.employees, public.organizations, public.registers, public.stores.",
+      "child_constraints": [
+        "shifts_closed_by_organization_fkey",
+        "shifts_opened_by_organization_fkey",
+        "shifts_organization_id_fkey",
+        "shifts_register_organization_fkey",
+        "shifts_store_organization_fkey"
+      ],
+      "parent_constraints": [
+        "refunds_shift_organization_fkey",
+        "sales_shift_organization_fkey"
+      ],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 29,
+      "relation": "public.employees",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.organizations.",
+      "child_constraints": [
+        "employees_organization_id_fkey"
+      ],
+      "parent_constraints": [
+        "advanced_checkout_requests_actor_organization_fkey",
+        "audit_logs_actor_employee_organization_fkey",
+        "audit_logs_subject_employee_organization_fkey",
+        "checkout_requests_actor_organization_fkey",
+        "employee_roles_employee_organization_fkey",
+        "employee_stores_employee_organization_fkey",
+        "inventory_counts_completer_organization_fkey",
+        "inventory_counts_starter_organization_fkey",
+        "inventory_movements_actor_organization_fkey",
+        "organization_features_updated_by_employee_fkey",
+        "refund_requests_actor_organization_fkey",
+        "refunds_employee_organization_fkey",
+        "sales_cashier_organization_fkey",
+        "shifts_closed_by_organization_fkey",
+        "shifts_opened_by_organization_fkey"
+      ],
+      "cascade_behavior": [
+        "CASCADE",
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 30,
+      "relation": "public.registers",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.organizations, public.stores.",
+      "child_constraints": [
+        "registers_organization_id_fkey",
+        "registers_store_organization_fkey"
+      ],
+      "parent_constraints": [
+        "audit_logs_register_organization_fkey",
+        "refunds_register_organization_fkey",
+        "sales_register_organization_fkey",
+        "shifts_register_organization_fkey"
+      ],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 31,
+      "relation": "public.store_payment_methods",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 6,
+      "fk_reason": "Deleted before public.payment_methods, public.stores.",
+      "child_constraints": [
+        "store_payment_methods_method_organization_fkey",
+        "store_payment_methods_store_organization_fkey"
+      ],
+      "parent_constraints": [],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 32,
+      "relation": "public.payment_methods",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 6,
+      "fk_reason": "Deleted before public.organizations.",
+      "child_constraints": [
+        "payment_methods_organization_id_fkey"
+      ],
+      "parent_constraints": [
+        "payments_method_organization_fkey",
+        "refund_payments_method_organization_fkey",
+        "store_payment_methods_method_organization_fkey"
+      ],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 33,
+      "relation": "public.stores",
+      "tenant_predicate": "organization_id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Deleted before public.organizations.",
+      "child_constraints": [
+        "stores_organization_id_fkey"
+      ],
+      "parent_constraints": [
+        "audit_logs_store_organization_fkey",
+        "employee_stores_store_organization_fkey",
+        "inventory_counts_store_organization_fkey",
+        "inventory_levels_store_organization_fkey",
+        "inventory_movements_store_organization_fkey",
+        "product_store_settings_store_organization_fkey",
+        "refunds_store_organization_fkey",
+        "registers_store_organization_fkey",
+        "sales_store_organization_fkey",
+        "shifts_store_organization_fkey",
+        "store_payment_methods_store_organization_fkey"
+      ],
+      "cascade_behavior": [
+        "CASCADE",
+        "RESTRICT"
+      ]
+    },
+    {
+      "sequence": 34,
+      "relation": "public.organizations",
+      "tenant_predicate": "id = 'baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9'::uuid",
+      "expected_rows": 1,
+      "fk_reason": "Leaf relation under the approved tenant scope.",
+      "child_constraints": [],
+      "parent_constraints": [
+        "organization_data_governance_organization_id_fkey",
+        "advanced_checkout_requests_organization_id_fkey",
+        "approval_rules_organization_id_fkey",
+        "audit_logs_organization_id_fkey",
+        "checkout_requests_organization_id_fkey",
+        "employee_roles_organization_id_fkey",
+        "employee_stores_organization_id_fkey",
+        "employees_organization_id_fkey",
+        "inventory_counts_organization_id_fkey",
+        "inventory_levels_organization_id_fkey",
+        "inventory_movements_organization_id_fkey",
+        "loyalty_programs_organization_id_fkey",
+        "organization_features_organization_id_fkey",
+        "payment_methods_organization_id_fkey",
+        "product_store_settings_organization_id_fkey",
+        "product_units_organization_id_fkey",
+        "products_organization_id_fkey",
+        "receipt_settings_organization_id_fkey",
+        "refund_requests_organization_id_fkey",
+        "refunds_organization_id_fkey",
+        "registers_organization_id_fkey",
+        "role_permissions_organization_id_fkey",
+        "roles_organization_id_fkey",
+        "sales_organization_id_fkey",
+        "shifts_organization_id_fkey",
+        "stores_organization_id_fkey"
+      ],
+      "cascade_behavior": [
+        "RESTRICT"
+      ]
+    }
+  ],
+  "foreign_keys": [
+    {
+      "child_schema": "private",
+      "child_table": "organization_data_governance",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "organization_data_governance_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "advanced_checkout_requests",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "advanced_checkout_requests_actor_organization_fkey",
+      "child_columns": "{actor_employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "advanced_checkout_requests",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "advanced_checkout_requests_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "advanced_checkout_requests",
+      "parent_schema": "public",
+      "parent_table": "sales",
+      "constraint_name": "advanced_checkout_requests_sale_organization_fkey",
+      "child_columns": "{sale_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "approval_rules",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "approval_rules_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "audit_logs",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "audit_logs_actor_employee_organization_fkey",
+      "child_columns": "{actor_employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "audit_logs",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "audit_logs_subject_employee_organization_fkey",
+      "child_columns": "{subject_employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "audit_logs",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "audit_logs_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "audit_logs",
+      "parent_schema": "public",
+      "parent_table": "registers",
+      "constraint_name": "audit_logs_register_organization_fkey",
+      "child_columns": "{register_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "audit_logs",
+      "parent_schema": "public",
+      "parent_table": "stores",
+      "constraint_name": "audit_logs_store_organization_fkey",
+      "child_columns": "{store_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "checkout_requests",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "checkout_requests_actor_organization_fkey",
+      "child_columns": "{actor_employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "checkout_requests",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "checkout_requests_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "checkout_requests",
+      "parent_schema": "public",
+      "parent_table": "sales",
+      "constraint_name": "checkout_requests_sale_organization_fkey",
+      "child_columns": "{sale_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "employee_roles",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "employee_roles_employee_organization_fkey",
+      "child_columns": "{employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "CASCADE",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "employee_roles",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "employee_roles_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "employee_roles",
+      "parent_schema": "public",
+      "parent_table": "roles",
+      "constraint_name": "employee_roles_role_organization_fkey",
+      "child_columns": "{role_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "CASCADE",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "employee_stores",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "employee_stores_employee_organization_fkey",
+      "child_columns": "{employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "CASCADE",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "employee_stores",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "employee_stores_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "employee_stores",
+      "parent_schema": "public",
+      "parent_table": "stores",
+      "constraint_name": "employee_stores_store_organization_fkey",
+      "child_columns": "{store_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "CASCADE",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "employees",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "employees_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "inventory_count_lines",
+      "parent_schema": "public",
+      "parent_table": "inventory_counts",
+      "constraint_name": "inventory_count_lines_count_organization_fkey",
+      "child_columns": "{inventory_count_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "inventory_count_lines",
+      "parent_schema": "public",
+      "parent_table": "products",
+      "constraint_name": "inventory_count_lines_product_organization_fkey",
+      "child_columns": "{product_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "inventory_counts",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "inventory_counts_completer_organization_fkey",
+      "child_columns": "{completed_by_employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "inventory_counts",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "inventory_counts_starter_organization_fkey",
+      "child_columns": "{started_by_employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "inventory_counts",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "inventory_counts_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "inventory_counts",
+      "parent_schema": "public",
+      "parent_table": "stores",
+      "constraint_name": "inventory_counts_store_organization_fkey",
+      "child_columns": "{store_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "inventory_levels",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "inventory_levels_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "inventory_levels",
+      "parent_schema": "public",
+      "parent_table": "products",
+      "constraint_name": "inventory_levels_product_organization_fkey",
+      "child_columns": "{product_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "inventory_levels",
+      "parent_schema": "public",
+      "parent_table": "stores",
+      "constraint_name": "inventory_levels_store_organization_fkey",
+      "child_columns": "{store_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "inventory_movements",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "inventory_movements_actor_organization_fkey",
+      "child_columns": "{actor_employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "inventory_movements",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "inventory_movements_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "inventory_movements",
+      "parent_schema": "public",
+      "parent_table": "products",
+      "constraint_name": "inventory_movements_product_organization_fkey",
+      "child_columns": "{product_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "inventory_movements",
+      "parent_schema": "public",
+      "parent_table": "stores",
+      "constraint_name": "inventory_movements_store_organization_fkey",
+      "child_columns": "{store_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "loyalty_programs",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "loyalty_programs_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "organization_features",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "organization_features_updated_by_employee_fkey",
+      "child_columns": "{updated_by_employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "organization_features",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "organization_features_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "payment_methods",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "payment_methods_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "payments",
+      "parent_schema": "public",
+      "parent_table": "payment_methods",
+      "constraint_name": "payments_method_organization_fkey",
+      "child_columns": "{payment_method_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "payments",
+      "parent_schema": "public",
+      "parent_table": "sales",
+      "constraint_name": "payments_sale_organization_fkey",
+      "child_columns": "{sale_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "product_store_settings",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "product_store_settings_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "product_store_settings",
+      "parent_schema": "public",
+      "parent_table": "products",
+      "constraint_name": "product_store_settings_product_organization_fkey",
+      "child_columns": "{product_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "CASCADE",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "product_store_settings",
+      "parent_schema": "public",
+      "parent_table": "stores",
+      "constraint_name": "product_store_settings_store_organization_fkey",
+      "child_columns": "{store_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "CASCADE",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "product_units",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "product_units_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "product_units",
+      "parent_schema": "public",
+      "parent_table": "products",
+      "constraint_name": "product_units_product_organization_fkey",
+      "child_columns": "{product_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "CASCADE",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "products",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "products_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "receipt_settings",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "receipt_settings_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "receipts",
+      "parent_schema": "public",
+      "parent_table": "sales",
+      "constraint_name": "receipts_sale_organization_fkey",
+      "child_columns": "{sale_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "refund_items",
+      "parent_schema": "public",
+      "parent_table": "products",
+      "constraint_name": "refund_items_product_organization_fkey",
+      "child_columns": "{product_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "refund_items",
+      "parent_schema": "public",
+      "parent_table": "refunds",
+      "constraint_name": "refund_items_refund_organization_fkey",
+      "child_columns": "{refund_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "refund_items",
+      "parent_schema": "public",
+      "parent_table": "sale_items",
+      "constraint_name": "refund_items_sale_item_id_fkey",
+      "child_columns": "{sale_item_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "refund_payments",
+      "parent_schema": "public",
+      "parent_table": "payment_methods",
+      "constraint_name": "refund_payments_method_organization_fkey",
+      "child_columns": "{payment_method_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "refund_payments",
+      "parent_schema": "public",
+      "parent_table": "refunds",
+      "constraint_name": "refund_payments_refund_organization_fkey",
+      "child_columns": "{refund_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "refund_requests",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "refund_requests_actor_organization_fkey",
+      "child_columns": "{actor_employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "refund_requests",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "refund_requests_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "refund_requests",
+      "parent_schema": "public",
+      "parent_table": "refunds",
+      "constraint_name": "refund_requests_refund_organization_fkey",
+      "child_columns": "{refund_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "refunds",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "refunds_employee_organization_fkey",
+      "child_columns": "{refunded_by_employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "refunds",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "refunds_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "refunds",
+      "parent_schema": "public",
+      "parent_table": "registers",
+      "constraint_name": "refunds_register_organization_fkey",
+      "child_columns": "{register_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "refunds",
+      "parent_schema": "public",
+      "parent_table": "sales",
+      "constraint_name": "refunds_sale_organization_fkey",
+      "child_columns": "{sale_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "refunds",
+      "parent_schema": "public",
+      "parent_table": "shifts",
+      "constraint_name": "refunds_shift_organization_fkey",
+      "child_columns": "{shift_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "refunds",
+      "parent_schema": "public",
+      "parent_table": "stores",
+      "constraint_name": "refunds_store_organization_fkey",
+      "child_columns": "{store_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "registers",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "registers_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "registers",
+      "parent_schema": "public",
+      "parent_table": "stores",
+      "constraint_name": "registers_store_organization_fkey",
+      "child_columns": "{store_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "role_permissions",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "role_permissions_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "role_permissions",
+      "parent_schema": "public",
+      "parent_table": "roles",
+      "constraint_name": "role_permissions_role_organization_fkey",
+      "child_columns": "{role_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "CASCADE",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "roles",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "roles_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "sale_items",
+      "parent_schema": "public",
+      "parent_table": "products",
+      "constraint_name": "sale_items_product_organization_fkey",
+      "child_columns": "{product_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "sale_items",
+      "parent_schema": "public",
+      "parent_table": "sales",
+      "constraint_name": "sale_items_sale_organization_fkey",
+      "child_columns": "{sale_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "sales",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "sales_cashier_organization_fkey",
+      "child_columns": "{cashier_employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "sales",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "sales_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "sales",
+      "parent_schema": "public",
+      "parent_table": "registers",
+      "constraint_name": "sales_register_organization_fkey",
+      "child_columns": "{register_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "sales",
+      "parent_schema": "public",
+      "parent_table": "shifts",
+      "constraint_name": "sales_shift_organization_fkey",
+      "child_columns": "{shift_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "sales",
+      "parent_schema": "public",
+      "parent_table": "stores",
+      "constraint_name": "sales_store_organization_fkey",
+      "child_columns": "{store_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "shifts",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "shifts_closed_by_organization_fkey",
+      "child_columns": "{closed_by_employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "shifts",
+      "parent_schema": "public",
+      "parent_table": "employees",
+      "constraint_name": "shifts_opened_by_organization_fkey",
+      "child_columns": "{opened_by_employee_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "shifts",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "shifts_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "shifts",
+      "parent_schema": "public",
+      "parent_table": "registers",
+      "constraint_name": "shifts_register_organization_fkey",
+      "child_columns": "{register_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "shifts",
+      "parent_schema": "public",
+      "parent_table": "stores",
+      "constraint_name": "shifts_store_organization_fkey",
+      "child_columns": "{store_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "store_payment_methods",
+      "parent_schema": "public",
+      "parent_table": "payment_methods",
+      "constraint_name": "store_payment_methods_method_organization_fkey",
+      "child_columns": "{payment_method_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "store_payment_methods",
+      "parent_schema": "public",
+      "parent_table": "stores",
+      "constraint_name": "store_payment_methods_store_organization_fkey",
+      "child_columns": "{store_id,organization_id}",
+      "parent_columns": "{id,organization_id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    },
+    {
+      "child_schema": "public",
+      "child_table": "stores",
+      "parent_schema": "public",
+      "parent_table": "organizations",
+      "constraint_name": "stores_organization_id_fkey",
+      "child_columns": "{organization_id}",
+      "parent_columns": "{id}",
+      "on_delete": "RESTRICT",
+      "deferrable": false,
+      "initially_deferred": false
+    }
+  ]
+}
+

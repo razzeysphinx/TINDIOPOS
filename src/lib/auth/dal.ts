@@ -187,7 +187,7 @@ export async function loadBusinessContext({
     ]),
   );
 
-  const availableOrganizations = membershipsResult.data
+  const memberOrganizations = membershipsResult.data
     .map((membership) =>
       organizationById.get(membership.organization_id),
     )
@@ -201,7 +201,15 @@ export async function loadBusinessContext({
         | "archived",
     }));
 
-  if (availableOrganizations.length === 0) {
+  // `availableOrganizations` is the operational selector surface. Keep
+  // lifecycle-paused memberships in `memberOrganizations` only so a stale
+  // cookie can be rendered safely on the paused page without becoming an
+  // eligible operational tenant.
+  const availableOrganizations = memberOrganizations.filter(
+    (organization) => organization.status === "active",
+  );
+
+  if (memberOrganizations.length === 0) {
     return null;
   }
 
@@ -222,10 +230,11 @@ export async function loadBusinessContext({
 
   const selectedOrganization =
     requestedOrganization
-    ?? availableOrganizations.find(
-      (organization) => organization.status === "active",
-    )
-    ?? availableOrganizations[0];
+    ?? availableOrganizations[0]
+    // This final fallback is a non-operational paused-screen state only. It
+    // is never included in the selector and requireBusinessContext redirects
+    // it before any business route can proceed.
+    ?? memberOrganizations[0];
 
   const employee = membershipsResult.data.find(
     (membership) =>

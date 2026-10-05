@@ -14,6 +14,15 @@ const CANONICAL_MIGRATION_PATTERN = /^(?<number>\d{4})_.+\.sql$/u;
 const HISTORICAL_ARCHIVE_SOURCE_COMMIT = "761effb81a0784ded8b56adad2d93e1dc72d8193";
 const HISTORICAL_ARCHIVE_SOURCE_TREE = "0b5f2ba5d5abeca8b0d451515c6deaac1b4ea70e";
 
+// The manifest certifies canonical LF bytes. Git may materialize a text file
+// with CRLF on Windows before the repository's eol rule reaches an existing
+// worktree, so restore the certified representation before hashing or sending
+// the baseline to a database. This is a byte-normalization boundary, not a
+// schema transformation.
+export function canonicalBaselineText(source) {
+  return source.replace(/\r\n/g, "\n");
+}
+
 function gitBytes(args) {
   return execFileSync("git", args, {
     cwd: ROOT,
@@ -39,11 +48,12 @@ export async function canonicalMigrationFiles() {
 }
 
 export async function loadCanonicalInstall() {
-  const [baseline, manifestSource, migrations] = await Promise.all([
+  const [baselineSource, manifestSource, migrations] = await Promise.all([
     readFile(BASELINE_PATH, "utf8"),
     readFile(MANIFEST_PATH, "utf8"),
     canonicalMigrationFiles(),
   ]);
+  const baseline = canonicalBaselineText(baselineSource);
   const manifest = JSON.parse(manifestSource);
   const baselineSha256 = createHash("sha256").update(baseline).digest("hex");
 

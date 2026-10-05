@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { canonicalMigrationFiles, loadCanonicalInstall, verifyHistoricalMigrationArchive } from "./canonical-install-core.mjs";
+import {
+  canonicalBaselineText,
+  canonicalMigrationFiles,
+  loadCanonicalInstall,
+  verifyHistoricalMigrationArchive,
+} from "./canonical-install-core.mjs";
+
+test("canonical baseline integrity is independent of Windows checkout endings", () => {
+  assert.equal(
+    canonicalBaselineText("select 1;\r\nselect 2;\r\n"),
+    "select 1;\nselect 2;\n",
+  );
+});
 
 test("canonical install files are ordered and manifest-backed", async () => {
   const migrations = await canonicalMigrationFiles();

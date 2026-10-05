@@ -3,7 +3,6 @@
 import { Check, ChefHat, CircleAlert, Clock3, Flag, LoaderCircle, Play, Soup } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -20,7 +19,6 @@ import type {
   KitchenStation,
   KitchenStationFilter,
 } from "@/features/kitchen/kitchen-types";
-import { getRealtimeClient, kitchenOrderChannel } from "@/lib/supabase/realtime-client";
 import { cn } from "@/lib/utils";
 
 const activeStatuses: KitchenOrderStatus[] = ["NEW", "PREPARING", "READY"];
@@ -265,13 +263,11 @@ function StationRoutingSettings({
 
 export function KitchenDisplay({
   canManage,
-  organizationId,
   orders,
   stationRoutes,
   stores,
 }: {
   canManage: boolean;
-  organizationId: string;
   orders: KitchenOrder[];
   stationRoutes: Array<{ categoryId: string; categoryName: string; station: KitchenStation }>;
   stores: Array<{ id: string; name: string }>;
@@ -289,36 +285,12 @@ export function KitchenDisplay({
   }, []);
 
   useEffect(() => {
-    const supabase = getRealtimeClient();
-    const channels: RealtimeChannel[] = [];
-    let cancelled = false;
-    let refreshTimeout: number | null = null;
-    const refreshOrders = () => {
-      if (refreshTimeout !== null) return;
-      refreshTimeout = window.setTimeout(() => {
-        refreshTimeout = null;
-        router.refresh();
-      }, 150);
-    };
-
-    void supabase.auth.getSession().then(({ data }) => {
-      if (cancelled || !data.session) return;
-      supabase.realtime.setAuth(data.session.access_token);
-
-      for (const store of stores) {
-        const channel = kitchenOrderChannel(organizationId, store.id)
-          .on("broadcast", { event: "kitchen-order-changed" }, refreshOrders)
-          .subscribe();
-        channels.push(channel);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      if (refreshTimeout !== null) window.clearTimeout(refreshTimeout);
-      for (const channel of channels) void supabase.removeChannel(channel);
-    };
-  }, [organizationId, router, stores]);
+    // Kitchen changes are durably recorded in the authoritative database.
+    // Reconciliation through the server-rendered read path avoids coupling a
+    // business transaction to any provider-specific realtime database API.
+    const interval = window.setInterval(() => router.refresh(), 15_000);
+    return () => window.clearInterval(interval);
+  }, [router]);
 
   const runAction = (key: string, action: () => Promise<{ ok: boolean; message: string }>) => {
     setMessage(null);

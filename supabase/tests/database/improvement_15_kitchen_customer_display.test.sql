@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(24);
+select plan(27);
 
 select ok(to_regclass('public.kitchen_station_category_routes') is not null, 'station category route table exists');
 select ok((select relrowsecurity from pg_class where oid = 'public.kitchen_station_category_routes'::regclass), 'station category routes have RLS enabled');
@@ -206,6 +206,24 @@ select is(
   'COMPLETED',
   'all completed items recalculate the parent order as completed'
 );
+
+reset role;
+
+select ok(
+  to_regclass('private.kitchen_order_change_events') is not null,
+  'kitchen status changes have a TINDIO-owned durable outbox'
+);
+select is(
+  (select count(*)::integer from private.kitchen_order_change_events where kitchen_order_id = (select kitchen_order_id from improvement_fifteen_context)),
+  4,
+  'new and each committed kitchen status transition record exactly one event'
+);
+select ok(
+  not has_table_privilege('authenticated', 'private.kitchen_order_change_events', 'select'),
+  'authenticated callers cannot read the private kitchen event outbox'
+);
+
+set local role authenticated;
 
 update improvement_fifteen_context context
 set display_session_id = (

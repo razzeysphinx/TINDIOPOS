@@ -37,11 +37,11 @@ kitchen/[storeId]              kitchen display
 
 ## Authentication and authorization
 
-Phase 1 uses Supabase Auth with cookie-based SSR clients. The browser receives only `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Service-role keys and database connection credentials are never exposed or required by the application.
+Supabase Auth is authoritative for authentication and session identity. It uses cookie-based SSR clients, and the browser receives only `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Service-role keys and database connection credentials are never exposed or required by the application.
 
 An authenticated user maps to a profile and employee record. Employee roles and store assignments define authorization; editable `user_metadata` is never used for permissions. UI visibility is a usability aid only—database policies and server-side permission checks enforce access.
 
-Each application table exposed through the Supabase Data API will have RLS enabled. RLS is not the same as object privileges: migrations must explicitly grant the minimum `SELECT`, `INSERT`, `UPDATE`, or `DELETE` privileges needed by `authenticated`, and revoke everything else. New tables are manually opted in to API exposure only when the application needs them.
+Neon PostgreSQL is authoritative for TINDIO business data, RLS, business routines, ledgers, financial records, inventory, permissions, loyalty, and shifts. Each application table exposed through the Neon Data API has RLS enabled. RLS is not the same as object privileges: canonical migrations explicitly grant the minimum `SELECT`, `INSERT`, `UPDATE`, or `DELETE` privileges to TINDIO-owned roles and revoke everything else. New tables are manually opted in to API exposure only when the application needs them.
 
 The Phase 4 checkout routine is a privileged database boundary, not an arbitrary public RPC. It uses a fixed `search_path`, validates the authenticated actor and scoped `sales.create` permission in the database, revokes `EXECUTE` from `PUBLIC`, and grants only the authenticated caller role. Its `SECURITY DEFINER` helper stays in the non-exposed `private` schema, contains no dynamic SQL from request values, and reconstructs prices, totals, receipts, and stock movements from trusted rows.
 
@@ -49,7 +49,7 @@ The Phase 4 checkout routine is a privileged database boundary, not an arbitrary
 
 Every business record belongs to an organization. Stores belong to an organization, registers to stores, and employees gain access through store assignments. This supports a single-store launch without a later tenancy rewrite.
 
-Supabase Postgres is authoritative for money, sale status, inventory, permissions, loyalty, and shifts. Browser state is disposable. Money columns use integer minor units; quantities use an explicitly chosen integer or numeric unit type. Completed sales and receipts are immutable records. Inventory changes are ledger entries, never silent quantity rewrites.
+Browser state is disposable. Money columns use integer minor units; quantities use an explicitly chosen integer or numeric unit type. Completed sales and receipts are immutable records. Inventory changes are ledger entries, never silent quantity rewrites.
 
 ## ERD plan: Phases 0–4
 

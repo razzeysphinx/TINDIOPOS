@@ -96,7 +96,7 @@ test(
 );
 
 test(
-  "database provider defaults safely to Supabase until explicit Neon cutover",
+  "database provider is explicit and fail-closed in hosted deployments",
   () => {
     assert.match(
       databaseEnv,
@@ -105,7 +105,7 @@ test(
 
     assert.match(
       databaseEnv,
-      /\?\?\s*"supabase"/,
+      /resolveDatabaseProvider/,
     );
 
     assert.match(

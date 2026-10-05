@@ -20,7 +20,6 @@ export default async function KitchenPage() {
     <KitchenDisplay
       canManage={hasPermission(context, "kitchen.manage")}
       orders={workspace.orders}
-      organizationId={context.organization.id}
       stationRoutes={workspace.stationRoutes}
       stores={workspace.stores}
     />

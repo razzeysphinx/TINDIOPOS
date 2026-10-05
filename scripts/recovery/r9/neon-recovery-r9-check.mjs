@@ -86,23 +86,18 @@ for (const migration of archiveManifest.migrations) {
   assert.equal(sha256, migration.sha256, `Historical migration changed: ${migration.archivePath}`);
 }
 
-const recoveryBranch = "recovery/neon-canonical-rebuild";
-const closureAttestationBranch = "recovery/neon-recovery-closure-attestation";
-const postR9HardeningBranch = "recovery/post-r9-neon-single-source";
-const postR9ArchiveDesignBranch = "post-r9/certification-tenant-archive-design";
-const allowedBranches = new Set([
-  recoveryBranch,
-  closureAttestationBranch,
-  postR9HardeningBranch,
-  postR9ArchiveDesignBranch,
-]);
+const protectedBaseBranch = "TINDIO-PREPRODUCTION";
 const checkedOutBranch = git("branch", "--show-current");
-if (checkedOutBranch) {
-  assert.ok(allowedBranches.has(checkedOutBranch), "R9 must run on an authorized recovery, closure, hardening, or archive-design branch.");
-} else {
+if (!checkedOutBranch) {
+  const protectedDefaultPush = process.env.GITHUB_REF === `refs/heads/${protectedBaseBranch}`;
+  const protectedPullRequest =
+    process.env.GITHUB_EVENT_NAME === "pull_request" &&
+    process.env.GITHUB_BASE_REF === protectedBaseBranch &&
+    Boolean(process.env.GITHUB_HEAD_REF);
+
   assert.ok(
-    allowedBranches.has(process.env.GITHUB_HEAD_REF),
-    "A detached R9 check must be a GitHub pull-request checkout of an authorized R9 branch.",
+    protectedDefaultPush || protectedPullRequest,
+    "A detached R9 check must be a protected-default push or a pull request targeting TINDIO-PREPRODUCTION.",
   );
 }
 assert.equal(git("ls-files", "-u"), "", "Unresolved merge conflicts are not allowed.");

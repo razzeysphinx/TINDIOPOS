@@ -1,0 +1,48 @@
+{
+  "captured_at": "2026-10-05T14:35:49.375768Z",
+  "classification": "read-only incident attestation",
+  "canonical_neon": {
+    "project_id": "divine-sound-41148108",
+    "branch_id": "br-snowy-heart-b5nf6q3n",
+    "database": "tindio_r6_recovery"
+  },
+  "organizations": {
+    "razzey": {
+      "id": "82643062-7d18-4f5a-b6a6-fc5da64bd810",
+      "name": "RAZZEY TRADING CORP.",
+      "status": "archived",
+      "archive_requested_at": "2026-10-05T14:34:56.755268Z",
+      "archived_at": "2026-10-05T14:35:49.375768Z",
+      "history_counts": {
+        "employees": 1,
+        "stores": 1,
+        "registers": 1,
+        "organization_features": 14,
+        "sales": 0,
+        "sale_items": 0,
+        "payments": 0,
+        "receipts": 0,
+        "refunds": 0,
+        "inventory_counts": 0,
+        "inventory_count_lines": 0,
+        "inventory_movements": 0,
+        "audit_logs": 7
+      },
+      "delivered_export_count": 2,
+      "linked_auth_user": {
+        "confirmed": true,
+        "enabled": true,
+        "deleted": false
+      }
+    },
+    "certification": {
+      "id": "baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9",
+      "name": "TINDIO Phase 04 Certification",
+      "status": "active",
+      "archive_requested_at": null,
+      "archived_at": null
+    }
+  },
+  "recovery_action": "none",
+  "certification_archive_action": "blocked pending explicit RAZZEY incident resolution"
+}

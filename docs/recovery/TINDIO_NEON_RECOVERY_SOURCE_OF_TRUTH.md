@@ -1023,3 +1023,16 @@ that tenant. The chosen cleanup model is the existing generic organization
 archive/deactivation lifecycle: retain history and identity linkage, remove
 operational eligibility, block future writes, and exclude archived tenants
 from normal selection. No production archival occurred in this design packet.
+
+---
+
+# Post-R9 RAZZEY archive incident note
+
+On 2026-10-05, `RAZZEY TRADING CORP.` was archived through the existing
+canonical lifecycle during an intended certification-tenant archive workflow.
+Its organization row, history, membership linkage, and Supabase Auth identity
+were preserved. `TINDIO Phase 04 Certification` remained active and
+unarchived. The canonical lifecycle does not reactivate archived organizations;
+no recovery mutation is authorized by this factual note. See
+`docs/recovery/evidence/post-r9-razzey-archive-incident.md` for the read-only
+incident attestation.

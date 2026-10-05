@@ -4,6 +4,10 @@ import {
   z,
 } from "zod";
 
+import {
+  resolveDatabaseProvider,
+} from "@/lib/database/provider-contract";
+
 const supabaseDatabaseEnvironmentSchema =
   z.object({
     TINDIO_DATABASE_PROVIDER:
@@ -39,10 +43,7 @@ export type DatabaseEnvironment =
 
 export function getDatabaseEnvironment():
   DatabaseEnvironment {
-  const provider =
-    process.env
-      .TINDIO_DATABASE_PROVIDER
-    ?? "supabase";
+  const provider = resolveDatabaseProvider(process.env);
 
   const result =
     databaseEnvironmentSchema

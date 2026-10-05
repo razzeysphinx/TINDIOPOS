@@ -88,7 +88,8 @@ for (const migration of archiveManifest.migrations) {
 
 const recoveryBranch = "recovery/neon-canonical-rebuild";
 const closureAttestationBranch = "recovery/neon-recovery-closure-attestation";
-const allowedBranches = new Set([recoveryBranch, closureAttestationBranch]);
+const postR9HardeningBranch = "recovery/post-r9-neon-single-source";
+const allowedBranches = new Set([recoveryBranch, closureAttestationBranch, postR9HardeningBranch]);
 const checkedOutBranch = git("branch", "--show-current");
 if (checkedOutBranch) {
   assert.ok(allowedBranches.has(checkedOutBranch), "R9 must run on the recovery or closure-attestation branch.");

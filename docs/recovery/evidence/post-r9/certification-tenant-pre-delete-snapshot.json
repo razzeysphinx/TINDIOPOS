@@ -1,4 +1,9 @@
 {
+  "status": "SUPERSEDED_HISTORICAL_EVIDENCE",
+  "superseded_at": "2026-10-06",
+  "supersession_reason": "The RAZZEY control tenant was archived during the intended certification-tenant workflow; this snapshot grants no deletion authority.",
+  "current_live_action": "none",
+  "certification_tenant_action": "blocked_pending_separate_RAZZEY_recovery_decision",
   "captured_at": "2026-10-05T09:00:00Z",
   "canonical_neon": {
     "project_id": "divine-sound-41148108",
@@ -654,4 +659,3 @@
     "auth_user_action": "preserve"
   }
 }
-

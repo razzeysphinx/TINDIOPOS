@@ -1,6 +1,14 @@
 # Certification tenant deletion preflight — read-only evidence
 
-Captured: 2026-10-05  
+> **SUPERSEDED — historical deletion-preflight evidence only.** This preflight
+> is preserved as a dated snapshot, not an active execution authority. The
+> RAZZEY control tenant is now archived, and the certification tenant must
+> remain active and unarchived until a separately authorized RAZZEY recovery
+> decision establishes a valid control-tenant path. No deletion, archive,
+> direct status update, owner bypass, or Auth identity action is authorized by
+> this document.
+
+Captured: 2026-10-05
 Scope: canonical Neon only; no tenant, Auth, or resource deletion was performed.
 
 ## Authoritative target
@@ -168,4 +176,3 @@ This is an approval gate, not executable SQL. Before any destructive action, rep
 **DESTRUCTIVE TENANT CLEANUP APPROVAL REQUIRED**
 
 No deletion plan in this file is authorization to execute it.
-

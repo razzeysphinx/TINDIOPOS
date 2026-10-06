@@ -1,7 +1,21 @@
+# SUPERSEDED — historical deletion-planning evidence only
+
+This document is preserved as historical evidence of a pre-incident planning
+state. It is not executable and grants no deletion authority. On 2026-10-05,
+the required control tenant `RAZZEY TRADING CORP.` was archived through the
+canonical lifecycle during the intended certification-tenant workflow, while
+`TINDIO Phase 04 Certification` remained active and unarchived. The current
+control-tenant incident blocks any certification-tenant archive or deletion
+action pending a separately authorized RAZZEY recovery decision. Do not use
+this document to change live data, bypass lifecycle controls, or delete an
+identity. See `post-r9-razzey-archive-incident.md`.
+
+---
+
 # Certification tenant deletion exact plan
 
-Generated: 2026-10-05T09:05:00Z  
-Target: `TINDIO Phase 04 Certification` (`baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9`)  
+Generated: 2026-10-05T09:05:00Z
+Target: `TINDIO Phase 04 Certification` (`baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9`)
 Canonical Neon: `divine-sound-41148108` / `br-snowy-heart-b5nf6q3n` / `tindio_r6_recovery`
 
 ## Deterministic graph result
@@ -61,4 +75,3 @@ The machine-readable plan, including every FK’s columns, delete action, deferr
 2. For every step, the actual `DELETE ... RETURNING` count must equal the expected count above.
 3. A dry run ends in `ROLLBACK`; the live run differs only by the terminal `COMMIT`.
 4. Any count/FK/orphan/control-tenant mismatch aborts the transaction.
-

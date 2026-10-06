@@ -5,6 +5,10 @@ import {
 import process from "node:process";
 
 import {
+  requireCanonicalProductionNeonTarget,
+} from "./lib/canonical-production-neon-target.mjs";
+
+import {
   restoreSql,
   runSql,
 } from "./lib/phase-04-postgres-docker.mjs";
@@ -30,24 +34,12 @@ if (
   fail("TINDIO_DATABASE_PROVIDER must be neon.");
 }
 
-const databaseUrl =
-  process.env.DATABASE_URL_UNPOOLED;
-
-if (!databaseUrl) {
-  fail("DATABASE_URL_UNPOOLED is required.");
-}
-
-const parsed =
-  new URL(databaseUrl);
-
-if (
-  !parsed.hostname.endsWith(".neon.tech")
-  || parsed.hostname.includes("-pooler")
-) {
-  fail(
-    "Hosted V2 apply requires the direct/unpooled Neon endpoint.",
-  );
-}
+const {
+  databaseUrl,
+  parsed,
+} = requireCanonicalProductionNeonTarget(
+  process.env.DATABASE_URL_UNPOOLED,
+);
 
 const migrations = [
   "../archive/database/supabase-migrations/20260924_phase_04_pos_bootstrap_v2_core.sql",

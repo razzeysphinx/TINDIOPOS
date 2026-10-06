@@ -5,6 +5,10 @@ import {
 import process from "node:process";
 
 import {
+  requireCanonicalProductionNeonTarget,
+} from "./lib/canonical-production-neon-target.mjs";
+
+import {
   restoreSql,
   runSql,
 } from "./lib/phase-04-postgres-docker.mjs";
@@ -23,35 +27,10 @@ if (
   );
 }
 
-const databaseUrl =
-  process.env
-    .DATABASE_URL_UNPOOLED;
-
-if (!databaseUrl) {
-  fail(
-    "DATABASE_URL_UNPOOLED is required.",
+const { databaseUrl } =
+  requireCanonicalProductionNeonTarget(
+    process.env.DATABASE_URL_UNPOOLED,
   );
-}
-
-const parsed =
-  new URL(
-    databaseUrl,
-  );
-
-if (
-  !parsed.hostname
-    .endsWith(
-      ".neon.tech",
-    )
-  || parsed.hostname
-    .includes(
-      "-pooler",
-    )
-) {
-  fail(
-    "Certification repair requires the direct/unpooled Neon endpoint.",
-  );
-}
 
 const migration =
   await readFile(

@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
+import {
+  requireCanonicalProductionNeonTarget,
+} from "./lib/canonical-production-neon-target.mjs";
 import { restoreSql, runSql } from "./lib/phase-04-postgres-docker.mjs";
 
 if (process.env.TINDIO_DATABASE_PROVIDER !== "neon") throw new Error("TINDIO_DATABASE_PROVIDER must be neon.");
-const databaseUrl = process.env.DATABASE_URL_UNPOOLED;
-if (!databaseUrl) throw new Error("DATABASE_URL_UNPOOLED is required.");
-const parsed = new URL(databaseUrl);
-if (!parsed.hostname.endsWith(".neon.tech") || parsed.hostname.includes("-pooler")) throw new Error("Certification repair requires the direct/unpooled Neon endpoint.");
+const { databaseUrl } = requireCanonicalProductionNeonTarget(process.env.DATABASE_URL_UNPOOLED);
 const migration = await readFile(new URL("../archive/database/supabase-migrations/20260930030000_neon_inventory_count_runtime_boundary_repair.sql", import.meta.url), "utf8");
 assert.doesNotMatch(migration, /\b(?:truncate|delete\s+from\s+public\.(?:sales|payments|receipts|inventory_movements)|update\s+public\.(?:sales|payments|receipts|inventory_movements)|insert\s+into\s+public\.(?:sales|payments|receipts|inventory_movements))\b/i);
 const evidence = `select jsonb_build_object('organizations',(select count(*) from public.organizations),'stores',(select count(*) from public.stores),'employees',(select count(*) from public.employees),'products',(select count(*) from public.products),'inventory_counts',(select count(*) from public.inventory_counts),'inventory_count_lines',(select count(*) from public.inventory_count_lines),'inventory_movements',(select count(*) from public.inventory_movements),'sales',(select count(*) from public.sales),'payments',(select count(*) from public.payments),'receipts',(select count(*) from public.receipts))::text;`;

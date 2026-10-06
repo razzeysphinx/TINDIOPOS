@@ -1053,3 +1053,29 @@ was read-only and stopped before mutation; it was not a canonical-production
 preflight. The old source remains historical/non-authoritative. See
 `docs/recovery/evidence/post-r9-razzey-archive-incident-recovery.md` for the
 full canonical recovery evidence.
+
+---
+
+# Post-R9 final infrastructure closure
+
+**Status:** COMPLETE — documented plan limitation
+
+The authoritative production target is
+`divine-sound-41148108 / br-snowy-heart-b5nf6q3n /
+tindio_r6_recovery`. The canonical branch is the Neon default and primary
+branch. Neon rejected the single protection request with HTTP 422 because the
+current plan has no protected-branch capacity; this is recorded as a plan
+limitation and must not be retried without a plan change.
+
+The retained old-source Data API for
+`noisy-violet-27747237 / br-dawn-bar-ayd8jk76 / neondb` was disabled while its
+branch, database, and data were retained. Production-capable hosted apply and
+repair tools now fail closed unless they target the exact canonical direct Neon
+endpoint and canonical database. Generic disposable/local installers remain
+intentionally target-agnostic and separately guarded.
+
+Recovery closure does not authorize deletion of any retained historical
+database, branch, tenant, Auth identity, business record, Git branch, or
+Vercel resource. See
+`docs/recovery/evidence/post-r9-final-infrastructure-closure.md` for the
+attestation and verification record.

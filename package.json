@@ -182,6 +182,7 @@
     "test:neon-inventory-count-runtime-repair": "node --test scripts/neon-inventory-count-runtime-boundary-check.mjs",
     "test:post-r9-provider-neutral-realtime": "node --test scripts/post-r9-provider-neutral-realtime-check.mjs",
     "test:post-r9-organization-archive-lifecycle": "node --test scripts/post-r9-organization-archive-lifecycle-check.mjs",
+    "test:canonical-production-neon-target": "node --test scripts/canonical-production-neon-target-check.mjs",
     "apply:neon-inventory-count-runtime-repair": "node scripts/apply-neon-inventory-count-runtime-boundary-repair.mjs"
   },
   "dependencies": {

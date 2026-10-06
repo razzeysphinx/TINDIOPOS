@@ -1036,3 +1036,20 @@ unarchived. The canonical lifecycle does not reactivate archived organizations;
 no recovery mutation is authorized by this factual note. See
 `docs/recovery/evidence/post-r9-razzey-archive-incident.md` for the read-only
 incident attestation.
+
+## Post-R9 RAZZEY archive incident resolution
+
+On 2026-10-06, the approved, narrowly scoped recovery was completed only on
+the canonical Neon business database
+`divine-sound-41148108 / br-snowy-heart-b5nf6q3n / tindio_r6_recovery`.
+RAZZEY TRADING CORP. was restored from archived to active after a row-locked
+dry run and exact preflight. Its business history, existing archive/export
+evidence, owner/profile linkage, and generic lifecycle semantics were
+preserved. TINDIO Phase 04 Certification remained active, unarchived, and
+unchanged.
+
+The initial recovery preflight that resolved to retained old-source `neondb`
+was read-only and stopped before mutation; it was not a canonical-production
+preflight. The old source remains historical/non-authoritative. See
+`docs/recovery/evidence/post-r9-razzey-archive-incident-recovery.md` for the
+full canonical recovery evidence.

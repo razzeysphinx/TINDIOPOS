@@ -69,7 +69,7 @@ test("Phase 15 Store Local Mode implementation contract", () => {
   );
 
   assert.ok(
-    schema.includes("TINDIO_LOCAL_SCHEMA_VERSION = 7"),
+    schema.includes("TINDIO_LOCAL_SCHEMA_VERSION = 8"),
     "Phase 15 local schema must remain version 7",
   );
 

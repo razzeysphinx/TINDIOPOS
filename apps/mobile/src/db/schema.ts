@@ -1,5 +1,5 @@
 export const TINDIO_DATABASE_NAME = "tindio-mobile.db";
-export const TINDIO_LOCAL_SCHEMA_VERSION = 7;
+export const TINDIO_LOCAL_SCHEMA_VERSION = 8;
 
 export type LocalMigration = {
   version: number;
@@ -105,4 +105,36 @@ export const LOCAL_MIGRATIONS: LocalMigration[] = [
   { version: 5, name: "phase_11_device_sequence_checkpoints", sql: `WITH ranked AS (SELECT event_id,ROW_NUMBER() OVER (PARTITION BY organization_id,device_id ORDER BY created_at ASC,event_id ASC) AS sequence_value FROM outbox_events WHERE device_sequence IS NULL) UPDATE outbox_events SET device_sequence=(SELECT sequence_value FROM ranked WHERE ranked.event_id=outbox_events.event_id) WHERE device_sequence IS NULL; CREATE UNIQUE INDEX IF NOT EXISTS idx_outbox_device_sequence ON outbox_events(organization_id,device_id,device_sequence); CREATE TABLE IF NOT EXISTS device_sync_state (organization_id TEXT NOT NULL,device_id TEXT NOT NULL,next_sequence INTEGER NOT NULL CHECK(next_sequence >= 1),server_checkpoint INTEGER NOT NULL DEFAULT 0 CHECK(server_checkpoint >= 0),checkpoint_observed_at TEXT,last_server_status TEXT,PRIMARY KEY(organization_id,device_id));` },
   { version: 6, name: "phase_12_delta_sync", sql: `CREATE TABLE IF NOT EXISTS sync_cursors (organization_id TEXT NOT NULL,device_id TEXT NOT NULL,store_id TEXT NOT NULL,pull_cursor INTEGER NOT NULL DEFAULT 0 CHECK(pull_cursor >= 0),initialized INTEGER NOT NULL DEFAULT 0 CHECK(initialized IN (0,1)),last_push_at TEXT,last_pull_at TEXT,last_reconcile_at TEXT,last_error TEXT,PRIMARY KEY(organization_id,device_id,store_id)); CREATE INDEX IF NOT EXISTS idx_sync_cursors_org_store ON sync_cursors(organization_id,store_id);` },
   { version: 7, name: "phase_15_store_hub", sql: `CREATE TABLE IF NOT EXISTS store_hub_state (organization_id TEXT NOT NULL,store_id TEXT NOT NULL,device_id TEXT NOT NULL,hub_url TEXT NOT NULL,pull_cursor INTEGER NOT NULL DEFAULT 0 CHECK(pull_cursor >= 0),last_contact_at TEXT,last_error TEXT,PRIMARY KEY(organization_id,store_id,device_id)); CREATE TABLE IF NOT EXISTS store_hub_events (organization_id TEXT NOT NULL,store_id TEXT NOT NULL,event_id TEXT NOT NULL,device_id TEXT NOT NULL,device_sequence INTEGER NOT NULL CHECK(device_sequence >= 1),hub_revision INTEGER NOT NULL CHECK(hub_revision >= 1),event_type TEXT NOT NULL CHECK(event_type IN ('SALE_COMPLETED')),created_at TEXT NOT NULL,cloud_synced_at TEXT,local_reference TEXT NOT NULL,items_json TEXT NOT NULL,received_at TEXT NOT NULL,PRIMARY KEY(organization_id,store_id,event_id)); CREATE INDEX IF NOT EXISTS idx_store_hub_events_device ON store_hub_events(organization_id,store_id,device_id,device_sequence); CREATE INDEX IF NOT EXISTS idx_store_hub_events_revision ON store_hub_events(organization_id,store_id,hub_revision); CREATE TABLE IF NOT EXISTS store_hub_publish_state (organization_id TEXT NOT NULL,store_id TEXT NOT NULL,event_id TEXT NOT NULL,outbox_state TEXT NOT NULL,cloud_synced_at TEXT,published_at TEXT NOT NULL,PRIMARY KEY(organization_id,store_id,event_id));` },
+  {
+    version: 8,
+    name: "mob_05_catalog_cache_repair",
+    sql: `
+      UPDATE catalog_items
+      SET
+        product_id = json_extract(payload_json, '$.productId'),
+        variant_id = json_extract(payload_json, '$.variantId'),
+        category_id = json_extract(payload_json, '$.categoryId'),
+        product_name = json_extract(payload_json, '$.productName'),
+        variant_name = json_extract(payload_json, '$.variantName'),
+        sku = json_extract(payload_json, '$.sku'),
+        barcode = json_extract(payload_json, '$.barcode'),
+        price_minor = CAST(json_extract(payload_json, '$.priceMinor') AS INTEGER),
+        unit = json_extract(payload_json, '$.unit'),
+        image_url = json_extract(payload_json, '$.imageUrl'),
+        is_variable_price = CASE json_extract(payload_json, '$.isVariablePrice') WHEN 1 THEN 1 ELSE 0 END,
+        allow_fractional_quantity = CASE json_extract(payload_json, '$.allowFractionalQuantity') WHEN 1 THEN 1 ELSE 0 END,
+        has_modifiers = CASE json_extract(payload_json, '$.hasModifiers') WHEN 1 THEN 1 ELSE 0 END,
+        search_text = lower(trim(
+          coalesce(json_extract(payload_json, '$.productName'), '') || ' ' ||
+          coalesce(json_extract(payload_json, '$.variantName'), '') || ' ' ||
+          coalesce(json_extract(payload_json, '$.sku'), '') || ' ' ||
+          coalesce(json_extract(payload_json, '$.barcode'), '')
+        ))
+      WHERE json_valid(payload_json)
+        AND json_type(payload_json, '$.productId') = 'text'
+        AND json_type(payload_json, '$.productName') = 'text'
+        AND json_type(payload_json, '$.priceMinor') IN ('integer', 'real')
+        AND json_type(payload_json, '$.unit') = 'text';
+    `,
+  },
 ];

@@ -43,8 +43,8 @@ test("Phase 15 Slice 02 mobile Store Hub config", () => {
   );
 
   assert.ok(
-    schema.includes("TINDIO_LOCAL_SCHEMA_VERSION = 7"),
-    "Phase 15 must install local schema version 7",
+    schema.includes("TINDIO_LOCAL_SCHEMA_VERSION = 8"),
+    "Phase 15 must install local schema version 8",
   );
 
   for (const table of [

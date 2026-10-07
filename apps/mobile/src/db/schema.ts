@@ -1,5 +1,5 @@
 export const TINDIO_DATABASE_NAME = "tindio-mobile.db";
-export const TINDIO_LOCAL_SCHEMA_VERSION = 8;
+export const TINDIO_LOCAL_SCHEMA_VERSION = 9;
 
 export type LocalMigration = {
   version: number;
@@ -135,6 +135,34 @@ export const LOCAL_MIGRATIONS: LocalMigration[] = [
         AND json_type(payload_json, '$.productName') = 'text'
         AND json_type(payload_json, '$.priceMinor') IN ('integer', 'real')
         AND json_type(payload_json, '$.unit') = 'text';
+    `,
+  },
+  {
+    version: 9,
+    name: "mob_01_durable_online_checkout_intents",
+    sql: `
+      CREATE TABLE IF NOT EXISTS checkout_intents (
+        intent_id TEXT PRIMARY KEY NOT NULL,
+        organization_id TEXT NOT NULL,
+        store_id TEXT NOT NULL,
+        register_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        employee_id TEXT NOT NULL,
+        shift_id TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('PREPARED','SUBMITTING','UNKNOWN','ACKNOWLEDGED','REJECTED')),
+        attempts INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_attempt_at TEXT,
+        last_error TEXT,
+        server_sale_id TEXT,
+        official_receipt_number INTEGER,
+        UNIQUE (organization_id, idempotency_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_checkout_intents_unresolved
+        ON checkout_intents (organization_id, device_id, state, created_at);
     `,
   },
 ];

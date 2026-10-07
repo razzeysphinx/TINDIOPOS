@@ -2,6 +2,7 @@ import * as Crypto from "expo-crypto";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import type {
+  CheckoutSaleValues,
   PosCartLine,
   PosCatalogItem,
   PosCustomer,
@@ -10,6 +11,16 @@ import type {
   PosOpenTicket,
 } from "../../../../src/contracts/pos";
 import { posItemKey } from "../../../../src/features/pos/pos-types";
+import {
+  getUnresolvedOnlineCheckoutIntent,
+  markOnlineCheckoutIntentAcknowledged,
+  markOnlineCheckoutIntentRejected,
+  markOnlineCheckoutIntentSubmitting,
+  markOnlineCheckoutIntentUnknown,
+  prepareOnlineCheckoutIntent,
+  recoverInterruptedOnlineCheckoutIntents,
+  type DurableOnlineCheckoutIntent,
+} from "../../src/db/checkout-intents";
 import { saveCustomerSearchResults, searchCachedCustomers } from "../../src/db/customer-cache";
 import { CashierCartLine } from "../../src/features/cashier/cashier-cart-line";
 import { ModifierPicker, VariablePriceEditor } from "../../src/features/cashier/cashier-editors";
@@ -115,6 +126,10 @@ export default function PosScreen() {
   const [savingOffline, setSavingOffline] = useState(false);
   const [onlineCheckoutPending, setOnlineCheckoutPending] = useState(false);
   const [checkoutKey, setCheckoutKey] = useState(() => Crypto.randomUUID());
+  const [onlineIntent, setOnlineIntent] =
+    useState<DurableOnlineCheckoutIntent | null>(null);
+  const [loadedOnlineIntentScope, setLoadedOnlineIntentScope] =
+    useState<string | null>(null);
 
   const [selectedCustomer, setSelectedCustomer] = useState<PosCustomer | null>(null);
   const [customerQuery, setCustomerQuery] = useState("");
@@ -197,6 +212,72 @@ export default function PosScreen() {
     return () => clearTimeout(timer);
   }, [load]);
 
+  useEffect(() => {
+    const organizationId = core?.organization.id;
+    const deviceId = identity?.credential.deviceId;
+    const scope = organizationId && deviceId
+      ? `${organizationId}:${deviceId}`
+      : null;
+    let active = true;
+
+    if (!organizationId || !deviceId || !scope) {
+      return () => {
+        active = false;
+      };
+    }
+
+    void recoverInterruptedOnlineCheckoutIntents(
+      organizationId,
+      deviceId,
+    ).then(() =>
+      getUnresolvedOnlineCheckoutIntent(
+        organizationId,
+        deviceId,
+      ),
+    ).then((intent) => {
+      if (!active) return;
+      setOnlineIntent(intent);
+      setLoadedOnlineIntentScope(scope);
+
+      if (intent) {
+        setCheckoutKey(intent.idempotencyKey);
+        setSaleMessage(
+          "UNRESOLVED ONLINE CHECKOUT - retry the original transaction. Offline fallback is blocked.",
+        );
+      }
+    }).catch(() => {
+      if (active) {
+        setSaleMessage(
+          "Checkout recovery state is unavailable. Do not collect payment or start another checkout.",
+        );
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [core?.organization.id, identity?.credential.deviceId]);
+
+  const currentOnlineIntentScope = core && identity
+    ? `${core.organization.id}:${identity.credential.deviceId}`
+    : null;
+  const onlineIntentLoading = Boolean(
+    currentOnlineIntentScope
+    && currentOnlineIntentScope !== loadedOnlineIntentScope,
+  );
+  const onlineIntentMatchesCurrentContext = Boolean(
+    !onlineIntent
+    || (
+      core
+      && binding
+      && core.activeShift
+      && onlineIntent.employeeId === core.employee.id
+      && onlineIntent.shiftId === core.activeShift.id
+      && onlineIntent.storeId === binding.storeId
+      && onlineIntent.registerId === binding.registerId
+    )
+  );
+
   const totals = useMemo(
     () =>
       calculateLocalCartTotals(
@@ -261,6 +342,13 @@ export default function PosScreen() {
   }
 
   const markCartChanged = () => {
+    if (onlineIntent) {
+      setSaleMessage(
+        "The unresolved online checkout is frozen. Retry its original payload before starting another sale.",
+      );
+      return;
+    }
+
     setCheckoutKey(Crypto.randomUUID());
     setSaleMessage(null);
   };
@@ -631,11 +719,19 @@ export default function PosScreen() {
     setActiveTicketId(null);
     setTicketLabel("");
     setTicketNote("");
+    setOnlineIntent(null);
     setCheckoutKey(Crypto.randomUUID());
   };
 
   const saveOfflineCashSale = async () => {
-    if (savingOffline || !offlineCartEligible) return;
+    if (onlineIntentLoading || savingOffline || !offlineCartEligible) return;
+
+    if (onlineIntent) {
+      setSaleMessage(
+        "Offline fallback is blocked while the original online checkout result is unresolved.",
+      );
+      return;
+    }
 
     setSavingOffline(true);
     setSaleMessage(null);
@@ -674,51 +770,104 @@ export default function PosScreen() {
   const completeOnlineCashSale = async () => {
     if (
       onlineCheckoutPending
+      || onlineIntentLoading
       || mode !== "online"
       || !canCreateSales
       || !canAcceptPayments
-      || !shiftMatches
-      || !cashMethod
-      || tenderedMinor === null
-      || tenderedMinor < totals.totalMinor
-      || cart.length === 0
+      || !onlineIntentMatchesCurrentContext
+    ) return;
+
+    if (
+      !onlineIntent
+      && (
+        !shiftMatches
+        || !cashMethod
+        || tenderedMinor === null
+        || tenderedMinor < totals.totalMinor
+        || cart.length === 0
+      )
     ) return;
 
     setOnlineCheckoutPending(true);
     setSaleMessage(null);
 
+    let intent = onlineIntent;
+
     try {
-      const result = await checkoutPosV2(core.organization.id, {
-        storeId: binding.storeId,
-        registerId: binding.registerId,
-        idempotencyKey: checkoutKey,
-        customerId: selectedCustomer?.id ?? null,
-        loyaltyRedemptionPoints: 0,
-        discountId,
-        taxRateId: taxId,
-        diningOptionId,
-        openTicketId: activeTicketId,
-        items: cart.map((line) => ({
-          productId: line.productId,
-          variantId: line.variantId,
-          quantity: line.quantity,
-          unitPriceMinor: line.manualPriceMinor,
-          modifierOptionIds: line.modifierOptionIds,
-          itemNote: line.itemNote ?? null,
-        })),
-        payments: [{
-          paymentMethodId: cashMethod.id,
-          tenderedAmount: cashTender,
-          referenceNumber: "",
-          note: "",
-        }],
-      });
+      if (!intent) {
+        const payload: CheckoutSaleValues = {
+          storeId: binding.storeId,
+          registerId: binding.registerId,
+          idempotencyKey: checkoutKey,
+          customerId: selectedCustomer?.id ?? null,
+          loyaltyRedemptionPoints: 0,
+          discountId,
+          taxRateId: taxId,
+          diningOptionId,
+          openTicketId: activeTicketId,
+          items: cart.map((line) => ({
+            productId: line.productId,
+            variantId: line.variantId,
+            quantity: line.quantity,
+            unitPriceMinor: line.manualPriceMinor,
+            modifierOptionIds: line.modifierOptionIds,
+            itemNote: line.itemNote ?? null,
+          })),
+          payments: [{
+            paymentMethodId: cashMethod!.id,
+            tenderedAmount: cashTender,
+            referenceNumber: "",
+            note: "",
+          }],
+        };
+
+        intent = await prepareOnlineCheckoutIntent({
+          organizationId: core.organization.id,
+          deviceId: identity.credential.deviceId,
+          employeeId: core.employee.id,
+          shiftId: core.activeShift!.id,
+          payload,
+        });
+        setOnlineIntent(intent);
+      }
+
+      await markOnlineCheckoutIntentSubmitting(
+        core.organization.id,
+        intent.intentId,
+      );
+
+      const result = await checkoutPosV2(
+        core.organization.id,
+        intent.payload,
+      );
 
       if (result.ok) {
+        await markOnlineCheckoutIntentAcknowledged(
+          core.organization.id,
+          intent.intentId,
+          result.data,
+        );
         clearSaleState();
         setSaleMessage(`SERVER RECEIPT #${result.data.receiptNumber}`);
         void syncOutboxEvents(core.organization.id);
         return;
+      }
+
+      if (result.retryable) {
+        await markOnlineCheckoutIntentUnknown(
+          core.organization.id,
+          intent.intentId,
+          result.message,
+        );
+        setOnlineIntent({ ...intent, state: "UNKNOWN", lastError: result.message });
+      } else {
+        await markOnlineCheckoutIntentRejected(
+          core.organization.id,
+          intent.intentId,
+          result.message,
+        );
+        setOnlineIntent(null);
+        setCheckoutKey(Crypto.randomUUID());
       }
 
       setSaleMessage(
@@ -727,8 +876,23 @@ export default function PosScreen() {
           : result.message,
       );
     } catch {
+      if (intent) {
+        await markOnlineCheckoutIntentUnknown(
+          core.organization.id,
+          intent.intentId,
+          "The server response could not be confirmed.",
+        ).catch(() => undefined);
+        setOnlineIntent({
+          ...intent,
+          state: "UNKNOWN",
+          lastError: "The server response could not be confirmed.",
+        });
+      }
+
       setSaleMessage(
-        "CHECKOUT STATUS UNKNOWN — verify Recent Receipts before starting another sale. Retrying this unchanged sale will reuse the same idempotency key.",
+        intent
+          ? "CHECKOUT STATUS UNKNOWN - retrying will use the exact persisted payload and idempotency key. Offline fallback is blocked."
+          : "CHECKOUT WAS NOT SENT because its durable intent could not be saved. Keep the cart and try again.",
       );
     } finally {
       setOnlineCheckoutPending(false);
@@ -1145,7 +1309,9 @@ export default function PosScreen() {
 
       <Pressable
         disabled={
-          savingOffline
+          onlineIntentLoading
+          || savingOffline
+          || Boolean(onlineIntent)
           || !offlineCartEligible
           || cart.length === 0
           || tenderedMinor === null
@@ -1167,22 +1333,38 @@ export default function PosScreen() {
         disabled={
           mode !== "online"
           || onlineCheckoutPending
+          || onlineIntentLoading
           || !canCreateSales
           || !canAcceptPayments
-          || !shiftMatches
-          || !cashMethod
-          || cart.length === 0
-          || tenderedMinor === null
-          || tenderedMinor < totals.totalMinor
+          || !onlineIntentMatchesCurrentContext
+          || (
+            !onlineIntent
+            && (
+              !shiftMatches
+              || !cashMethod
+              || cart.length === 0
+              || tenderedMinor === null
+              || tenderedMinor < totals.totalMinor
+            )
+          )
         }
         onPress={() => void completeOnlineCashSale()}
       >
         <Text>
           {onlineCheckoutPending
             ? "Processing server checkout…"
-            : "COMPLETE ONLINE CASH CHECKOUT"}
+            : onlineIntent
+              ? "RETRY ORIGINAL ONLINE CHECKOUT"
+              : "COMPLETE ONLINE CASH CHECKOUT"}
         </Text>
       </Pressable>
+
+      {onlineIntent && !onlineIntentMatchesCurrentContext ? (
+        <Text>
+          This unresolved checkout belongs to its original employee, shift, store, and register.
+          Restore that operating context or reconcile it under supervised recovery; do not start a new sale.
+        </Text>
+      ) : null}
 
       {saleMessage ? <Text>{saleMessage}</Text> : null}
       <Text>Current checkout operation: {checkoutKey}</Text>

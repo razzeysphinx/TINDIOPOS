@@ -13,6 +13,7 @@ const dbFiles = [
   "apps/mobile/src/db/customer-cache.ts",
   "apps/mobile/src/db/shift-cache.ts",
   "apps/mobile/src/db/receipt-cache.ts",
+  "apps/mobile/src/db/checkout-intents.ts",
   "apps/mobile/src/db/cache-admin.ts",
   "apps/mobile/src/db/cache-stats.ts",
   "apps/mobile/src/db/health.ts",
@@ -27,11 +28,11 @@ test("Phase 07 complete foundation remains persistent, tenant-scoped, and phase-
   const sync = read("apps/mobile/app/(app)/sync-status.tsx");
   const localSource = dbFiles.map(read).join("\n");
 
-  assert.match(schema, /TINDIO_LOCAL_SCHEMA_VERSION\s*=\s*8/);
+  assert.match(schema, /TINDIO_LOCAL_SCHEMA_VERSION\s*=\s*9/);
   assert.match(schema, /version:\s*1/);
   assert.match(schema, /version:\s*2/);
-  for (const table of ["local_metadata", "business_context_snapshots", "local_cache_state", "reference_snapshots", "catalog_items", "customer_cache", "shift_snapshots", "receipt_summaries"]) assert.match(schema, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
-  for (const table of ["business_context_snapshots", "local_cache_state", "reference_snapshots", "catalog_items", "customer_cache", "shift_snapshots", "receipt_summaries"]) {
+  for (const table of ["local_metadata", "business_context_snapshots", "local_cache_state", "reference_snapshots", "catalog_items", "customer_cache", "shift_snapshots", "receipt_summaries", "checkout_intents"]) assert.match(schema, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
+  for (const table of ["business_context_snapshots", "local_cache_state", "reference_snapshots", "catalog_items", "customer_cache", "shift_snapshots", "receipt_summaries", "checkout_intents"]) {
     const statement = schema.slice(schema.indexOf(`CREATE TABLE IF NOT EXISTS ${table}`), schema.indexOf(";", schema.indexOf(`CREATE TABLE IF NOT EXISTS ${table}`)));
     assert.match(statement, /organization_id/);
   }

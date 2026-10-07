@@ -6,6 +6,7 @@ export type TransactionCustodySummary = {
   syncing: number;
   conflict: number;
   failed: number;
+  onlineCheckoutIntents: number;
   organizationCount: number;
 };
 
@@ -28,10 +29,19 @@ export async function getTransactionCustodySummary(
         "SELECT state,COUNT(*) AS count FROM outbox_events WHERE state<>'SYNCED' GROUP BY state",
       );
 
+  const onlineCheckoutRow = organizationId
+    ? await database.getFirstAsync<{ count: number }>(
+        "SELECT COUNT(*) AS count FROM checkout_intents WHERE organization_id=? AND state IN ('PREPARED','SUBMITTING','UNKNOWN')",
+        organizationId,
+      )
+    : await database.getFirstAsync<{ count: number }>(
+        "SELECT COUNT(*) AS count FROM checkout_intents WHERE state IN ('PREPARED','SUBMITTING','UNKNOWN')",
+      );
+
   const organizations = organizationId
     ? [{ organization_id: organizationId }]
     : await database.getAllAsync<{ organization_id: string }>(
-        "SELECT DISTINCT organization_id FROM outbox_events WHERE state<>'SYNCED'",
+        "SELECT organization_id FROM outbox_events WHERE state<>'SYNCED' UNION SELECT organization_id FROM checkout_intents WHERE state IN ('PREPARED','SUBMITTING','UNKNOWN')",
       );
 
   const counts = Object.fromEntries(
@@ -42,14 +52,16 @@ export async function getTransactionCustodySummary(
   const syncing = counts.SYNCING ?? 0;
   const conflict = counts.CONFLICT ?? 0;
   const failed = counts.FAILED ?? 0;
+  const onlineCheckoutIntents = onlineCheckoutRow?.count ?? 0;
 
   return {
     unresolved:
-      localPending + syncing + conflict + failed,
+      localPending + syncing + conflict + failed + onlineCheckoutIntents,
     localPending,
     syncing,
     conflict,
     failed,
+    onlineCheckoutIntents,
     organizationCount: organizations.length,
   };
 }

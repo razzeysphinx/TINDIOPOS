@@ -20,6 +20,7 @@
     "test:phase-07-native-sqlite-foundation": "node --test scripts/phase-07-native-sqlite-foundation-check.mjs",
     "test:phase-07-native-sqlite-complete": "node --test scripts/phase-07-native-sqlite-complete-check.mjs",
     "test:mobile-catalog-cache": "node --test scripts/mobile-catalog-cache-correctness.test.mjs",
+    "test:mobile-receipt-cache-scope": "node --test scripts/mobile-receipt-cache-scope.test.mjs",
     "test:phase-08-cold-start-offline": "node --test scripts/phase-08-cold-start-offline-check.mjs",
     "test:phase-09-local-first": "node --test scripts/phase-09-local-first-check.mjs",
     "test:phase-10-durable-outbox": "node --test scripts/phase-10-durable-outbox-check.mjs",

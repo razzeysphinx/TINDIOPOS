@@ -20,6 +20,9 @@ import {
   saveActiveShiftSnapshot,
 } from "../../db/shift-cache";
 import {
+  pruneUnauthorizedReceiptSummaries,
+} from "../../db/receipt-cache";
+import {
   fetchPosV2Core,
   isExplicitAuthorizationDenial,
 } from "../../lib/tindio-api";
@@ -195,6 +198,11 @@ export function BusinessContextProvider({
         try {
           await saveBusinessContextSnapshot(
             next.core,
+          );
+
+          await pruneUnauthorizedReceiptSummaries(
+            organizationId,
+            next.core.storeIds,
           );
 
           await saveActiveShiftSnapshot(

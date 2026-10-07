@@ -42,6 +42,7 @@ export default function Receipts() {
       setRows(
         await searchCachedReceiptSummaries(
           core.organization.id,
+          core.storeIds,
           query,
         ),
       );

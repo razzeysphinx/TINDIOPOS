@@ -75,8 +75,9 @@ test(
 
     assert.ok(
       files.receipts.includes(
-        "WHERE organization_id=?",
+        "store_id IN (SELECT value FROM json_each(?))",
       ),
+      "receipt reads must enforce the current employee's authorized store scope",
     );
 
     assert.ok(

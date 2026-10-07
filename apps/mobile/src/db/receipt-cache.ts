@@ -5,6 +5,22 @@ import type {
 import { saveLocalCacheState } from "./cache-state";
 import { getTindioDatabase } from "./database";
 
+export const AUTHORIZED_RECEIPT_SEARCH_SQL = `
+  SELECT payload_json
+  FROM receipt_summaries
+  WHERE organization_id=?
+    AND store_id IN (SELECT value FROM json_each(?))
+    AND (?='' OR cast(receipt_number as text) LIKE ? OR lower(payload_json) LIKE ?)
+  ORDER BY receipt_number DESC
+  LIMIT ?
+`;
+
+export const PRUNE_UNAUTHORIZED_RECEIPTS_SQL = `
+  DELETE FROM receipt_summaries
+  WHERE organization_id=?
+    AND store_id NOT IN (SELECT value FROM json_each(?))
+`;
+
 export async function saveReceiptSummaries(
   organizationId: string,
   response: PosReceiptListResponse,
@@ -46,14 +62,20 @@ export async function saveReceiptSummaries(
 
 export async function searchCachedReceiptSummaries(
   organizationId: string,
+  authorizedStoreIds: readonly string[],
   query: string,
   limit = 25,
 ) {
+  if (authorizedStoreIds.length === 0) {
+    return [];
+  }
+
   const normalized = query.trim().toLocaleLowerCase();
 
   const rows = await (await getTindioDatabase()).getAllAsync<{ payload_json: string }>(
-    "SELECT payload_json FROM receipt_summaries WHERE organization_id=? AND (?='' OR cast(receipt_number as text) LIKE ? OR lower(payload_json) LIKE ?) ORDER BY receipt_number DESC LIMIT ?",
+    AUTHORIZED_RECEIPT_SEARCH_SQL,
     organizationId,
+    JSON.stringify([...new Set(authorizedStoreIds)]),
     normalized,
     `%${normalized}%`,
     `%${normalized}%`,
@@ -67,4 +89,15 @@ export async function searchCachedReceiptSummaries(
       return [];
     }
   });
+}
+
+export async function pruneUnauthorizedReceiptSummaries(
+  organizationId: string,
+  authorizedStoreIds: readonly string[],
+) {
+  await (await getTindioDatabase()).runAsync(
+    PRUNE_UNAUTHORIZED_RECEIPTS_SQL,
+    organizationId,
+    JSON.stringify([...new Set(authorizedStoreIds)]),
+  );
 }

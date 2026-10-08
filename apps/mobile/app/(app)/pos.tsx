@@ -42,6 +42,10 @@ import {
   searchLocalCatalog,
 } from "../../src/features/local-first/local-catalog";
 import { calculateLocalCartTotals } from "../../src/features/local-first/local-cart";
+import {
+  canAcceptOfflineSale,
+  cashierReadinessLabel,
+} from "../../src/features/offline/cashier-readiness-policy";
 import { getLocalFirstModifiers } from "../../src/features/local-first/local-modifiers";
 import {
   getLocalCategories,
@@ -89,7 +93,7 @@ function baseCartLine(item: PosCatalogItem): PosCartLine {
 }
 
 export default function PosScreen() {
-  const { data, mode } = useBusinessContext();
+  const { data, mode, cashierReadinessState } = useBusinessContext();
   const core = data?.core;
   const terminal =
     useTerminalDevice(
@@ -307,6 +311,7 @@ export default function PosScreen() {
     diningOptionId,
     openTicketId: activeTicketId,
   });
+  const offlineSaleReady = canAcceptOfflineSale(cashierReadinessState);
 
   useEffect(() => {
     if (!core || !binding || !identity) return;
@@ -725,6 +730,13 @@ export default function PosScreen() {
 
   const saveOfflineCashSale = async () => {
     if (onlineIntentLoading || savingOffline || !offlineCartEligible) return;
+
+    if (!offlineSaleReady) {
+      setSaleMessage(
+        "Offline cash acceptance is paused. Your cart is preserved; reconnect and restore terminal readiness before collecting payment.",
+      );
+      return;
+    }
 
     if (onlineIntent) {
       setSaleMessage(
@@ -1307,10 +1319,20 @@ export default function PosScreen() {
 
       {!cashMethod ? <Text>No enabled cash payment method is cached for this store.</Text> : null}
 
+      <Text accessibilityRole={offlineSaleReady ? undefined : "alert"}>
+        Offline readiness: {cashierReadinessLabel(cashierReadinessState)}
+      </Text>
+      {!offlineSaleReady && cart.length > 0 ? (
+        <Text accessibilityRole="alert">
+          Offline payment is paused. This cart remains available while you reconnect or complete preparation.
+        </Text>
+      ) : null}
+
       <Pressable
         disabled={
           onlineIntentLoading
           || savingOffline
+          || !offlineSaleReady
           || Boolean(onlineIntent)
           || !offlineCartEligible
           || cart.length === 0

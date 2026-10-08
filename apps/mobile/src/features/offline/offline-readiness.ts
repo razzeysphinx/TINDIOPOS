@@ -5,7 +5,7 @@ import { getLocalCacheStates } from "../../db/cache-state";
 import { getReferenceSnapshot } from "../../db/reference-cache";
 import { getActiveShiftSnapshot } from "../../db/shift-cache";
 import { loadMobileDeviceIdentity } from "../device/device-store";
-import { validateOfflineAuthorizationGrant, type OfflineAuthorizationGrant, type OfflineAuthorizationScope } from "./offline-authorization";
+import { readOfflineAuthorizationGrant, validateOfflineAuthorizationGrant, type OfflineAuthorizationGrant, type OfflineAuthorizationScope } from "./offline-authorization";
 
 export type OfflineReadiness = { ok: true; grant: OfflineAuthorizationGrant; core: PosBootstrapV2CoreResponse["core"]; catalogItems: number; referenceVersion: string } | { ok: false; reason: string };
 export type OfflineScopeReadiness = Omit<Extract<OfflineReadiness, { ok: true }>, "grant"> | Extract<OfflineReadiness, { ok: false }>;
@@ -36,5 +36,14 @@ export async function evaluateOfflineReadiness(): Promise<OfflineReadiness> {
   const readiness = await evaluateOfflineScopeReadiness(authorization.grant);
   return readiness.ok
     ? { ...readiness, grant: authorization.grant }
+    : readiness;
+}
+
+export async function evaluateRestrictedOfflineReadiness(): Promise<OfflineReadiness> {
+  const grant = await readOfflineAuthorizationGrant();
+  if (!grant) return { ok: false, reason: "MISSING" };
+  const readiness = await evaluateOfflineScopeReadiness(grant);
+  return readiness.ok
+    ? { ...readiness, grant }
     : readiness;
 }

@@ -37,7 +37,14 @@ import {
 } from "../offline/connection-mode-state";
 import {
   evaluateOfflineReadiness,
+  evaluateRestrictedOfflineReadiness,
 } from "../offline/offline-readiness";
+import {
+  deriveCashierReadinessState,
+  evaluateOfflineAuthorizationLifecycle,
+  nextOfflineAuthorizationCheckDelay,
+  type CashierReadinessState,
+} from "../offline/cashier-readiness-policy";
 import { createForegroundReloadCoordinator } from "../offline/foreground-reload-coordinator";
 import {
   shouldRecoverCloudEntry,
@@ -73,6 +80,7 @@ type Value = {
   mode: "online" | "offline";
   connectionMode: MobileConnectionMode;
   offlineExpiresAt: string | null;
+  cashierReadinessState: CashierReadinessState;
   reload(organizationId?: string): Promise<void>;
 };
 
@@ -95,6 +103,8 @@ export function BusinessContextProvider({
   const {
     accessMode,
     offlineExpiresAt: sessionOfflineExpiresAt,
+    offlineRestrictionReason,
+    refreshOfflineAccess,
   } = useSession();
 
   const [data, setData] =
@@ -116,6 +126,8 @@ export function BusinessContextProvider({
 
   const [preparedOfflineExpiresAt, setPreparedOfflineExpiresAt] =
     useState<string | null>(sessionOfflineExpiresAt);
+  const [readinessCheckedAt, setReadinessCheckedAt] =
+    useState(() => Date.now());
 
   const [reloadCoordinator] = useState(() =>
     createForegroundReloadCoordinator<void>(async () => undefined),
@@ -147,18 +159,39 @@ export function BusinessContextProvider({
         await evaluateOfflineReadiness();
 
       if (!readiness.ok) {
-        setData(null);
-        setPreparedOfflineExpiresAt(null);
-        setError(
-          "Offline access is not prepared for this terminal.",
+        const restricted = offlineRestrictionReason
+          ? await evaluateRestrictedOfflineReadiness()
+          : null;
+
+        if (!restricted?.ok) {
+          setData(null);
+          setMode("offline");
+          setReadinessCheckedAt((previous) => Math.max(previous, Date.now()));
+          setPreparedOfflineExpiresAt(null);
+          setError(
+            "PREPARATION REQUIRED — connect to prepare this terminal for offline work.",
+          );
+          return false;
+        }
+
+        const restrictedCore = restricted.core;
+        setData(cachedBootstrap(restrictedCore));
+        setMode("offline");
+        setReadinessCheckedAt((previous) => Math.max(previous, Date.now()));
+        setPreparedOfflineExpiresAt(restricted.grant.expiresAt);
+        setError(null);
+        await setPersistedMode(
+          restrictedCore.organization.id,
+          "DEVICE_ISOLATED",
         );
-        return false;
+        return true;
       }
 
       const core = readiness.core;
 
       setData(cachedBootstrap(core));
       setMode("offline");
+      setReadinessCheckedAt((previous) => Math.max(previous, Date.now()));
       setPreparedOfflineExpiresAt(readiness.grant.expiresAt);
       setError(null);
 
@@ -201,7 +234,7 @@ export function BusinessContextProvider({
       );
 
       return true;
-    }, [setPersistedMode]);
+    }, [offlineRestrictionReason, setPersistedMode]);
 
   const completeCloudEntry =
     useCallback(
@@ -267,7 +300,7 @@ export function BusinessContextProvider({
 
         if (!needsRecovery) {
           const renewal = await renewOfflineAuthorizationFromCloud(next.core);
-          if (renewal.ok) setPreparedOfflineExpiresAt(renewal.expiresAt);
+          setPreparedOfflineExpiresAt(renewal.ok ? renewal.expiresAt : null);
           setMode("online");
 
           await setPersistedMode(
@@ -281,6 +314,7 @@ export function BusinessContextProvider({
         // Network is reachable, but business mutations remain safely gated
         // until reconciliation is complete.
         setMode("offline");
+        setReadinessCheckedAt((previous) => Math.max(previous, Date.now()));
 
         await setPersistedMode(
           organizationId,
@@ -294,7 +328,7 @@ export function BusinessContextProvider({
 
         if (recovery.ok) {
           const renewal = await renewOfflineAuthorizationFromCloud(next.core);
-          if (renewal.ok) setPreparedOfflineExpiresAt(renewal.expiresAt);
+          setPreparedOfflineExpiresAt(renewal.ok ? renewal.expiresAt : null);
           setMode("online");
 
           await setPersistedMode(
@@ -392,6 +426,47 @@ export function BusinessContextProvider({
     return () => subscription.remove();
   }, [data?.core.organization.id, reload]);
 
+  const effectiveOfflineExpiresAt =
+    preparedOfflineExpiresAt ?? sessionOfflineExpiresAt;
+  const authorizationState = evaluateOfflineAuthorizationLifecycle({
+    prepared: Boolean(effectiveOfflineExpiresAt),
+    expiresAt: effectiveOfflineExpiresAt,
+    restrictionReason: mode === "offline" ? offlineRestrictionReason : null,
+    now: readinessCheckedAt,
+  });
+  const cashierReadinessState = deriveCashierReadinessState({
+    connectionMode,
+    authorizationState,
+  });
+
+  useEffect(() => {
+    if (mode !== "offline") return;
+    const now = Date.now();
+    const current = evaluateOfflineAuthorizationLifecycle({
+      prepared: Boolean(effectiveOfflineExpiresAt),
+      expiresAt: effectiveOfflineExpiresAt,
+      restrictionReason: offlineRestrictionReason,
+      now,
+    });
+    const delay = nextOfflineAuthorizationCheckDelay({
+      state: current,
+      expiresAt: effectiveOfflineExpiresAt,
+      now,
+    });
+    if (delay === null) return;
+
+    const timer = setTimeout(() => {
+      setReadinessCheckedAt((previous) => Math.max(previous, Date.now()));
+      void refreshOfflineAccess();
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [
+    effectiveOfflineExpiresAt,
+    mode,
+    offlineRestrictionReason,
+    refreshOfflineAccess,
+  ]);
+
   const value = useMemo(
     () => ({
       data,
@@ -399,10 +474,8 @@ export function BusinessContextProvider({
       error,
       mode,
       connectionMode,
-      offlineExpiresAt:
-        mode === "offline"
-          ? preparedOfflineExpiresAt ?? sessionOfflineExpiresAt
-          : null,
+      offlineExpiresAt: effectiveOfflineExpiresAt,
+      cashierReadinessState,
       reload,
     }),
     [
@@ -411,8 +484,8 @@ export function BusinessContextProvider({
       error,
       mode,
       connectionMode,
-      preparedOfflineExpiresAt,
-      sessionOfflineExpiresAt,
+      effectiveOfflineExpiresAt,
+      cashierReadinessState,
       reload,
     ],
   );

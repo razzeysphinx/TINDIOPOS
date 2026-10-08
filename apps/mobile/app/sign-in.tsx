@@ -1,14 +1,22 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import {
+  cashierReadinessLabel,
+  deriveCashierReadinessState,
+} from "../src/features/offline/cashier-readiness-policy";
 import { useSession } from "../src/features/session/session-provider";
 
 export default function SignInScreen() {
-  const { signIn, offlineRestrictionReason } = useSession();
+  const { signIn, offlineRestrictionReason, offlineAuthorizationState } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const readinessState = deriveCashierReadinessState({
+    connectionMode: "DEVICE_ISOLATED",
+    authorizationState: offlineAuthorizationState,
+  });
 
   const submit = async () => {
     if (pending || !email.trim() || !password) return;
@@ -24,6 +32,9 @@ export default function SignInScreen() {
     <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 14 }}>
       <Text style={{ fontSize: 30, fontWeight: "800" }}>TINDIO POS</Text>
       <Text>Sign in with your TINDIO employee account.</Text>
+      <Text accessibilityRole={readinessState === "READY_OFFLINE" ? undefined : "alert"}>
+        Terminal readiness: {cashierReadinessLabel(readinessState)}
+      </Text>
       {offlineRestrictionReason ? (
         <Text accessibilityRole="alert">{offlineRestrictionReason}</Text>
       ) : null}

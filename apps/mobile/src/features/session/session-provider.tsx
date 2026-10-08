@@ -14,10 +14,16 @@ import { supabase } from "../../lib/supabase";
 import {
   clearOfflineAuthorizationGrant,
   offlineAuthorizationFailureMessage,
+  readOfflineAuthorizationGrant,
 } from "../offline/offline-authorization";
 import {
   evaluateOfflineReadiness,
+  evaluateOfflineScopeReadiness,
 } from "../offline/offline-readiness";
+import {
+  evaluateOfflineAuthorizationLifecycle,
+  type OfflineAuthorizationLifecycleState,
+} from "../offline/cashier-readiness-policy";
 import {
   canReleaseTransactionCustody,
 } from "../offline/transaction-custody";
@@ -37,6 +43,7 @@ type Value = {
   accessMode: AccessMode;
   offlineExpiresAt: string | null;
   offlineRestrictionReason: string | null;
+  offlineAuthorizationState: OfflineAuthorizationLifecycleState;
   signIn(
     email: string,
     password: string,
@@ -75,6 +82,8 @@ export function SessionProvider({
     useState<string | null>(null);
   const [offlineRestrictionReason, setOfflineRestrictionReason] =
     useState<string | null>(null);
+  const [offlineAuthorizationState, setOfflineAuthorizationState] =
+    useState<OfflineAuthorizationLifecycleState>("PREPARATION_REQUIRED");
 
   const applyOfflineReadiness =
     useCallback(async () => {
@@ -87,14 +96,33 @@ export function SessionProvider({
           readiness.grant.expiresAt,
         );
         setOfflineRestrictionReason(null);
+        setOfflineAuthorizationState(evaluateOfflineAuthorizationLifecycle({
+          prepared: true,
+          expiresAt: readiness.grant.expiresAt,
+          restrictionReason: null,
+          now: Date.now(),
+        }));
+        return;
+      }
+
+      const grant = await readOfflineAuthorizationGrant();
+      const restricted = grant
+        ? await evaluateOfflineScopeReadiness(grant)
+        : null;
+      const restrictionMessage = offlineAuthorizationFailureMessage(readiness.reason);
+
+      if (grant && restricted?.ok) {
+        setAccessMode("offline");
+        setOfflineExpiresAt(grant.expiresAt);
+        setOfflineRestrictionReason(restrictionMessage);
+        setOfflineAuthorizationState("EXPIRED_RECONNECT_REQUIRED");
         return;
       }
 
       setAccessMode("signed-out");
       setOfflineExpiresAt(null);
-      setOfflineRestrictionReason(
-        offlineAuthorizationFailureMessage(readiness.reason),
-      );
+      setOfflineRestrictionReason(restrictionMessage);
+      setOfflineAuthorizationState("PREPARATION_REQUIRED");
     }, []);
 
   const refreshOfflineAccess =
@@ -120,6 +148,7 @@ export function SessionProvider({
         setAccessMode("online");
         setOfflineExpiresAt(null);
         setOfflineRestrictionReason(null);
+        setOfflineAuthorizationState("PREPARATION_REQUIRED");
       } else {
         await applyOfflineReadiness();
       }
@@ -137,6 +166,7 @@ export function SessionProvider({
         setAccessMode("online");
         setOfflineExpiresAt(null);
         setOfflineRestrictionReason(null);
+        setOfflineAuthorizationState("PREPARATION_REQUIRED");
       } else {
         await applyOfflineReadiness();
       }
@@ -158,6 +188,7 @@ export function SessionProvider({
             setAccessMode("online");
             setOfflineExpiresAt(null);
             setOfflineRestrictionReason(null);
+            setOfflineAuthorizationState("PREPARATION_REQUIRED");
           } else {
             void applyOfflineReadiness();
           }
@@ -217,6 +248,7 @@ export function SessionProvider({
         setAccessMode("online");
         setOfflineExpiresAt(null);
         setOfflineRestrictionReason(null);
+        setOfflineAuthorizationState("PREPARATION_REQUIRED");
         return { ok: true };
       } catch {
         await supabase.auth.signOut();
@@ -250,6 +282,7 @@ export function SessionProvider({
       setAccessMode("signed-out");
       setOfflineExpiresAt(null);
       setOfflineRestrictionReason(null);
+      setOfflineAuthorizationState("PREPARATION_REQUIRED");
 
       return { ok: true };
     }, []);
@@ -277,6 +310,7 @@ export function SessionProvider({
         setAccessMode("online");
         setOfflineExpiresAt(null);
         setOfflineRestrictionReason(null);
+        setOfflineAuthorizationState("PREPARATION_REQUIRED");
         return { ok: true };
       } catch {
         await supabase.auth.signOut();
@@ -297,6 +331,7 @@ export function SessionProvider({
       accessMode,
       offlineExpiresAt,
       offlineRestrictionReason,
+      offlineAuthorizationState,
       signIn,
       reauthenticate,
       signOut,
@@ -308,6 +343,7 @@ export function SessionProvider({
       accessMode,
       offlineExpiresAt,
       offlineRestrictionReason,
+      offlineAuthorizationState,
       signIn,
       reauthenticate,
       signOut,

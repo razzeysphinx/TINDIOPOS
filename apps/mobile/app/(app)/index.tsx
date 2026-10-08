@@ -13,6 +13,7 @@ import { DeviceSetup } from "../../src/features/device/device-setup";
 import {
   canReleaseTransactionCustody,
 } from "../../src/features/offline/transaction-custody";
+import { cashierReadinessLabel } from "../../src/features/offline/cashier-readiness-policy";
 import { useSession } from "../../src/features/session/session-provider";
 
 export default function MobileHomeScreen() {
@@ -26,6 +27,7 @@ export default function MobileHomeScreen() {
     mode,
     connectionMode,
     offlineExpiresAt,
+    cashierReadinessState,
   } = useBusinessContext();
 
   const [message, setMessage] =
@@ -42,6 +44,9 @@ export default function MobileHomeScreen() {
   if (error || !data) {
     return (
       <View>
+        <Text accessibilityRole="alert">
+          Terminal readiness: {cashierReadinessLabel(cashierReadinessState)}
+        </Text>
         <Text>
           {error
             ?? "Business context is unavailable."}
@@ -112,6 +117,21 @@ export default function MobileHomeScreen() {
         gap: 16,
       }}
     >
+      <Text
+        accessibilityRole={cashierReadinessState === "READY_OFFLINE" ? undefined : "alert"}
+      >
+        Terminal readiness: {cashierReadinessLabel(cashierReadinessState)}
+      </Text>
+      {cashierReadinessState === "EXPIRING_SOON" ? (
+        <Text accessibilityRole="alert">
+          Offline authorization expires soon. Reconnect before {offlineExpiresAt ?? "the displayed deadline"} to keep accepting offline cash sales.
+        </Text>
+      ) : null}
+      {cashierReadinessState === "EXPIRED_RECONNECT_REQUIRED" ? (
+        <Text accessibilityRole="alert">
+          Offline sales are paused. Reconnect and sign in; accepted receipts and pending transactions remain available for recovery.
+        </Text>
+      ) : null}
       <Text>
         Connection mode: {connectionMode}
       </Text>

@@ -1,193 +1,419 @@
-import type { PosDeviceCredential } from "../../../../../src/contracts/pos";
-import type { CheckoutSaleActionResult } from "../../../../../src/features/checkout/checkout-types";
+import type {
+  PosDeviceCredential,
+  PosSyncPushAck,
+} from "../../../../../src/contracts/pos";
 import {
-  listPendingOutboxEvents,
+  getOutboxSummary,
+  listUnresolvedOutboxEvents,
   recoverInterruptedOutboxEvents,
   updateOutboxEvent,
 } from "../../db/outbox";
-import { getDeviceSyncState, recordServerCheckpoint } from "../../db/device-sync-state";
 import {
-  recordRecoveryRun,
-} from "../performance/performance-metrics";
-import { TindioApiError, requestPosV2Raw } from "../../lib/tindio-api";
+  getDeviceSyncState,
+  recordServerCheckpoint,
+} from "../../db/device-sync-state";
+import {
+  pushPosV2SyncBatch,
+  TindioApiError,
+} from "../../lib/tindio-api";
 import { loadMobileDeviceIdentity } from "../device/device-store";
-import { nextOutboxRetryAt } from "./retry-policy";
-import type { DurableOutboxEvent, OutboxSummary } from "./outbox-types";
-import { getOutboxSummary } from "../../db/outbox";
+import { recordRecoveryRun } from "../performance/performance-metrics";
 import { refreshDeviceCheckpoint } from "./checkpoint-sync";
-import { pushPosV2SyncBatch } from "../../lib/tindio-api";
+import { nextOutboxRetryAt } from "./retry-policy";
+import { runOutboxSingleFlight } from "./single-flight";
+import {
+  checkoutResultSync,
+  selectOrderedOutboxBatch,
+  validateSyncPushResponse,
+} from "./sync-policy";
+import type {
+  DurableOutboxEvent,
+  OutboxSummary,
+} from "./outbox-types";
 
-export type OutboxSyncReport = OutboxSummary & { completed: number; recovered: number };
+export type OutboxSyncReport = OutboxSummary & {
+  completed: number;
+  recovered: number;
+};
 
-const activeSyncs = new Map<string, Promise<OutboxSyncReport>>();
+type CoordinatorReport = OutboxSyncReport & {
+  batches: number;
+  stopped: boolean;
+};
 
-export async function syncPosV2OfflineCheckout(
-  organizationId: string,
-  event: DurableOutboxEvent,
-  credential: PosDeviceCredential,
-) {
-  return requestPosV2Raw("/api/pos/v2/offline-checkout", {
-    organizationId,
-    init: {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ checkout: event.payload.checkout, device: credential, offline: { ...event.payload.offline, deviceSequence: event.deviceSequence } }),
-    },
-  });
+const OUTBOX_BATCH_SIZE = 20;
+const OUTBOX_MAX_BATCHES = 50;
+const OUTBOX_TRANSPORT_TIMEOUT_MS = 15_000;
+
+class OutboxTransportTimeoutError extends Error {
+  constructor() {
+    super("OUTBOX_TRANSPORT_TIMEOUT");
+    this.name = "OutboxTransportTimeoutError";
+  }
 }
 
 function retryMessage() {
   return "Waiting for a secure TINDIO connection before this saved sale can sync.";
 }
 
-function isCheckoutFailure(result: CheckoutSaleActionResult | null): result is Extract<CheckoutSaleActionResult, { ok: false }> {
-  return result !== null && !result.ok;
+function unverifiedAckMessage() {
+  return "TINDIO returned an incomplete or mismatched acknowledgement. This saved sale remains queued with its original identity.";
 }
 
-function checkpointFromResult(result: CheckoutSaleActionResult | null) {
-  const sync = result && "sync" in result ? result.sync : undefined;
-  return sync && Number.isSafeInteger(sync.serverCheckpoint) ? sync : null;
-}
-
-async function markRetryable(event: DurableOutboxEvent, attempts: number, message: string) {
+async function markRetryable(
+  event: DurableOutboxEvent,
+  attempts: number,
+  message: string,
+  retryAfterMs = 0,
+) {
   await updateOutboxEvent(event.organizationId, event.eventId, {
-    state: "LOCAL_PENDING", attempts, lastError: message, conflictType: null,
-    nextRetryAt: nextOutboxRetryAt(attempts),
+    state: "LOCAL_PENDING",
+    attempts,
+    lastError: message,
+    conflictType: null,
+    nextRetryAt: nextOutboxRetryAt(attempts, Date.now(), retryAfterMs),
   });
 }
 
-async function syncOneEvent(organizationId: string, event: DurableOutboxEvent) {
-  const attempts = event.attempts + 1;
-  await updateOutboxEvent(event.organizationId, event.eventId, {
-    state: "SYNCING", attempts, lastAttemptAt: new Date().toISOString(),
-    nextRetryAt: null, lastError: null, conflictType: null,
-  });
-  try {
-    // The credential is deliberately loaded only here; it is never part of the SQLite event.
-    const identity = await loadMobileDeviceIdentity(organizationId);
-    if (!identity || !identity.binding || identity.credential.deviceId !== event.deviceId ||
-        identity.binding.storeId !== event.storeId || identity.binding.registerId !== event.registerId) {
-      await updateOutboxEvent(event.organizationId, event.eventId, {
-        state: "CONFLICT", lastError: "The device credential or terminal binding that accepted this sale is unavailable.",
-        conflictType: "DEVICE_BINDING_MISMATCH", nextRetryAt: null,
-      });
-      return "stopped" as const;
-    }
-    const response = await syncPosV2OfflineCheckout(organizationId, event, identity.credential);
-    const result = await response.json().catch(() => null) as CheckoutSaleActionResult | null;
-    const checkpoint = checkpointFromResult(result);
-    if (checkpoint) await recordServerCheckpoint({ organizationId, deviceId: event.deviceId, serverCheckpoint: checkpoint.serverCheckpoint, status: checkpoint.status });
-    if (response.ok && result?.ok) {
-      await updateOutboxEvent(event.organizationId, event.eventId, {
-        state: "SYNCED", lastError: null, conflictType: null, nextRetryAt: null,
-        syncedAt: new Date().toISOString(), serverSaleId: result.data.saleId,
-        officialReceiptNumber: result.data.receiptNumber,
-      });
-      return "completed" as const;
-    }
-    if (response.status >= 500 || (isCheckoutFailure(result) && result.retryable)) {
-      await markRetryable(event, attempts, isCheckoutFailure(result) ? result.message : retryMessage());
-      return "stopped" as const;
-    }
-    const failureCode = isCheckoutFailure(result) ? result.failureCode : undefined;
-    const sequenceFailure = ["SEQUENCE_GAP", "SEQUENCE_CONFLICT", "SEQUENCE_OUT_OF_ORDER"].includes(failureCode ?? "");
-    await updateOutboxEvent(event.organizationId, event.eventId, {
-      state: response.status === 401 || response.status === 403 ? "FAILED" : "CONFLICT",
-      lastError: isCheckoutFailure(result) ? result.message : "This saved sale requires review before it can be posted.",
-      conflictType: sequenceFailure ? failureCode! : response.status === 401 || response.status === 403 ? "AUTHORIZATION_CHANGED" : "SERVER_REJECTED",
-      nextRetryAt: null,
-    });
-    return "stopped" as const;
-  } catch (error) {
-    if (error instanceof TindioApiError && (error.status === 401 || error.status === 403)) {
-      await updateOutboxEvent(event.organizationId, event.eventId, {
-        state: "FAILED", lastError: "Sign in again before TINDIO can sync this saved sale.",
-        conflictType: "AUTHORIZATION_CHANGED", nextRetryAt: null,
-      });
-      return "stopped" as const;
-    }
-    await markRetryable(event, attempts, retryMessage());
-    return "stopped" as const;
+async function markBatchRetryable(
+  events: DurableOutboxEvent[],
+  message: string,
+  retryAfterMs = 0,
+) {
+  for (const event of events) {
+    await markRetryable(event, event.attempts + 1, message, retryAfterMs);
   }
 }
 
-async function synchronize(organizationId: string): Promise<OutboxSyncReport> {
+async function releaseUnacknowledged(events: DurableOutboxEvent[]) {
+  for (const event of events) {
+    await updateOutboxEvent(event.organizationId, event.eventId, {
+      state: "LOCAL_PENDING",
+      nextRetryAt: null,
+      lastError: "Waiting for the earlier device sequence to finish before delivery.",
+      conflictType: null,
+    });
+  }
+}
+
+async function claimBatch(events: DurableOutboxEvent[]) {
+  const attemptedAt = new Date().toISOString();
+  for (const event of events) {
+    await updateOutboxEvent(event.organizationId, event.eventId, {
+      state: "SYNCING",
+      attempts: event.attempts + 1,
+      lastAttemptAt: attemptedAt,
+      nextRetryAt: null,
+      lastError: null,
+      conflictType: null,
+    });
+  }
+}
+
+async function pushWithTimeout(
+  organizationId: string,
+  credential: PosDeviceCredential,
+  events: DurableOutboxEvent[],
+) {
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      reject(new OutboxTransportTimeoutError());
+    }, OUTBOX_TRANSPORT_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([
+      pushPosV2SyncBatch(
+        organizationId,
+        credential,
+        events.map((event) => ({
+          eventId: event.eventId,
+          operationType: "SALE_COMPLETED" as const,
+          checkout: event.payload.checkout,
+          offline: {
+            ...event.payload.offline,
+            deviceSequence: event.deviceSequence,
+          },
+        })),
+        controller.signal,
+      ),
+      timeoutPromise,
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+function sequenceFailureCode(ack: PosSyncPushAck) {
+  if (ack.result.ok) return null;
+  return ["SEQUENCE_GAP", "SEQUENCE_CONFLICT", "SEQUENCE_OUT_OF_ORDER"]
+    .includes(ack.result.failureCode ?? "")
+    ? ack.result.failureCode ?? null
+    : null;
+}
+
+async function applyAck(event: DurableOutboxEvent, ack: PosSyncPushAck) {
+  const checkpoint = checkoutResultSync(ack.result);
+  if (checkpoint) {
+    await recordServerCheckpoint({
+      organizationId: event.organizationId,
+      deviceId: event.deviceId,
+      serverCheckpoint: checkpoint.serverCheckpoint,
+      status: checkpoint.status,
+    });
+  }
+
+  if (ack.status === "SYNCED" && ack.result.ok) {
+    await updateOutboxEvent(event.organizationId, event.eventId, {
+      state: "SYNCED",
+      lastError: null,
+      conflictType: null,
+      nextRetryAt: null,
+      syncedAt: new Date().toISOString(),
+      serverSaleId: ack.result.data.saleId,
+      officialReceiptNumber: ack.result.data.receiptNumber,
+    });
+    return "completed" as const;
+  }
+
+  if (ack.status === "RETRY" && !ack.result.ok) {
+    await markRetryable(
+      event,
+      event.attempts + 1,
+      ack.result.message,
+    );
+    return "stopped" as const;
+  }
+
+  const failureCode = sequenceFailureCode(ack);
+  await updateOutboxEvent(event.organizationId, event.eventId, {
+    state: ack.status === "FAILED" ? "FAILED" : "CONFLICT",
+    lastError: ack.result.ok
+      ? "Server did not acknowledge this saved sale."
+      : ack.result.message,
+    conflictType: failureCode
+      ?? (ack.status === "FAILED" ? "AUTHORIZATION_CHANGED" : "SERVER_REJECTED"),
+    nextRetryAt: null,
+  });
+  return "stopped" as const;
+}
+
+async function ensureFirstSequenceCanRun(
+  organizationId: string,
+  event: DurableOutboxEvent,
+) {
+  let state = await getDeviceSyncState(organizationId, event.deviceId);
+  if (!state || event.deviceSequence <= state.serverCheckpoint + 1) return true;
+
+  let refreshed: Awaited<ReturnType<typeof refreshDeviceCheckpoint>>;
+  try {
+    refreshed = await refreshDeviceCheckpoint(organizationId);
+  } catch {
+    refreshed = { ok: false, reason: "CHECKPOINT_REFRESH_UNAVAILABLE" };
+  }
+  if (!refreshed.ok) {
+    await markRetryable(
+      event,
+      event.attempts + 1,
+      "Server checkpoint must be checked before this later sequence can sync.",
+    );
+    return false;
+  }
+
+  state = await getDeviceSyncState(organizationId, event.deviceId);
+  if (state && event.deviceSequence <= state.serverCheckpoint + 1) return true;
+
+  await updateOutboxEvent(event.organizationId, event.eventId, {
+    state: "CONFLICT",
+    conflictType: "LOCAL_SEQUENCE_GAP",
+    lastError: "A required earlier device sequence is missing. This sale was not sent.",
+    nextRetryAt: null,
+  });
+  return false;
+}
+
+async function synchronize(
+  organizationId: string,
+  identity: NonNullable<Awaited<ReturnType<typeof loadMobileDeviceIdentity>>>,
+  maxBatches: number,
+): Promise<CoordinatorReport> {
+  const deviceId = identity.credential.deviceId;
+  const recoveryStartedAt = Date.now();
+  const recovery = await recoverInterruptedOutboxEvents(organizationId, deviceId);
+  recordRecoveryRun(Date.now() - recoveryStartedAt);
+
+  let completed = 0;
+  let batches = 0;
+  let stopped = false;
+
+  while (batches < maxBatches) {
+    const unresolved = await listUnresolvedOutboxEvents(organizationId, deviceId);
+    if (unresolved.length === 0) break;
+
+    let events = selectOrderedOutboxBatch(
+      unresolved,
+      new Date().toISOString(),
+      OUTBOX_BATCH_SIZE,
+    );
+    if (events.length === 0) {
+      stopped = true;
+      break;
+    }
+
+    const contextMismatch = events.findIndex((event) =>
+      !identity.binding
+      || identity.binding.storeId !== event.storeId
+      || identity.binding.registerId !== event.registerId
+    );
+    if (contextMismatch === 0) {
+      const event = events[0];
+      await updateOutboxEvent(event.organizationId, event.eventId, {
+        state: "CONFLICT",
+        lastError: "The device credential or terminal binding that accepted this sale is unavailable.",
+        conflictType: "DEVICE_BINDING_MISMATCH",
+        nextRetryAt: null,
+      });
+      stopped = true;
+      break;
+    }
+    if (contextMismatch > 0) events = events.slice(0, contextMismatch);
+
+    if (!await ensureFirstSequenceCanRun(organizationId, events[0])) {
+      stopped = true;
+      break;
+    }
+
+    await claimBatch(events);
+    batches += 1;
+
+    let response: Awaited<ReturnType<typeof pushPosV2SyncBatch>>;
+    try {
+      response = await pushWithTimeout(
+        organizationId,
+        identity.credential,
+        events,
+      );
+    } catch (error) {
+      if (error instanceof TindioApiError && (error.status === 401 || error.status === 403)) {
+        const [first, ...tail] = events;
+        await updateOutboxEvent(first.organizationId, first.eventId, {
+          state: "FAILED",
+          lastError: "Sign in again before TINDIO can sync this saved sale.",
+          conflictType: "AUTHORIZATION_CHANGED",
+          nextRetryAt: null,
+        });
+        await releaseUnacknowledged(tail);
+      } else if (
+        error instanceof TindioApiError
+        && error.status >= 400
+        && error.status < 500
+        && error.status !== 429
+      ) {
+        const [first, ...tail] = events;
+        await updateOutboxEvent(first.organizationId, first.eventId, {
+          state: "CONFLICT",
+          lastError: "TINDIO rejected this saved event envelope. It requires review before later sequences can sync.",
+          conflictType: "SERVER_REJECTED",
+          nextRetryAt: null,
+        });
+        await releaseUnacknowledged(tail);
+      } else {
+        const retryAfterMs = error instanceof TindioApiError && error.status === 429
+          ? error.retryAfterMs ?? 0
+          : 0;
+        await markBatchRetryable(events, retryMessage(), retryAfterMs);
+      }
+      stopped = true;
+      break;
+    }
+
+    const validated = validateSyncPushResponse(
+      response,
+      organizationId,
+      deviceId,
+      events,
+    );
+    if (!validated) {
+      await markBatchRetryable(events, unverifiedAckMessage());
+      stopped = true;
+      break;
+    }
+
+    for (let index = 0; index < validated.acks.length; index += 1) {
+      const result = await applyAck(events[index], validated.acks[index]);
+      if (result === "completed") completed += 1;
+      else stopped = true;
+    }
+    await releaseUnacknowledged(events.slice(validated.acks.length));
+
+    if (stopped || validated.stoppedEarly) {
+      stopped = true;
+      break;
+    }
+  }
+
+  const summary = await getOutboxSummary(organizationId);
+  return {
+    ...summary,
+    completed,
+    recovered: recovery.changes,
+    batches,
+    stopped,
+  };
+}
+
+async function coordinateOutboxSync(
+  organizationId: string,
+  maxBatches = OUTBOX_MAX_BATCHES,
+): Promise<CoordinatorReport> {
   let identity: Awaited<ReturnType<typeof loadMobileDeviceIdentity>>;
   try {
     identity = await loadMobileDeviceIdentity(organizationId);
   } catch {
-    return { ...(await getOutboxSummary(organizationId)), completed: 0, recovered: 0 };
+    return {
+      ...(await getOutboxSummary(organizationId)),
+      completed: 0,
+      recovered: 0,
+      batches: 0,
+      stopped: true,
+    };
   }
-  if (!identity) return { ...(await getOutboxSummary(organizationId)), completed: 0, recovered: 0 };
-  const deviceId = identity.credential.deviceId;
-  const recoveryStartedAt =
-    Date.now();
+  if (!identity?.binding) {
+    return {
+      ...(await getOutboxSummary(organizationId)),
+      completed: 0,
+      recovered: 0,
+      batches: 0,
+      stopped: true,
+    };
+  }
 
-  const recovery =
-    await recoverInterruptedOutboxEvents(
+  const deviceScope = `${organizationId}:${identity.credential.deviceId}`;
+  return runOutboxSingleFlight(deviceScope, () =>
+    synchronize(
       organizationId,
-      Date.now(),
-      deviceId,
-    );
-
-  recordRecoveryRun(
-    Date.now()
-    - recoveryStartedAt,
+      identity,
+      Math.max(1, Math.min(OUTBOX_MAX_BATCHES, maxBatches)),
+    )
   );
-  const events = await listPendingOutboxEvents(organizationId, deviceId);
-  let completed = 0;
-  for (const event of events) {
-    if (event.nextRetryAt !== null && event.nextRetryAt > new Date().toISOString()) break;
-    let state = await getDeviceSyncState(organizationId, event.deviceId);
-    if (state && event.deviceSequence > state.serverCheckpoint + 1) {
-      let refreshed: Awaited<ReturnType<typeof refreshDeviceCheckpoint>>;
-      try { refreshed = await refreshDeviceCheckpoint(organizationId); }
-      catch { refreshed = { ok: false, reason: "CHECKPOINT_REFRESH_UNAVAILABLE" }; }
-      if (!refreshed.ok) {
-        await updateOutboxEvent(event.organizationId, event.eventId, { state: "LOCAL_PENDING", lastError: "Server checkpoint must be checked before this later sequence can sync.", nextRetryAt: nextOutboxRetryAt(event.attempts + 1) });
-        break;
-      }
-      state = await getDeviceSyncState(organizationId, event.deviceId);
-      if (!state || event.deviceSequence > state.serverCheckpoint + 1) {
-        await updateOutboxEvent(event.organizationId, event.eventId, { state: "CONFLICT", conflictType: "LOCAL_SEQUENCE_GAP", lastError: "A required earlier device sequence is missing. This sale was not sent.", nextRetryAt: null });
-        break;
-      }
-    }
-    const result = await syncOneEvent(organizationId, event);
-    if (result !== "completed") break;
-    completed += 1;
-  }
-  return { ...(await getOutboxSummary(organizationId)), completed, recovered: recovery.changes };
 }
 
-/** A process-local lock makes each organization deliver only one FIFO event at a time. */
+/** Every automatic, manual, single, and batch trigger joins this device-scoped coordinator. */
 export function syncOutboxEvents(organizationId: string): Promise<OutboxSyncReport> {
-  const active = activeSyncs.get(organizationId);
-  if (active) return active;
-  const sync = synchronize(organizationId);
-  activeSyncs.set(organizationId, sync);
-  void sync.finally(() => activeSyncs.delete(organizationId));
-  return sync;
+  return coordinateOutboxSync(organizationId);
 }
 
-/** Phase 12 ordered batch delivery; ACKs are the only authority for local terminal states. */
-export async function syncOutboxBatches(organizationId: string, maxBatches = 10) {
-  const identity = await loadMobileDeviceIdentity(organizationId);
-  if (!identity?.binding) return { completed: 0, batches: 0, stopped: true };
-  let completed = 0; let batches = 0; let stopped = false;
-  while (batches < maxBatches) {
-    const events = (await listPendingOutboxEvents(organizationId, identity.credential.deviceId)).filter((event) => event.nextRetryAt === null || event.nextRetryAt <= new Date().toISOString()).slice(0, 20);
-    if (!events.length) break;
-    const response = await pushPosV2SyncBatch(organizationId, identity.credential, events.map((event) => ({ eventId: event.eventId, operationType: "SALE_COMPLETED", checkout: event.payload.checkout, offline: { ...event.payload.offline, deviceSequence: event.deviceSequence } })));
-    batches += 1;
-    for (const ack of response.acks) {
-      const event = events.find((candidate) => candidate.eventId === ack.eventId); if (!event) { stopped = true; break; }
-      if (ack.status === "SYNCED" && ack.result.ok) { await updateOutboxEvent(event.organizationId, event.eventId, { state: "SYNCED", syncedAt: new Date().toISOString(), nextRetryAt: null, lastError: null, conflictType: null, serverSaleId: ack.result.data.saleId, officialReceiptNumber: ack.result.data.receiptNumber }); completed += 1; continue; }
-      if (ack.status === "RETRY") await markRetryable(event, event.attempts + 1, !ack.result.ok ? ack.result.message : retryMessage());
-      else await updateOutboxEvent(event.organizationId, event.eventId, { state: ack.status === "FAILED" ? "FAILED" : "CONFLICT", nextRetryAt: null, lastError: !ack.result.ok ? ack.result.message : "Server did not acknowledge this saved sale.", conflictType: !ack.result.ok ? ack.result.failureCode ?? "SERVER_REJECTED" : "SERVER_REJECTED" });
-      stopped = true; break;
-    }
-    if (stopped || response.stoppedEarly || response.acks.length < events.length) { stopped = true; break; }
-  }
-  return { completed, batches, stopped };
+export async function syncOutboxBatches(
+  organizationId: string,
+  maxBatches = OUTBOX_MAX_BATCHES,
+) {
+  const report = await coordinateOutboxSync(organizationId, maxBatches);
+  return {
+    completed: report.completed,
+    batches: report.batches,
+    stopped: report.stopped,
+  };
 }

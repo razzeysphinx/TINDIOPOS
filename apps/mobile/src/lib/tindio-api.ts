@@ -67,10 +67,23 @@ export class TindioApiError extends Error {
     readonly status: number,
     readonly reason: string,
     readonly requestId: string | null,
+    readonly retryAfterMs: number | null = null,
   ) {
     super(message);
     this.name = "TindioApiError";
   }
+}
+
+function retryAfterMs(response: Response) {
+  const value = response.headers.get("retry-after");
+  if (!value) return null;
+  const seconds = Number(value);
+  const delay = Number.isFinite(seconds)
+    ? seconds * 1_000
+    : Date.parse(value) - Date.now();
+  return Number.isFinite(delay) && delay > 0
+    ? Math.min(300_000, Math.round(delay))
+    : null;
 }
 
 export function isExplicitAuthorizationDenial(error: unknown) {
@@ -152,6 +165,7 @@ async function request(
       response.status,
       `HTTP_${response.status}`,
       response.headers.get("x-tindio-request-id"),
+      retryAfterMs(response),
     );
   }
 
@@ -220,10 +234,11 @@ export async function pushPosV2SyncBatch(
   organizationId: string,
   device: PosDeviceCredential,
   events: PosSyncPushEvent[],
+  signal?: AbortSignal,
 ) {
   return (await request("/api/pos/v2/sync/push", {
     organizationId,
-    init: jsonPost({ organizationId, device, events }),
+    init: { ...jsonPost({ organizationId, device, events }), signal },
   })).json() as Promise<PosSyncPushResponse>;
 }
 

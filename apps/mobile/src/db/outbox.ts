@@ -169,21 +169,31 @@ export async function listPendingOutboxEvents(organizationId: string, deviceId?:
   return rows.map(toEvent).filter((event): event is DurableOutboxEvent => event !== null);
 }
 
+export async function listUnresolvedOutboxEvents(organizationId: string, deviceId: string) {
+  const rows = await (await getTindioDatabase()).getAllAsync<OutboxRow>(
+    "SELECT * FROM outbox_events WHERE organization_id = ? AND device_id = ? AND state <> 'SYNCED' ORDER BY device_sequence, created_at, event_id",
+    organizationId,
+    deviceId,
+  );
+  return rows.map((row) => {
+    const event = toEvent(row);
+    if (!event) throw new Error("OUTBOX_ROW_CORRUPT");
+    return event;
+  });
+}
+
 export async function listReadyOutboxEvents(organizationId: string, now = new Date().toISOString(), deviceId?: string) {
   return (await listPendingOutboxEvents(organizationId, deviceId)).filter(
     (event) => event.nextRetryAt === null || event.nextRetryAt <= now,
   );
 }
 
-export async function recoverInterruptedOutboxEvents(organizationId: string, now = Date.now(), deviceId?: string) {
-  const scoped = typeof deviceId === "string" && deviceId.length > 0;
+export async function recoverInterruptedOutboxEvents(organizationId: string, deviceId: string) {
   return (await getTindioDatabase()).runAsync(
-    scoped
-      ? "UPDATE outbox_events SET state = 'LOCAL_PENDING', last_error = 'Recovered after interrupted sync attempt.', updated_at = ? WHERE organization_id = ? AND device_id = ? AND state = 'SYNCING' AND last_attempt_at < ?"
-      : "UPDATE outbox_events SET state = 'LOCAL_PENDING', last_error = 'Recovered after interrupted sync attempt.', updated_at = ? WHERE organization_id = ? AND state = 'SYNCING' AND last_attempt_at < ?",
-    ...(scoped
-      ? [new Date(now).toISOString(), organizationId, deviceId, new Date(now - 60_000).toISOString()]
-      : [new Date(now).toISOString(), organizationId, new Date(now - 60_000).toISOString()]),
+    "UPDATE outbox_events SET state = 'LOCAL_PENDING', last_error = 'Recovered after interrupted sync attempt.', updated_at = ? WHERE organization_id = ? AND device_id = ? AND state = 'SYNCING'",
+    new Date().toISOString(),
+    organizationId,
+    deviceId,
   );
 }
 

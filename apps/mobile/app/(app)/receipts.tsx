@@ -6,6 +6,7 @@ import {
   saveReceiptSummaries,
   searchCachedReceiptSummaries,
 } from "../../src/db/receipt-cache";
+import { searchLocalReceipts, type LocalReceipt } from "../../src/db/local-receipts";
 import { formatMoney } from "../../src/features/cashier/cashier-format";
 import { useBusinessContext } from "../../src/features/business/use-business-context";
 import { fetchPosV2Receipts } from "../../src/lib/tindio-api";
@@ -15,6 +16,7 @@ export default function Receipts() {
 
   const [query, setQuery] = useState("");
   const [rows, setRows] = useState<PosReceiptSummary[]>([]);
+  const [localRows, setLocalRows] = useState<LocalReceipt[]>([]);
   const [message, setMessage] = useState("");
 
   if (!data) return <Text>Receipt workspace unavailable.</Text>;
@@ -27,13 +29,15 @@ export default function Receipts() {
 
   const load = async () => {
     try {
+      const localPromise = searchLocalReceipts(core.organization.id, core.storeIds, query);
       if (mode === "online") {
-        const result = await fetchPosV2Receipts(
-          core.organization.id,
-          { query },
-        );
+        const [result, local] = await Promise.all([
+          fetchPosV2Receipts(core.organization.id, { query }),
+          localPromise,
+        ]);
 
         setRows(result.receipts);
+        setLocalRows(local);
         await saveReceiptSummaries(core.organization.id, result);
         setMessage("SERVER RECEIPTS");
         return;
@@ -46,6 +50,7 @@ export default function Receipts() {
           query,
         ),
       );
+      setLocalRows(await localPromise);
       setMessage("CACHED RECEIPT SUMMARIES — READ ONLY");
     } catch {
       setMessage("Receipt history is unavailable.");
@@ -71,6 +76,26 @@ export default function Receipts() {
         <Text>Search receipts</Text>
       </Pressable>
 
+      <Text>Saved device sale records</Text>
+      {localRows.map((row) => (
+        <Pressable
+          key={row.eventId}
+          accessibilityRole="button"
+          onPress={() => router.push(`/local-receipt/${row.eventId}` as never)}
+        >
+          <Text>
+            {row.officialReceiptNumber === null
+              ? `Provisional ${row.localReference}`
+              : `Receipt #${row.officialReceiptNumber}`}
+            {" — "}
+            {formatMoney(row.snapshot.totalMinor, row.snapshot.currencyCode)}
+            {" — "}
+            {row.snapshot.version === 2 ? row.snapshot.storeName : "Saved device sale"}
+          </Text>
+        </Pressable>
+      ))}
+
+      <Text>Server receipt history</Text>
       {rows.map((row) => (
         <Pressable
           key={row.receipt_id}

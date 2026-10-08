@@ -3,7 +3,8 @@ import type { PosCartLine, PosDeviceBinding } from "../../../../../src/contracts
 import { enqueueSaleCompletedEvent } from "../../db/outbox";
 import { getBusinessContextSnapshot } from "../../db/business-context-cache";
 import { getActiveShiftSnapshot } from "../../db/shift-cache";
-import { getLocalPaymentMethods } from "../local-first/local-reference";
+import { getLocalDiscounts, getLocalPaymentMethods, getLocalTaxRates } from "../local-first/local-reference";
+import { calculateLocalCartTotals, localCartLineTotalMinor } from "../local-first/local-cart";
 import { validateOfflineAuthorizationGrant } from "../offline/offline-authorization";
 import type { LocalCartTotals } from "../local-first/local-cart";
 import type { DurableOutboxEvent, DurableSaleSnapshot, SaleCompletedOutboxPayloadBeforeSequence } from "./outbox-types";
@@ -41,10 +42,12 @@ export async function createOfflineCashSale(input: OfflineSaleAcceptanceInput): 
     return { ok: false, reason: "OFFLINE_CONTEXT_MISMATCH" };
   }
 
-  const [context, shiftSnapshot, paymentMethods] = await Promise.all([
+  const [context, shiftSnapshot, paymentMethods, discounts, taxRates] = await Promise.all([
     getBusinessContextSnapshot(input.organizationId),
     getActiveShiftSnapshot(input.organizationId, input.binding.storeId, input.binding.registerId),
     getLocalPaymentMethods(input.organizationId, input.binding.storeId),
+    getLocalDiscounts(input.organizationId),
+    getLocalTaxRates(input.organizationId),
   ]);
   if (!context || context.core.organization.id !== input.organizationId || context.core.employee.id !== grant.employeeId) {
     return { ok: false, reason: "CACHED_BUSINESS_CONTEXT_REQUIRED" };
@@ -63,6 +66,21 @@ export async function createOfflineCashSale(input: OfflineSaleAcceptanceInput): 
     method.type === "CASH" && method.offlinePolicy === "cash" && !method.requiresReference,
   );
   if (!cashMethod) return { ok: false, reason: "ELIGIBLE_CASH_PAYMENT_METHOD_REQUIRED" };
+  const discount = input.discountId === null
+    ? null
+    : discounts.find((candidate) => candidate.id === input.discountId) ?? null;
+  const tax = input.taxRateId === null
+    ? null
+    : taxRates.find((candidate) => candidate.id === input.taxRateId) ?? null;
+  if (input.discountId !== null && !discount) return { ok: false, reason: "CACHED_DISCOUNT_REQUIRED" };
+  if (input.taxRateId !== null && !tax) return { ok: false, reason: "CACHED_TAX_RATE_REQUIRED" };
+  const verifiedTotals = calculateLocalCartTotals(input.cart, discount, tax);
+  if (verifiedTotals.subtotalMinor !== input.totals.subtotalMinor
+    || verifiedTotals.discountMinor !== input.totals.discountMinor
+    || verifiedTotals.taxMinor !== input.totals.taxMinor
+    || verifiedTotals.totalMinor !== input.totals.totalMinor) {
+    return { ok: false, reason: "CACHED_TOTALS_MISMATCH" };
+  }
 
   const createdAt = new Date().toISOString();
   const eventId = Crypto.randomUUID();
@@ -93,14 +111,37 @@ export async function createOfflineCashSale(input: OfflineSaleAcceptanceInput): 
     checkout,
     offline: { localReceiptReference: localReference, createdAt, shiftId: grant.shiftId, deviceId: input.deviceId },
   };
+  const store = context.core.stores.find((candidate) => candidate.id === input.binding.storeId);
+  const register = context.core.registers.find((candidate) => candidate.id === input.binding.registerId);
+  if (!store || !register || register.storeId !== store.id) {
+    return { ok: false, reason: "CACHED_TERMINAL_CONTEXT_REQUIRED" };
+  }
   const snapshot: DurableSaleSnapshot = {
-    version: 1, capturedAt: createdAt, organizationId: input.organizationId,
+    version: 2, capturedAt: createdAt, organizationId: input.organizationId,
     storeId: input.binding.storeId, registerId: input.binding.registerId, shiftId: grant.shiftId,
     deviceId: input.deviceId, employeeId: context.core.employee.id, employeeName: context.core.employee.name,
+    organizationName: context.core.organization.name, storeName: store.name, registerName: register.name,
     currencyCode: context.core.organization.currencyCode, localReceiptReference: localReference,
     subtotalMinor: input.totals.subtotalMinor, discountMinor: input.totals.discountMinor,
     taxMinor: input.totals.taxMinor, totalMinor: input.totals.totalMinor,
     tenderedMinor: input.tenderedMinor, changeMinor, itemCount: input.cart.reduce((count, line) => count + line.quantity, 0),
+    discount: discount ? { id: discount.id, name: discount.name } : null,
+    tax: tax ? { id: tax.id, name: tax.name, rateBps: tax.rateBps, isInclusive: tax.isInclusive } : null,
+    payment: { methodId: cashMethod.id, methodName: cashMethod.name, methodType: "CASH" },
+    lines: input.cart.map((line, index) => ({
+      lineNumber: index + 1,
+      productId: line.productId,
+      variantId: line.variantId,
+      productName: line.productName,
+      variantName: line.variantName,
+      sku: line.sku,
+      barcode: line.barcode,
+      unit: line.unit,
+      quantity: line.quantity,
+      unitPriceMinor: line.priceMinor,
+      modifierTotalMinor: 0,
+      lineTotalMinor: localCartLineTotalMinor(line),
+    })),
   };
   const event = await enqueueSaleCompletedEvent({
     eventId, organizationId: input.organizationId, storeId: input.binding.storeId,

@@ -3,7 +3,7 @@ import type { CheckoutSaleValues } from "../../../../../src/features/checkout/ch
 export type OutboxOperationType = "SALE_COMPLETED";
 export type OutboxState = "LOCAL_PENDING" | "SYNCING" | "SYNCED" | "CONFLICT" | "FAILED";
 
-export type DurableSaleSnapshot = {
+export type DurableSaleSnapshotV1 = {
   version: 1;
   capturedAt: string;
   organizationId: string;
@@ -23,6 +23,34 @@ export type DurableSaleSnapshot = {
   changeMinor: number;
   itemCount: number;
 };
+
+export type DurableSaleSnapshotLine = {
+  lineNumber: number;
+  productId: string;
+  variantId: string | null;
+  productName: string;
+  variantName: string | null;
+  sku: string | null;
+  barcode: string | null;
+  unit: string;
+  quantity: number;
+  unitPriceMinor: number;
+  modifierTotalMinor: number;
+  lineTotalMinor: number;
+};
+
+export type DurableSaleSnapshotV2 = Omit<DurableSaleSnapshotV1, "version"> & {
+  version: 2;
+  organizationName: string;
+  storeName: string;
+  registerName: string;
+  discount: { id: string; name: string } | null;
+  tax: { id: string; name: string; rateBps: number; isInclusive: boolean } | null;
+  payment: { methodId: string; methodName: string; methodType: "CASH" };
+  lines: DurableSaleSnapshotLine[];
+};
+
+export type DurableSaleSnapshot = DurableSaleSnapshotV1 | DurableSaleSnapshotV2;
 
 export type SaleCompletedOutboxPayload = {
   checkout: CheckoutSaleValues;

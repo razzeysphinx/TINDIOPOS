@@ -1,5 +1,5 @@
 export const TINDIO_DATABASE_NAME = "tindio-mobile.db";
-export const TINDIO_LOCAL_SCHEMA_VERSION = 10;
+export const TINDIO_LOCAL_SCHEMA_VERSION = 11;
 
 export type LocalMigration = {
   version: number;
@@ -186,6 +186,72 @@ export const LOCAL_MIGRATIONS: LocalMigration[] = [
       );
       CREATE INDEX IF NOT EXISTS idx_outbox_recovery_event
         ON outbox_recovery_actions (organization_id, event_id, created_at);
+    `,
+  },
+  {
+    version: 11,
+    name: "mob_07_immutable_local_receipts",
+    sql: `
+      CREATE TABLE IF NOT EXISTS local_receipts (
+        event_id TEXT PRIMARY KEY NOT NULL,
+        organization_id TEXT NOT NULL,
+        store_id TEXT NOT NULL,
+        register_id TEXT NOT NULL,
+        local_reference TEXT NOT NULL,
+        snapshot_version INTEGER NOT NULL CHECK (snapshot_version IN (1,2)),
+        snapshot_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        server_sale_id TEXT,
+        official_receipt_number INTEGER,
+        linked_at TEXT,
+        FOREIGN KEY (event_id) REFERENCES outbox_events(event_id) ON DELETE RESTRICT,
+        CHECK ((server_sale_id IS NULL AND official_receipt_number IS NULL AND linked_at IS NULL) OR
+               (server_sale_id IS NOT NULL AND official_receipt_number IS NOT NULL AND linked_at IS NOT NULL))
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_local_receipt_official_sale
+        ON local_receipts (organization_id, server_sale_id) WHERE server_sale_id IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_local_receipt_official_number
+        ON local_receipts (organization_id, official_receipt_number) WHERE official_receipt_number IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_local_receipt_store_created
+        ON local_receipts (organization_id, store_id, created_at DESC);
+      INSERT OR IGNORE INTO local_receipts
+        (event_id,organization_id,store_id,register_id,local_reference,snapshot_version,snapshot_json,created_at,server_sale_id,official_receipt_number,linked_at)
+      SELECT event_id,organization_id,store_id,register_id,local_reference,
+        CASE WHEN json_valid(snapshot_json) THEN
+          CASE WHEN json_extract(snapshot_json,'$.version')=2 THEN 2 ELSE 1 END
+        ELSE 1 END,
+        snapshot_json,created_at,
+        CASE WHEN server_sale_id IS NOT NULL AND official_receipt_number IS NOT NULL THEN server_sale_id ELSE NULL END,
+        CASE WHEN server_sale_id IS NOT NULL AND official_receipt_number IS NOT NULL THEN official_receipt_number ELSE NULL END,
+        CASE WHEN server_sale_id IS NOT NULL AND official_receipt_number IS NOT NULL THEN coalesce(synced_at,updated_at) ELSE NULL END
+      FROM outbox_events;
+      CREATE TRIGGER IF NOT EXISTS trg_local_receipt_snapshot_immutable
+      BEFORE UPDATE OF snapshot_json,snapshot_version,event_id,organization_id,store_id,register_id,local_reference,created_at ON local_receipts
+      BEGIN SELECT RAISE(ABORT, 'local receipt snapshot is immutable'); END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_receipt_custody
+      BEFORE DELETE ON local_receipts
+      BEGIN SELECT RAISE(ABORT, 'local receipt custody is immutable'); END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_receipt_official_link_once
+      BEFORE UPDATE OF server_sale_id,official_receipt_number,linked_at ON local_receipts
+      WHEN OLD.server_sale_id IS NOT NULL OR OLD.official_receipt_number IS NOT NULL OR OLD.linked_at IS NOT NULL
+      BEGIN SELECT RAISE(ABORT, 'official receipt link is immutable'); END;
+      CREATE TABLE IF NOT EXISTS receipt_copy_jobs (
+        job_id TEXT PRIMARY KEY NOT NULL,
+        organization_id TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        copy_number INTEGER NOT NULL CHECK (copy_number >= 1),
+        document_kind TEXT NOT NULL CHECK (document_kind IN ('PROVISIONAL','OFFICIAL')),
+        state TEXT NOT NULL CHECK (state IN ('PREPARED','COMPLETED','FAILED')),
+        requested_by_profile_id TEXT NOT NULL,
+        requested_by_employee_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        completed_at TEXT,
+        last_error TEXT,
+        FOREIGN KEY (event_id) REFERENCES local_receipts(event_id) ON DELETE RESTRICT,
+        UNIQUE (organization_id,event_id,copy_number)
+      );
+      CREATE INDEX IF NOT EXISTS idx_receipt_copy_history
+        ON receipt_copy_jobs (organization_id,event_id,copy_number DESC);
     `,
   },
 ];

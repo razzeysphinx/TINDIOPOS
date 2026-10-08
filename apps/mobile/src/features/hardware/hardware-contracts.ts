@@ -41,10 +41,12 @@ export type HardwareActionResult<T = undefined> =
     };
 
 export type ReceiptPrintRequest = {
-  operationId: string;
-  receiptNumber: number;
-  currencyCode: string;
-  totalMinor: number;
+  copyJobId: string;
+  eventId: string;
+  localReference: string;
+  documentKind: "PROVISIONAL" | "OFFICIAL";
+  copyNumber: number;
+  committedSnapshotJson: string;
 };
 
 export type CashDrawerRequest = {

@@ -37,6 +37,9 @@ type OutboxRow = {
 
 export const OUTBOX_RECOVERY_UPDATE_SQL = `UPDATE outbox_events SET state='LOCAL_PENDING',next_retry_at=NULL,last_error=?,conflict_type=NULL,updated_at=? WHERE organization_id=? AND device_id=? AND event_id=? AND state=?`;
 export const OUTBOX_RECOVERY_AUDIT_SQL = `INSERT INTO outbox_recovery_actions (organization_id,event_id,device_id,actor_profile_id,actor_employee_id,prior_state,prior_error,prior_conflict_type,action,reason,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
+export const LOCAL_RECEIPT_INSERT_SQL = `INSERT INTO local_receipts (event_id,organization_id,store_id,register_id,local_reference,snapshot_version,snapshot_json,created_at) VALUES (?,?,?,?,?,?,?,?)`;
+export const OFFICIAL_RECEIPT_LINK_SQL = `UPDATE local_receipts SET server_sale_id=?,official_receipt_number=?,linked_at=? WHERE organization_id=? AND event_id=? AND server_sale_id IS NULL AND official_receipt_number IS NULL AND linked_at IS NULL`;
+export const OUTBOX_SYNC_ACK_SQL = `UPDATE outbox_events SET state='SYNCED',last_error=NULL,conflict_type=NULL,next_retry_at=NULL,synced_at=?,server_sale_id=?,official_receipt_number=?,updated_at=? WHERE organization_id=? AND event_id=?`;
 
 function toEvent(row: OutboxRow): DurableOutboxEvent | null {
   try {
@@ -129,6 +132,18 @@ export async function enqueueSaleCompletedEvent(
         JSON.stringify(input.snapshot),
         "LOCAL_PENDING",
         input.createdAt,
+        input.createdAt,
+      );
+
+      await transaction.runAsync(
+        LOCAL_RECEIPT_INSERT_SQL,
+        input.eventId,
+        input.organizationId,
+        input.storeId,
+        input.registerId,
+        input.localReference,
+        input.snapshot.version,
+        JSON.stringify(input.snapshot),
         input.createdAt,
       );
 
@@ -342,6 +357,62 @@ export async function updateOutboxEvent(
     organizationId,
     eventId,
   );
+}
+
+export async function markOutboxEventSynced(input: {
+  organizationId: string;
+  eventId: string;
+  serverSaleId: string;
+  officialReceiptNumber: number;
+  syncedAt: string;
+}) {
+  if (!input.serverSaleId || !Number.isSafeInteger(input.officialReceiptNumber) || input.officialReceiptNumber < 1) {
+    throw new Error("Invalid official receipt acknowledgement.");
+  }
+
+  const database = await getTindioDatabase();
+  await database.withExclusiveTransactionAsync(async (transaction) => {
+    const receipt = await transaction.getFirstAsync<{
+      server_sale_id: string | null;
+      official_receipt_number: number | null;
+    }>(
+      "SELECT server_sale_id,official_receipt_number FROM local_receipts WHERE organization_id=? AND event_id=?",
+      input.organizationId,
+      input.eventId,
+    );
+    if (!receipt) throw new Error("Durable local receipt is missing.");
+
+    const alreadyLinked = receipt.server_sale_id !== null || receipt.official_receipt_number !== null;
+    if (alreadyLinked && (
+      receipt.server_sale_id !== input.serverSaleId
+      || receipt.official_receipt_number !== input.officialReceiptNumber
+    )) {
+      throw new Error("Official receipt acknowledgement conflicts with the committed link.");
+    }
+
+    if (!alreadyLinked) {
+      const linked = await transaction.runAsync(
+        OFFICIAL_RECEIPT_LINK_SQL,
+        input.serverSaleId,
+        input.officialReceiptNumber,
+        input.syncedAt,
+        input.organizationId,
+        input.eventId,
+      );
+      if (linked.changes !== 1) throw new Error("Official receipt link could not be committed.");
+    }
+
+    const updated = await transaction.runAsync(
+      OUTBOX_SYNC_ACK_SQL,
+      input.syncedAt,
+      input.serverSaleId,
+      input.officialReceiptNumber,
+      input.syncedAt,
+      input.organizationId,
+      input.eventId,
+    );
+    if (updated.changes !== 1) throw new Error("Outbox acknowledgement could not be committed.");
+  });
 }
 
 export async function getOutboxSummary(organizationId: string): Promise<OutboxSummary> {

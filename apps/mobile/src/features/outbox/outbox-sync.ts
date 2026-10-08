@@ -5,6 +5,7 @@ import type {
 import {
   getOutboxSummary,
   listUnresolvedOutboxEvents,
+  markOutboxEventSynced,
   recoverInterruptedOutboxEvents,
   updateOutboxEvent,
 } from "../../db/outbox";
@@ -167,11 +168,9 @@ async function applyAck(event: DurableOutboxEvent, ack: PosSyncPushAck) {
   }
 
   if (ack.status === "SYNCED" && ack.result.ok) {
-    await updateOutboxEvent(event.organizationId, event.eventId, {
-      state: "SYNCED",
-      lastError: null,
-      conflictType: null,
-      nextRetryAt: null,
+    await markOutboxEventSynced({
+      organizationId: event.organizationId,
+      eventId: event.eventId,
       syncedAt: new Date().toISOString(),
       serverSaleId: ack.result.data.saleId,
       officialReceiptNumber: ack.result.data.receiptNumber,

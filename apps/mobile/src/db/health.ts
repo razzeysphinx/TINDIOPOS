@@ -1,18 +1,50 @@
 import * as Crypto from "expo-crypto";
-import { closeTindioDatabase, getLocalSchemaVersion, getTindioDatabase, readLocalMetadata, writeLocalMetadata } from "./database";
+import {
+  closeTindioDatabase,
+  getLocalSchemaVersion,
+  getTindioDatabase,
+  readLocalMetadata,
+  TINDIO_SQLITE_SYNCHRONOUS_FULL,
+  writeLocalMetadata,
+} from "./database";
 import { TINDIO_LOCAL_SCHEMA_VERSION } from "./schema";
 
 export async function getLocalDatabaseHealth() {
   try {
     const database = await getTindioDatabase();
     const journal = await database.getFirstAsync<{ journal_mode: string }>("PRAGMA journal_mode");
+    const synchronous = await database.getFirstAsync<{ synchronous: number }>("PRAGMA synchronous");
     const quickCheck = await database.getFirstAsync<{ quick_check: string }>("PRAGMA quick_check");
     const schemaVersion = await getLocalSchemaVersion();
     const integrity = quickCheck?.quick_check === "ok" ? "ok" : "check-required";
     const verified = await readLocalMetadata("persistence_verified_at");
-    return { ready: schemaVersion === TINDIO_LOCAL_SCHEMA_VERSION && integrity === "ok", schemaVersion, expectedSchemaVersion: TINDIO_LOCAL_SCHEMA_VERSION, journalMode: journal?.journal_mode ?? null, integrity, persistenceVerifiedAt: verified?.value ?? null, error: null };
+    const journalMode = journal?.journal_mode.toLowerCase() ?? null;
+    const synchronousMode = synchronous?.synchronous ?? null;
+    return {
+      ready:
+        schemaVersion === TINDIO_LOCAL_SCHEMA_VERSION
+        && integrity === "ok"
+        && journalMode === "wal"
+        && synchronousMode === TINDIO_SQLITE_SYNCHRONOUS_FULL,
+      schemaVersion,
+      expectedSchemaVersion: TINDIO_LOCAL_SCHEMA_VERSION,
+      journalMode,
+      synchronousMode,
+      integrity,
+      persistenceVerifiedAt: verified?.value ?? null,
+      error: null,
+    };
   } catch {
-    return { ready: false, schemaVersion: 0, expectedSchemaVersion: TINDIO_LOCAL_SCHEMA_VERSION, journalMode: null, integrity: "check-required", persistenceVerifiedAt: null, error: "SQLite unavailable" };
+    return {
+      ready: false,
+      schemaVersion: 0,
+      expectedSchemaVersion: TINDIO_LOCAL_SCHEMA_VERSION,
+      journalMode: null,
+      synchronousMode: null,
+      integrity: "check-required",
+      persistenceVerifiedAt: null,
+      error: "SQLite unavailable",
+    };
   }
 }
 

@@ -55,6 +55,13 @@ test(
       "SQLite must retain WAL durability mode",
     );
 
+    assert.ok(
+      database.includes(
+        "PRAGMA synchronous = FULL",
+      ),
+      "accepted cash writes must use FULL WAL commit synchronization",
+    );
+
     const migrationSqlExecutionIndex =
       database.indexOf(
         "transaction.execAsync(migration.sql)",

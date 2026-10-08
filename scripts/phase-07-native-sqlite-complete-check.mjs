@@ -46,7 +46,10 @@ test("Phase 07 complete foundation remains persistent, tenant-scoped, and phase-
   for (const helper of ["refreshReferenceCache", "fetchAndCacheCatalogPage", "fetchAndCacheCustomers", "fetchAndCacheReceipts"]) assert.match(onlineCache, new RegExp(helper));
   for (const requirement of ["PRAGMA quick_check", "closeTindioDatabase", "armPhase07RestartProof", "readPhase07RestartProof"]) assert.match(health, new RegExp(requirement));
   assert.match(database, /WAL/);
+  assert.match(database, /PRAGMA synchronous = FULL/);
+  assert.match(database, /await database\.closeAsync\(\)/);
   assert.match(database, /foreign_keys/);
+  assert.match(health, /synchronousMode/);
   for (const phase of ["Phase 08", "Phase 09", "PHASE 10", "PHASE 11", "PHASE 12"]) assert.match(sync, new RegExp(phase));
   for (const table of ["outbox_events", "device_sync_state", "sync_cursors", "store_hub_state"]) assert.match(schema, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
   assert.doesNotMatch(localSource, /(access_token|refresh_token|credential\.secret|device\.secret|DATABASE_URL|DATABASE_URL_UNPOOLED|service_role)/i);

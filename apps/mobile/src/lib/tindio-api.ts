@@ -31,6 +31,10 @@ import type { CheckoutSaleActionResult } from "../../../../src/features/checkout
 import { mobileEnvironment } from "./env";
 import { recordApiCall } from "../features/performance/performance-metrics";
 import { supabase } from "./supabase";
+import {
+  fetchWithTimeout,
+  PosApiRequestTimeoutError,
+} from "./request-timeout";
 
 const ORGANIZATION_HEADER = "x-tindio-organization-id";
 const STORE_HEADER = "x-tindio-store-id";
@@ -120,34 +124,50 @@ export async function requestPosV2Raw(
   } = {},
 ) {
   const startedAt = Date.now();
-  const headers = new Headers({
-    Accept: "application/json",
-    Authorization: `Bearer ${await token(false)}`,
-  });
+  let retried = false;
 
-  if (organizationId) headers.set(ORGANIZATION_HEADER, organizationId);
+  try {
+    const headers = new Headers({
+      Accept: "application/json",
+      Authorization: `Bearer ${await token(false)}`,
+    });
 
-  for (const [key, value] of new Headers(init.headers).entries()) {
-    headers.set(key, value);
-  }
+    if (organizationId) headers.set(ORGANIZATION_HEADER, organizationId);
 
-  let response = await fetch(endpoint(pathname), {
-    ...init,
-    method: init.method ?? "GET",
-    headers,
-  });
+    for (const [key, value] of new Headers(init.headers).entries()) {
+      headers.set(key, value);
+    }
 
-  if (response.status === 401) {
-    headers.set("Authorization", `Bearer ${await token(true)}`);
-    response = await fetch(endpoint(pathname), {
+    let response = await fetchWithTimeout(fetch, endpoint(pathname), {
       ...init,
       method: init.method ?? "GET",
       headers,
     });
-  }
 
-  recordApiCall({ durationMs: Date.now() - startedAt, responseBytes: Number(response.headers.get("content-length") ?? 0) || 0, retried: false, failed: !response.ok });
-  return response;
+    if (response.status === 401) {
+      retried = true;
+      headers.set("Authorization", `Bearer ${await token(true)}`);
+      response = await fetchWithTimeout(fetch, endpoint(pathname), {
+        ...init,
+        method: init.method ?? "GET",
+        headers,
+      });
+    }
+
+    recordApiCall({ durationMs: Date.now() - startedAt, responseBytes: Number(response.headers.get("content-length") ?? 0) || 0, retried, failed: !response.ok });
+    return response;
+  } catch (error) {
+    recordApiCall({ durationMs: Date.now() - startedAt, responseBytes: 0, retried, failed: true });
+    if (error instanceof PosApiRequestTimeoutError) {
+      throw new TindioApiError(
+        error.message,
+        0,
+        "REQUEST_TIMEOUT",
+        null,
+      );
+    }
+    throw error;
+  }
 }
 
 async function request(

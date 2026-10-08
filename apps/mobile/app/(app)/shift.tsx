@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput } from "react-native";
 import { useBusinessContext } from "../../src/features/business/use-business-context";
 import { useTerminalDevice } from "../../src/features/device/use-terminal-device";
+import { prepareShiftFinalization } from "../../src/features/shifts/prepare-shift-finalization";
 import {
   closePosV2Shift,
   openPosV2Shift,
@@ -24,6 +25,7 @@ export default function ShiftScreen() {
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [movementAttempt, setMovementAttempt] = useState<MovementAttempt | null>(null);
+  const [closing, setClosing] = useState(false);
 
   if (!core) return <Text>Loading business context…</Text>;
 
@@ -73,9 +75,21 @@ export default function ShiftScreen() {
   };
 
   const close = async () => {
-    if (offline || !canClose || !active || !matches) return;
+    if (offline || closing || !canClose || !active || !matches || !binding || !terminal.identity) return;
 
+    setClosing(true);
     try {
+      const preparation = await prepareShiftFinalization({
+        organizationId: core.organization.id,
+        deviceId: terminal.identity.credential.deviceId,
+        storeId: binding.storeId,
+        registerId: binding.registerId,
+        shiftId: active.id,
+      });
+      if (!preparation.ok) {
+        setMessage(preparation.message);
+        return;
+      }
       const result = await closePosV2Shift(
         core.organization.id,
         {
@@ -91,7 +105,9 @@ export default function ShiftScreen() {
         await reload(core.organization.id);
       }
     } catch {
-      setMessage("Shift closing could not be confirmed.");
+      setMessage("Shift closing could not be confirmed. Refresh before retrying; do not assume the drawer is closed.");
+    } finally {
+      setClosing(false);
     }
   };
 
@@ -187,10 +203,10 @@ export default function ShiftScreen() {
       </Pressable>
 
       <Pressable
-        disabled={offline || !canClose || !matches}
+        disabled={offline || closing || !canClose || !matches}
         onPress={() => void close()}
       >
-        <Text>Close shift</Text>
+        <Text>{closing ? "Checking transaction custody…" : "Close shift"}</Text>
       </Pressable>
 
       <Pressable

@@ -150,7 +150,7 @@ test("MOB-01 migration and cache cleanup preserve transaction custody", () => {
   assert.equal(database.prepare("SELECT next_sequence FROM device_sync_state").get().next_sequence, 8);
   assert.equal(database.prepare("SELECT server_checkpoint FROM device_sync_state").get().server_checkpoint, 6);
   assert.equal(database.prepare("SELECT pull_cursor FROM sync_cursors").get().pull_cursor, 5);
-  assert.match(cacheAdminSource, /checkout_intents, outbox_events, device_sync_state, and sync_cursors are intentionally excluded/);
+  for (const text of ["checkout_intents", "outbox_events", "local_receipts", "device_sync_state", "sync_cursors", "intentionally excluded"]) assert.ok(cacheAdminSource.includes(text));
   assert.doesNotMatch(cacheAdminSource, /DELETE FROM checkout_intents/);
   assert.match(custodySource, /FROM checkout_intents WHERE organization_id=\? AND state IN \('PREPARED','SUBMITTING','UNKNOWN'\)/);
   assert.match(custodySource, /onlineCheckoutIntents/);

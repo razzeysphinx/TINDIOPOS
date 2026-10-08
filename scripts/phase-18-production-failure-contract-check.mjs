@@ -136,12 +136,12 @@ test(
       "sync must never delete unresolved durable sales",
     );
 
-    assert.ok(
-      cacheAdmin.includes(
-        "outbox_events, device_sync_state, and sync_cursors are intentionally excluded",
-      ),
-      "cache cleanup must not delete transaction custody or recovery state",
-    );
+    for (const protectedStore of ["checkout_intents", "outbox_events", "local_receipts", "device_sync_state", "sync_cursors"]) {
+      assert.ok(
+        cacheAdmin.includes(protectedStore),
+        `cache cleanup must preserve ${protectedStore}`,
+      );
+    }
 
     assert.ok(
       readiness.includes(

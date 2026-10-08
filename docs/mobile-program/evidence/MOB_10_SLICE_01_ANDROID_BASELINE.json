@@ -1,0 +1,78 @@
+{
+  "phase": "MOB-10",
+  "slice": 1,
+  "status": "BLOCKED",
+  "starting_commit": "797b5a64e2a13cea3b00083d814290678cb065af",
+  "source_commit": "0b3f859888619303646e50e806374f4e0390911e",
+  "lockfile_hash": "sha256:b4450bc03089943af8001072f8f18c3895b1cd0f0401ef94f42bb02561ff33cb",
+  "build": {
+    "profile": "preview",
+    "method": "EAS cloud internal-distribution APK",
+    "EAS_build_id": null,
+    "package_id": "com.tindio.pos",
+    "version_name": "1.0.0",
+    "version_code": null,
+    "artifact_SHA256": null,
+    "result": "BLOCKED",
+    "reason": "No EAS account is authenticated, the source has no verified EAS owner/projectId binding, and no signing-credential state was inspected. No build was started because doing so could initialize project or signing state."
+  },
+  "runtime": {
+    "device_model": null,
+    "OS_API": null,
+    "page_size": null,
+    "local_schema_version": 12,
+    "backend_contract_version": "POS API v2",
+    "test_environment": "No Android runtime target available; local endpoint configuration is development-only and was not embedded in an APK.",
+    "synthetic_fixture_id": null,
+    "tester": "Codex configuration audit",
+    "reviewer": null,
+    "executed_at": "2026-10-08T15:16:41.6503623Z"
+  },
+  "acceptance_cases": [
+    {
+      "case_id": "A01",
+      "canonical_phase": "01-08",
+      "ticket_id": "MOB-10",
+      "result": "NOT_RUN",
+      "expected_result": "A clean installed Android binary completes sign-in, enrollment, assignment, preparation, and reaches a truthful ready state.",
+      "actual_result": "No APK or Android device was available, so no physical step was executed."
+    },
+    {
+      "case_id": "A07",
+      "canonical_phase": "08/16",
+      "ticket_id": "MOB-10",
+      "result": "NOT_RUN",
+      "expected_result": "A prepared app cold-starts in airplane mode with scoped cached catalog, cash flow, and receipt access inside the grant window.",
+      "actual_result": "Requires the completed A01 device baseline and was not physically executed."
+    },
+    {
+      "case_id": "A08",
+      "canonical_phase": "06/08",
+      "ticket_id": "MOB-10",
+      "result": "NOT_RUN",
+      "expected_result": "First-install offline or incomplete preparation reports preparation required and never reports ready.",
+      "actual_result": "No clean Android installation was available, so this was not physically executed."
+    },
+    {
+      "case_id": "A42",
+      "canonical_phase": "07/18/23",
+      "ticket_id": "MOB-10",
+      "result": "NOT_RUN",
+      "expected_result": "An in-place binary upgrade preserves unresolved transaction identity, payload, secret, sequence, and exactly-once recovery.",
+      "actual_result": "Deferred until two successive installable binaries and a physical Android baseline exist."
+    },
+    {
+      "case_id": "A48",
+      "canonical_phase": "23/24",
+      "ticket_id": "MOB-10",
+      "result": "NOT_RUN",
+      "expected_result": "The actual signed AAB passes target API, manifest, native-library, and 16 KB qualification.",
+      "actual_result": "Explicitly deferred to signed release evidence; Android export is not counted as native evidence."
+    }
+  ],
+  "operation_ids": [],
+  "redacted_ledger_assertions": [],
+  "log_or_video_artifact": null,
+  "unresolved_defect_link": null,
+  "secrets_or_real_merchant_data_included": false
+}

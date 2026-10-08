@@ -10,9 +10,11 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
+import { AppState } from "react-native";
 import {
   getOutboxSummary,
 } from "../../db/outbox";
+import { getSyncCursor } from "../../db/sync-cursor";
 import {
   saveBusinessContextSnapshot,
 } from "../../db/business-context-cache";
@@ -36,9 +38,17 @@ import {
 import {
   evaluateOfflineReadiness,
 } from "../offline/offline-readiness";
+import { createForegroundReloadCoordinator } from "../offline/foreground-reload-coordinator";
+import {
+  shouldRecoverCloudEntry,
+  shouldReloadAfterAppStateChange,
+} from "../offline/lifecycle-policy";
 import {
   recoverCloudConnection,
 } from "../offline/recover-cloud-connection";
+import {
+  renewOfflineAuthorizationFromCloud,
+} from "../offline/renew-offline-authorization";
 import {
   probeStoreHub,
 } from "../store-hub/store-hub-client";
@@ -84,7 +94,7 @@ export function BusinessContextProvider({
 }: PropsWithChildren) {
   const {
     accessMode,
-    offlineExpiresAt,
+    offlineExpiresAt: sessionOfflineExpiresAt,
   } = useSession();
 
   const [data, setData] =
@@ -103,6 +113,13 @@ export function BusinessContextProvider({
     useState<MobileConnectionMode>(
       "CLOUD_ONLINE",
     );
+
+  const [preparedOfflineExpiresAt, setPreparedOfflineExpiresAt] =
+    useState<string | null>(sessionOfflineExpiresAt);
+
+  const [reloadCoordinator] = useState(() =>
+    createForegroundReloadCoordinator<void>(async () => undefined),
+  );
 
   const setPersistedMode =
     useCallback(
@@ -131,6 +148,7 @@ export function BusinessContextProvider({
 
       if (!readiness.ok) {
         setData(null);
+        setPreparedOfflineExpiresAt(null);
         setError(
           "Offline access is not prepared for this terminal.",
         );
@@ -141,6 +159,7 @@ export function BusinessContextProvider({
 
       setData(cachedBootstrap(core));
       setMode("offline");
+      setPreparedOfflineExpiresAt(readiness.grant.expiresAt);
       setError(null);
 
       const identity =
@@ -213,17 +232,25 @@ export function BusinessContextProvider({
           // Cloud response remains authoritative.
         }
 
-        const [
-          previousMode,
-          outbox,
-        ] = await Promise.all([
+        const [previousMode, outbox, identity] = await Promise.all([
           readConnectionModeState(
             organizationId,
           ),
           getOutboxSummary(
             organizationId,
           ),
+          loadMobileDeviceIdentity(
+            organizationId,
+          ),
         ]);
+
+        const cursor = identity?.binding
+          ? await getSyncCursor(
+              organizationId,
+              identity.credential.deviceId,
+              identity.binding.storeId,
+            )
+          : null;
 
         const unresolved =
           outbox.pending
@@ -231,15 +258,16 @@ export function BusinessContextProvider({
           + outbox.conflict
           + outbox.failed;
 
-        const needsRecovery =
-          unresolved > 0
-          || (
-            previousMode
-            && previousMode.mode
-            !== "CLOUD_ONLINE"
-          );
+        const needsRecovery = shouldRecoverCloudEntry({
+          previousMode: previousMode?.mode ?? null,
+          unresolvedTransactions: unresolved,
+          terminalEnrolled: Boolean(identity?.binding),
+          syncCursorInitialized: Boolean(cursor?.initialized),
+        });
 
         if (!needsRecovery) {
+          const renewal = await renewOfflineAuthorizationFromCloud(next.core);
+          if (renewal.ok) setPreparedOfflineExpiresAt(renewal.expiresAt);
           setMode("online");
 
           await setPersistedMode(
@@ -265,6 +293,8 @@ export function BusinessContextProvider({
           );
 
         if (recovery.ok) {
+          const renewal = await renewOfflineAuthorizationFromCloud(next.core);
+          if (renewal.ok) setPreparedOfflineExpiresAt(renewal.expiresAt);
           setMode("online");
 
           await setPersistedMode(
@@ -285,7 +315,7 @@ export function BusinessContextProvider({
       [setPersistedMode],
     );
 
-  const reload =
+  const performReload =
     useCallback(
       async (
         organizationId?: string,
@@ -334,6 +364,14 @@ export function BusinessContextProvider({
     );
 
   useEffect(() => {
+    reloadCoordinator.setTask(performReload);
+  }, [performReload, reloadCoordinator]);
+  const reload = useCallback(
+    (organizationId?: string) => reloadCoordinator.run(organizationId),
+    [reloadCoordinator],
+  );
+
+  useEffect(() => {
     const timer = setTimeout(
       () => void reload(),
       0,
@@ -341,7 +379,18 @@ export function BusinessContextProvider({
 
     return () =>
       clearTimeout(timer);
-  }, [reload]);
+  }, [accessMode, reload]);
+
+  useEffect(() => {
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (shouldReloadAfterAppStateChange(previousState, nextState)) {
+        void reload(data?.core.organization.id);
+      }
+      previousState = nextState;
+    });
+    return () => subscription.remove();
+  }, [data?.core.organization.id, reload]);
 
   const value = useMemo(
     () => ({
@@ -352,7 +401,7 @@ export function BusinessContextProvider({
       connectionMode,
       offlineExpiresAt:
         mode === "offline"
-          ? offlineExpiresAt
+          ? preparedOfflineExpiresAt ?? sessionOfflineExpiresAt
           : null,
       reload,
     }),
@@ -362,7 +411,8 @@ export function BusinessContextProvider({
       error,
       mode,
       connectionMode,
-      offlineExpiresAt,
+      preparedOfflineExpiresAt,
+      sessionOfflineExpiresAt,
       reload,
     ],
   );

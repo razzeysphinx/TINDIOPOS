@@ -16,6 +16,10 @@ export type OfflineAuthorizationGrant = {
   issuedAt: string;
   expiresAt: string;
 };
+export type OfflineAuthorizationScope = Omit<
+  OfflineAuthorizationGrant,
+  "version" | "issuedAt" | "expiresAt"
+>;
 export type OfflineAuthorizationValidation = { ok: true; grant: OfflineAuthorizationGrant } | { ok: false; reason: "MISSING" | "INVALID" | "EXPIRED" | "CLOCK_ROLLBACK" };
 
 function parseTimestamp(value: string) {
@@ -23,7 +27,7 @@ function parseTimestamp(value: string) {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
-export async function saveOfflineAuthorizationGrant(input: Omit<OfflineAuthorizationGrant, "version" | "issuedAt" | "expiresAt">) {
+export async function saveOfflineAuthorizationGrant(input: OfflineAuthorizationScope) {
   const now = Date.now();
   const grant: OfflineAuthorizationGrant = { version: 1, ...input, issuedAt: new Date(now).toISOString(), expiresAt: new Date(now + OFFLINE_AUTHORIZATION_WINDOW_MS).toISOString() };
   await secureStorage.setItem(OFFLINE_AUTHORIZATION_KEY, JSON.stringify(grant));

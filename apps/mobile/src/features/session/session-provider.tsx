@@ -97,6 +97,25 @@ export function SessionProvider({
   useEffect(() => {
     let active = true;
 
+    const recoverSessionOnForeground = async () => {
+      const current = await supabase.auth.getSession();
+      let next = current.data.session;
+
+      if (!isUnexpired(next)) {
+        const refreshed = await supabase.auth.refreshSession();
+        next = refreshed.error ? null : refreshed.data.session;
+      }
+
+      if (!active) return;
+      setSession(next);
+      if (isUnexpired(next)) {
+        setAccessMode("online");
+        setOfflineExpiresAt(null);
+      } else {
+        await applyOfflineReadiness();
+      }
+    };
+
     const start = async () => {
       const { data } =
         await supabase.auth.getSession();
@@ -138,10 +157,14 @@ export function SessionProvider({
 
     const app = AppState.addEventListener(
       "change",
-      (state) =>
-        state === "active"
-          ? supabase.auth.startAutoRefresh()
-          : supabase.auth.stopAutoRefresh(),
+      (state) => {
+        if (state === "active") {
+          supabase.auth.startAutoRefresh();
+          void recoverSessionOnForeground();
+        } else {
+          supabase.auth.stopAutoRefresh();
+        }
+      },
     );
 
     supabase.auth.startAutoRefresh();

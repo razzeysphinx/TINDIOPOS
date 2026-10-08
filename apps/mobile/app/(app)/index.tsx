@@ -185,7 +185,10 @@ export default function MobileHomeScreen() {
             ),
           )}
 
-          <DeviceSetup core={core} />
+          <DeviceSetup
+            core={core}
+            onEnrolled={() => reload(core.organization.id)}
+          />
         </>
       ) : null}
 

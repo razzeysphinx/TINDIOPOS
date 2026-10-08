@@ -19,6 +19,8 @@ const businessSource = read("apps/mobile/src/features/business/business-context-
 const sessionSource = read("apps/mobile/src/features/session/session-provider.tsx");
 const renewalSource = read("apps/mobile/src/features/offline/renew-offline-authorization.ts");
 const readinessSource = read("apps/mobile/src/features/offline/offline-readiness.ts");
+const deviceSetupSource = read("apps/mobile/src/features/device/device-setup.tsx");
+const homeSource = read("apps/mobile/app/(app)/index.tsx");
 
 test("MOB-09 cloud entry recovers unresolved, previously isolated, and unprepared terminals", () => {
   const base = {
@@ -115,4 +117,22 @@ test("MOB-09 renewal occurs only on a safe cloud-online path", () => {
   assert.equal((businessSource.match(/renewOfflineAuthorizationFromCloud\(next\.core\)/g) ?? []).length, 2);
   const reviewPath = businessSource.slice(businessSource.indexOf("recovery.mode"));
   assert.doesNotMatch(reviewPath, /renewOfflineAuthorizationFromCloud/);
+});
+
+test("MOB-09 enrollment immediately enters the existing automatic preparation lifecycle", () => {
+  const enrollmentStart = deviceSetupSource.indexOf("const enroll = async () =>");
+  const persistAt = deviceSetupSource.indexOf("await saveMobileDeviceIdentity(next)", enrollmentStart);
+  const notifyAt = deviceSetupSource.indexOf("await onEnrolled?.()", enrollmentStart);
+
+  assert.ok(enrollmentStart >= 0);
+  assert.ok(persistAt > enrollmentStart, "device identity must be durable before notification");
+  assert.ok(notifyAt > persistAt, "cloud lifecycle must be notified after durable enrollment");
+  assert.match(homeSource, /onEnrolled=\{\(\) => reload\(core\.organization\.id\)\}/);
+
+  assert.equal(policy.shouldRecoverCloudEntry({
+    previousMode: "CLOUD_ONLINE",
+    unresolvedTransactions: 0,
+    terminalEnrolled: true,
+    syncCursorInitialized: false,
+  }), true);
 });

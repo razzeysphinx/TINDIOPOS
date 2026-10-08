@@ -21,8 +21,10 @@ import {
 
 export function DeviceSetup({
   core,
+  onEnrolled,
 }: {
   core: PosBootstrapV2CoreResponse["core"];
+  onEnrolled?: () => void | Promise<void>;
 }) {
   const organizationId = core.organization.id;
   const canManage = core.permissions.includes("devices.manage");
@@ -139,6 +141,15 @@ export function DeviceSetup({
 
       await saveMobileDeviceIdentity(next);
       setIdentity(next);
+      setError(null);
+
+      try {
+        await onEnrolled?.();
+      } catch {
+        setError(
+          "Device enrolled, but automatic offline preparation could not start. Retry the connection check.",
+        );
+      }
     } catch {
       setError("TINDIO could not enroll this device.");
     }

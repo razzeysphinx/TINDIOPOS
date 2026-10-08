@@ -5,7 +5,7 @@ import { getBusinessContextSnapshot } from "../../db/business-context-cache";
 import { getActiveShiftSnapshot } from "../../db/shift-cache";
 import { getLocalDiscounts, getLocalPaymentMethods, getLocalTaxRates } from "../local-first/local-reference";
 import { calculateLocalCartTotals, localCartLineTotalMinor } from "../local-first/local-cart";
-import { validateOfflineAuthorizationGrant } from "../offline/offline-authorization";
+import { offlineAuthorizationFailureMessage, validateOfflineAuthorizationGrant } from "../offline/offline-authorization";
 import type { LocalCartTotals } from "../local-first/local-cart";
 import type { DurableOutboxEvent, DurableSaleSnapshot, SaleCompletedOutboxPayloadBeforeSequence } from "./outbox-types";
 
@@ -22,7 +22,7 @@ export type OfflineSaleAcceptanceInput = {
 
 export type OfflineSaleAcceptanceResult =
   | { ok: true; event: DurableOutboxEvent }
-  | { ok: false; reason: string };
+  | { ok: false; reason: string; message?: string };
 
 const money = (minor: number) => (minor / 100).toFixed(2);
 
@@ -35,7 +35,11 @@ function validCartLine(line: PosCartLine) {
 
 export async function createOfflineCashSale(input: OfflineSaleAcceptanceInput): Promise<OfflineSaleAcceptanceResult> {
   const authorization = await validateOfflineAuthorizationGrant();
-  if (!authorization.ok) return { ok: false, reason: `OFFLINE_AUTHORIZATION_${authorization.reason}` };
+  if (!authorization.ok) return {
+    ok: false,
+    reason: `OFFLINE_AUTHORIZATION_${authorization.reason}`,
+    message: offlineAuthorizationFailureMessage(authorization.reason),
+  };
   const grant = authorization.grant;
   if (grant.organizationId !== input.organizationId || grant.deviceId !== input.deviceId ||
       grant.storeId !== input.binding.storeId || grant.registerId !== input.binding.registerId) {

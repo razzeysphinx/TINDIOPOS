@@ -13,6 +13,7 @@ import { fetchPosV2Core } from "../../lib/tindio-api";
 import { supabase } from "../../lib/supabase";
 import {
   clearOfflineAuthorizationGrant,
+  offlineAuthorizationFailureMessage,
 } from "../offline/offline-authorization";
 import {
   evaluateOfflineReadiness,
@@ -35,6 +36,7 @@ type Value = {
   loading: boolean;
   accessMode: AccessMode;
   offlineExpiresAt: string | null;
+  offlineRestrictionReason: string | null;
   signIn(
     email: string,
     password: string,
@@ -71,6 +73,8 @@ export function SessionProvider({
     useState<AccessMode>("signed-out");
   const [offlineExpiresAt, setOfflineExpiresAt] =
     useState<string | null>(null);
+  const [offlineRestrictionReason, setOfflineRestrictionReason] =
+    useState<string | null>(null);
 
   const applyOfflineReadiness =
     useCallback(async () => {
@@ -82,11 +86,15 @@ export function SessionProvider({
         setOfflineExpiresAt(
           readiness.grant.expiresAt,
         );
+        setOfflineRestrictionReason(null);
         return;
       }
 
       setAccessMode("signed-out");
       setOfflineExpiresAt(null);
+      setOfflineRestrictionReason(
+        offlineAuthorizationFailureMessage(readiness.reason),
+      );
     }, []);
 
   const refreshOfflineAccess =
@@ -111,6 +119,7 @@ export function SessionProvider({
       if (isUnexpired(next)) {
         setAccessMode("online");
         setOfflineExpiresAt(null);
+        setOfflineRestrictionReason(null);
       } else {
         await applyOfflineReadiness();
       }
@@ -127,6 +136,7 @@ export function SessionProvider({
       if (isUnexpired(data.session)) {
         setAccessMode("online");
         setOfflineExpiresAt(null);
+        setOfflineRestrictionReason(null);
       } else {
         await applyOfflineReadiness();
       }
@@ -147,6 +157,7 @@ export function SessionProvider({
           if (isUnexpired(next)) {
             setAccessMode("online");
             setOfflineExpiresAt(null);
+            setOfflineRestrictionReason(null);
           } else {
             void applyOfflineReadiness();
           }
@@ -205,6 +216,7 @@ export function SessionProvider({
         setSession(result.data.session);
         setAccessMode("online");
         setOfflineExpiresAt(null);
+        setOfflineRestrictionReason(null);
         return { ok: true };
       } catch {
         await supabase.auth.signOut();
@@ -237,6 +249,7 @@ export function SessionProvider({
       setSession(null);
       setAccessMode("signed-out");
       setOfflineExpiresAt(null);
+      setOfflineRestrictionReason(null);
 
       return { ok: true };
     }, []);
@@ -263,6 +276,7 @@ export function SessionProvider({
         setSession(result.data.session);
         setAccessMode("online");
         setOfflineExpiresAt(null);
+        setOfflineRestrictionReason(null);
         return { ok: true };
       } catch {
         await supabase.auth.signOut();
@@ -282,6 +296,7 @@ export function SessionProvider({
       loading,
       accessMode,
       offlineExpiresAt,
+      offlineRestrictionReason,
       signIn,
       reauthenticate,
       signOut,
@@ -292,6 +307,7 @@ export function SessionProvider({
       loading,
       accessMode,
       offlineExpiresAt,
+      offlineRestrictionReason,
       signIn,
       reauthenticate,
       signOut,

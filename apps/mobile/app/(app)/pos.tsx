@@ -749,7 +749,7 @@ export default function PosScreen() {
       });
 
       if (!result.ok) {
-        setSaleMessage(`Offline cash sale was not saved: ${result.reason}`);
+        setSaleMessage(result.message ?? `Offline cash sale was not saved: ${result.reason}`);
         return;
       }
 

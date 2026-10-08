@@ -15,7 +15,7 @@ test("Phase 11 device sequence checkpoints contract", () => {
   const status = read("apps/mobile/app/(app)/sync-status.tsx");
   const cache = read("apps/mobile/src/db/cache-admin.ts");
 
-  for (const text of ["TINDIO_LOCAL_SCHEMA_VERSION = 11", "device_sequence", "device_sync_state", "idx_outbox_device_sequence"]) assert.ok(schema.includes(text));
+  for (const text of ["TINDIO_LOCAL_SCHEMA_VERSION = 12", "device_sequence", "device_sync_state", "idx_outbox_device_sequence"]) assert.ok(schema.includes(text));
   assert.ok(outbox.includes("withExclusiveTransactionAsync") && outbox.includes("next_sequence=next_sequence+1") && outbox.includes("deviceSequence"));
   assert.ok(state.includes("MAX(device_sequence)") && state.includes("MAX(server_checkpoint,?)"));
   for (const text of ["pos_device_sync_checkpoints", "pos_device_sequence_receipts", "reserve_pos_device_sequence", "finalize_pos_device_sequence", "get_pos_device_sync_checkpoint", "GAP", "DUPLICATE_SEQUENCE", "OUT_OF_ORDER", "REPLAY"]) assert.ok(migration.includes(text));

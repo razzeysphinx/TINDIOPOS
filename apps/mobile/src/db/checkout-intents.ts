@@ -154,6 +154,29 @@ export async function prepareOnlineCheckoutIntent(input: {
   let resolved: DurableOnlineCheckoutIntent | null = null;
 
   await database.withExclusiveTransactionAsync(async (transaction) => {
+    const existing = await transaction.getFirstAsync<IntentRow>(
+      "SELECT * FROM checkout_intents WHERE organization_id=? AND idempotency_key=?",
+      input.organizationId,
+      input.payload.idempotencyKey,
+    );
+    if (existing) {
+      if (
+        existing.payload_json !== payloadJson
+        || existing.device_id !== input.deviceId
+        || existing.employee_id !== input.employeeId
+        || existing.shift_id !== input.shiftId
+      ) throw new Error("ONLINE_CHECKOUT_IDENTITY_CONFLICT");
+      resolved = decodeIntent(existing);
+      return;
+    }
+
+    const finalizing = await transaction.getFirstAsync<{ shift_id: string }>(
+      "SELECT shift_id FROM shift_finalization_guards WHERE organization_id=? AND shift_id=? AND state='FINALIZING'",
+      input.organizationId,
+      input.shiftId,
+    );
+    if (finalizing) throw new Error("SHIFT_FINALIZATION_IN_PROGRESS");
+
     await transaction.runAsync(
       INSERT_CHECKOUT_INTENT_SQL,
       input.payload.idempotencyKey,

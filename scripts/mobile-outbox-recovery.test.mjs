@@ -182,7 +182,7 @@ test("MOB-04 corrupt rows remain visible and non-retryable without a database re
   assert.match(outboxSource, /listOutboxRecoveryItems/);
   assert.match(outboxSource, /corrupt: event === null/);
   assert.match(outboxSource, /state <> 'SYNCED'/);
-  assert.match(schemaSource, /TINDIO_LOCAL_SCHEMA_VERSION = 11/);
+  assert.match(schemaSource, /TINDIO_LOCAL_SCHEMA_VERSION = 12/);
   assert.match(schemaSource, /ON DELETE RESTRICT/);
   assert.doesNotMatch(schemaSource, /DROP TABLE|DELETE FROM outbox_events/i);
 });

@@ -5,6 +5,8 @@ import { posDeviceRequestHeaders } from "@/features/devices/device-schema";
 import {
   cashMovementSchema,
   closeShiftSchema,
+  mobileCloseShiftSchema,
+  acquireShiftCustodySchema,
   openShiftSubmissionSchema,
 } from "@/features/shifts/shift-schema";
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
@@ -112,6 +114,99 @@ export async function closeShift({
       expectedCashMinor: data[0].expected_cash_minor,
       countedCashMinor: data[0].counted_cash_minor,
       differenceMinor: data[0].difference_minor,
+    },
+  };
+}
+
+export async function acquireMobileShiftCustody({
+  context,
+  input,
+}: {
+  context: BusinessContext;
+  input: unknown;
+}) {
+  const parsed = acquireShiftCustodySchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, message: "A valid shift and enrolled device are required." };
+
+  const database = await createBusinessContextClient(context, {
+    headers: posDeviceRequestHeaders(parsed.data.device),
+  }) as unknown as {
+    rpc: (name: string, args: Record<string, unknown>) => Promise<{
+      data: Array<Record<string, unknown>> | null;
+      error: { code?: string; message?: string } | null;
+    }>;
+  };
+  const { data, error } = await database.rpc("acquire_pos_shift_custody", {
+    target_organization_id: context.organization.id,
+    target_shift_id: parsed.data.shiftId,
+  });
+  const row = data?.[0];
+  if (error || !row || String(row.device_id) !== parsed.data.device.deviceId) {
+    return {
+      ok: false as const,
+      message: databaseMessage(error?.code, error?.message, "TINDIO could not establish offline shift custody."),
+    };
+  }
+  return {
+    ok: true as const,
+    deviceId: String(row.device_id),
+    shiftId: String(row.shift_id),
+    state: "ACTIVE" as const,
+  };
+}
+
+export async function closeMobileShift({
+  context,
+  input,
+}: {
+  context: BusinessContext;
+  input: unknown;
+}): Promise<ShiftActionResult> {
+  if (!hasPermission(context, "shifts.close")) {
+    return { ok: false, message: "You do not have permission to close register shifts." };
+  }
+  const parsed = mobileCloseShiftSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: "Enter the counted cash and provide a valid reconciled device checkpoint." };
+  }
+  const database = await createBusinessContextClient(context, {
+    headers: posDeviceRequestHeaders(parsed.data.device),
+  }) as unknown as {
+    rpc: (name: string, args: Record<string, unknown>) => Promise<{
+      data: Array<Record<string, unknown>> | null;
+      error: { code?: string; message?: string } | null;
+    }>;
+  };
+  const { data, error } = await database.rpc("close_register_shift_mobile", {
+    target_organization_id: context.organization.id,
+    target_shift_id: parsed.data.shiftId,
+    target_counted_cash_minor: moneyInputToMinor(parsed.data.countedCash),
+    target_closing_note: parsed.data.closingNote || null,
+    target_local_high_water: parsed.data.localHighWater,
+    target_finalization_token: parsed.data.finalizationToken,
+  });
+  const row = data?.[0];
+  if (error || !row) {
+    return {
+      ok: false,
+      message: databaseMessage(error?.code, error?.message, "TINDIO could not close this register shift."),
+    };
+  }
+  if (row.closed !== true) {
+    return {
+      ok: false,
+      message: "This device is reconciled, but another device still has offline transaction custody. Bring every device online and retry this same close.",
+    };
+  }
+  return {
+    ok: true,
+    message: row.was_replayed
+      ? "This shift close was already recorded."
+      : "Shift closed and cash difference recorded.",
+    closeSummary: {
+      expectedCashMinor: Number(row.expected_cash_minor),
+      countedCashMinor: Number(row.counted_cash_minor),
+      differenceMinor: Number(row.difference_minor),
     },
   };
 }

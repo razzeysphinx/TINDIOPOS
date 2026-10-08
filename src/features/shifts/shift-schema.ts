@@ -26,6 +26,17 @@ export const closeShiftSchema = z.object({
   closingNote: optionalNote,
 });
 
+export const mobileCloseShiftSchema = closeShiftSchema.extend({
+  device: posDeviceCredentialSchema,
+  localHighWater: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  finalizationToken: z.uuid(),
+});
+
+export const acquireShiftCustodySchema = z.object({
+  shiftId: z.uuid(),
+  device: posDeviceCredentialSchema,
+});
+
 export const cashMovementSchema = z.object({
   shiftId: z.uuid(),
   movementType: z.enum(["PAY_IN", "PAY_OUT"]),

@@ -3,6 +3,9 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput } from "react-native";
 import { useBusinessContext } from "../../src/features/business/use-business-context";
 import { useTerminalDevice } from "../../src/features/device/use-terminal-device";
+import {
+  completeShiftFinalizationGuard,
+} from "../../src/db/shift-custody";
 import { prepareShiftFinalization } from "../../src/features/shifts/prepare-shift-finalization";
 import {
   closePosV2Shift,
@@ -92,16 +95,24 @@ export default function ShiftScreen() {
       }
       const result = await closePosV2Shift(
         core.organization.id,
+        terminal.identity.credential,
         {
           shiftId: active.id,
           countedCash,
           closingNote: note.trim(),
+          localHighWater: preparation.localHighWater,
+          finalizationToken: preparation.finalizationToken,
         },
       );
 
       setMessage(result.message);
 
       if (result.ok) {
+        await completeShiftFinalizationGuard(
+          core.organization.id,
+          active.id,
+          preparation.finalizationToken,
+        );
         await reload(core.organization.id);
       }
     } catch {

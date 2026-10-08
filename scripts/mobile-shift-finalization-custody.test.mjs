@@ -6,8 +6,12 @@ import ts from "typescript";
 
 const read = (path) => fs.readFileSync(path, "utf8");
 const custodySource = read("apps/mobile/src/db/shift-custody.ts");
+const schemaSource = read("apps/mobile/src/db/schema.ts");
+const outboxSource = read("apps/mobile/src/db/outbox.ts");
+const checkoutSource = read("apps/mobile/src/db/checkout-intents.ts");
 const preparationSource = read("apps/mobile/src/features/shifts/prepare-shift-finalization.ts");
 const shiftScreenSource = read("apps/mobile/app/(app)/shift.tsx");
+const cacheAdminSource = read("apps/mobile/src/db/cache-admin.ts");
 
 function templateAfter(source, marker) {
   const markerAt = source.indexOf(marker);
@@ -117,11 +121,56 @@ test("MOB-08 reconciliation preserves transaction identity and opens only after 
 });
 
 test("MOB-08 native close performs sync and checkpoint verification before the close API", () => {
-  for (const marker of ["recoverInterruptedOnlineCheckoutIntents", "syncOutboxEvents", "refreshDeviceCheckpoint", "getShiftFinalizationCustody", "evaluateShiftFinalization"]) {
+  for (const marker of ["recoverInterruptedOnlineCheckoutIntents", "syncOutboxEvents", "refreshDeviceCheckpoint", "getShiftFinalizationCustody", "evaluateShiftFinalization", "beginShiftFinalizationGuard"]) {
     assert.ok(preparationSource.includes(marker));
   }
   assert.ok(shiftScreenSource.indexOf("prepareShiftFinalization({") < shiftScreenSource.indexOf("closePosV2Shift("));
   assert.match(shiftScreenSource, /if \(!preparation\.ok\)[\s\S]*return;/);
+  for (const marker of ["localHighWater: preparation.localHighWater", "finalizationToken: preparation.finalizationToken", "completeShiftFinalizationGuard"]) {
+    assert.ok(shiftScreenSource.includes(marker));
+  }
   assert.match(shiftScreenSource, /do not assume the drawer is closed/);
-  assert.doesNotMatch(custodySource + preparationSource, /DELETE FROM|DROP TABLE|randomUUID/i);
+  assert.doesNotMatch(custodySource + preparationSource, /DELETE FROM|DROP TABLE/i);
+});
+
+test("MOB-08 SQLite migration persists a non-expiring close identity without touching transaction custody", () => {
+  const migration = schemaSource.match(/version: 12,[\s\S]*?sql: `([\s\S]*?)`,\s*\n\s*},/);
+  assert.ok(migration, "missing SQLite migration 12");
+  const database = new DatabaseSync(":memory:");
+  database.exec(migration[1]);
+  database.prepare(`INSERT INTO shift_finalization_guards
+    (organization_id,shift_id,device_id,store_id,register_id,finalization_token,local_high_water,state,started_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,'FINALIZING',?,?)`).run(
+      "org-a", "shift-a", "device-a", "store-a", "register-a", "token-a", 7,
+      "2026-10-08T00:00:00.000Z", "2026-10-08T00:00:00.000Z",
+    );
+  const row = database.prepare("SELECT * FROM shift_finalization_guards WHERE organization_id='org-a' AND shift_id='shift-a'").get();
+  assert.equal(row.finalization_token, "token-a");
+  assert.equal(row.local_high_water, 7);
+  assert.equal(row.state, "FINALIZING");
+  assert.throws(() => database.prepare(`INSERT INTO shift_finalization_guards
+    (organization_id,shift_id,device_id,store_id,register_id,finalization_token,local_high_water,state,started_at,updated_at)
+    VALUES ('org-a','shift-b','device-a','store-a','register-a','token-a',7,'FINALIZING','now','now')`).run());
+  assert.doesNotMatch(migration[1], /outbox_events|checkout_intents|device_sync_state|sync_cursors|DELETE/i);
+  assert.doesNotMatch(cacheAdminSource.match(/ORGANIZATION_TABLES\s*=\s*\[([^\]]*)\]/)?.[1] ?? "", /shift_finalization_guards/);
+});
+
+test("MOB-08 finalization barrier rejects new sales but permits exact idempotent re-entry", () => {
+  const enqueueSource = outboxSource.slice(outboxSource.indexOf("export async function enqueueSaleCompletedEvent"));
+  const outboxExisting = enqueueSource.indexOf("if (existing)");
+  const outboxBarrier = enqueueSource.indexOf("SHIFT_FINALIZATION_IN_PROGRESS");
+  const outboxSequence = enqueueSource.indexOf("ensureDeviceSyncState");
+  assert.ok(outboxExisting < outboxBarrier && outboxBarrier < outboxSequence);
+
+  const checkoutExisting = checkoutSource.indexOf("if (existing)", checkoutSource.indexOf("prepareOnlineCheckoutIntent"));
+  const checkoutBarrier = checkoutSource.indexOf("SHIFT_FINALIZATION_IN_PROGRESS");
+  const checkoutInsert = checkoutSource.indexOf("INSERT_CHECKOUT_INTENT_SQL", checkoutBarrier);
+  assert.ok(checkoutExisting < checkoutBarrier && checkoutBarrier < checkoutInsert);
+
+  assert.match(custodySource, /existing\?\.state === "FINALIZING"[\s\S]*resolved = toGuard\(existing\)/);
+  assert.match(preparationSource, /finalizationToken: Crypto\.randomUUID\(\)/);
+  assert.match(custodySource, /local_high_water[^]*server_checkpoint/);
+  assert.match(custodySource, /state='CLOSED'/);
+  assert.match(custodySource, /SHIFT_FINALIZATION_COMPLETION_NOT_DURABLE/);
+  assert.doesNotMatch(shiftScreenSource, /cancelShiftFinalizationGuard/);
 });

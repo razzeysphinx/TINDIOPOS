@@ -1,5 +1,5 @@
 export const TINDIO_DATABASE_NAME = "tindio-mobile.db";
-export const TINDIO_LOCAL_SCHEMA_VERSION = 11;
+export const TINDIO_LOCAL_SCHEMA_VERSION = 12;
 
 export type LocalMigration = {
   version: number;
@@ -252,6 +252,29 @@ export const LOCAL_MIGRATIONS: LocalMigration[] = [
       );
       CREATE INDEX IF NOT EXISTS idx_receipt_copy_history
         ON receipt_copy_jobs (organization_id,event_id,copy_number DESC);
+    `,
+  },
+  {
+    version: 12,
+    name: "mob_08_shift_finalization_guard",
+    sql: `
+      CREATE TABLE IF NOT EXISTS shift_finalization_guards (
+        organization_id TEXT NOT NULL,
+        shift_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        store_id TEXT NOT NULL,
+        register_id TEXT NOT NULL,
+        finalization_token TEXT NOT NULL,
+        local_high_water INTEGER NOT NULL CHECK (local_high_water >= 0),
+        state TEXT NOT NULL CHECK (state IN ('FINALIZING','CLOSED')),
+        started_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_error TEXT,
+        PRIMARY KEY (organization_id, shift_id),
+        UNIQUE (organization_id, finalization_token)
+      );
+      CREATE INDEX IF NOT EXISTS idx_shift_finalization_guard_device
+        ON shift_finalization_guards (organization_id, device_id, state);
     `,
   },
 ];

@@ -86,6 +86,13 @@ export async function enqueueSaleCompletedEvent(
         return;
       }
 
+      const finalizing = await transaction.getFirstAsync<{ shift_id: string }>(
+        "SELECT shift_id FROM shift_finalization_guards WHERE organization_id=? AND shift_id=? AND state='FINALIZING'",
+        input.organizationId,
+        input.shiftId,
+      );
+      if (finalizing) throw new Error("SHIFT_FINALIZATION_IN_PROGRESS");
+
       const state =
         await ensureDeviceSyncState(
           transaction,

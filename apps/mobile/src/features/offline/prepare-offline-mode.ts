@@ -4,7 +4,8 @@ import { saveBusinessContextSnapshot } from "../../db/business-context-cache";
 import { saveReferenceSnapshot } from "../../db/reference-cache";
 import { saveActiveShiftSnapshot } from "../../db/shift-cache";
 import { initializeSyncCursor } from "../../db/sync-cursor";
-import { fetchPosV2CatalogPage, fetchPosV2Core, fetchPosV2Reference, fetchPosV2SyncBaseline, validatePosV2Device } from "../../lib/tindio-api";
+import { isShiftFinalizationInProgress } from "../../db/shift-custody";
+import { acquirePosV2ShiftCustody, fetchPosV2CatalogPage, fetchPosV2Core, fetchPosV2Reference, fetchPosV2SyncBaseline, validatePosV2Device } from "../../lib/tindio-api";
 import { loadMobileDeviceIdentity, saveMobileDeviceIdentity } from "../device/device-store";
 import { saveOfflineAuthorizationGrant } from "./offline-authorization";
 
@@ -31,6 +32,13 @@ export async function prepareOfflineMode(organizationId: string): Promise<Offlin
   const shift = core.activeShift;
   if (!shift) return { ok: false, reason: "ACTIVE_SHIFT_REQUIRED" };
   if (shift.storeId !== binding.storeId || shift.registerId !== binding.registerId) return { ok: false, reason: "SHIFT_TERMINAL_MISMATCH" };
+  try {
+    if (await isShiftFinalizationInProgress(organizationId, shift.id)) {
+      return { ok: false, reason: "SHIFT_FINALIZATION_IN_PROGRESS" };
+    }
+  } catch {
+    return { ok: false, reason: "SHIFT_FINALIZATION_STATE_UNAVAILABLE" };
+  }
 
   let reference;
   try { reference = await fetchPosV2Reference(organizationId); } catch { return { ok: false, reason: "REFERENCE_UNAVAILABLE" }; }
@@ -58,6 +66,22 @@ export async function prepareOfflineMode(organizationId: string): Promise<Offlin
     await saveMobileDeviceIdentity({ ...stored, binding, lastVerifiedAt: new Date().toISOString() });
     await initializeSyncCursor(organizationId, stored.credential.deviceId, binding.storeId, baseline.serverRevision);
   } catch { return { ok: false, reason: "CACHE_PERSISTENCE_FAILED" }; }
+
+  try {
+    const custody = await acquirePosV2ShiftCustody(
+      organizationId,
+      stored.credential,
+      shift.id,
+    );
+    if (
+      !custody.ok
+      || custody.deviceId !== stored.credential.deviceId
+      || custody.shiftId !== shift.id
+      || custody.state !== "ACTIVE"
+    ) return { ok: false, reason: "SHIFT_CUSTODY_UNAVAILABLE" };
+  } catch {
+    return { ok: false, reason: "SHIFT_CUSTODY_UNAVAILABLE" };
+  }
 
   try {
     const grant = await saveOfflineAuthorizationGrant({ organizationId, profileId: core.profileId, employeeId: core.employee.id, deviceId: stored.credential.deviceId, storeId: binding.storeId, registerId: binding.registerId, shiftId: shift.id });

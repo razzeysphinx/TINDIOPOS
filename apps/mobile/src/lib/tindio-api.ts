@@ -291,16 +291,33 @@ export async function openPosV2Shift(
 
 export async function closePosV2Shift(
   organizationId: string,
+  credential: PosDeviceCredential,
   input: {
     shiftId: string;
     countedCash: string;
     closingNote?: string;
+    localHighWater: number;
+    finalizationToken: string;
   },
 ) {
   return (await request("/api/pos/v2/shifts/close", {
     organizationId,
-    init: jsonPost(input),
+    init: jsonPost({ ...input, device: credential }),
   })).json() as Promise<PosCloseShiftV2Response>;
+}
+
+export async function acquirePosV2ShiftCustody(
+  organizationId: string,
+  credential: PosDeviceCredential,
+  shiftId: string,
+) {
+  return (await request("/api/pos/v2/shifts/custody", {
+    organizationId,
+    init: jsonPost({ shiftId, device: credential }),
+  })).json() as Promise<
+    | { ok: true; deviceId: string; shiftId: string; state: "ACTIVE" }
+    | { ok: false; message: string }
+  >;
 }
 
 export async function recordPosV2CashMovement(

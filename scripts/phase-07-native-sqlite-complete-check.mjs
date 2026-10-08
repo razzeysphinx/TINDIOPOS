@@ -28,7 +28,7 @@ test("Phase 07 complete foundation remains persistent, tenant-scoped, and phase-
   const sync = read("apps/mobile/app/(app)/sync-status.tsx");
   const localSource = dbFiles.map(read).join("\n");
 
-  assert.match(schema, /TINDIO_LOCAL_SCHEMA_VERSION\s*=\s*9/);
+  assert.match(schema, /TINDIO_LOCAL_SCHEMA_VERSION\s*=\s*10/);
   assert.match(schema, /version:\s*1/);
   assert.match(schema, /version:\s*2/);
   for (const table of ["local_metadata", "business_context_snapshots", "local_cache_state", "reference_snapshots", "catalog_items", "customer_cache", "shift_snapshots", "receipt_summaries", "checkout_intents"]) assert.match(schema, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));

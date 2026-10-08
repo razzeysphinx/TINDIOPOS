@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { getOrganizationCacheStats, type OrganizationCacheStats } from "../../src/db/cache-stats";
 import { hasBusinessContextSnapshot } from "../../src/db/business-context-cache";
 import { getDeviceSyncState, type DeviceSyncState } from "../../src/db/device-sync-state";
+import { listOutboxRecoveryItems } from "../../src/db/outbox";
 import { getSyncCursor, type SyncCursorState } from "../../src/db/sync-cursor";
 import { armPhase07RestartProof, getLocalDatabaseHealth, readPhase07RestartProof, type Phase07RestartProof, verifyLocalPersistence } from "../../src/db/health";
 import { useBusinessContext } from "../../src/features/business/use-business-context";
@@ -18,6 +19,10 @@ import { prepareOfflineMode } from "../../src/features/offline/prepare-offline-m
 import { refreshDeviceCheckpoint } from "../../src/features/outbox/checkpoint-sync";
 import { getSafeOutboxDiagnostics } from "../../src/features/outbox/outbox-summary";
 import { syncOutboxEvents } from "../../src/features/outbox/outbox-sync";
+import { retryReviewedOutboxEvent } from "../../src/features/outbox/outbox-recovery";
+import { evaluateOutboxRecovery } from "../../src/features/outbox/recovery-policy";
+import type { OutboxRecoveryItem } from "../../src/features/outbox/outbox-types";
+import { useSession } from "../../src/features/session/session-provider";
 import { reconcileCloud } from "../../src/features/sync/reconcile-cloud";
 import { getStoreHubState, type StoreHubState } from "../../src/db/store-hub-cache";
 import { synchronizeWithStoreHub } from "../../src/features/store-hub/store-hub-sync";
@@ -25,6 +30,7 @@ import { getIsolatedRuntimeDiagnostics } from "../../src/features/offline/isolat
 
 export default function SyncStatusScreen() {
   const { data, reload, mode, connectionMode } = useBusinessContext();
+  const { accessMode, reauthenticate } = useSession();
   const organizationId = data?.core.organization.id;
   const terminal = useTerminalDevice(organizationId);
   const identity = terminal.identity;
@@ -47,6 +53,11 @@ export default function SyncStatusScreen() {
     useState<StoreHubState | null>(null);
   const [isolatedDiagnostics, setIsolatedDiagnostics] =
     useState<Awaited<ReturnType<typeof getIsolatedRuntimeDiagnostics>> | null>(null);
+  const [recoveryItems, setRecoveryItems] = useState<OutboxRecoveryItem[]>([]);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryPassword, setRecoveryPassword] = useState("");
+  const [recoveryNote, setRecoveryNote] = useState("");
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
 
   const load = useCallback(async () => {
     setHealth(await getLocalDatabaseHealth()); setRestartProof(await readPhase07RestartProof());
@@ -55,7 +66,12 @@ export default function SyncStatusScreen() {
     setOfflineState(authorization.ok ? "READY" : authorization.reason === "EXPIRED" ? "EXPIRED" : savedGrant ? "BLOCKED" : "NOT PREPARED");
     if (organizationId) {
       setCached(await hasBusinessContextSnapshot(organizationId)); setStats(await getOrganizationCacheStats(organizationId));
-      setOutbox(await getSafeOutboxDiagnostics(organizationId));
+      const [outboxDiagnostics, recovery] = await Promise.all([
+        getSafeOutboxDiagnostics(organizationId),
+        deviceId ? listOutboxRecoveryItems(organizationId, deviceId) : Promise.resolve([]),
+      ]);
+      setOutbox(outboxDiagnostics);
+      setRecoveryItems(recovery);
       setSequenceState(deviceId ? await getDeviceSyncState(organizationId, deviceId) : null);
       setCursor(deviceId && binding ? await getSyncCursor(organizationId, deviceId, binding.storeId) : null);
       setInventoryDiagnostics(
@@ -115,9 +131,62 @@ export default function SyncStatusScreen() {
     await load();
   }, [organizationId, load]);
 
+  const reauthenticateForRecovery = useCallback(async () => {
+    if (!organizationId || recoveryBusy || !recoveryEmail.trim() || !recoveryPassword) return;
+    setRecoveryBusy(true);
+    setMessage("Reauthenticating without releasing transaction custody…");
+    try {
+      const result = await reauthenticate(recoveryEmail, recoveryPassword, organizationId);
+      setRecoveryPassword("");
+      if (result.ok) {
+        await reload(organizationId);
+        setMessage("Authentication refreshed. Review and retry the blocked transaction.");
+      } else {
+        setMessage(result.message);
+      }
+      await load();
+    } catch {
+      setMessage("Reauthentication is unavailable. Local transactions remain protected.");
+    } finally {
+      setRecoveryBusy(false);
+    }
+  }, [load, organizationId, reauthenticate, recoveryBusy, recoveryEmail, recoveryPassword, reload]);
+
+  const retryRecoveryEvent = useCallback(async (eventId: string) => {
+    if (!organizationId || !data?.core || !identity || accessMode !== "online" || recoveryBusy) return;
+    setRecoveryBusy(true);
+    setMessage("Authorizing same-identity recovery retry…");
+    try {
+      const result = await retryReviewedOutboxEvent({
+        organizationId,
+        eventId,
+        reason: recoveryNote,
+        core: data.core,
+        identity,
+      });
+      setMessage(
+        result.ok
+          ? `Recovery retry completed: ${result.report.completed} delivered.`
+          : `Recovery retry blocked: ${result.reason}`,
+      );
+      if (result.ok) setRecoveryNote("");
+      await reload(organizationId);
+      await load();
+    } catch {
+      setMessage("Recovery retry could not be completed. The saved transaction remains protected.");
+      await load();
+    } finally {
+      setRecoveryBusy(false);
+    }
+  }, [accessMode, data, identity, load, organizationId, recoveryBusy, recoveryNote, reload]);
+
   const sequenceHealth = !sequenceState ? "CHECK REQUIRED" : outbox?.oldestUnresolved && outbox.oldestUnresolved.deviceSequence > sequenceState.serverCheckpoint + 1 ? "GAP DETECTED" : "CONTIGUOUS";
 
   const performance = getPerformanceMetrics();
+  const visibleRecoveryItems = recoveryItems.filter((event) =>
+    data?.core.storeIds.includes(event.storeId),
+  );
+  const hiddenRecoveryCount = recoveryItems.length - visibleRecoveryItems.length;
 
   return <View>
     <Text>Cloud Backend: {mode === "offline" ? "OFFLINE" : "CONNECTED / CHECK REQUIRED"}</Text><Text>Native SQLite: {health?.ready ? "READY — PHASE 07" : "CHECK REQUIRED"}</Text><Text>SQLite schema: {health?.schemaVersion ?? 0}/{health?.expectedSchemaVersion ?? 2}</Text><Text>SQLite integrity: {health?.integrity === "ok" ? "OK" : "CHECK REQUIRED"}</Text><Text>Business context cached: {cached === null ? "UNKNOWN" : cached ? "YES" : "NO"}</Text><Text>Business context rows: {stats?.businessContext ?? 0}</Text><Text>Reference snapshots: {stats?.reference ?? 0}</Text><Text>Catalog items: {stats?.catalog ?? 0}</Text><Text>Observed customers: {stats?.customers ?? 0}</Text><Text>Shift snapshots: {stats?.shifts ?? 0}</Text><Text>Receipt summaries: {stats?.receipts ?? 0}</Text><Text>Persistence verified: {health?.persistenceVerifiedAt ?? "NOT YET"}</Text><Text>Restart proof: {restartProof ? `${restartProof.organizationId} at ${restartProof.armedAt}` : "NOT ARMED"}</Text>
@@ -125,6 +194,33 @@ export default function SyncStatusScreen() {
     <Pressable onPress={() => void verify()}><Text>Verify SQLite persistence</Text></Pressable><Pressable onPress={() => void arm()}><Text>Arm Phase 07 restart proof</Text></Pressable><Pressable disabled={mode !== "online"} onPress={() => void prepare()}><Text>Prepare Offline Mode</Text></Pressable><Pressable onPress={() => void revoke()}><Text>Revoke Offline Authorization</Text></Pressable><Pressable onPress={() => void reload(organizationId)}><Text>Recheck Backend</Text></Pressable>
     <Text>Cold-start Offline: PHASE 08</Text><Text>Phase 09 Local-First: IMPLEMENTED</Text><Text>Catalog source: SQLite</Text><Text>Local-first metrics: SQLite catalog reads {getLocalFirstMetrics().sqliteCatalogReads}; SQLite barcode reads {getLocalFirstMetrics().sqliteBarcodeReads}; SQLite reference reads {getLocalFirstMetrics().sqliteReferenceReads}; modifier cache hits {getLocalFirstMetrics().modifierCacheHits}; modifier network fallbacks {getLocalFirstMetrics().modifierNetworkFallbacks}; cloud catalog searches {getLocalFirstMetrics().cloudCatalogSearches}</Text>
     <Text>Durable Outbox: PHASE 10</Text><Text>Outbox pending / syncing / conflict / failed: {outbox?.summary.pending ?? 0} / {outbox?.summary.syncing ?? 0} / {outbox?.summary.conflict ?? 0} / {outbox?.summary.failed ?? 0}</Text><Text>Oldest unresolved: {outbox?.oldestUnresolved ? `${outbox.oldestUnresolved.localReference} — sequence ${outbox.oldestUnresolved.deviceSequence} — ${outbox.oldestUnresolved.state} — ${outbox.oldestUnresolved.totalMinor} ${outbox.oldestUnresolved.currencyCode}` : "NONE"}</Text><Pressable disabled={mode !== "online"} onPress={() => void syncOutbox()}><Text>Sync durable outbox now</Text></Pressable>
+    <Text>MOB-04 TRANSACTION RECOVERY</Text>
+    <Text>Authentication state: {accessMode === "online" ? "ONLINE AUTHENTICATED" : "REAUTHENTICATION REQUIRED"}</Text>
+    <TextInput accessibilityLabel="Recovery employee email" autoCapitalize="none" autoComplete="email" editable={!recoveryBusy} keyboardType="email-address" onChangeText={setRecoveryEmail} placeholder="Recovery employee email" value={recoveryEmail} />
+    <TextInput accessibilityLabel="Recovery employee password" autoComplete="current-password" editable={!recoveryBusy} onChangeText={setRecoveryPassword} placeholder="Password" secureTextEntry value={recoveryPassword} />
+    <Pressable accessibilityRole="button" disabled={recoveryBusy || !recoveryEmail.trim() || !recoveryPassword} onPress={() => void reauthenticateForRecovery()}><Text>Reauthenticate in place</Text></Pressable>
+    <TextInput accessibilityLabel="Manager recovery note" editable={!recoveryBusy} onChangeText={setRecoveryNote} placeholder="Manager recovery note (required for review)" value={recoveryNote} />
+    {visibleRecoveryItems.map((event) => {
+      const decision = identity?.binding && data?.core
+        ? evaluateOutboxRecovery(event, {
+            organizationId: data.core.organization.id,
+            profileId: data.core.profileId,
+            employeeId: data.core.employee.id,
+            permissions: data.core.permissions,
+            storeIds: data.core.storeIds,
+            deviceId: identity.credential.deviceId,
+            storeId: identity.binding.storeId,
+            registerId: identity.binding.registerId,
+          })
+        : { ok: false as const, reason: "DEVICE_REVALIDATION_REQUIRED" };
+      return <View key={event.eventId}>
+        <Text>{event.localReference} — sequence {event.deviceSequence ?? "CORRUPT"} — {event.state}</Text>
+        <Text>{event.corrupt ? "Damaged local record; escalation required." : `${event.totalMinor ?? "?"} ${event.currencyCode ?? ""} — ${event.itemCount ?? "?"} item(s)`}</Text>
+        <Text>{event.conflictType ?? "NO CLASSIFICATION"}: {event.lastError ?? "No error detail recorded."}</Text>
+        {decision.ok ? <Pressable accessibilityRole="button" disabled={accessMode !== "online" || recoveryBusy} onPress={() => void retryRecoveryEvent(event.eventId)}><Text>Retry original transaction</Text></Pressable> : <Text>Recovery blocked: {decision.reason}</Text>}
+      </View>;
+    })}
+    {hiddenRecoveryCount > 0 ? <Text>{hiddenRecoveryCount} unresolved transaction(s) are hidden because this employee is not assigned to their store. Custody remains protected.</Text> : null}
     <Text>PHASE 11 DEVICE SEQUENCE</Text><Text>Device: {deviceId ?? "NOT AVAILABLE"}</Text><Text>Next local sequence: {sequenceState?.nextSequence ?? "CHECK REQUIRED"}</Text><Text>Local known server checkpoint: {sequenceState?.serverCheckpoint ?? "CHECK REQUIRED"}</Text><Text>Remote server checkpoint: {remoteCheckpoint ?? "NOT CHECKED"}</Text><Text>Next expected server sequence: {sequenceState ? sequenceState.serverCheckpoint + 1 : "CHECK REQUIRED"}</Text><Text>Sequence health: {sequenceHealth}</Text><Pressable disabled={mode !== "online"} onPress={() => void refreshCheckpoint()}><Text>Refresh Server Checkpoint</Text></Pressable>
     <Text>PHASE 12 CLOUD RECONCILIATION</Text><Text>Delta sync: {cursor?.initialized ? "INITIALIZED" : "NOT INITIALIZED"}</Text><Text>Pull cursor: {cursor?.pullCursor ?? 0}</Text><Text>Last push: {cursor?.lastPushAt ?? "NEVER"}</Text><Text>Last pull: {cursor?.lastPullAt ?? "NEVER"}</Text><Text>Last reconciliation: {cursor?.lastReconcileAt ?? "NEVER"}</Text><Text>Last sync error: {cursor?.lastError ?? "NONE"}</Text><Text>Server changes remaining: UNKNOWN UNTIL RECONCILE</Text><Pressable disabled={mode !== "online"} onPress={() => void reconcile()}><Text>Reconcile With Cloud</Text></Pressable>
     <Text>PHASE 16 ISOLATED DEVICE MODE</Text>

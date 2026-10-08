@@ -3,6 +3,7 @@ import { ensureDeviceSyncState } from "./device-sync-state";
 import type {
   DurableOutboxEvent,
   NewDurableOutboxEvent,
+  OutboxRecoveryItem,
   OutboxState,
   OutboxSummary,
   SafeOutboxEventSummary,
@@ -33,6 +34,9 @@ type OutboxRow = {
   server_sale_id: string | null;
   official_receipt_number: number | null;
 };
+
+export const OUTBOX_RECOVERY_UPDATE_SQL = `UPDATE outbox_events SET state='LOCAL_PENDING',next_retry_at=NULL,last_error=?,conflict_type=NULL,updated_at=? WHERE organization_id=? AND device_id=? AND event_id=? AND state=?`;
+export const OUTBOX_RECOVERY_AUDIT_SQL = `INSERT INTO outbox_recovery_actions (organization_id,event_id,device_id,actor_profile_id,actor_employee_id,prior_state,prior_error,prior_conflict_type,action,reason,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
 
 function toEvent(row: OutboxRow): DurableOutboxEvent | null {
   try {
@@ -169,6 +173,36 @@ export async function listPendingOutboxEvents(organizationId: string, deviceId?:
   return rows.map(toEvent).filter((event): event is DurableOutboxEvent => event !== null);
 }
 
+function toRecoveryItem(row: OutboxRow): OutboxRecoveryItem {
+  const event = toEvent(row);
+  let snapshot: Partial<DurableOutboxEvent["snapshot"]> = {};
+  try {
+    snapshot = JSON.parse(row.snapshot_json) as Partial<DurableOutboxEvent["snapshot"]>;
+  } catch {
+    // The row stays visible and blocks FIFO even when its display snapshot is damaged.
+  }
+  return {
+    eventId: row.event_id,
+    organizationId: row.organization_id,
+    storeId: row.store_id,
+    registerId: row.register_id,
+    deviceId: row.device_id,
+    deviceSequence: Number.isSafeInteger(row.device_sequence) && row.device_sequence > 0
+      ? row.device_sequence
+      : null,
+    employeeId: typeof snapshot.employeeId === "string" ? snapshot.employeeId : null,
+    localReference: row.local_reference,
+    state: row.state,
+    createdAt: row.created_at,
+    lastError: row.last_error,
+    conflictType: row.conflict_type,
+    currencyCode: typeof snapshot.currencyCode === "string" ? snapshot.currencyCode : null,
+    totalMinor: Number.isSafeInteger(snapshot.totalMinor) ? snapshot.totalMinor! : null,
+    itemCount: Number.isSafeInteger(snapshot.itemCount) ? snapshot.itemCount! : null,
+    corrupt: event === null,
+  };
+}
+
 export async function listUnresolvedOutboxEvents(organizationId: string, deviceId: string) {
   const rows = await (await getTindioDatabase()).getAllAsync<OutboxRow>(
     "SELECT * FROM outbox_events WHERE organization_id = ? AND device_id = ? AND state <> 'SYNCED' ORDER BY device_sequence, created_at, event_id",
@@ -179,6 +213,68 @@ export async function listUnresolvedOutboxEvents(organizationId: string, deviceI
     const event = toEvent(row);
     if (!event) throw new Error("OUTBOX_ROW_CORRUPT");
     return event;
+  });
+}
+
+export async function listOutboxRecoveryItems(
+  organizationId: string,
+  deviceId: string,
+): Promise<OutboxRecoveryItem[]> {
+  const rows = await (await getTindioDatabase()).getAllAsync<OutboxRow>(
+    "SELECT * FROM outbox_events WHERE organization_id = ? AND device_id = ? AND state <> 'SYNCED' ORDER BY device_sequence, created_at, event_id",
+    organizationId,
+    deviceId,
+  );
+  return rows.map(toRecoveryItem);
+}
+
+export async function authorizeOutboxRecoveryRetry(input: {
+  organizationId: string;
+  deviceId: string;
+  eventId: string;
+  actorProfileId: string;
+  actorEmployeeId: string;
+  reason: string;
+  authorizedAt?: string;
+}) {
+  const database = await getTindioDatabase();
+  await database.withExclusiveTransactionAsync(async (transaction) => {
+    const row = await transaction.getFirstAsync<OutboxRow>(
+      "SELECT * FROM outbox_events WHERE organization_id=? AND device_id=? AND event_id=?",
+      input.organizationId,
+      input.deviceId,
+      input.eventId,
+    );
+    if (!row || (row.state !== "FAILED" && row.state !== "CONFLICT")) {
+      throw new Error("OUTBOX_RECOVERY_STATE_CHANGED");
+    }
+
+    const authorizedAt = input.authorizedAt ?? new Date().toISOString();
+    const updated = await transaction.runAsync(
+      OUTBOX_RECOVERY_UPDATE_SQL,
+      `Retry authorized by employee ${input.actorEmployeeId}.`,
+      authorizedAt,
+      input.organizationId,
+      input.deviceId,
+      input.eventId,
+      row.state,
+    );
+    if (updated.changes !== 1) throw new Error("OUTBOX_RECOVERY_STATE_CHANGED");
+
+    await transaction.runAsync(
+      OUTBOX_RECOVERY_AUDIT_SQL,
+      input.organizationId,
+      input.eventId,
+      input.deviceId,
+      input.actorProfileId,
+      input.actorEmployeeId,
+      row.state,
+      row.last_error,
+      row.conflict_type,
+      "RETRY_AUTHORIZED",
+      input.reason,
+      authorizedAt,
+    );
   });
 }
 

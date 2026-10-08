@@ -39,6 +39,11 @@ type Value = {
     email: string,
     password: string,
   ): Promise<Result>;
+  reauthenticate(
+    email: string,
+    password: string,
+    organizationId: string,
+  ): Promise<Result>;
   signOut(): Promise<Result>;
   refreshOfflineAccess(): Promise<void>;
 };
@@ -213,6 +218,41 @@ export function SessionProvider({
       return { ok: true };
     }, []);
 
+  const reauthenticate = useCallback(
+    async (
+      email: string,
+      password: string,
+      organizationId: string,
+    ): Promise<Result> => {
+      const result = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (result.error || !result.data.session) {
+        return { ok: false, message: "Email or password is incorrect." };
+      }
+
+      try {
+        const core = await fetchPosV2Core(organizationId);
+        if (core.core.organization.id !== organizationId) {
+          throw new Error("ORGANIZATION_MISMATCH");
+        }
+        setSession(result.data.session);
+        setAccessMode("online");
+        setOfflineExpiresAt(null);
+        return { ok: true };
+      } catch {
+        await supabase.auth.signOut();
+        await applyOfflineReadiness();
+        return {
+          ok: false,
+          message: "This account is not authorized for the protected business. Local transactions remain saved.",
+        };
+      }
+    },
+    [applyOfflineReadiness],
+  );
+
   const value = useMemo(
     () => ({
       session,
@@ -220,6 +260,7 @@ export function SessionProvider({
       accessMode,
       offlineExpiresAt,
       signIn,
+      reauthenticate,
       signOut,
       refreshOfflineAccess,
     }),
@@ -229,6 +270,7 @@ export function SessionProvider({
       accessMode,
       offlineExpiresAt,
       signIn,
+      reauthenticate,
       signOut,
       refreshOfflineAccess,
     ],

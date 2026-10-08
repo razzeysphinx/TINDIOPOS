@@ -1,5 +1,5 @@
 export const TINDIO_DATABASE_NAME = "tindio-mobile.db";
-export const TINDIO_LOCAL_SCHEMA_VERSION = 9;
+export const TINDIO_LOCAL_SCHEMA_VERSION = 10;
 
 export type LocalMigration = {
   version: number;
@@ -163,6 +163,29 @@ export const LOCAL_MIGRATIONS: LocalMigration[] = [
       );
       CREATE INDEX IF NOT EXISTS idx_checkout_intents_unresolved
         ON checkout_intents (organization_id, device_id, state, created_at);
+    `,
+  },
+  {
+    version: 10,
+    name: "mob_04_outbox_recovery_audit",
+    sql: `
+      CREATE TABLE IF NOT EXISTS outbox_recovery_actions (
+        action_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        organization_id TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        actor_profile_id TEXT NOT NULL,
+        actor_employee_id TEXT NOT NULL,
+        prior_state TEXT NOT NULL CHECK (prior_state IN ('FAILED','CONFLICT')),
+        prior_error TEXT,
+        prior_conflict_type TEXT,
+        action TEXT NOT NULL CHECK (action IN ('RETRY_AUTHORIZED')),
+        reason TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (event_id) REFERENCES outbox_events(event_id) ON DELETE RESTRICT
+      );
+      CREATE INDEX IF NOT EXISTS idx_outbox_recovery_event
+        ON outbox_recovery_actions (organization_id, event_id, created_at);
     `,
   },
 ];

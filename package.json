@@ -24,6 +24,7 @@
     "test:mobile-online-checkout-intent": "node --test scripts/mobile-online-checkout-intent.test.mjs",
     "test:mobile-sqlite-durability": "node --test scripts/mobile-sqlite-durability.test.mjs",
     "test:mobile-outbox-coordinator": "node --test scripts/mobile-outbox-coordinator.test.mjs",
+    "test:mobile-outbox-recovery": "node --test scripts/mobile-outbox-recovery.test.mjs",
     "test:phase-08-cold-start-offline": "node --test scripts/phase-08-cold-start-offline-check.mjs",
     "test:phase-09-local-first": "node --test scripts/phase-09-local-first-check.mjs",
     "test:phase-10-durable-outbox": "node --test scripts/phase-10-durable-outbox-check.mjs",

@@ -92,3 +92,22 @@ export type SafeOutboxEventSummary = Pick<
   DurableOutboxEvent,
   "eventId" | "localReference" | "state" | "createdAt" | "lastError" | "conflictType" | "deviceSequence"
 > & Pick<DurableSaleSnapshot, "currencyCode" | "totalMinor" | "itemCount">;
+
+export type OutboxRecoveryItem = {
+  eventId: string;
+  organizationId: string;
+  storeId: string;
+  registerId: string;
+  deviceId: string;
+  deviceSequence: number | null;
+  employeeId: string | null;
+  localReference: string;
+  state: OutboxState;
+  createdAt: string;
+  lastError: string | null;
+  conflictType: string | null;
+  currencyCode: string | null;
+  totalMinor: number | null;
+  itemCount: number | null;
+  corrupt: boolean;
+};

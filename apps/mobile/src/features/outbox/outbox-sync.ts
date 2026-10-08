@@ -189,12 +189,14 @@ async function applyAck(event: DurableOutboxEvent, ack: PosSyncPushAck) {
   }
 
   const failureCode = sequenceFailureCode(ack);
+  const reportedFailureCode = ack.result.ok ? null : ack.result.failureCode ?? null;
   await updateOutboxEvent(event.organizationId, event.eventId, {
     state: ack.status === "FAILED" ? "FAILED" : "CONFLICT",
     lastError: ack.result.ok
       ? "Server did not acknowledge this saved sale."
       : ack.result.message,
     conflictType: failureCode
+      ?? reportedFailureCode
       ?? (ack.status === "FAILED" ? "AUTHORIZATION_CHANGED" : "SERVER_REJECTED"),
     nextRetryAt: null,
   });

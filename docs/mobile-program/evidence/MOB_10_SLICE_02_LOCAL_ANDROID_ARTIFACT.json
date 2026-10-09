@@ -1,0 +1,106 @@
+{
+  "phase": "MOB-10",
+  "slice": 2,
+  "status": "BLOCKED",
+  "starting_commit": "80b2aeb53dd6ef1f2233d7c2d9d789985ebd349d",
+  "source_commit": "80b2aeb53dd6ef1f2233d7c2d9d789985ebd349d",
+  "lockfile_hash": "sha256:b4450bc03089943af8001072f8f18c3895b1cd0f0401ef94f42bb02561ff33cb",
+  "build": {
+    "profile": "local-cng-release-arm64-qualification",
+    "method": "Expo CNG prebuild plus Gradle :app:assembleRelease in a disposable short-path copy",
+    "local_build_id": "local-gradle-20261009T121554Z-80b2aeb",
+    "EAS_build_id": null,
+    "package_id": "com.tindio.pos",
+    "version_name": "1.0.0",
+    "version_code": 1,
+    "min_sdk": 24,
+    "compile_sdk": 36,
+    "target_sdk": 36,
+    "abi": [
+      "arm64-v8a"
+    ],
+    "artifact_path": "C:\\tmp\\TINDIOPOS-MOB10-80b2aeb-arm64-local.apk",
+    "artifact_size_bytes": 54417231,
+    "artifact_SHA256": "FBAFF2C3322F26DEEFA29F8096739EEF5D936ABF215EEF187862C3B598D4F5B3",
+    "signature_scheme": "APK Signature Scheme v2",
+    "signing_identity": "generated Android debug certificate; not production signing",
+    "signer_certificate_SHA256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "embedded_bundle_present": true,
+    "metro_required": false,
+    "zipalign_16k_check": "PASS",
+    "result": "PASS"
+  },
+  "runtime": {
+    "device_model": null,
+    "OS_API": null,
+    "page_size": null,
+    "local_schema_version": 12,
+    "backend_contract_version": "POS API v2",
+    "test_environment": "Repository local Expo environment embedded; values redacted; runtime connectivity not exercised",
+    "synthetic_fixture_id": null,
+    "tester": "Codex local build audit",
+    "reviewer": null,
+    "artifact_created_at": "2026-10-09T12:15:54.3831581Z",
+    "executed_at": "2026-10-09T12:15:54.3831581Z",
+    "device_discovery": "ADB started successfully and reported no attached devices"
+  },
+  "validation": {
+    "local_arm64_assemble_release": "PASS",
+    "apk_metadata_signature_abi": "PASS",
+    "apk_zipalign_16k": "PASS_PRELIMINARY_ONLY",
+    "adb_device_discovery": "BLOCKED_NO_DEVICE",
+    "mobile_typecheck": "PASS",
+    "root_typecheck": "PASS",
+    "lint": "PASS_0_ERRORS_3_PREEXISTING_WARNINGS",
+    "android_javascript_export": "PASS_NOT_DEVICE_EVIDENCE",
+    "static_certification": "BLOCKED_142_OF_143_PASS_LOCAL_SUPABASE_UNAVAILABLE",
+    "git_diff_check": "PASS"
+  },
+  "acceptance_cases": [
+    {
+      "case_id": "A01",
+      "canonical_phase": "01-08",
+      "ticket_id": "MOB-10",
+      "result": "NOT_RUN",
+      "expected_result": "A clean installed Android binary completes sign-in, enrollment, assignment, preparation, and reaches a truthful ready state.",
+      "actual_result": "An installable APK exists, but ADB reported no attached device; no physical runtime step was executed."
+    },
+    {
+      "case_id": "A07",
+      "canonical_phase": "08/16",
+      "ticket_id": "MOB-10",
+      "result": "NOT_RUN",
+      "expected_result": "A prepared app cold-starts in airplane mode with scoped cached catalog, cash flow, and receipt access inside the grant window.",
+      "actual_result": "Requires the completed A01 physical-device baseline and was not executed."
+    },
+    {
+      "case_id": "A08",
+      "canonical_phase": "06/08",
+      "ticket_id": "MOB-10",
+      "result": "NOT_RUN",
+      "expected_result": "First-install offline or incomplete preparation reports preparation required and never reports ready.",
+      "actual_result": "No physical clean installation was available."
+    },
+    {
+      "case_id": "A42",
+      "canonical_phase": "07/18/23",
+      "ticket_id": "MOB-10",
+      "result": "NOT_RUN",
+      "expected_result": "An in-place binary upgrade preserves unresolved transaction identity, payload, secret, sequence, and exactly-once recovery.",
+      "actual_result": "Requires a prior installed binary and physical custody fixture; neither exists yet."
+    },
+    {
+      "case_id": "A48",
+      "canonical_phase": "23/24",
+      "ticket_id": "MOB-10",
+      "result": "NOT_RUN",
+      "expected_result": "The actual signed AAB passes target API, manifest, native-library, and 16 KB qualification.",
+      "actual_result": "The local APK passed a preliminary 16 KB zipalign check, but it is ARM64-only, debug-key signed, and is not the production AAB."
+    }
+  ],
+  "operation_ids": [],
+  "redacted_ledger_assertions": [],
+  "log_or_video_artifact": null,
+  "unresolved_defect_link": null,
+  "secrets_or_real_merchant_data_included": false
+}

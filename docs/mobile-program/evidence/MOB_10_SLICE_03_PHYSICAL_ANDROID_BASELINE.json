@@ -1,0 +1,94 @@
+{
+  "phase": "MOB-10",
+  "slice": 3,
+  "status": "PARTIAL_PASS",
+  "starting_commit": "ad701dfa4213a6725bb4eea7847c393ce1bc4764",
+  "implementation_commits": [
+    "d15f5c71f3bfe723e34c8ba00a98a04df21c6a3e",
+    "fd8aa9765731d9088a3c4c5e2766f4cf0088b424"
+  ],
+  "device": {
+    "manufacturer": "Xiaomi",
+    "model": "21121210G",
+    "android_version": "14",
+    "api_level": 34,
+    "abi": "arm64-v8a",
+    "kernel_page_size_bytes": 4096
+  },
+  "artifact": {
+    "path": "C:\\tmp\\TINDIOPOS-MOB10-development-cleartext-lan6.apk",
+    "sha256": "B7F5540D965F5AD7DC1C6B22B77E82D7B7CC1F3E3CA219B11178EABBC561BAD3",
+    "package_id": "com.tindio.pos",
+    "version_name": "1.0.0",
+    "version_code": 1,
+    "min_sdk": 24,
+    "target_sdk": 36,
+    "signing": "generated debug certificate; not production signing",
+    "signer_certificate_sha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "zipalign_16k": "PASS_PRELIMINARY_APK_ONLY"
+  },
+  "runtime": {
+    "sqlite_schema": "12/12",
+    "sqlite_integrity": "OK",
+    "catalog_items": 1,
+    "reference_snapshots": 1,
+    "shift_snapshots": 1,
+    "authorization_expires_at": "2026-10-10T03:15:17.756Z",
+    "outbox": {
+      "pending": 0,
+      "syncing": 0,
+      "conflict": 0,
+      "failed": 0
+    },
+    "fatal_log_count": 0,
+    "financial_transaction_created": false,
+    "app_data_cleared_after_enrollment": false
+  },
+  "database_repairs": {
+    "migration_0013_deployment_drift_repaired": true,
+    "data_api_schema_cache_refreshed": true,
+    "migration_0014_conflict_target_applied": true,
+    "database_reset": false,
+    "deletion_performed": false
+  },
+  "acceptance_cases": [
+    {
+      "case_id": "A01",
+      "result": "PASS",
+      "actual_result": "Clean install, sign-in, enrollment, current assignment and shift validation, preparation, READY OFFLINE, and online cold restart completed on the physical phone."
+    },
+    {
+      "case_id": "A07",
+      "result": "PASS",
+      "actual_result": "Disconnected force-stop/cold start entered DEVICE_ISOLATED while remaining READY OFFLINE; SQLite catalog, permitted cash-sale surface, cached-customer search, and saved local receipt access were available."
+    },
+    {
+      "case_id": "A08",
+      "result": "PASS",
+      "actual_result": "Fresh and disconnected incomplete-preparation states reported PREPARATION REQUIRED and never reported ready."
+    },
+    {
+      "case_id": "A42",
+      "result": "NOT_RUN",
+      "actual_result": "Requires a controlled in-place upgrade with an unresolved synthetic transaction."
+    },
+    {
+      "case_id": "A48",
+      "result": "NOT_RUN",
+      "actual_result": "Requires the actual production-signed AAB; the tested APK is debug-key signed."
+    }
+  ],
+  "validation": {
+    "mobile_shift_custody_leases": "PASS_6_OF_6",
+    "canonical_install": "PASS_5_OF_5",
+    "affected_phase_suites": "PASS",
+    "mobile_typecheck": "PASS",
+    "root_typecheck": "PASS",
+    "lint": "PASS_0_ERRORS_3_PREEXISTING_WARNINGS",
+    "android_export": "PASS",
+    "static_certification": "BLOCKED_142_OF_143_LOCAL_SUPABASE_SOURCE_UNAVAILABLE",
+    "git_diff_check": "PASS"
+  },
+  "secrets_or_real_merchant_data_included": false,
+  "production_ready": false
+}

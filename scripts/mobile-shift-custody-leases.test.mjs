@@ -4,6 +4,7 @@ import test from "node:test";
 
 const read = (path) => fs.readFileSync(path, "utf8");
 const migration = read("database/migrations/0013_mobile_shift_custody_leases.sql");
+const conflictTargetFix = read("database/migrations/0014_mobile_shift_custody_conflict_target.sql");
 const service = read("src/features/shifts/service.ts");
 const closeRoute = read("src/app/api/pos/v2/shifts/close/route.ts");
 const custodyRoute = read("src/app/api/pos/v2/shifts/custody/route.ts");
@@ -70,4 +71,16 @@ test("MOB-08 RPC exposure is explicit and limited to authenticated callers", () 
     assert.ok(migration.includes(`revoke all on function ${signature} from tindio_anon`));
     assert.ok(migration.includes(`grant execute on function ${signature} to tindio_authenticated`));
   }
+});
+
+test("MOB-10 custody renewal has an unambiguous conflict target", () => {
+  assert.match(
+    conflictTargetFix,
+    /on conflict on constraint pos_shift_custody_leases_pkey do update/i,
+  );
+  assert.doesNotMatch(
+    conflictTargetFix,
+    /on conflict\s*\(\s*organization_id\s*,\s*shift_id\s*,\s*device_id\s*\)/i,
+  );
+  assert.doesNotMatch(conflictTargetFix, /delete\s+from/i);
 });

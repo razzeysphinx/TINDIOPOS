@@ -8,6 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 const databaseSource = fs.readFileSync("apps/mobile/src/db/database.ts", "utf8");
+const schemaSource = fs.readFileSync("apps/mobile/src/db/schema.ts", "utf8");
 const healthSource = fs.readFileSync("apps/mobile/src/db/health.ts", "utf8");
 const offlineSaleSource = fs.readFileSync(
   "apps/mobile/src/features/outbox/create-offline-sale.ts",
@@ -141,6 +142,48 @@ test("MOB-02 failed atomic acceptance rolls back event and sequence together", (
     );
     database.close();
   });
+});
+
+test("MOB-10 schema 12 to 13 upgrade preserves unresolved transaction custody", () => {
+  const migration = schemaSource.match(
+    /version: 13,[\s\S]*?sql: `([\s\S]*?)`,\s*\n\s*},/,
+  );
+  assert.ok(migration, "missing SQLite migration 13");
+
+  const database = new DatabaseSync(":memory:");
+  database.exec(`
+    CREATE TABLE outbox_events (
+      event_id TEXT PRIMARY KEY NOT NULL,
+      organization_id TEXT NOT NULL,
+      state TEXT NOT NULL,
+      device_sequence INTEGER NOT NULL,
+      idempotency_key TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      snapshot_json TEXT NOT NULL
+    );
+    INSERT INTO outbox_events VALUES (
+      'event-1','org-1','LOCAL_PENDING',7,'key-1','{"totalMinor":100}','{"version":2}'
+    );
+    PRAGMA user_version = 12;
+  `);
+
+  const before = database.prepare("SELECT * FROM outbox_events").get();
+  database.exec("BEGIN IMMEDIATE");
+  database.exec(migration[1]);
+  database.exec("PRAGMA user_version = 13");
+  database.exec("COMMIT");
+  const after = database.prepare("SELECT * FROM outbox_events").get();
+
+  assert.deepEqual(after, before);
+  assert.equal(database.prepare("PRAGMA user_version").get().user_version, 13);
+  assert.equal(
+    database.prepare(
+      "SELECT COUNT(*) AS count FROM sqlite_master WHERE type='index' AND name='idx_outbox_upgrade_custody'",
+    ).get().count,
+    1,
+  );
+  assert.doesNotMatch(migration[1], /DELETE|DROP|UPDATE|INSERT/i);
+  database.close();
 });
 
 test("MOB-02 records a file-backed FULL/WAL transaction benchmark", (context) => {

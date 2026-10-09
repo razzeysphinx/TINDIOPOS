@@ -1,5 +1,5 @@
 export const TINDIO_DATABASE_NAME = "tindio-mobile.db";
-export const TINDIO_LOCAL_SCHEMA_VERSION = 12;
+export const TINDIO_LOCAL_SCHEMA_VERSION = 13;
 
 export type LocalMigration = {
   version: number;
@@ -275,6 +275,15 @@ export const LOCAL_MIGRATIONS: LocalMigration[] = [
       );
       CREATE INDEX IF NOT EXISTS idx_shift_finalization_guard_device
         ON shift_finalization_guards (organization_id, device_id, state);
+    `,
+  },
+  {
+    version: 13,
+    name: "mob_10_upgrade_custody_index",
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_outbox_upgrade_custody
+        ON outbox_events (organization_id, device_sequence, event_id)
+        WHERE state <> 'SYNCED';
     `,
   },
 ];

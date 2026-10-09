@@ -42,7 +42,7 @@ test(
       Number.isInteger(
         app.android.versionCode,
       )
-      && app.android.versionCode >= 1,
+      && app.android.versionCode >= 2,
     );
 
     assert.equal(

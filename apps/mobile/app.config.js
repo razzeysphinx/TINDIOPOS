@@ -1,24 +1,22 @@
 module.exports = ({
   config,
 }) => {
-  const isProduction =
+  const allowsDevelopmentCleartext =
     process.env.EAS_BUILD_PROFILE
-    === "production";
+    === "development";
 
   const plugins = [
     ...(config.plugins ?? []),
-  ];
-
-  if (isProduction) {
-    plugins.push([
+    [
       "expo-build-properties",
       {
         android: {
-          usesCleartextTraffic: false,
+          usesCleartextTraffic:
+            allowsDevelopmentCleartext,
         },
       },
-    ]);
-  }
+    ],
+  ];
 
   return {
     ...config,

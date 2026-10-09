@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
+import {
+  createRequire,
+} from "node:module";
 import fs from "node:fs";
 import test from "node:test";
+
+const require =
+  createRequire(
+    import.meta.url,
+  );
 
 const read = (path) =>
   fs.readFileSync(
@@ -23,11 +31,6 @@ test(
         read(
           "apps/mobile/eas.json",
         ),
-      );
-
-    const dynamicConfig =
-      read(
-        "apps/mobile/app.config.js",
       );
 
     assert.equal(
@@ -74,15 +77,73 @@ test(
       true,
     );
 
-    assert.ok(
-      dynamicConfig.includes(
-        "EAS_BUILD_PROFILE",
-      )
-      && dynamicConfig.includes(
-        "usesCleartextTraffic: false",
+    const configureApp =
+      require(
+        "../apps/mobile/app.config.js",
+      );
+
+    const cleartextForProfile =
+      (profile) => {
+        const previous =
+          process.env.EAS_BUILD_PROFILE;
+
+        try {
+          if (profile === undefined) {
+            delete process.env.EAS_BUILD_PROFILE;
+          } else {
+            process.env.EAS_BUILD_PROFILE =
+              profile;
+          }
+
+          const resolved =
+            configureApp({
+              config: {
+                plugins: [],
+              },
+            });
+
+          const buildProperties =
+            resolved.plugins.find(
+              (plugin) =>
+                Array.isArray(plugin)
+                && plugin[0]
+                  === "expo-build-properties",
+            );
+
+          return buildProperties?.[1]
+            ?.android
+            ?.usesCleartextTraffic;
+        } finally {
+          if (previous === undefined) {
+            delete process.env.EAS_BUILD_PROFILE;
+          } else {
+            process.env.EAS_BUILD_PROFILE =
+              previous;
+          }
+        }
+      };
+
+    assert.equal(
+      cleartextForProfile(
+        "development",
       ),
-      "production builds must disable cleartext traffic",
+      true,
+      "development builds must permit an explicitly configured HTTP LAN endpoint",
     );
+
+    for (
+      const profile of [
+        "preview",
+        "production",
+        undefined,
+      ]
+    ) {
+      assert.equal(
+        cleartextForProfile(profile),
+        false,
+        `${profile ?? "unspecified"} builds must disable cleartext traffic`,
+      );
+    }
   },
 );
 

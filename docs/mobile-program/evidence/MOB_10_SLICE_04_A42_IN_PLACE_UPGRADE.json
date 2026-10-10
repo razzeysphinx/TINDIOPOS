@@ -1,0 +1,90 @@
+{
+  "phase": "MOB-10",
+  "slice": 4,
+  "status": "PASS",
+  "acceptance_case": "A42",
+  "starting_commit": "3b5be63633de30e37b55d2ed444fb02d63f1a912",
+  "implementation_commit": "b41461353e4b0ba64105d2f0311cac29c8ff7c94",
+  "device": {
+    "manufacturer": "Xiaomi",
+    "model": "21121210G",
+    "android_version": "14",
+    "api_level": 34,
+    "abi": "arm64-v8a",
+    "kernel_page_size_bytes": 4096
+  },
+  "upgrade": {
+    "method": "adb install -r",
+    "uninstall_performed": false,
+    "app_data_cleared": false,
+    "database_reset": false,
+    "logout_performed": false,
+    "package_id": "com.tindio.pos",
+    "version_name": "1.0.0",
+    "version_code_before": 1,
+    "version_code_after": 2,
+    "sqlite_schema_before": 12,
+    "sqlite_schema_after": 13,
+    "first_install_time_before": "2026-10-09 22:13:25",
+    "first_install_time_after": "2026-10-09 22:13:25",
+    "pre_upgrade_proof": "UPGRADE PROOF ARMED — 1 UNSYNCED EVENT(S) — SCHEMA 12",
+    "post_upgrade_proof": "UPGRADE PROOF PASS — 1 EVENT(S) PRESERVED — SCHEMA 12 -> 13"
+  },
+  "transaction": {
+    "local_reference": "OFF-801CB32386",
+    "device_sequence": 1,
+    "amount_minor": 100,
+    "currency": "PHP",
+    "identity_payload_snapshot_preserved": true,
+    "idempotency_key_replaced": false,
+    "server_push_count": 1,
+    "post_restart_push_count": 1,
+    "local_final_state": "CONFLICT",
+    "conflict_type": "INVENTORY_CONFLICT",
+    "failure_message": "This store blocks negative stock. Receive or adjust stock before continuing."
+  },
+  "authoritative_result": {
+    "offline_sync_events": 1,
+    "offline_sync_event_states": ["CONFLICT"],
+    "attempt_count": 1,
+    "sequence_receipts": 1,
+    "sequence_receipt_states": ["CONFLICT"],
+    "checkout_requests": 0,
+    "sales": 0,
+    "payments": 0,
+    "receipts": 0,
+    "inventory_movements": 0,
+    "stable_after_second_cold_start": true
+  },
+  "artifacts": {
+    "initial_arm64_upgrade_sha256": "A3306CEFFAC1207D1F619EBF197DCBAA2ACCA5E4294ACBE57B9E703A062C185F",
+    "endpoint_refresh_path": "C:\\tmp\\TINDIOPOS-MOB10-b414613-v2-lan-recovery.apk",
+    "endpoint_refresh_sha256": "D74F3FAB588FFC94D3E9277F0A6B2BA804EBCA49D7A5872BDD2D6CDE9A939AE6",
+    "endpoint_refresh_size_bytes": 135773099,
+    "min_sdk": 24,
+    "target_sdk": 36,
+    "native_abis": ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"],
+    "apk_signature_v2": true,
+    "zipalign_16k": "PASS_PRELIMINARY_APK_ONLY",
+    "signer_certificate_sha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "production_signed": false,
+    "play_delivered": false
+  },
+  "validation": {
+    "focused_behavioral_tests": "PASS_43_OF_43",
+    "mobile_typecheck": "PASS",
+    "root_typecheck": "PASS",
+    "lint": "PASS_0_ERRORS_3_PREEXISTING_WARNINGS",
+    "android_export": "PASS",
+    "native_assemble_release": "PASS",
+    "static_certification": "BLOCKED_142_OF_143_LOCAL_SUPABASE_SOURCE_UNAVAILABLE",
+    "fatal_log_count": 0,
+    "git_diff_check": "PASS"
+  },
+  "acceptance": {
+    "A42": "PASS",
+    "A48": "NOT_RUN"
+  },
+  "secrets_or_real_merchant_data_included": false,
+  "production_ready": false
+}

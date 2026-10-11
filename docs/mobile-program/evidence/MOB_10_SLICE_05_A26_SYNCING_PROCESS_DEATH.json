@@ -1,0 +1,120 @@
+{
+  "phase": "MOB-10 Slice 5",
+  "acceptance_case": "A26",
+  "status": "PASS",
+  "starting_commit": "9510f58ac4f9a447642f2ed71daba3558f0d6361",
+  "device": {
+    "model": "Xiaomi 21121210G",
+    "android_api": 34,
+    "abi": "arm64-v8a",
+    "package": "com.tindio.pos",
+    "version_code": 2
+  },
+  "artifact": {
+    "path_uncommitted": "C:\\tmp\\TINDIOPOS-MOB10-A14-lan8.apk",
+    "sha256": "C485DBDA94E314E6463218E1BB588020D8E1B5B67D2194B56C5F9C1EC6DA5F3E",
+    "signer_sha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "production_signed": false
+  },
+  "transaction": {
+    "event_id": "c54c80f6-4f0f-490e-915e-8ff515fbacc7",
+    "idempotency_key": "049eaaaa-a52a-4b1b-9bd9-86bedac0bf7c",
+    "payload_hash": "69362f4abd9f050d92bc3ea774bcad87",
+    "local_receipt_reference": "OFF-049EAAAAA5",
+    "device_sequence": 5,
+    "amount_minor": 100,
+    "item_count": 1,
+    "sale_id": "48e0e111-640f-4f11-913c-6f1ad478e97e",
+    "receipt_number": 38
+  },
+  "pre_interruption": {
+    "local_state": "LOCAL_PENDING",
+    "outbox_pending_syncing_conflict_failed": [1, 0, 0, 0],
+    "next_local_sequence": 6,
+    "local_known_server_checkpoint": 4,
+    "request_count": 0,
+    "sale_count": 0,
+    "payment_count": 0,
+    "receipt_count": 0,
+    "inventory_movement_count": 0,
+    "stock_quantity": 5
+  },
+  "interruption": {
+    "sync_request_received_at": "2026-10-11T16:47:01.603Z",
+    "force_stop_at": "2026-10-11T16:47:01.742Z",
+    "milliseconds_after_relay_receipt": 139,
+    "request_forwarded": false,
+    "client_connection_closed": true,
+    "cloud_effect_count_after_kill": 0
+  },
+  "restart_reclamation": {
+    "cold_restart_at": "2026-10-11T16:47:19.503Z",
+    "reclaimed_request_observed_at": "2026-10-11T16:47:21.615Z",
+    "same_event_id": true,
+    "same_idempotency_key": true,
+    "same_local_receipt_reference": true,
+    "same_device_sequence": true,
+    "observation_response": 503,
+    "local_state_after_observation": "LOCAL_PENDING",
+    "outbox_pending_syncing_conflict_failed": [1, 0, 0, 0],
+    "terminal_readiness": "RECOVERING",
+    "next_local_sequence": 6,
+    "local_known_server_checkpoint": 4,
+    "sequence_health": "CONTIGUOUS"
+  },
+  "post_recovery": {
+    "local_state": "SYNCED",
+    "outbox_pending_syncing_conflict_failed": [0, 0, 0, 0],
+    "oldest_unresolved": null,
+    "authentication_state": "ONLINE AUTHENTICATED",
+    "connection_mode": "CLOUD_ONLINE",
+    "terminal_readiness": "READY OFFLINE",
+    "next_local_sequence": 6,
+    "local_known_server_checkpoint": 5,
+    "next_expected_server_sequence": 6,
+    "sequence_health": "CONTIGUOUS",
+    "last_sync_error": null,
+    "request_count": 1,
+    "request_state": "completed",
+    "sale_count": 1,
+    "sale_total_minor": 100,
+    "payment_count": 1,
+    "payment_total_minor": 100,
+    "receipt_count": 1,
+    "sale_item_count": 1,
+    "inventory_movement_count": 1,
+    "inventory_delta": -1,
+    "stock_quantity": 4,
+    "immutable_receipt_snapshot_visible": true
+  },
+  "failure_method": {
+    "external_relay_only": true,
+    "server_source_modified": false,
+    "sqlite_manually_edited": false,
+    "database_manually_mutated": false,
+    "app_data_cleared": false,
+    "app_uninstalled": false,
+    "transaction_identity_replaced": false,
+    "initial_request_forwarded": false,
+    "normal_same_identity_recovery_completed": true,
+    "temporary_services_stopped": true
+  },
+  "repository_checks": {
+    "targeted_regressions": "PASS_29_OF_29",
+    "mobile_typecheck": "PASS",
+    "root_typecheck": "PASS",
+    "lint": "PASS_0_ERRORS_3_PREEXISTING_WARNINGS",
+    "android_export": "PASS_1440_MODULES",
+    "static_certification": "FAIL_143_OF_144_COMMANDS_PASS_LOCAL_SUPABASE_SOURCE_UNAVAILABLE",
+    "static_certification_failure_scope": "test:phase-04-docker-source-connectivity only"
+  },
+  "campaign_status": {
+    "A14": "PASS",
+    "A17": "PASS_PREVIOUS_PHYSICAL_EXECUTION",
+    "A21": "PASS",
+    "A25": "PASS_PREVIOUS_PHYSICAL_EXECUTION",
+    "A26": "PASS",
+    "A27": "NOT_RUN",
+    "A48": "NOT_RUN"
+  }
+}

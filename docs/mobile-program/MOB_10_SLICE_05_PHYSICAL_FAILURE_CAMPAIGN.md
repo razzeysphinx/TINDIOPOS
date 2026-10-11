@@ -1,6 +1,6 @@
 # MOB-10 Slice 5 — physical transaction failure campaign
 
-Status: **A14 AND A21 PASS; MOB-10 REMAINS OPEN**
+Status: **A14, A21, AND A26 PASS; MOB-10 REMAINS OPEN**
 
 Starting commit: `ce8718ff999b3cabc24e46e8f22233419cd0db77`
 
@@ -16,7 +16,7 @@ No production fault hook, SQLite edit, database mutation outside the checkout AP
 | A17 | `PASS` | Previously executed physical process-death case; its evidence uses local reference `OFF-B7F4894C09`, idempotency key `b7f4894c-0933-4534-a3d8-b62b8c47b876`, device sequence 2, and official receipt 34. Consolidation into the final campaign report remains. |
 | A21 | `PASS` | Physical Android event `74aef69b-7f91-4698-a999-9b6867c38aba`, idempotency key `6cf34af2-3023-4106-bd6d-ac7e6478ef6c`, provisional receipt `OFF-6CF34AF230`, and device sequence 4 were delivered twice through an external one-shot relay. The first unchanged request returned `ACCEPTED`; the second returned `REPLAY`, both mapping to sale `a1d11324-39b5-4292-b249-471aafe9ad9a` and receipt 37. The relay then returned a deliberately duplicated two-entry ACK array. The app rejected that envelope atomically, restored the original event to `LOCAL_PENDING`, and displayed the incomplete/mismatched-ack custody message. Normal recovery replayed the same identity, drained the outbox, advanced the checkpoint to 4, and left exactly one sale/payment/receipt/item/inventory movement. |
 | A25 | `PASS` | Previously executed physical concurrent-trigger case; its evidence uses local reference `OFF-AE7354477B`, idempotency key `ae735447-7b41-4c80-9546-81b6bc7a02a6`, device sequence 3, and official receipt 35. Consolidation into the final campaign report remains. |
-| A26 | `NOT_RUN` | No complete qualifying kill-during-SYNCING result has been certified. |
+| A26 | `PASS` | Physical Android event `c54c80f6-4f0f-490e-915e-8ff515fbacc7`, idempotency key `049eaaaa-a52a-4b1b-9bd9-86bedac0bf7c`, provisional receipt `OFF-049EAAAAA5`, and sequence 5 were captured by an external relay after the production coordinator claimed the event. The relay held the request without forwarding it; the app was force-stopped 139 ms after relay receipt and the client connection closed. Neon still had zero matching effects. Cold restart emitted the same identity again, proving immediate reclamation from interrupted `SYNCING`; a temporary 503 kept it `LOCAL_PENDING` for inspection. Normal recovery then created exactly one sale/payment/receipt/item/inventory movement, mapped the immutable snapshot to receipt 38, advanced checkpoint 4 to 5, and cleared the outbox. |
 | A27 | `NOT_RUN` | Timeout, 429, 503, and malformed-ACK physical execution remains. |
 | A48 | `NOT_RUN` | This was a debug-key-signed development APK, not the Phase 23/24 production release candidate. |
 
@@ -78,6 +78,38 @@ The normal recovery request returned a valid replay acknowledgement for the orig
 
 The relay was external test infrastructure only. Production source, the POS v2 API contract, SQLite, and Neon schema were unchanged. Its port owner and the temporary Next.js port owner were stopped after evidence capture; ports 3000 and 3001 were no longer listening.
 
+## A26 kill-during-SYNCING evidence
+
+A26 began from commit `9510f58ac4f9a447642f2ed71daba3558f0d6361`. With the backend unavailable, the unchanged application accepted one synthetic PHP 1.00 cash sale. Before interruption, the physical Sync Status screen showed `OFF-049EAAAAA5` as `LOCAL_PENDING`, outbox `1 / 0 / 0 / 0`, next local sequence 6, local server checkpoint 4, and next expected sequence 5. A read-only Neon assertion found zero matching requests or financial effects and authoritative stock remained 5.
+
+The temporary relay fully buffered the first production `/api/pos/v2/sync/push` request and deliberately did not forward it. Receipt of that request proves the production coordinator had already atomically claimed the event as `SYNCING`. The relay captured:
+
+| Field | Value |
+|---|---|
+| Event ID | `c54c80f6-4f0f-490e-915e-8ff515fbacc7` |
+| Idempotency/checkout identity | `049eaaaa-a52a-4b1b-9bd9-86bedac0bf7c` |
+| Provisional receipt | `OFF-049EAAAAA5` |
+| Device sequence | 5 |
+| Amount | PHP 1.00 / 100 minor units |
+| Item snapshot | 1 each, Phase 04F Certification Item at PHP 1.00 |
+| Initial request received | `2026-10-11T16:47:01.603Z` |
+| Process force-stop | `2026-10-11T16:47:01.742Z` |
+| First request forwarded | No |
+| Database state after kill | zero request/sale/payment/receipt/item/movement rows; stock 5 |
+
+On cold restart at `2026-10-11T16:47:19.503Z`, the normal recovery coordinator emitted a second request at `2026-10-11T16:47:21.615Z`. It contained the exact same event ID, idempotency key, local receipt, sequence, and item count. The relay returned a temporary 503 without forwarding this observation request so local custody could be inspected. The terminal reported `RECOVERING`; Sync Status showed the original event as `LOCAL_PENDING`, outbox `1 / 0 / 0 / 0`, amount 100 PHP, next sequence 6, checkpoint 4, and contiguous sequence health. The event was therefore reclaimed rather than stranded, discarded, or replaced.
+
+After enabling normal relay forwarding, the next recovery request again used the same identity. Final evidence was:
+
+- terminal `READY OFFLINE` and `CLOUD_ONLINE`;
+- outbox `0 / 0 / 0 / 0`, no oldest unresolved event;
+- local checkpoint 5, next sequence 6, next expected sequence 6, `CONTIGUOUS`;
+- saved-device receipt `OFF-049EAAAAA5` mapped to `OFFICIAL RECEIPT #38` with the original item, subtotal, total, cash tender, and zero change;
+- one completed checkout request, one sale `48e0e111-640f-4f11-913c-6f1ad478e97e`, one PHP 1.00 payment, one receipt 38, one sale item, and one inventory movement of -1;
+- authoritative stock moved exactly once from 5 to 4.
+
+This is both delivery/recovery correctness and financial settlement success. No production fault hook, SQLite edit, app-data clear, uninstall, cache reset, identity replacement, custody deletion, or manual merchant-data mutation was used. The relay was external test infrastructure and did not log credentials.
+
 ## Artifact and device
 
 - Device: Xiaomi `21121210G`, Android 14 / API 34, ARM64-v8a.
@@ -128,8 +160,22 @@ Additional A21 checks from starting commit `6927122185b17bf585cdfbbfa9f9cab4815c
 - Static certification: 143/144 automated package commands passed; the unrelated `test:phase-04-docker-source-connectivity` check reported `Local Supabase source is unavailable`. No production or historical database was changed to satisfy that local-environment prerequisite.
 - `git diff --check`: passed before evidence changes.
 
+Additional A26 checks from starting commit `9510f58ac4f9a447642f2ed71daba3558f0d6361`:
+
+- Mobile outbox coordinator: 5/5 passed.
+- Mobile outbox recovery: 5/5 passed.
+- Phase 10/11/12 checks: 3/3 passed.
+- Phase 18 disaster model: 11/11 passed, including interrupted `SYNCING` reclamation.
+- Phase 18 production contract: 1/1 passed.
+- Mobile source of truth: 4/4 passed.
+- Mobile and root typecheck: passed.
+- Lint: passed with 0 errors and 3 pre-existing warnings.
+- Android export: passed, 1,440 modules bundled.
+- Static certification: 143/144 automated package commands passed; only the unrelated `test:phase-04-docker-source-connectivity` local-environment prerequisite failed with `Local Supabase source is unavailable`.
+- `git diff --check`: passed before evidence commit.
+
 ## Remaining limitations and next slice
 
-A14 and A21 prove response-loss recovery plus duplicate-delivery/duplicate-ACK correctness for their synthetic transactions. They do not certify A26, A27, A48, signed-AAB delivery, 16 KB-page physical hardware, peripherals, upgrades beyond A42, or merchant pilot readiness.
+A14, A21, and A26 prove response-loss recovery, duplicate-delivery/duplicate-ACK correctness, and process-death reclamation during `SYNCING` for their synthetic transactions. They do not certify A27, A48, signed-AAB delivery, 16 KB-page physical hardware, peripherals, upgrades beyond A42, or merchant pilot readiness.
 
-Next smallest safe slice: A26 kill during `SYNCING`, proving that restart safely reclaims the interrupted entry with the same identity. A27 remains after A26. A48 remains `NOT_RUN` until the real Phase 23/24 production release candidate exists.
+Next smallest safe slice: A27 timeout / 429 / 503 / malformed-ACK physical execution with bounded retry, stable identities, and no false terminal success. A48 remains `NOT_RUN` until the real Phase 23/24 production release candidate exists.

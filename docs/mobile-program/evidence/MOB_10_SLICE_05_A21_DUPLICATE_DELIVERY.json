@@ -1,0 +1,117 @@
+{
+  "phase": "MOB-10 Slice 5",
+  "acceptance_case": "A21",
+  "status": "PASS",
+  "starting_commit": "6927122185b17bf585cdfbbfa9f9cab4815c32ae",
+  "device": {
+    "model": "Xiaomi 21121210G",
+    "android_api": 34,
+    "abi": "arm64-v8a",
+    "package": "com.tindio.pos",
+    "version_code": 2
+  },
+  "artifact": {
+    "path_uncommitted": "C:\\tmp\\TINDIOPOS-MOB10-A14-lan8.apk",
+    "sha256": "C485DBDA94E314E6463218E1BB588020D8E1B5B67D2194B56C5F9C1EC6DA5F3E",
+    "signer_sha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "production_signed": false
+  },
+  "transaction": {
+    "event_id": "74aef69b-7f91-4698-a999-9b6867c38aba",
+    "idempotency_key": "6cf34af2-3023-4106-bd6d-ac7e6478ef6c",
+    "payload_hash": "69362f4abd9f050d92bc3ea774bcad87",
+    "local_receipt_reference": "OFF-6CF34AF230",
+    "device_sequence": 4,
+    "amount_minor": 100,
+    "item_count": 1,
+    "sale_id": "a1d11324-39b5-4292-b249-471aafe9ad9a",
+    "receipt_number": 37
+  },
+  "pre_delivery": {
+    "local_state": "LOCAL_PENDING",
+    "outbox_pending_syncing_conflict_failed": [1, 0, 0, 0],
+    "next_local_sequence": 5,
+    "local_known_server_checkpoint": 3,
+    "request_count": 0,
+    "sale_count": 0,
+    "payment_count": 0,
+    "receipt_count": 0,
+    "inventory_movement_count": 0,
+    "stock_quantity": 6
+  },
+  "duplicate_delivery": {
+    "first_sync_status": "ACCEPTED",
+    "second_sync_status": "REPLAY",
+    "first_sale_id": "a1d11324-39b5-4292-b249-471aafe9ad9a",
+    "second_sale_id": "a1d11324-39b5-4292-b249-471aafe9ad9a",
+    "first_receipt_number": 37,
+    "second_receipt_number": 37,
+    "server_checkpoint": 4,
+    "server_offline_event_attempt_count_after_final_replay": 3
+  },
+  "duplicate_ack": {
+    "ack_count_returned": 2,
+    "expected_ack_count": 1,
+    "accepted_as_terminal_success": false,
+    "local_state_after_rejection": "LOCAL_PENDING",
+    "outbox_pending_syncing_conflict_failed": [1, 0, 0, 0],
+    "diagnostic": "TINDIO returned an incomplete or mismatched acknowledgement. This saved sale remains queued with its original identity.",
+    "identity_preserved": true
+  },
+  "post_recovery": {
+    "local_state": "SYNCED",
+    "outbox_pending_syncing_conflict_failed": [0, 0, 0, 0],
+    "oldest_unresolved": null,
+    "authentication_state": "ONLINE AUTHENTICATED",
+    "connection_mode": "CLOUD_ONLINE",
+    "terminal_readiness": "READY OFFLINE",
+    "next_local_sequence": 5,
+    "local_known_server_checkpoint": 4,
+    "next_expected_server_sequence": 5,
+    "sequence_health": "CONTIGUOUS",
+    "last_sync_error": null,
+    "request_count": 1,
+    "request_state": "completed",
+    "sale_count": 1,
+    "sale_total_minor": 100,
+    "payment_count": 1,
+    "payment_total_minor": 100,
+    "receipt_count": 1,
+    "sale_item_count": 1,
+    "inventory_movement_count": 1,
+    "inventory_delta": -1,
+    "stock_quantity": 5
+  },
+  "failure_method": {
+    "external_relay_only": true,
+    "server_source_modified": false,
+    "sqlite_manually_edited": false,
+    "database_manually_mutated": false,
+    "app_data_cleared": false,
+    "app_uninstalled": false,
+    "transaction_identity_replaced": false,
+    "duplicate_request_bytes_forwarded": true,
+    "duplicate_ack_injected": true,
+    "normal_same_identity_recovery_completed": true,
+    "temporary_services_stopped": true
+  },
+  "repository_checks": {
+    "targeted_regressions": "PASS_29_OF_29",
+    "mobile_typecheck": "PASS",
+    "root_typecheck": "PASS",
+    "mobile_lint": "PASS_0_ERRORS_1_PREEXISTING_WARNING",
+    "root_lint": "PASS_0_ERRORS_3_PREEXISTING_WARNINGS",
+    "android_export": "PASS_1440_MODULES",
+    "static_certification": "FAIL_143_OF_144_COMMANDS_PASS_LOCAL_SUPABASE_SOURCE_UNAVAILABLE",
+    "static_certification_failure_scope": "test:phase-04-docker-source-connectivity only"
+  },
+  "campaign_status": {
+    "A14": "PASS",
+    "A17": "PASS_PREVIOUS_PHYSICAL_EXECUTION",
+    "A21": "PASS",
+    "A25": "PASS_PREVIOUS_PHYSICAL_EXECUTION",
+    "A26": "NOT_RUN",
+    "A27": "NOT_RUN",
+    "A48": "NOT_RUN"
+  }
+}

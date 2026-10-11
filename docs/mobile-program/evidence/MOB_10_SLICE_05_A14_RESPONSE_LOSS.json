@@ -1,0 +1,87 @@
+{
+  "phase": "MOB-10 Slice 5",
+  "acceptance_case": "A14",
+  "status": "PASS",
+  "starting_commit": "ce8718ff999b3cabc24e46e8f22233419cd0db77",
+  "device": {
+    "model": "Xiaomi 21121210G",
+    "android_api": 34,
+    "abi": "arm64-v8a",
+    "package": "com.tindio.pos",
+    "version_code": 2,
+    "install_method": "adb install -r",
+    "first_install_time_preserved": "2026-10-09 22:13:25"
+  },
+  "artifact": {
+    "path_uncommitted": "C:\\tmp\\TINDIOPOS-MOB10-A14-lan8.apk",
+    "sha256": "C485DBDA94E314E6463218E1BB588020D8E1B5B67D2194B56C5F9C1EC6DA5F3E",
+    "signer_sha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "production_signed": false
+  },
+  "transaction": {
+    "idempotency_key": "2e25ed10-7c01-4976-94a8-fa3af0643ae7",
+    "payload_hash": "764f15d58b8a0c496b2f3d0a2bba4154",
+    "amount_minor": 100,
+    "sale_id": "41e4e582-8422-4561-b406-ddb47788459f",
+    "receipt_number": 36,
+    "device_sequence": null,
+    "device_sequence_reason": "Online checkout intent; not an offline outbox event",
+    "provisional_receipt": null,
+    "force_stop_after_commit_marker_ms": 113
+  },
+  "pre_commit": {
+    "request_count": 0,
+    "sale_count": 0,
+    "payment_count": 0,
+    "receipt_count": 0,
+    "inventory_movement_count": 0,
+    "stock_quantity": 7
+  },
+  "post_replay": {
+    "request_count": 1,
+    "request_state": "completed",
+    "sale_count": 1,
+    "sale_total_minor": 100,
+    "payment_count": 1,
+    "payment_total_minor": 100,
+    "receipt_count": 1,
+    "sale_item_count": 1,
+    "inventory_movement_count": 1,
+    "inventory_delta": -1,
+    "stock_quantity": 6,
+    "app_result": "SERVER RECEIPT #36",
+    "receipt_visible_after_second_cold_restart": true,
+    "fatal_log_count": 0
+  },
+  "failure_method": {
+    "server_source_modified": false,
+    "sqlite_manually_edited": false,
+    "database_manually_mutated": false,
+    "response_withheld_after_upstream_http_200_ok": true,
+    "app_force_stopped_before_ack": true,
+    "same_identity_replayed": true,
+    "temporary_services_stopped": true
+  },
+  "repository_checks": {
+    "mobile_online_checkout_intent": "PASS_5_OF_5",
+    "mobile_request_timeout": "PASS_4_OF_4",
+    "phase_09_local_first": "PASS_1_OF_1",
+    "phase_10_durable_outbox": "PASS_1_OF_1",
+    "phase_11_device_sequence": "PASS_1_OF_1",
+    "phase_18_disaster_model": "PASS_11_OF_11",
+    "phase_18_production_contract": "PASS_1_OF_1",
+    "mobile_typecheck": "PASS",
+    "root_typecheck": "PASS",
+    "lint": "PASS_0_ERRORS_3_PREEXISTING_WARNINGS",
+    "native_assemble_release": "PASS"
+  },
+  "campaign_status": {
+    "A14": "PASS",
+    "A17": "PASS_PREVIOUS_PHYSICAL_EXECUTION",
+    "A21": "NOT_RUN",
+    "A25": "PASS_PREVIOUS_PHYSICAL_EXECUTION",
+    "A26": "NOT_RUN",
+    "A27": "NOT_RUN",
+    "A48": "NOT_RUN"
+  }
+}

@@ -1,5 +1,5 @@
-import { router } from "expo-router";
-import { useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput } from "react-native";
 import type { PosReceiptSummary } from "../../../../src/contracts/pos";
 import {
@@ -15,9 +15,54 @@ export default function Receipts() {
   const { data, mode } = useBusinessContext();
 
   const [query, setQuery] = useState("");
+  const queryRef = useRef("");
   const [rows, setRows] = useState<PosReceiptSummary[]>([]);
   const [localRows, setLocalRows] = useState<LocalReceipt[]>([]);
   const [message, setMessage] = useState("");
+
+  const load = useCallback(async (searchQuery: string) => {
+    if (!data || !data.core.permissions.includes("receipts.view")) return;
+    const { core } = data;
+    try {
+      const localPromise = searchLocalReceipts(core.organization.id, core.storeIds, searchQuery);
+      if (mode === "online") {
+        const serverPromise = fetchPosV2Receipts(
+          core.organization.id,
+          { query: searchQuery },
+        ).then(
+          (result) => ({ ok: true as const, result }),
+          (error: unknown) => ({ ok: false as const, error }),
+        );
+        const local = await localPromise;
+        setLocalRows(local);
+        const server = await serverPromise;
+        if (!server.ok) throw server.error;
+        const { result } = server;
+
+        setRows(result.receipts);
+        await saveReceiptSummaries(core.organization.id, result);
+        setMessage("SERVER RECEIPTS");
+        return;
+      }
+
+      const local = await localPromise;
+      setLocalRows(local);
+      setRows(
+        await searchCachedReceiptSummaries(
+          core.organization.id,
+          core.storeIds,
+          searchQuery,
+        ),
+      );
+      setMessage("CACHED RECEIPT SUMMARIES — READ ONLY");
+    } catch {
+      setMessage("Receipt history is unavailable.");
+    }
+  }, [data, mode]);
+
+  useFocusEffect(useCallback(() => {
+    void load(queryRef.current);
+  }, [load]));
 
   if (!data) return <Text>Receipt workspace unavailable.</Text>;
 
@@ -27,38 +72,13 @@ export default function Receipts() {
     return <Text>Receipt access is not permitted.</Text>;
   }
 
-  const load = async () => {
-    try {
-      const localPromise = searchLocalReceipts(core.organization.id, core.storeIds, query);
-      if (mode === "online") {
-        const [result, local] = await Promise.all([
-          fetchPosV2Receipts(core.organization.id, { query }),
-          localPromise,
-        ]);
-
-        setRows(result.receipts);
-        setLocalRows(local);
-        await saveReceiptSummaries(core.organization.id, result);
-        setMessage("SERVER RECEIPTS");
-        return;
-      }
-
-      setRows(
-        await searchCachedReceiptSummaries(
-          core.organization.id,
-          core.storeIds,
-          query,
-        ),
-      );
-      setLocalRows(await localPromise);
-      setMessage("CACHED RECEIPT SUMMARIES — READ ONLY");
-    } catch {
-      setMessage("Receipt history is unavailable.");
-    }
-  };
-
   return (
-    <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
+    <ScrollView
+      contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 12 }}
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
+      testID="receipts-scroll"
+    >
       <Text>Receipts</Text>
       <Text>
         {mode === "offline"
@@ -67,12 +87,16 @@ export default function Receipts() {
       </Text>
 
       <TextInput
+        accessibilityLabel="Receipt search"
         value={query}
-        onChangeText={setQuery}
+        onChangeText={(value) => {
+          queryRef.current = value;
+          setQuery(value);
+        }}
         placeholder="Receipt number, cashier, store"
       />
 
-      <Pressable onPress={() => void load()}>
+      <Pressable accessibilityRole="button" testID="search-receipts" onPress={() => void load(query)}>
         <Text>Search receipts</Text>
       </Pressable>
 
@@ -119,7 +143,7 @@ export default function Receipts() {
         <Text>Receipt detail/refund/delivery requires connectivity.</Text>
       ) : null}
 
-      <Text>{message}</Text>
+      <Text accessibilityLiveRegion="polite">{message}</Text>
     </ScrollView>
   );
 }

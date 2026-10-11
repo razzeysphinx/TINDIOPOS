@@ -1,6 +1,14 @@
 import * as Crypto from "expo-crypto";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import type {
   CheckoutSaleValues,
   PosCartLine,
@@ -956,7 +964,16 @@ export default function PosScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={{ flex: 1 }}
+    >
+      <ScrollView
+        contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 12 }}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        testID="pos-scroll"
+      >
       <Text>LOCAL-FIRST POS</Text>
       <Text>Catalog source: SQLite</Text>
       <Text>Business: {core.organization.name}</Text>
@@ -1303,11 +1320,51 @@ export default function PosScreen() {
         </View>
       ) : null}
 
+      {!offlineCartEligible && cart.length > 0 ? (
+        <Text>
+          This cart requires online checkout because it contains customer/ticket/dining,
+          variable-price, modifier, or line-note state that the Phase 10 offline sale contract does not persist.
+        </Text>
+      ) : null}
+
+      {onlineIntent && !onlineIntentMatchesCurrentContext ? (
+        <Text>
+          This unresolved checkout belongs to its original employee, shift, store, and register.
+          Restore that operating context or reconcile it under supervised recovery; do not start a new sale.
+        </Text>
+      ) : null}
+
+      <Text>Current checkout operation: {checkoutKey}</Text>
+      <Text>
+        The operation key remains unchanged after an ambiguous retry and rotates only when the sale meaning changes or completes.
+      </Text>
+
+      </ScrollView>
+
+      <View
+        style={{
+          backgroundColor: "white",
+          borderTopColor: "#d1d5db",
+          borderTopWidth: 1,
+          gap: 8,
+          paddingBottom: 20,
+          paddingHorizontal: 20,
+          paddingTop: 12,
+        }}
+        testID="checkout-panel"
+      >
+      <Text>
+        Checkout total: {formatMoney(totals.totalMinor, core.organization.currencyCode)}
+      </Text>
+
       <TextInput
+        accessibilityLabel="Cash tendered"
         value={cashTender}
         onChangeText={setCashTender}
         keyboardType="decimal-pad"
         placeholder="Cash tendered, e.g. 20.00"
+        returnKeyType="done"
+        testID="cash-tender-input"
       />
 
       <Text>
@@ -1319,7 +1376,11 @@ export default function PosScreen() {
 
       {!cashMethod ? <Text>No enabled cash payment method is cached for this store.</Text> : null}
 
-      <Text accessibilityRole={offlineSaleReady ? undefined : "alert"}>
+      <Text
+        accessibilityLiveRegion="polite"
+        accessibilityRole={offlineSaleReady ? undefined : "alert"}
+        testID="offline-readiness"
+      >
         Offline readiness: {cashierReadinessLabel(cashierReadinessState)}
       </Text>
       {!offlineSaleReady && cart.length > 0 ? (
@@ -1329,6 +1390,9 @@ export default function PosScreen() {
       ) : null}
 
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Save offline cash sale"
+        testID="save-offline-cash-sale"
         disabled={
           onlineIntentLoading
           || savingOffline
@@ -1344,14 +1408,10 @@ export default function PosScreen() {
         <Text>{savingOffline ? "Saving locally…" : "SAVE OFFLINE CASH SALE"}</Text>
       </Pressable>
 
-      {!offlineCartEligible && cart.length > 0 ? (
-        <Text>
-          This cart requires online checkout because it contains customer/ticket/dining,
-          variable-price, modifier, or line-note state that the Phase 10 offline sale contract does not persist.
-        </Text>
-      ) : null}
-
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={onlineIntent ? "Retry original online checkout" : "Complete online cash checkout"}
+        testID="complete-online-cash-checkout"
         disabled={
           mode !== "online"
           || onlineCheckoutPending
@@ -1381,18 +1441,8 @@ export default function PosScreen() {
         </Text>
       </Pressable>
 
-      {onlineIntent && !onlineIntentMatchesCurrentContext ? (
-        <Text>
-          This unresolved checkout belongs to its original employee, shift, store, and register.
-          Restore that operating context or reconcile it under supervised recovery; do not start a new sale.
-        </Text>
-      ) : null}
-
-      {saleMessage ? <Text>{saleMessage}</Text> : null}
-      <Text>Current checkout operation: {checkoutKey}</Text>
-      <Text>
-        The operation key remains unchanged after an ambiguous retry and rotates only when the sale meaning changes or completes.
-      </Text>
-    </ScrollView>
+      {saleMessage ? <Text accessibilityLiveRegion="polite">{saleMessage}</Text> : null}
+      </View>
+    </KeyboardAvoidingView>
   );
 }

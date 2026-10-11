@@ -10,6 +10,7 @@ test("MOB-10 POS keeps checkout controls reachable above a resizing keyboard", (
 
   assert.equal(config.expo.android.softwareKeyboardLayoutMode, "resize");
   assert.match(pos, /<KeyboardAvoidingView[\s\S]*style=\{\{ flex: 1 \}\}/);
+  assert.match(pos, /behavior=\{Platform\.OS === "ios" \? "padding" : "height"\}/);
   assert.match(pos, /keyboardDismissMode="on-drag"/);
   assert.match(pos, /keyboardShouldPersistTaps="handled"/);
   assert.match(pos, /testID="checkout-panel"/);

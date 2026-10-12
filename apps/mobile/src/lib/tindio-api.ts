@@ -18,7 +18,9 @@ import type {
   PosReceiptListResponse,
   PosReferenceV2Response,
   PosSyncBaselineResponse,
+  PosSyncCursorExpiredResponse,
   PosSyncPullResponse,
+  PosSyncResnapshotResponse,
   PosSyncPushEvent,
   PosSyncPushResponse,
   TicketActionResult,
@@ -268,10 +270,28 @@ export async function pullPosV2Delta(
   cursor: number,
   limit = 100,
 ) {
-  return (await request("/api/pos/v2/sync/pull", {
+  const response = await requestPosV2Raw("/api/pos/v2/sync/pull", {
     organizationId,
     init: jsonPost({ organizationId, device, cursor, limit }),
-  })).json() as Promise<PosSyncPullResponse>;
+  });
+  if (response.status === 409) {
+    const expired = await response.json().catch(() => null) as PosSyncCursorExpiredResponse | null;
+    if (expired?.ok === false && expired.code === "SYNC_CURSOR_EXPIRED") return expired;
+  }
+  if (!response.ok) {
+    throw new TindioApiError(`HTTP_${response.status}`, response.status, `HTTP_${response.status}`, response.headers.get("x-tindio-request-id"), retryAfterMs(response));
+  }
+  return response.json() as Promise<PosSyncPullResponse>;
+}
+
+export async function fetchPosV2SyncResnapshot(
+  organizationId: string,
+  device: PosDeviceCredential,
+) {
+  return (await request("/api/pos/v2/sync/resnapshot", {
+    organizationId,
+    init: jsonPost({ organizationId, device }),
+  })).json() as Promise<PosSyncResnapshotResponse>;
 }
 
 export async function fetchPosV2Live(

@@ -8,11 +8,13 @@ test("Phase 12 delta sync contract", () => {
   const schema = read("apps/mobile/src/db/schema.ts");
   const migration = read("archive/database/supabase-migrations/20260929010000_phase_12_delta_sync.sql");
   const pageLimitFix = read("database/migrations/0015_mobile_delta_catalog_page_limit.sql");
+  const resnapshotMigration = read("database/migrations/0016_mobile_sync_retention_resnapshot.sql");
   const push = read("src/app/api/pos/v2/sync/push/route.ts");
   const pull = read("src/app/api/pos/v2/sync/pull/route.ts");
   const apply = read("apps/mobile/src/features/sync/apply-delta-page.ts");
   const cache = read("apps/mobile/src/db/cache-admin.ts");
   const outboxSync = read("apps/mobile/src/features/outbox/outbox-sync.ts");
+  const resnapshot = read("apps/mobile/src/db/sync-resnapshot.ts");
 
   assert.ok(schema.includes("TINDIO_LOCAL_SCHEMA_VERSION = 13") && schema.includes("sync_cursors"));
   for (const text of [
@@ -44,11 +46,15 @@ test("Phase 12 delta sync contract", () => {
   assert.ok(push.includes("for(const event of parsed.data.events") && push.includes("stoppedEarly"));
   assert.ok(pull.includes("nextCursor") && pull.includes("store_id"));
   assert.match(pull, /function jsonRpcValue<T>/);
-  assert.match(pull, /jsonRpcValue<\{items\?:PosCatalogDelta\["items"\]\}>\(answer\.data\)/);
-  assert.match(pull, /jsonRpcValue<\{customer\?:PosCustomerDelta\["customer"\]\}>\(answer\.data\)/);
+  assert.match(pull, /jsonRpcValue<\{\s*items\?:\s*PosCatalogDelta\["items"\]\s*\}>\(answer\.data\)/);
+  assert.match(pull, /jsonRpcValue<\{\s*customer\?:\s*PosCustomerDelta\["customer"\]\s*\}>\(answer\.data\)/);
   assert.match(pull, /jsonRpcValue<PosReferenceV2Response>\(answer\.data\)/);
   assert.ok(apply.indexOf("applyDeltaSqliteTransaction") < apply.indexOf("advanceSyncCursor"));
   for (const text of ["outbox_events", "device_sync_state", "sync_cursors"]) assert.ok(cache.includes(text));
   for (const text of ["coordinateOutboxSync", "runOutboxSingleFlight", "validateSyncPushResponse", "OUTBOX_TRANSPORT_TIMEOUT_MS"]) assert.ok(outboxSync.includes(text));
   assert.doesNotMatch(read("apps/mobile/src/features/sync/reconcile-cloud.ts"), /setInterval|Promise\.all/);
+  for (const text of ["pos_sync_retention_state", "get_pos_sync_revision", "get_pos_sync_retention_state", "prune_pos_sync_changes", "get_pos_sync_resnapshot_v1"]) assert.ok(resnapshotMigration.includes(text));
+  assert.match(pull, /SYNC_CURSOR_EXPIRED/);
+  assert.ok(resnapshot.indexOf("withExclusiveTransactionAsync") < resnapshot.lastIndexOf("RESNAPSHOT_CURSOR_SQL"));
+  for (const protectedTable of ["outbox_events", "device_sync_state", "checkout_intents", "local_receipts", "outbox_recovery_actions", "shift_finalization_guards"]) assert.doesNotMatch(resnapshot, new RegExp(`DELETE FROM ${protectedTable}`));
 });

@@ -39,6 +39,7 @@ export type CloudReconcileReport = {
   cursorBefore: number;
   cursorAfter: number;
   hasMore: boolean;
+  resnapshotted: boolean;
 };
 
 const active =
@@ -96,6 +97,7 @@ async function run(
         cursorBefore: 0,
         cursorAfter: 0,
         hasMore: false,
+        resnapshotted: false,
       },
     );
   }
@@ -196,6 +198,7 @@ async function run(
             current?.pullCursor
             ?? 0,
           hasMore: false,
+          resnapshotted: false,
         },
       );
     }
@@ -240,6 +243,8 @@ async function run(
           pulled.toCursor,
         hasMore:
           pulled.hasMore,
+        resnapshotted:
+          pulled.resnapshotted,
       },
     );
   } catch (error) {
@@ -276,6 +281,7 @@ async function run(
           current?.pullCursor
           ?? 0,
         hasMore: false,
+        resnapshotted: false,
       },
     );
   }

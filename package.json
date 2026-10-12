@@ -32,6 +32,8 @@
     "test:mobile-foreground-recovery": "node --test scripts/mobile-foreground-recovery.test.mjs",
     "test:mobile-offline-authorization-expiry": "node --test scripts/mobile-offline-authorization-expiry.test.mjs",
     "test:mobile-physical-ui-hardening": "node --test scripts/mobile-physical-ui-hardening.test.mjs",
+    "test:mobile-delta-resnapshot": "node --test scripts/mobile-delta-resnapshot.test.mjs",
+    "apply:mobile-sync-retention-resnapshot": "node scripts/apply-mobile-sync-retention-resnapshot.mjs",
     "test:phase-08-cold-start-offline": "node --test scripts/phase-08-cold-start-offline-check.mjs",
     "test:phase-09-local-first": "node --test scripts/phase-09-local-first-check.mjs",
     "test:phase-10-durable-outbox": "node --test scripts/phase-10-durable-outbox-check.mjs",

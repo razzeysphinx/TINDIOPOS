@@ -1,0 +1,174 @@
+{
+  "phase": "MOB-10 Slice 5",
+  "acceptance_case": "A27",
+  "status": "PASS",
+  "starting_commit": "81cdc9aa9862576bd0f623f876a1c7f24e42082f",
+  "device": {
+    "model": "Xiaomi 21121210G",
+    "android_api": 34,
+    "abi": "arm64-v8a",
+    "package": "com.tindio.pos",
+    "version_code": 2
+  },
+  "artifact": {
+    "path_uncommitted": "C:\\tmp\\TINDIOPOS-MOB10-A14-lan8.apk",
+    "sha256": "C485DBDA94E314E6463218E1BB588020D8E1B5B67D2194B56C5F9C1EC6DA5F3E",
+    "signer_sha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "production_signed": false
+  },
+  "transaction": {
+    "event_id": "ea8c0421-28fc-477a-bdbc-3b3f8e4f57c2",
+    "idempotency_key": "cb80ea87-2677-4593-a205-8765bb1cbc9b",
+    "payload_hash": "69362f4abd9f050d92bc3ea774bcad87",
+    "local_receipt_reference": "OFF-CB80EA8726",
+    "device_sequence": 6,
+    "amount_minor": 100,
+    "item_count": 1,
+    "sale_id": "495c0fb6-6862-4ded-9182-fcfb1479737d",
+    "receipt_number": 39
+  },
+  "pre_delivery": {
+    "terminal_readiness": "EXPIRING SOON",
+    "connection_mode": "DEVICE_ISOLATED",
+    "local_state": "LOCAL_PENDING",
+    "outbox_pending_syncing_conflict_failed": [1, 0, 0, 0],
+    "next_local_sequence": 7,
+    "local_known_server_checkpoint": 5,
+    "next_expected_server_sequence": 6,
+    "sequence_health": "CONTIGUOUS",
+    "request_count": 0,
+    "sale_count": 0,
+    "payment_count": 0,
+    "receipt_count": 0,
+    "inventory_movement_count": 0,
+    "stock_quantity": 4
+  },
+  "physical_failure_sequence": [
+    {
+      "case": "timeout",
+      "request_received_at": "2026-10-12T04:12:14.549Z",
+      "client_cancelled_at": "2026-10-12T04:12:29.527Z",
+      "elapsed_ms": 14977,
+      "request_forwarded": false,
+      "local_state_after_response": "LOCAL_PENDING",
+      "visible_message": "Waiting for a secure TINDIO connection before this saved sale can sync."
+    },
+    {
+      "case": "http_429",
+      "request_received_at": "2026-10-12T04:13:39.443Z",
+      "retry_after_seconds": 1,
+      "request_forwarded": false,
+      "local_state_after_response": "LOCAL_PENDING",
+      "visible_message": "Waiting for a secure TINDIO connection before this saved sale can sync."
+    },
+    {
+      "case": "http_503",
+      "request_received_at": "2026-10-12T04:14:25.718Z",
+      "request_forwarded": false,
+      "local_state_after_response": "LOCAL_PENDING",
+      "visible_message": "Waiting for a secure TINDIO connection before this saved sale can sync."
+    },
+    {
+      "case": "short_ack",
+      "request_received_at": "2026-10-12T04:15:02.073Z",
+      "ack_count": 0,
+      "request_forwarded": false,
+      "local_state_after_response": "LOCAL_PENDING",
+      "visible_message": "TINDIO returned an incomplete or mismatched acknowledgement. This saved sale remains queued with its original identity."
+    },
+    {
+      "case": "malformed_ack",
+      "request_received_at": "2026-10-12T04:15:34.641Z",
+      "defect": "SYNCED result omitted required data and sync fields",
+      "request_forwarded": false,
+      "local_state_after_response": "LOCAL_PENDING",
+      "visible_message": "TINDIO returned an incomplete or mismatched acknowledgement. This saved sale remains queued with its original identity."
+    },
+    {
+      "case": "wrong_device_ack",
+      "request_received_at": "2026-10-12T04:16:12.621Z",
+      "response_device_id": "00000000-0000-0000-0000-000000000000",
+      "request_forwarded": false,
+      "local_state_after_response": "LOCAL_PENDING",
+      "visible_message": "TINDIO returned an incomplete or mismatched acknowledgement. This saved sale remains queued with its original identity."
+    }
+  ],
+  "identity_and_custody_after_failures": {
+    "same_event_id_every_attempt": true,
+    "same_idempotency_key_every_attempt": true,
+    "same_local_receipt_reference_every_attempt": true,
+    "same_device_sequence_every_attempt": true,
+    "same_item_count_every_attempt": true,
+    "next_local_sequence": 7,
+    "local_known_server_checkpoint": 5,
+    "next_expected_server_sequence": 6,
+    "sequence_health": "CONTIGUOUS",
+    "outbox_pending_syncing_conflict_failed": [1, 0, 0, 0],
+    "request_count": 0,
+    "sale_count": 0,
+    "payment_count": 0,
+    "receipt_count": 0,
+    "inventory_movement_count": 0,
+    "stock_quantity": 4
+  },
+  "post_recovery": {
+    "request_forwarded_at": "2026-10-12T04:17:05.086Z",
+    "ack_received_at": "2026-10-12T04:17:08.261Z",
+    "ack_status": "SYNCED",
+    "sync_status": "ACCEPTED",
+    "was_replayed": false,
+    "local_state": "SYNCED",
+    "terminal_readiness": "READY OFFLINE",
+    "connection_mode": "CLOUD_ONLINE",
+    "outbox_pending_syncing_conflict_failed": [0, 0, 0, 0],
+    "oldest_unresolved": null,
+    "next_local_sequence": 7,
+    "local_known_server_checkpoint": 6,
+    "next_expected_server_sequence": 7,
+    "sequence_health": "CONTIGUOUS",
+    "request_count": 1,
+    "request_state": "completed",
+    "sale_count": 1,
+    "sale_total_minor": 100,
+    "payment_count": 1,
+    "payment_total_minor": 100,
+    "receipt_count": 1,
+    "sale_item_count": 1,
+    "inventory_movement_count": 1,
+    "inventory_delta": -1,
+    "stock_quantity": 3,
+    "immutable_receipt_snapshot_visible": true
+  },
+  "failure_method": {
+    "external_relay_only": true,
+    "server_source_modified": false,
+    "sqlite_manually_edited": false,
+    "database_manually_mutated": false,
+    "app_data_cleared": false,
+    "app_uninstalled": false,
+    "transaction_identity_replaced": false,
+    "failed_requests_forwarded": false,
+    "normal_same_identity_recovery_completed": true,
+    "synthetic_cash_only": true
+  },
+  "repository_checks": {
+    "targeted_regressions": "PASS_29_OF_29",
+    "mobile_typecheck": "PASS",
+    "root_typecheck": "PASS",
+    "mobile_lint": "PASS_0_ERRORS_1_PREEXISTING_WARNING",
+    "root_lint": "PASS_0_ERRORS_3_PREEXISTING_WARNINGS",
+    "android_export": "PASS_1440_MODULES",
+    "static_certification": "FAIL_143_OF_144_COMMANDS_PASS_LOCAL_SUPABASE_SOURCE_UNAVAILABLE",
+    "static_certification_failure_scope": "test:phase-04-docker-source-connectivity only",
+    "git_diff_check": "PASS"
+  },
+  "campaign_status": {
+    "A14": "PASS",
+    "A17": "PASS_PREVIOUS_PHYSICAL_EXECUTION",
+    "A21": "PASS",
+    "A25": "PASS_PREVIOUS_PHYSICAL_EXECUTION",
+    "A26": "PASS",
+    "A27": "PASS",
+    "A48": "NOT_RUN"
+  }
+}

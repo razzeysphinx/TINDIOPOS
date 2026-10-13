@@ -1,0 +1,135 @@
+{
+  "phase": "MOB-10 Slice 9",
+  "acceptance_case": "A31",
+  "status": "PASS",
+  "starting_commit": "d38c5c9bd8828c293d38d55bc24416f02144c0ac",
+  "device": {
+    "model": "Xiaomi 21121210G",
+    "android_api": 34,
+    "abi": "arm64-v8a",
+    "serial": "82eaaf10",
+    "package": "com.tindio.pos"
+  },
+  "artifact": {
+    "path": "C:\\tmp\\TINDIOPOS-MOB10-A30-queue-scale.apk",
+    "sha256": "61CBEBB751FBDCB888336F6CBE425D9B22F582118FCDE3906D3137E3AF5213D7",
+    "app_data_cleared": false,
+    "app_uninstalled": false,
+    "production_signed": false
+  },
+  "scope": {
+    "organization_id": "baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9",
+    "store_id": "8de6a6de-b006-403e-84eb-c1ac9b36e1c0",
+    "register_id": "5c697afa-720a-4a63-8302-aca541fd23c9",
+    "device_id": "72c8267d-1aaf-4bc0-91f9-86d6eea47797",
+    "shift_id": "d2cd3c24-543c-415f-9d97-a2ca92ff6e4e",
+    "product_id": "bc938c56-67ef-4c7a-8238-c805fdddc83f"
+  },
+  "transaction": {
+    "event_id": "0cbe38be-d4eb-41f0-bcb8-036f31330f65",
+    "idempotency_key": "598e7125-e4bc-42f3-9ea3-f16e18481cdb",
+    "device_sequence": 1108,
+    "provisional_receipt": "OFF-598E7125E4",
+    "amount_minor": 100,
+    "currency": "PHP",
+    "item_count": 1,
+    "payment_method": "CASH"
+  },
+  "authorization_failure": {
+    "production_route": "/api/pos/v2/sync/push",
+    "method": "external relay replaced only the Authorization header and forwarded the unchanged request to the real route",
+    "initial_attempt": {
+      "observed_at": "2026-10-13T12:11:13.103Z",
+      "http_status": 401,
+      "reason": "AUTH_INVALID"
+    },
+    "refreshed_token_attempt": {
+      "observed_at": "2026-10-13T12:11:14.215Z",
+      "http_status": 401,
+      "reason": "AUTH_INVALID"
+    },
+    "identity_stable_across_attempts": true,
+    "authorization_value_logged": false
+  },
+  "failed_custody_state": {
+    "state": "FAILED",
+    "conflict_type": "AUTHORIZATION_CHANGED",
+    "last_error": "Sign in again before TINDIO can sync this saved sale.",
+    "next_local_sequence": 1109,
+    "server_checkpoint": 1107,
+    "connection_mode": "SYNC_REVIEW",
+    "unresolved_transactions": 1,
+    "recovery_safe_for_cloud_online": false
+  },
+  "recovery": {
+    "control": "Reauthenticate in place",
+    "context_validation": [
+      "Supabase password sign-in",
+      "current organization bootstrap",
+      "current employee permissions and store assignment",
+      "current device/store/register binding"
+    ],
+    "retry_control": "Retry original transaction",
+    "destructive_logout": false,
+    "identity_replaced": false,
+    "sqlite_reset": false,
+    "custody_deleted": false
+  },
+  "authoritative_result": {
+    "sale_id": "bcd3dda4-916b-4189-a3b1-77cf96008a50",
+    "sale_status": "completed",
+    "sale_count": 1,
+    "sale_total_minor": 100,
+    "payment_id": "adba2fc7-6f12-4fd4-8edb-fada5ed33eca",
+    "payment_count": 1,
+    "payment_total_minor": 100,
+    "receipt_id": "d35b5195-d8c6-4e13-8308-9438428e9bd5",
+    "receipt_count": 1,
+    "official_receipt_number": 1141,
+    "sale_item_count": 1,
+    "inventory_movement_id": "7324f3ee-354d-4a20-bd43-c560e833fba7",
+    "inventory_movement_count": 1,
+    "inventory_delta": -1,
+    "inventory_before": 102,
+    "inventory_after": 101,
+    "offline_event_count": 1,
+    "offline_event_state": "SYNCED",
+    "sequence_receipt_count": 1,
+    "sequence_receipt_state": "APPLIED",
+    "server_checkpoint": 1108
+  },
+  "final_physical_state": {
+    "next_local_sequence": 1109,
+    "local_server_checkpoint": 1108,
+    "sequence_health": "CONTIGUOUS",
+    "connection_mode": "CLOUD_ONLINE",
+    "outbox_pending_syncing_conflict_failed": [0, 0, 0, 0],
+    "unresolved_transactions": 0,
+    "receipt_visible": true,
+    "receipt_item": "1 each x Phase 04F Certification Item",
+    "receipt_total_minor": 100,
+    "receipt_tendered_minor": 100,
+    "receipt_change_minor": 0
+  },
+  "calibration_observation": {
+    "sequence": 1107,
+    "provisional_receipt": "OFF-6D91ED1679",
+    "result": "A single 401 was recovered by the client's one bounded refresh-and-retry and therefore did not satisfy A31.",
+    "authoritative_receipt_number": 1140
+  },
+  "repository_checks": {
+    "focused_behavioral_tests": "PASS_34_OF_34",
+    "root_typecheck": "PASS",
+    "mobile_typecheck": "PASS",
+    "root_lint": "PASS_WITH_3_EXISTING_WARNINGS",
+    "mobile_lint": "PASS_WITH_1_EXISTING_WARNING",
+    "android_export": "PASS",
+    "static_certification": "FAIL_147_OF_148_LOCAL_SUPABASE_SOURCE_UNAVAILABLE",
+    "git_diff_check": "PASS"
+  },
+  "campaign_status": {
+    "A31": "PASS",
+    "A48": "NOT_RUN",
+    "production_ready": false
+  }
+}

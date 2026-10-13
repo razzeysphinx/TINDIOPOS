@@ -22,6 +22,9 @@ import {
 
 export function createPosV2DatabaseClient(
   accessToken: string,
+  options: {
+    headers?: Record<string, string>;
+  } = {},
 ) {
   const environment =
     getPublicEnvironment();
@@ -50,6 +53,17 @@ export function createPosV2DatabaseClient(
       global: {
         ...(databaseFetch
           ? { fetch: databaseFetch }
+          : {}),
+        ...(options.headers
+          ? {
+              headers:
+                Object.fromEntries(
+                  Object.entries(options.headers).filter(
+                    ([name]) =>
+                      name.toLowerCase() !== "authorization",
+                  ),
+                ),
+            }
           : {}),
       },
     },

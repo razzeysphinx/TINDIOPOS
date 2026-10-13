@@ -42,7 +42,10 @@ type CoordinatorReport = OutboxSyncReport & {
   stopped: boolean;
 };
 
-const OUTBOX_BATCH_SIZE = 20;
+// Keep a physical-device batch comfortably inside the 15-second transport
+// boundary. The coordinator loops, so reducing batch size does not reduce
+// queue capacity or change transaction ordering.
+const OUTBOX_BATCH_SIZE = 5;
 const OUTBOX_MAX_BATCHES = 50;
 const OUTBOX_TRANSPORT_TIMEOUT_MS = 15_000;
 

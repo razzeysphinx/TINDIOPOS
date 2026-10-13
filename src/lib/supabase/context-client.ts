@@ -6,6 +6,9 @@ import type {
 import {
   createClient,
 } from "@/lib/supabase/server";
+import {
+  createPosV2DatabaseClient,
+} from "@/lib/supabase/pos-v2-database-client";
 
 export async function createBusinessContextClient(
   context: Pick<
@@ -36,6 +39,17 @@ export async function createBusinessContextClient(
     headers.Authorization =
       context.requestAuth
         .authorizationHeader;
+    const match =
+      /^Bearer ([^\s]+)$/i.exec(
+        headers.Authorization.trim(),
+      );
+
+    if (match?.[1]) {
+      return createPosV2DatabaseClient(
+        match[1],
+        { headers },
+      );
+    }
   }
 
   return createClient({

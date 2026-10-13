@@ -1,0 +1,108 @@
+{
+  "phase": "MOB-10 Slice 8",
+  "acceptance_case": "A30",
+  "status": "PASS",
+  "starting_commit": "f0305e7f99f8a751fe6bcfc1267e91b02cc0e2ac",
+  "device": {
+    "model": "Xiaomi 21121210G",
+    "android_api": 34,
+    "abi": "arm64-v8a",
+    "serial": "82eaaf10",
+    "package": "com.tindio.pos"
+  },
+  "artifact": {
+    "path": "C:\\tmp\\TINDIOPOS-MOB10-A30-queue-scale.apk",
+    "sha256": "61CBEBB751FBDCB888336F6CBE425D9B22F582118FCDE3906D3137E3AF5213D7",
+    "upgrade_install": true,
+    "app_data_cleared": false,
+    "app_uninstalled": false,
+    "certification_only": true
+  },
+  "scope": {
+    "organization_id": "baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9",
+    "store_id": "8de6a6de-b006-403e-84eb-c1ac9b36e1c0",
+    "register_id": "5c697afa-720a-4a63-8302-aca541fd23c9",
+    "device_id": "72c8267d-1aaf-4bc0-91f9-86d6eea47797",
+    "product_id": "bc938c56-67ef-4c7a-8238-c805fdddc83f",
+    "payment_method": "CASH"
+  },
+  "synthetic_stock": {
+    "approved_adjustment": 1200,
+    "operation_id": "502d1636-f98a-4564-b5ea-5c85e5691012",
+    "movement_id": "a8d4c710-51b1-4b50-b752-21765c9d2391",
+    "second_adjustment_issued": false
+  },
+  "campaign_100": {
+    "sequence_range": [7, 106],
+    "first_event_id": "e7125a93-0b33-4afb-a466-d46556ebcd29",
+    "first_idempotency_key": "ef9c9380-c2f1-405e-b054-edd4ae81d1f3",
+    "last_event_id": "5f23766e-08cc-4a00-8575-f345774fd5dc",
+    "last_idempotency_key": "14f79dfc-4e48-45c6-bdc1-0634c8b086d9",
+    "offline_events_synced": 100,
+    "sequence_receipts_applied": 100,
+    "distinct_idempotency_keys": 100,
+    "sales": 100,
+    "payments": 100,
+    "receipts": 100,
+    "sale_items": 100,
+    "inventory_movements": 100,
+    "sale_total_minor": 10000,
+    "payment_total_minor": 10000,
+    "inventory_delta": -100,
+    "stock_after": 1103,
+    "server_checkpoint": 106,
+    "final_local_queue": [0, 0, 0, 0]
+  },
+  "campaign_1000": {
+    "creation_duration_ms": 119627,
+    "sequence_range": [107, 1106],
+    "first_event_id": "5a322d9a-8019-4736-ada2-b7c8290f5a1b",
+    "first_idempotency_key": "3f24bf5d-a066-4f32-93ad-a6cd6674690a",
+    "last_event_id": "cb71ceba-f1f5-416f-9d39-e65bd4fe8ee2",
+    "last_idempotency_key": "2a7e013a-948f-4352-a86e-d3bac87a869a",
+    "offline_events_synced": 1000,
+    "sequence_receipts_applied": 1000,
+    "distinct_idempotency_keys": 1000,
+    "sales": 1000,
+    "payments": 1000,
+    "receipts": 1000,
+    "sale_items": 1000,
+    "inventory_movements": 1000,
+    "sale_total_minor": 100000,
+    "payment_total_minor": 100000,
+    "inventory_delta": -1000,
+    "stock_after": 103,
+    "server_checkpoint": 1106,
+    "final_local_queue": [0, 0, 0, 0]
+  },
+  "runtime_hardening": {
+    "transport_timeout_ms": 15000,
+    "initial_batch_size": 20,
+    "intermediate_batch_size": 10,
+    "validated_batch_size": 5,
+    "ten_event_server_duration_ms": 14900,
+    "five_event_observed_server_duration_ms": [9400, 13700],
+    "single_flight_coordinator_preserved": true,
+    "identity_replaced": false
+  },
+  "repository_checks": {
+    "a30_behavioral_tests": "PASS_4_OF_4",
+    "outbox_coordinator": "PASS_5_OF_5",
+    "outbox_recovery": "PASS_5_OF_5",
+    "sequence_replay": "PASS_4_OF_4",
+    "request_bearer_context": "PASS_3_OF_3",
+    "phase_12_delta_reconciliation": "PASS",
+    "phase_18": "PASS_12_OF_12",
+    "phase_22": "PASS_3_OF_3",
+    "root_typecheck": "PASS",
+    "mobile_typecheck": "PASS",
+    "root_mobile_lint": "PASS_WITH_3_EXISTING_WARNINGS",
+    "android_export": "PASS",
+    "static_certification": "FAIL_147_OF_148_LOCAL_SUPABASE_SOURCE_UNAVAILABLE",
+    "git_diff_check": "PASS"
+  },
+  "campaign_status": {
+    "A30": "PASS",
+    "A48": "NOT_RUN"
+  }
+}

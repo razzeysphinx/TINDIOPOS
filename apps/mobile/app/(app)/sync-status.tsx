@@ -28,6 +28,11 @@ import { reconcileCloud } from "../../src/features/sync/reconcile-cloud";
 import { getStoreHubState, type StoreHubState } from "../../src/db/store-hub-cache";
 import { synchronizeWithStoreHub } from "../../src/features/store-hub/store-hub-sync";
 import { getIsolatedRuntimeDiagnostics } from "../../src/features/offline/isolated-runtime-diagnostics";
+import {
+  createMob10A30Queue,
+  isMob10A30CertificationBuild,
+  type Mob10A30QueueResult,
+} from "../../src/features/certification/mob-10-a30";
 
 export default function SyncStatusScreen() {
   const { data, reload, mode, connectionMode } = useBusinessContext();
@@ -59,6 +64,9 @@ export default function SyncStatusScreen() {
   const [recoveryPassword, setRecoveryPassword] = useState("");
   const [recoveryNote, setRecoveryNote] = useState("");
   const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [a30Busy, setA30Busy] = useState(false);
+  const [a30Progress, setA30Progress] = useState(0);
+  const [a30Result, setA30Result] = useState<Mob10A30QueueResult | null>(null);
 
   const load = useCallback(async () => {
     setHealth(await getLocalDatabaseHealth()); setRestartProof(await readPhase07RestartProof());
@@ -196,6 +204,33 @@ export default function SyncStatusScreen() {
     }
   }, [accessMode, data, identity, load, organizationId, recoveryBusy, recoveryNote, reload]);
 
+  const createA30Queue = useCallback(async (count: 100 | 1_000) => {
+    if (!data?.core || !identity?.binding || a30Busy) return;
+    setA30Busy(true);
+    setA30Progress(0);
+    setA30Result(null);
+    setMessage(`Creating ${count} synthetic durable sales through the production acceptance path…`);
+    try {
+      const result = await createMob10A30Queue({
+        organizationId: data.core.organization.id,
+        organizationName: data.core.organization.name,
+        binding: identity.binding,
+        deviceId: identity.credential.deviceId,
+        count,
+        isOffline: mode === "offline",
+        isPrepared: offlineState === "READY",
+        onProgress: setA30Progress,
+      });
+      setA30Result(result);
+      setMessage(result.ok
+        ? `A30 queue ready: ${result.accepted} durable synthetic sales. Reconnect, then sync the durable outbox.`
+        : `A30 queue stopped after ${result.accepted}: ${result.reason}. Accepted records remain in custody.`);
+      await load();
+    } finally {
+      setA30Busy(false);
+    }
+  }, [a30Busy, data, identity, load, mode, offlineState]);
+
   const sequenceHealth = !sequenceState ? "CHECK REQUIRED" : outbox?.oldestUnresolved && outbox.oldestUnresolved.deviceSequence > sequenceState.serverCheckpoint + 1 ? "GAP DETECTED" : "CONTIGUOUS";
 
   const performance = getPerformanceMetrics();
@@ -216,6 +251,21 @@ export default function SyncStatusScreen() {
     <Pressable onPress={() => void verify()}><Text>Verify SQLite persistence</Text></Pressable><Pressable onPress={() => void arm()}><Text>Arm Phase 07 restart proof</Text></Pressable><Pressable disabled={mode !== "online"} onPress={() => void prepare()}><Text>Prepare Offline Mode</Text></Pressable><Pressable onPress={() => void revoke()}><Text>Revoke Offline Authorization</Text></Pressable><Pressable accessibilityRole="button" testID="recheck-backend" onPress={() => void recheck()}><Text>Recheck Backend</Text></Pressable>
     <Text>Cold-start Offline: PHASE 08</Text><Text>Phase 09 Local-First: IMPLEMENTED</Text><Text>Catalog source: SQLite</Text><Text>Local-first metrics: SQLite catalog reads {getLocalFirstMetrics().sqliteCatalogReads}; SQLite barcode reads {getLocalFirstMetrics().sqliteBarcodeReads}; SQLite reference reads {getLocalFirstMetrics().sqliteReferenceReads}; modifier cache hits {getLocalFirstMetrics().modifierCacheHits}; modifier network fallbacks {getLocalFirstMetrics().modifierNetworkFallbacks}; cloud catalog searches {getLocalFirstMetrics().cloudCatalogSearches}</Text>
     <Text>Durable Outbox: PHASE 10</Text><Text>Outbox pending / syncing / conflict / failed: {outbox?.summary.pending ?? 0} / {outbox?.summary.syncing ?? 0} / {outbox?.summary.conflict ?? 0} / {outbox?.summary.failed ?? 0}</Text><Text>Oldest unresolved: {outbox?.oldestUnresolved ? `${outbox.oldestUnresolved.localReference} — sequence ${outbox.oldestUnresolved.deviceSequence} — ${outbox.oldestUnresolved.state} — ${outbox.oldestUnresolved.totalMinor} ${outbox.oldestUnresolved.currencyCode}` : "NONE"}</Text><Pressable accessibilityRole="button" testID="sync-durable-outbox" disabled={mode !== "online"} onPress={() => void syncOutbox()}><Text>Sync durable outbox now</Text></Pressable>
+    {isMob10A30CertificationBuild() ? <View>
+      <Text>MOB-10 A30 SYNTHETIC QUEUE CERTIFICATION</Text>
+      <Text>Safety gate: certification organization/product, prepared offline terminal, and empty unresolved queue required.</Text>
+      <Text>Queue creation progress: {a30Progress}</Text>
+      {a30Result?.ok ? <>
+        <Text>A30 accepted / duration: {a30Result.accepted} / {a30Result.durationMs} ms</Text>
+        <Text>A30 sequence range: {a30Result.firstSequence}–{a30Result.lastSequence}</Text>
+        <Text>A30 first identity: {a30Result.firstEventId} / {a30Result.firstIdempotencyKey}</Text>
+        <Text>A30 last identity: {a30Result.lastEventId} / {a30Result.lastIdempotencyKey}</Text>
+        <Text>A30 total / expected stock delta: {a30Result.totalMinor} minor / {a30Result.expectedStockDelta}</Text>
+        <Text>A30 product: {a30Result.productName} / {a30Result.productId}</Text>
+      </> : a30Result ? <Text>A30 stopped after {a30Result.accepted}: {a30Result.reason}</Text> : null}
+      <Pressable accessibilityRole="button" testID="create-a30-100" disabled={a30Busy} onPress={() => void createA30Queue(100)}><Text>Create A30 100-sale queue</Text></Pressable>
+      <Pressable accessibilityRole="button" testID="create-a30-1000" disabled={a30Busy} onPress={() => void createA30Queue(1_000)}><Text>Create A30 1,000-sale queue</Text></Pressable>
+    </View> : null}
     <Text>MOB-04 TRANSACTION RECOVERY</Text>
     <Text>Authentication state: {accessMode === "online" ? "ONLINE AUTHENTICATED" : "REAUTHENTICATION REQUIRED"}</Text>
     <TextInput accessibilityLabel="Recovery employee email" autoCapitalize="none" autoComplete="email" editable={!recoveryBusy} keyboardType="email-address" onChangeText={setRecoveryEmail} placeholder="Recovery employee email" value={recoveryEmail} />

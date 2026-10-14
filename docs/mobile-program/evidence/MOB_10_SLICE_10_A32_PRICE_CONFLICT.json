@@ -1,0 +1,132 @@
+{
+  "phase": "MOB-10 Slice 10",
+  "acceptance_case": "A32",
+  "status": "PASS",
+  "starting_commit": "0d9893c3c687ad11132cf007549cf7b10957f589",
+  "device": {
+    "model": "Xiaomi 21121210G",
+    "android_api": 34,
+    "abi": "arm64-v8a",
+    "serial": "82eaaf10",
+    "package": "com.tindio.pos",
+    "version_code": 2,
+    "version_name": "1.0.0"
+  },
+  "scope": {
+    "organization_id": "baf8e21b-e6e8-4ec9-9cf9-3b8d351e7fb9",
+    "store_id": "8de6a6de-b006-403e-84eb-c1ac9b36e1c0",
+    "register_id": "5c697afa-720a-4a63-8302-aca541fd23c9",
+    "device_id": "72c8267d-1aaf-4bc0-91f9-86d6eea47797",
+    "product_id": "bc938c56-67ef-4c7a-8238-c805fdddc83f"
+  },
+  "transaction": {
+    "local_event_id": "3ff36c65-d1b1-4905-8b36-62c605a79716",
+    "server_offline_event_id": "12daf36b-68f4-46e8-b6f9-6713972e9e0d",
+    "idempotency_key": "757644b2-b619-41ab-84b6-6ee11b3ca03e",
+    "device_sequence": 1109,
+    "provisional_receipt": "OFF-757644B2B6",
+    "amount_minor": 100,
+    "currency": "PHP",
+    "item_count": 1,
+    "payment_method": "CASH"
+  },
+  "catalog_change": {
+    "method": "authenticated canonical set_catalog_product_store_configuration_v3 RPC",
+    "normal_price_minor": 100,
+    "temporary_store_override_minor": 200,
+    "changed_at": "2026-10-13T13:22:23.191001Z",
+    "restored_at": "2026-10-13T13:40:17.550092Z",
+    "change_audited": true,
+    "restoration_audited": true,
+    "final_store_override_minor": null
+  },
+  "conflict_state": {
+    "state": "CONFLICT",
+    "conflict_type": "PRICE_CHANGED",
+    "message": "This queued sale total changed while offline. Review the sale before recording it.",
+    "financial_counts_before": {
+      "sales": 1110,
+      "payments": 1110,
+      "receipts": 1110,
+      "sale_items": 1110,
+      "inventory_movements": 1115
+    },
+    "financial_counts_after_rejection": {
+      "sales": 1110,
+      "payments": 1110,
+      "receipts": 1110,
+      "sale_items": 1110,
+      "inventory_movements": 1115
+    },
+    "silent_reprice_or_false_success": false
+  },
+  "recovery": {
+    "manager_permission_required": "sales.refund",
+    "control": "Retry original transaction",
+    "audit_action": "RETRY_AUTHORIZED",
+    "audit_prior_state": "CONFLICT",
+    "audit_prior_conflict_type": "PRICE_CHANGED",
+    "audit_reason": "A32 price restored after audited review",
+    "audit_created_at": "2026-10-13T13:41:01.811Z",
+    "identity_replaced": false,
+    "sqlite_reset": false,
+    "custody_deleted": false
+  },
+  "local_durability": {
+    "state": "SYNCED",
+    "attempts": 2,
+    "synced_at": "2026-10-13T13:41:05.264Z",
+    "server_sale_id": "7487b152-c8c2-4d0a-8e04-ee2bb4568f48",
+    "official_receipt_number": 1143,
+    "offline_expected_total_minor": 100,
+    "snapshot_total_minor": 100,
+    "snapshot_tendered_minor": 100,
+    "snapshot_change_minor": 0,
+    "snapshot_unit_price_minor": 100,
+    "payload_sha256": "4182b5b69e80c01d4aa6b66928f2fb41e9c85c6c1d213594063e625e40a8e93b",
+    "snapshot_sha256": "7551fc95c110e140f0d09d706b9513d057e3abd60877767ea6a4770649b539a8",
+    "local_receipt_snapshot_matches_outbox": true,
+    "verified_after_process_stop": true
+  },
+  "authoritative_result": {
+    "checkout_request_count": 1,
+    "checkout_request_state": "completed",
+    "sale_id": "7487b152-c8c2-4d0a-8e04-ee2bb4568f48",
+    "sale_status": "completed",
+    "sale_total_minor": 100,
+    "payment_count": 1,
+    "payment_total_minor": 100,
+    "receipt_count": 1,
+    "official_receipt_number": 1143,
+    "sale_item_count": 1,
+    "sale_item_total_minor": 100,
+    "inventory_movement_count": 1,
+    "inventory_delta": -1,
+    "offline_event_state": "SYNCED",
+    "sequence_receipt_state": "APPLIED",
+    "final_financial_counts": {
+      "sales": 1111,
+      "payments": 1111,
+      "receipts": 1111,
+      "sale_items": 1111,
+      "inventory_movements": 1116
+    }
+  },
+  "repository_checks": {
+    "focused_behavioral_tests": "PASS_37_OF_37",
+    "root_typecheck": "PASS",
+    "mobile_typecheck": "PASS",
+    "root_lint": "PASS_WITH_3_EXISTING_WARNINGS",
+    "mobile_lint": "PASS_WITH_1_EXISTING_WARNING",
+    "android_export": "PASS",
+    "static_certification": "FAIL_148_OF_149_LOCAL_SUPABASE_SOURCE_UNAVAILABLE",
+    "git_diff_check": "PASS"
+  },
+  "campaign_status": {
+    "A32": "PASS",
+    "A33": "NOT_RUN",
+    "A34": "NOT_RUN",
+    "A48": "NOT_RUN",
+    "production_ready": false
+  }
+}

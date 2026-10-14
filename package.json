@@ -29,6 +29,7 @@
     "test:mobile-a32-price-conflict": "node --test scripts/mobile-a32-price-conflict.test.mjs",
     "test:mobile-a36-unsupported-offline-cart": "node --test scripts/mobile-a36-unsupported-offline-cart.test.mjs",
     "test:mobile-a37-hardware-input": "node --test scripts/mobile-a37-hardware-input.test.mjs",
+    "test:mobile-a39-store-hub-resilience": "node --test scripts/mobile-a39-store-hub-resilience.test.mjs",
     "test:mobile-sequence-conflict-replay": "node --test scripts/mobile-sequence-conflict-replay.test.mjs",
     "test:pos-v2-business-context-bearer": "node --test scripts/pos-v2-business-context-bearer.test.mjs",
     "apply:mobile-sequence-conflict-replay": "node scripts/apply-mobile-sequence-conflict-replay.mjs",

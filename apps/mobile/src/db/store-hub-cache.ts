@@ -107,6 +107,37 @@ export async function recordStoreHubError(input: {
   );
 }
 
+export async function resetStoreHubReplicaState(input: {
+  organizationId: string;
+  storeId: string;
+  deviceId: string;
+}) {
+  const database = await getTindioDatabase();
+
+  await database.withExclusiveTransactionAsync(
+    async (transaction) => {
+      await transaction.runAsync(
+        "DELETE FROM store_hub_events WHERE organization_id=? AND store_id=?",
+        input.organizationId,
+        input.storeId,
+      );
+
+      await transaction.runAsync(
+        "DELETE FROM store_hub_publish_state WHERE organization_id=? AND store_id=?",
+        input.organizationId,
+        input.storeId,
+      );
+
+      await transaction.runAsync(
+        "DELETE FROM store_hub_state WHERE organization_id=? AND store_id=? AND device_id=?",
+        input.organizationId,
+        input.storeId,
+        input.deviceId,
+      );
+    },
+  );
+}
+
 export async function applyStoreHubChanges(
   organizationId: string,
   storeId: string,

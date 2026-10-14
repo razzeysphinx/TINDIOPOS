@@ -4,6 +4,7 @@ import {
   getStoreHubPublishSignature,
   getStoreHubState,
   recordStoreHubError,
+  resetStoreHubReplicaState,
   saveStoreHubContact,
   saveStoreHubPublishSignature,
 } from "../../db/store-hub-cache";
@@ -15,6 +16,9 @@ import {
   pullStoreHubChanges,
   type StoreHubActivityEvent,
 } from "./store-hub-client";
+import {
+  evaluateStoreHubReplicaContinuity,
+} from "./store-hub-replica-policy";
 
 type OutboxHubRow = {
   event_id: string;
@@ -107,6 +111,18 @@ export async function synchronizeWithStoreHub(
   };
 
   try {
+    let state = await getStoreHubState(scope);
+    const continuity = evaluateStoreHubReplicaContinuity({
+      state,
+      endpoint: probe.config.endpoint,
+      currentRevision: probe.currentRevision,
+    });
+
+    if (continuity.reset) {
+      await resetStoreHubReplicaState(scope);
+      state = null;
+    }
+
     const outbox = await (await getTindioDatabase())
       .getAllAsync<OutboxHubRow>(
         "SELECT event_id,organization_id,store_id,device_id,device_sequence,local_reference,payload_json,state,synced_at,created_at FROM outbox_events WHERE organization_id=? AND store_id=? AND device_id=? AND operation_type='SALE_COMPLETED' ORDER BY device_sequence ASC",
@@ -153,7 +169,6 @@ export async function synchronizeWithStoreHub(
       published += 1;
     }
 
-    const state = await getStoreHubState(scope);
     let cursor = state?.pullCursor ?? 0;
     let pulled = 0;
 

@@ -1,0 +1,129 @@
+{
+  "phase": "MOB-10 Slice 11",
+  "acceptance_case": "A33",
+  "status": "PASS",
+  "starting_commit": "ea175476b105a43a6451f379c261160b45ebabf5",
+  "device": {
+    "model": "Xiaomi 21121210G",
+    "android_api": 34,
+    "abi": "arm64-v8a",
+    "serial": "82eaaf10",
+    "package": "com.tindio.pos",
+    "version_code": 2,
+    "version_name": "1.0.0"
+  },
+  "transaction": {
+    "local_event_id": "021466ba-02f7-4471-9767-eb35e20f9de5",
+    "server_offline_event_id": "ac592712-2fff-4844-8dfa-7fec2d092d14",
+    "idempotency_key": "813d8e74-7128-4d14-a95a-f825ab68574a",
+    "device_sequence": 1110,
+    "provisional_receipt": "OFF-813D8E7471",
+    "amount_minor": 100,
+    "currency": "PHP",
+    "payment_method": "CASH",
+    "shift_id": "d2cd3c24-543c-415f-9d97-a2ca92ff6e4e",
+    "device_id": "72c8267d-1aaf-4bc0-91f9-86d6eea47797"
+  },
+  "custody_before_attempts": {
+    "local_state": "LOCAL_PENDING",
+    "attempts": 0,
+    "unresolved_count": 1,
+    "next_device_sequence": 1111,
+    "server_checkpoint": 1109,
+    "receipt_snapshot_present": true,
+    "lease_state": "ACTIVE"
+  },
+  "guard_attempts": {
+    "physical_offline_close": {
+      "control_enabled": false,
+      "message": "Shift mutations are online only.",
+      "state_changed": false
+    },
+    "canonical_shift_close": {
+      "http_status": 400,
+      "sqlstate": "23514",
+      "message": "Shift close blocked while a device has active offline transaction custody.",
+      "state_changed": false
+    },
+    "canonical_device_revoke": {
+      "http_status": 400,
+      "sqlstate": "23514",
+      "message": "This device has active offline shift custody. Reconcile and close the shift before reassigning or revoking it.",
+      "state_changed": false
+    },
+    "canonical_device_reassign": {
+      "status": "NOT_RUN",
+      "reason": "No different active certification register exists; no merchant fixture was created or mutated.",
+      "shared_trigger_live_evidence": "device revoke",
+      "behavioral_contract_covered": true
+    }
+  },
+  "unchanged_after_rejection": {
+    "shift_status": "open",
+    "device_status": "active",
+    "device_store_id": "8de6a6de-b006-403e-84eb-c1ac9b36e1c0",
+    "device_register_id": "5c697afa-720a-4a63-8302-aca541fd23c9",
+    "lease_state": "ACTIVE",
+    "server_checkpoint": 1109,
+    "financial_counts": {
+      "sales": 1111,
+      "payments": 1111,
+      "receipts": 1111,
+      "sale_items": 1111,
+      "inventory_movements": 1116
+    }
+  },
+  "recovery": {
+    "connection_mode": "CLOUD_ONLINE",
+    "local_state": "SYNCED",
+    "attempts": 1,
+    "identity_replaced": false,
+    "sqlite_reset": false,
+    "custody_deleted": false,
+    "server_checkpoint": 1110,
+    "server_sale_id": "9efaf98d-b6de-49d9-a961-79546848a656",
+    "official_receipt_number": 1144
+  },
+  "authoritative_result": {
+    "checkout_request_count": 1,
+    "checkout_request_state": "completed",
+    "sale_status": "completed",
+    "sale_total_minor": 100,
+    "payment_count": 1,
+    "payment_total_minor": 100,
+    "receipt_count": 1,
+    "sale_item_count": 1,
+    "sale_item_total_minor": 100,
+    "inventory_movement_count": 1,
+    "inventory_delta": -1,
+    "offline_event_state": "SYNCED",
+    "sequence_receipt_state": "APPLIED",
+    "final_financial_counts": {
+      "sales": 1112,
+      "payments": 1112,
+      "receipts": 1112,
+      "sale_items": 1112,
+      "inventory_movements": 1117
+    }
+  },
+  "repository_checks": {
+    "mobile_shift_finalization": "PASS_6_OF_6",
+    "mobile_shift_custody_leases": "PASS_6_OF_6",
+    "phase_13": "PASS_1_OF_1",
+    "phase_18": "PASS_1_OF_1",
+    "phase_25": "PASS_5_OF_5",
+    "root_typecheck": "PASS",
+    "mobile_typecheck": "PASS",
+    "root_lint": "PASS_WITH_3_EXISTING_WARNINGS",
+    "mobile_lint": "PASS_WITH_1_EXISTING_WARNING",
+    "android_export": "PASS_29_FILES",
+    "static_certification": "FAIL_148_OF_149_LOCAL_SUPABASE_SOURCE_UNAVAILABLE",
+    "git_diff_check": "PASS"
+  },
+  "campaign_status": {
+    "A33": "PASS",
+    "A34": "NOT_RUN",
+    "A48": "NOT_RUN",
+    "production_ready": false
+  }
+}

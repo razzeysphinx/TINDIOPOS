@@ -36,6 +36,8 @@ import { cashierFeatureGates } from "../../src/features/cashier/cashier-feature-
 import { formatMoney } from "../../src/features/cashier/cashier-format";
 import {
   cartSupportsDurableOfflineCash,
+  offlineCashCartRestriction,
+  offlineCashCartRestrictionMessage,
   sameConfiguration,
   sameSaleable,
 } from "../../src/features/cashier/cashier-validation";
@@ -314,11 +316,13 @@ export default function PosScreen() {
 
   const cashMethod = paymentMethods.find((method) => method.type === "CASH") ?? null;
 
-  const offlineCartEligible = cartSupportsDurableOfflineCash(cart, {
+  const offlineCartInput = {
     customerId: selectedCustomer?.id ?? null,
     diningOptionId,
     openTicketId: activeTicketId,
-  });
+  };
+  const offlineCartRestriction = offlineCashCartRestriction(cart, offlineCartInput);
+  const offlineCartEligible = cartSupportsDurableOfflineCash(cart, offlineCartInput);
   const offlineSaleReady = canAcceptOfflineSale(cashierReadinessState);
 
   useEffect(() => {
@@ -737,7 +741,12 @@ export default function PosScreen() {
   };
 
   const saveOfflineCashSale = async () => {
-    if (onlineIntentLoading || savingOffline || !offlineCartEligible) return;
+    if (onlineIntentLoading || savingOffline) return;
+
+    if (offlineCartRestriction) {
+      setSaleMessage(offlineCashCartRestrictionMessage(offlineCartRestriction));
+      return;
+    }
 
     if (!offlineSaleReady) {
       setSaleMessage(
@@ -1320,10 +1329,9 @@ export default function PosScreen() {
         </View>
       ) : null}
 
-      {!offlineCartEligible && cart.length > 0 ? (
-        <Text>
-          This cart requires online checkout because it contains customer/ticket/dining,
-          variable-price, modifier, or line-note state that the Phase 10 offline sale contract does not persist.
+      {offlineCartRestriction && offlineCartRestriction !== "EMPTY_CART" ? (
+        <Text accessibilityRole="alert" testID="offline-cart-restriction">
+          {offlineCashCartRestrictionMessage(offlineCartRestriction)}
         </Text>
       ) : null}
 

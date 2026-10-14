@@ -30,7 +30,8 @@ function validCartLine(line: PosCartLine) {
   return Number.isFinite(line.quantity) && line.quantity > 0 &&
     (line.allowFractionalQuantity || Number.isInteger(line.quantity)) &&
     !line.isVariablePrice && line.manualPriceMinor === null &&
-    (line.modifierOptionIds?.length ?? 0) === 0 && (line.modifiers?.length ?? 0) === 0;
+    (line.modifierOptionIds?.length ?? 0) === 0 && (line.modifiers?.length ?? 0) === 0 &&
+    !(line.itemNote ?? "").trim();
 }
 
 export async function createOfflineCashSale(input: OfflineSaleAcceptanceInput): Promise<OfflineSaleAcceptanceResult> {

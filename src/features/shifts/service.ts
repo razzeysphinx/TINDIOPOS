@@ -9,6 +9,9 @@ import {
   acquireShiftCustodySchema,
   openShiftSubmissionSchema,
 } from "@/features/shifts/shift-schema";
+import {
+  legacyMobileShiftCloseUpgrade,
+} from "@/features/shifts/mobile-shift-close-compatibility";
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
 import { createBusinessContextClient } from "@/lib/supabase/context-client";
 import type { PosCloseShiftV2Response, PosOpenShiftV2Response } from "@/contracts/pos";
@@ -165,6 +168,10 @@ export async function closeMobileShift({
   if (!hasPermission(context, "shifts.close")) {
     return { ok: false, message: "You do not have permission to close register shifts." };
   }
+
+  const upgrade = legacyMobileShiftCloseUpgrade(input);
+  if (upgrade) return upgrade;
+
   const parsed = mobileCloseShiftSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, message: "Enter the counted cash and provide a valid reconciled device checkpoint." };

@@ -80,6 +80,14 @@ Do not publish a binary rollback whose local schema support is older than the in
 
 Fix forward with a newer compatible binary.
 
+## Backend compatibility policy
+
+During a supported mobile-client window, additive backend changes must continue accepting the existing request contract. When a newer safety protocol makes an older mutation unsafe, the backend must fail before business mutation with an explicit `POS_CLIENT_UPGRADE_REQUIRED` response. The response must name the missing capability, state whether retrying unchanged can succeed, and confirm when recovery data remains preserved.
+
+The backend must not silently reinterpret an old financial request, manufacture a new transaction identity, close a shift without current custody proof, or delete pending local work to force an upgrade. Authentication and permission checks still run before an upgrade response.
+
+For the current preproduction baseline, the older-client reference is commit `bd18a3c88862ce0265d31c5e749d2257b57dac49`. Its financial checkout, offline checkout, ordered sync push, bootstrap, catalog, reference, and live request routes retain their established POS v2 shapes. Its legacy mobile shift-close body is intentionally not executed because it predates MOB-08 custody finalization; the server returns HTTP 426 before database access.
+
 ## Certification
 
 Phase 23 cannot be marked CERTIFIED until a real Android upgrade/restart/recovery test passes.

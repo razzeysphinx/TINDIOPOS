@@ -609,4 +609,5 @@ export type {
 } from "@/features/pos/pos-types";
 
 export type PosOpenShiftV2Response = { ok: true; message: string; shift: PosActiveShift } | { ok: false; message: string };
-export type PosCloseShiftV2Response = { ok: true; message: string; closeSummary?: { expectedCashMinor: number; countedCashMinor: number; differenceMinor: number } } | { ok: false; message: string };
+export type PosClientUpgradeRequiredResponse = { ok: false; code: "POS_CLIENT_UPGRADE_REQUIRED"; requiredCapability: "SHIFT_CUSTODY_FINALIZATION_V1"; retryable: false; preservesRecovery: true; message: string };
+export type PosCloseShiftV2Response = { ok: true; message: string; closeSummary?: { expectedCashMinor: number; countedCashMinor: number; differenceMinor: number } } | { ok: false; message: string } | PosClientUpgradeRequiredResponse;

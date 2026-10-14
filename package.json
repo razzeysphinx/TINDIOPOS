@@ -31,6 +31,8 @@
     "test:mobile-a37-hardware-input": "node --test scripts/mobile-a37-hardware-input.test.mjs",
     "test:mobile-a39-store-hub-resilience": "node --test scripts/mobile-a39-store-hub-resilience.test.mjs",
     "test:mobile-a40-store-hub-transport": "node --test scripts/mobile-a40-store-hub-transport.test.mjs",
+    "test:mobile-a43-old-client-compatibility": "node --test scripts/mobile-a43-old-client-compatibility.test.mjs",
+    "certify:mobile-a43-live": "node scripts/mobile-a43-old-client-live.mjs",
     "test:mobile-sequence-conflict-replay": "node --test scripts/mobile-sequence-conflict-replay.test.mjs",
     "test:pos-v2-business-context-bearer": "node --test scripts/pos-v2-business-context-bearer.test.mjs",
     "apply:mobile-sequence-conflict-replay": "node scripts/apply-mobile-sequence-conflict-replay.mjs",

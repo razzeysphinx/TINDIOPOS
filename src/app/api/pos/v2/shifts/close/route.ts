@@ -1,5 +1,6 @@
 import { posApiJson, readPosApiJson } from "@/features/pos/pos-api-response";
 import { closeMobileShift } from "@/features/shifts/service";
+import { isMobileShiftCloseUpgradeRequired } from "@/features/shifts/mobile-shift-close-compatibility";
 import { getPosV2BusinessContext } from "@/lib/auth/pos-v2-business-context";
 
 export async function POST(request: Request) {
@@ -8,5 +9,15 @@ export async function POST(request: Request) {
   const context = resolved.context;
   const body = await readPosApiJson(request);
   if (!body.ok) return body.response;
-  return posApiJson(await closeMobileShift({ context, input: body.input }));
+  const result = await closeMobileShift({
+    context,
+    input: body.input,
+  });
+
+  return posApiJson(
+    result,
+    isMobileShiftCloseUpgradeRequired(result)
+      ? 426
+      : 200,
+  );
 }

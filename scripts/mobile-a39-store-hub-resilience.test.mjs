@@ -59,6 +59,7 @@ async function startHub({ dataDir, port }) {
       TINDIO_STORE_HUB_PORT: String(port),
       TINDIO_STORE_HUB_HOST: "127.0.0.1",
       TINDIO_STORE_HUB_DATA_DIR: dataDir,
+      TINDIO_STORE_HUB_ALLOW_INSECURE_HTTP: "1",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

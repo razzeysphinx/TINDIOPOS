@@ -1,4 +1,5 @@
 import { secureStorage } from "../../lib/secure-storage";
+import { isStoreHubTransportAllowed } from "./store-hub-transport-policy";
 
 export type StoreHubConfig = {
   version: 1;
@@ -46,7 +47,16 @@ function privateIpv4(hostname: string) {
   );
 }
 
-export function normalizeStoreHubEndpoint(value: string) {
+function allowsInsecureDevelopmentHttp() {
+  return typeof __DEV__ !== "undefined" && __DEV__;
+}
+
+export function normalizeStoreHubEndpoint(
+  value: string,
+  options: {
+    allowInsecureHttp?: boolean;
+  } = {},
+) {
   let url: URL;
 
   try {
@@ -56,8 +66,12 @@ export function normalizeStoreHubEndpoint(value: string) {
   }
 
   if (
-    url.protocol !== "http:"
-    && url.protocol !== "https:"
+    !isStoreHubTransportAllowed({
+      protocol: url.protocol,
+      allowInsecureHttp:
+        options.allowInsecureHttp
+        ?? allowsInsecureDevelopmentHttp(),
+    })
   ) {
     return null;
   }
@@ -88,6 +102,24 @@ export async function saveStoreHubConfig(input: {
   const token = input.token.trim();
 
   if (!endpoint) {
+    try {
+      const candidate = new URL(input.endpoint.trim());
+
+      if (
+        candidate.protocol === "http:"
+        && !allowsInsecureDevelopmentHttp()
+      ) {
+        throw new Error("STORE_HUB_HTTPS_REQUIRED");
+      }
+    } catch (error) {
+      if (
+        error instanceof Error
+        && error.message === "STORE_HUB_HTTPS_REQUIRED"
+      ) {
+        throw error;
+      }
+    }
+
     throw new Error("STORE_HUB_PRIVATE_ENDPOINT_REQUIRED");
   }
 

@@ -61,9 +61,12 @@ Native mobile:
 
 - stores the Hub token only in SecureStore
 - rejects public internet Hub URLs
-- accepts private IPv4, localhost, or `.local`
+- accepts private IPv4, localhost, or `.local` HTTPS endpoints in release runtime
+- permits HTTP only in an explicit non-production development runtime
 - never stores the Hub token in SQLite
 - never forwards cloud/Supabase access tokens to the Hub
+
+The Store Hub serves TLS directly when certificate and private-key paths are configured. It fails closed without TLS by default. Its explicit HTTP override is rejected when `NODE_ENV=production`; Android production builds retain global cleartext denial.
 
 ## Data minimization
 

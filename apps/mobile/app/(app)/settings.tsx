@@ -125,7 +125,7 @@ export default function SettingsScreen() {
       <TextInput
         value={endpoint}
         onChangeText={setEndpoint}
-        placeholder="http://192.168.1.10:8787"
+        placeholder="https://hub.example.local:8787"
         autoCapitalize="none"
       />
 

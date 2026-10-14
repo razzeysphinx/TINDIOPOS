@@ -1,5 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
-import { createServer } from "node:http";
+import { readFileSync } from "node:fs";
+import { createServer as createHttpServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
 import { resolve } from "node:path";
 import { createStoreHubJournal } from "./journal.mjs";
 import { validateStoreHubEvent } from "./protocol.mjs";
@@ -20,6 +22,16 @@ const port = Number(
 const host =
   process.env.TINDIO_STORE_HUB_HOST?.trim()
   || "0.0.0.0";
+
+const tlsCertificatePath =
+  process.env.TINDIO_STORE_HUB_TLS_CERT_PATH?.trim();
+
+const tlsPrivateKeyPath =
+  process.env.TINDIO_STORE_HUB_TLS_KEY_PATH?.trim();
+
+const allowInsecureDevelopmentHttp =
+  process.env.TINDIO_STORE_HUB_ALLOW_INSECURE_HTTP === "1"
+  && process.env.NODE_ENV !== "production";
 
 const dataDir = resolve(
   process.env.TINDIO_STORE_HUB_DATA_DIR?.trim()
@@ -46,6 +58,22 @@ if (
   throw new Error("TINDIO_STORE_HUB_PORT is invalid.");
 }
 
+if (Boolean(tlsCertificatePath) !== Boolean(tlsPrivateKeyPath)) {
+  throw new Error(
+    "Store Hub TLS certificate and private-key paths must be configured together.",
+  );
+}
+
+const usesTls = Boolean(
+  tlsCertificatePath && tlsPrivateKeyPath,
+);
+
+if (!usesTls && !allowInsecureDevelopmentHttp) {
+  throw new Error(
+    "Store Hub requires TLS. Insecure HTTP is available only through the explicit non-production development override.",
+  );
+}
+
 const journal = createStoreHubJournal({
   dataDir,
   organizationId,
@@ -60,6 +88,12 @@ function json(response, status, body) {
     "Content-Length": Buffer.byteLength(payload),
     "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
+    ...(usesTls
+      ? {
+          "Strict-Transport-Security":
+            "max-age=31536000",
+        }
+      : {}),
   });
 
   response.end(payload);
@@ -95,7 +129,7 @@ async function readJson(request) {
   return raw ? JSON.parse(raw) : null;
 }
 
-const server = createServer(async (request, response) => {
+const handleRequest = async (request, response) => {
   if (!authorized(request)) {
     json(response, 401, {
       ok: false,
@@ -106,7 +140,7 @@ const server = createServer(async (request, response) => {
 
   const url = new URL(
     request.url ?? "/",
-    `http://${request.headers.host ?? "localhost"}`,
+    `${usesTls ? "https" : "http"}://${request.headers.host ?? "localhost"}`,
   );
 
   if (
@@ -119,6 +153,9 @@ const server = createServer(async (request, response) => {
       organizationId,
       storeId,
       currentRevision: journal.revision,
+      transport: usesTls
+        ? "HTTPS"
+        : "HTTP_DEVELOPMENT",
       now: new Date().toISOString(),
     });
     return;
@@ -216,11 +253,22 @@ const server = createServer(async (request, response) => {
     ok: false,
     reason: "STORE_HUB_ROUTE_NOT_FOUND",
   });
-});
+};
+
+const server = usesTls
+  ? createHttpsServer(
+      {
+        cert: readFileSync(tlsCertificatePath),
+        key: readFileSync(tlsPrivateKeyPath),
+        minVersion: "TLSv1.2",
+      },
+      handleRequest,
+    )
+  : createHttpServer(handleRequest);
 
 server.listen(port, host, () => {
   console.log(
-    `TINDIO Store Hub listening on ${host}:${port} for ${organizationId}/${storeId}`,
+    `TINDIO Store Hub listening on ${usesTls ? "https" : "http"}://${host}:${port} for ${organizationId}/${storeId}`,
   );
 });
 

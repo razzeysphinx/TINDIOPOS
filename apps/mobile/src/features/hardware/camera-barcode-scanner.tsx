@@ -3,6 +3,7 @@ import {
   useCameraPermissions,
 } from "expo-camera";
 import {
+  useRef,
   useState,
 } from "react";
 import {
@@ -10,6 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { createBarcodeScanGuard } from "./barcode-scan-guard";
 
 export function CameraBarcodeScanner({
   onScanned,
@@ -29,6 +31,9 @@ export function CameraBarcodeScanner({
     locked,
     setLocked,
   ] = useState(false);
+  const scanGuard = useRef(
+    createBarcodeScanGuard(),
+  ).current;
 
   if (!permission) {
     return (
@@ -58,7 +63,7 @@ export function CameraBarcodeScanner({
         }}
       >
         <Text>
-          Camera permission is required only for camera barcode scanning.
+          Camera permission is required only for camera barcode scanning. Manual barcode and SKU entry remains available in the POS.
         </Text>
 
         <Pressable
@@ -116,13 +121,18 @@ export function CameraBarcodeScanner({
                   return;
                 }
 
+                if (!scanGuard.tryAcquire()) {
+                  return;
+                }
+
                 setLocked(true);
 
-                void Promise.resolve(
-                  onScanned(value),
-                ).finally(() => {
-                  setLocked(false);
-                });
+                void Promise.resolve()
+                  .then(() => onScanned(value))
+                  .finally(() => {
+                    scanGuard.release();
+                    setLocked(false);
+                  });
               }
         }
       />

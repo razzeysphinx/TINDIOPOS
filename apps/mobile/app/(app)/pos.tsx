@@ -1,5 +1,5 @@
 import * as Crypto from "expo-crypto";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -46,6 +46,7 @@ import { useTerminalDevice } from "../../src/features/device/use-terminal-device
 import {
   CameraBarcodeScanner,
 } from "../../src/features/hardware/camera-barcode-scanner";
+import { createBarcodeScanGuard } from "../../src/features/hardware/barcode-scan-guard";
 import {
   lookupLocalBarcode,
   lookupLocalSku,
@@ -160,6 +161,7 @@ export default function PosScreen() {
 
   const [configureState, setConfigureState] = useState<ConfigureState | null>(null);
   const [modifierState, setModifierState] = useState<ModifierState | null>(null);
+  const hidLookupGuard = useRef(createBarcodeScanGuard()).current;
 
   const gates = core ? cashierFeatureGates(core) : null;
 
@@ -519,28 +521,36 @@ export default function PosScreen() {
       return;
     }
 
-    const item =
-      await lookupLocalBarcode(
-        core.organization.id,
-        binding.storeId,
-        normalized,
-      )
-      ?? await lookupLocalSku(
-        core.organization.id,
-        binding.storeId,
-        normalized,
-      );
-
-    if (item) {
-      await add(item);
-      setLookup("");
-      setSaleMessage(null);
+    if (!hidLookupGuard.tryAcquire()) {
       return;
     }
 
-    setSaleMessage(
-      "No local barcode/SKU match.",
-    );
+    try {
+      const item =
+        await lookupLocalBarcode(
+          core.organization.id,
+          binding.storeId,
+          normalized,
+        )
+        ?? await lookupLocalSku(
+          core.organization.id,
+          binding.storeId,
+          normalized,
+        );
+
+      if (item) {
+        await add(item);
+        setLookup("");
+        setSaleMessage(null);
+        return;
+      }
+
+      setSaleMessage(
+        "No local barcode/SKU match.",
+      );
+    } finally {
+      hidLookupGuard.release();
+    }
   };
 
   const find = async () => {

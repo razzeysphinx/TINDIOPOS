@@ -5,8 +5,9 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { changePosDeviceRegisterAction, registerPosDeviceAction, revokePosDeviceAction } from "@/features/devices/actions";
+import { changePosDeviceRegisterAction, registerPosDeviceAction, retirePosDeviceAction } from "@/features/devices/actions";
 import { TINDIO_POS_APP_VERSION } from "@/features/devices/device-schema";
 import { savePosDeviceIdentity } from "@/features/offline/offline-store";
 
@@ -37,6 +38,10 @@ export type DeviceFleetItem = {
   revokedAt: string | null;
   telemetry: FleetTelemetry | null;
 };
+
+type RetirementIntent = "disable" | "replace";
+type CustodyDecision = "RECONCILED" | "DEVICE_UNAVAILABLE_ACCEPT_BOUNDED_LOSS";
+type RetirementRequest = { device: DeviceFleetItem; intent: RetirementIntent };
 
 function createIdentity() {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -79,6 +84,7 @@ export function DeviceManager({ business, devices, registers, stores }: {
   const [storeId, setStoreId] = useState(stores[0]?.id ?? "");
   const [registerId, setRegisterId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [retirement, setRetirement] = useState<RetirementRequest | null>(null);
   const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(null);
   const [isRegisteringPending, startRegisteringTransition] = useTransition();
   const [isDeviceActionPending, startDeviceActionTransition] = useTransition();
@@ -118,27 +124,21 @@ export function DeviceManager({ business, devices, registers, stores }: {
     });
   };
 
-  const revoke = (device: DeviceFleetItem) => {
-    if (!window.confirm(`Disable ${device.name}? It will no longer be able to use TINDIO POS.`)) return;
+  const retire = (request: RetirementRequest, custodyDecision: CustodyDecision, reason: string, lossConfirmation: string) => {
+    const { device, intent } = request;
     setPendingDeviceId(device.id);
     startDeviceActionTransition(async () => {
-      const result = await revokePosDeviceAction({ deviceId: device.id, reason: "Device disabled by a fleet manager." });
-      setMessage(result.message);
-      setPendingDeviceId(null);
-      if (result.ok) router.refresh();
-    });
-  };
-
-  const replace = (device: DeviceFleetItem) => {
-    const store = stores.find((candidate) => candidate.id === device.storeId);
-    const register = registers.find((candidate) => candidate.id === device.registerId);
-    if (!window.confirm(`Replace ${device.name}? The old terminal will be disabled immediately and a new terminal must be enrolled with a new credential.`)) return;
-    setPendingDeviceId(device.id);
-    startDeviceActionTransition(async () => {
-      const result = await revokePosDeviceAction({ deviceId: device.id, reason: "Device replacement started by a fleet manager. Old credential intentionally revoked." });
+      const result = await retirePosDeviceAction({ deviceId: device.id, custodyDecision, reason, lossConfirmation });
       setPendingDeviceId(null);
       if (!result.ok) return setMessage(result.message);
-      setMessage(`${device.name} was disabled for replacement. On the replacement Android terminal: Install TINDIO POS → Authenticate → Enroll → ${store?.name ?? device.storeId} → ${register?.name ?? device.registerId} → Initial Sync → Ready. The replacement device must generate a NEW device ID and secret.`);
+      setRetirement(null);
+      if (intent === "replace") {
+        const store = stores.find((candidate) => candidate.id === device.storeId);
+        const register = registers.find((candidate) => candidate.id === device.registerId);
+        setMessage(`${result.message} On the replacement Android terminal: Install TINDIO POS → Authenticate → Enroll → ${store?.name ?? device.storeId} → ${register?.name ?? device.registerId} → Initial Sync → Ready. The replacement device must generate a NEW device ID and secret.`);
+      } else {
+        setMessage(result.message);
+      }
       router.refresh();
     });
   };
@@ -173,17 +173,17 @@ export function DeviceManager({ business, devices, registers, stores }: {
 
     <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
       <div className="border-b px-5 py-4 sm:px-6"><h2 className="font-semibold">Managed terminals</h2><p className="mt-1 text-sm text-muted-foreground">Assign store/register, monitor health, disable compromised terminals, or start a safe replacement.</p></div>
-      {devices.length ? <div className="divide-y">{devices.map((device) => <FleetDeviceCard busy={isDeviceActionPending && pendingDeviceId === device.id} device={device} key={device.id} onRebind={rebind} onReplace={replace} onRevoke={revoke} registers={registers} stores={stores} />)}</div> : <p className="px-5 py-10 text-sm text-muted-foreground">No POS terminal is enrolled in this business yet.</p>}
+      {devices.length ? <div className="divide-y">{devices.map((device) => <FleetDeviceCard busy={isDeviceActionPending && pendingDeviceId === device.id} device={device} key={device.id} onRebind={rebind} onRetire={(intent) => setRetirement({ device, intent })} registers={registers} stores={stores} />)}</div> : <p className="px-5 py-10 text-sm text-muted-foreground">No POS terminal is enrolled in this business yet.</p>}
     </section>
+    {retirement ? <DeviceRetirementDialog busy={isDeviceActionPending && pendingDeviceId === retirement.device.id} key={`${retirement.device.id}:${retirement.intent}`} onCancel={() => setRetirement(null)} onConfirm={(decision, reason, confirmation) => retire(retirement, decision, reason, confirmation)} request={retirement} /> : null}
   </div>;
 }
 
-function FleetDeviceCard({ busy, device, onRebind, onReplace, onRevoke, registers, stores }: {
+function FleetDeviceCard({ busy, device, onRebind, onRetire, registers, stores }: {
   busy: boolean;
   device: DeviceFleetItem;
   onRebind: (deviceId: string, storeId: string, registerId: string) => void;
-  onReplace: (device: DeviceFleetItem) => void;
-  onRevoke: (device: DeviceFleetItem) => void;
+  onRetire: (intent: RetirementIntent) => void;
   registers: Register[];
   stores: Store[];
 }) {
@@ -197,8 +197,57 @@ function FleetDeviceCard({ busy, device, onRebind, onReplace, onRevoke, register
   return <article className="space-y-5 p-5 sm:p-6">
     <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{device.name}</h3><span className={device.status === "active" ? "rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary" : "rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"}>{device.status === "active" ? "Active" : "Disabled"}</span>{needsAttention ? <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"><AlertTriangle className="size-3" />Attention required</span> : null}{telemetry ? <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">{connectionIcon(telemetry.connectionMode)}{telemetry.connectionMode.replaceAll("_", " ")}</span> : null}</div><p className="mt-1 font-mono text-xs text-muted-foreground">{device.id}</p></div><div className="text-right text-xs text-muted-foreground"><p>App {device.appVersion}</p><p>Last contact: {dateTime(newestContact(device))}</p></div></div>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Metric label="Heartbeat" value={dateTime(telemetry?.lastHeartbeatAt ?? null)} /><Metric label="Last successful sync" value={dateTime(telemetry?.lastSuccessfulSyncAt ?? null)} /><Metric label="Employee" value={telemetry?.employeeName ?? "Not reported"} /><Metric label="Offline since" value={dateTime(telemetry?.offlineSince ?? null)} /><Metric label="Queue depth" value={telemetry?.queueDepth ?? 0} /><Metric label="Conflicts" value={telemetry?.conflictCount ?? 0} /><Metric label="Failed" value={telemetry?.failedCount ?? 0} /><Metric label="Checkpoint gap" value={checkpointGap} /></div>
-    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"><label className="grid gap-1 text-xs font-medium text-muted-foreground">Store assignment<select className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-foreground" disabled={device.status !== "active" || busy} onChange={(event) => { setStoreId(event.target.value); setRegisterId(""); }} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label><label className="grid gap-1 text-xs font-medium text-muted-foreground">Register assignment<select className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-foreground" disabled={device.status !== "active" || busy} onChange={(event) => setRegisterId(event.target.value)} value={registerId}><option value="">Choose register</option>{availableRegisters.map((register) => <option key={register.id} value={register.id}>{register.name} ({register.code})</option>)}</select></label>{device.status === "active" ? <div className="flex flex-wrap items-end gap-2"><Button aria-label={`Save ${device.name} assignment`} disabled={busy || !registerId || (storeId === device.storeId && registerId === device.registerId)} onClick={() => onRebind(device.id, storeId, registerId)} size="icon" type="button" variant="outline">{busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}</Button><Button disabled={busy} onClick={() => onReplace(device)} type="button" variant="outline"><RotateCcw />Replace</Button><Button aria-label={`Disable ${device.name}`} disabled={busy} onClick={() => onRevoke(device)} type="button" variant="destructive"><ShieldBan />Disable</Button></div> : <p className="self-end text-xs text-muted-foreground">Disabled {dateTime(device.revokedAt)}</p>}</div>
+    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"><label className="grid gap-1 text-xs font-medium text-muted-foreground">Store assignment<select className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-foreground" disabled={device.status !== "active" || busy} onChange={(event) => { setStoreId(event.target.value); setRegisterId(""); }} value={storeId}>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label><label className="grid gap-1 text-xs font-medium text-muted-foreground">Register assignment<select className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-foreground" disabled={device.status !== "active" || busy} onChange={(event) => setRegisterId(event.target.value)} value={registerId}><option value="">Choose register</option>{availableRegisters.map((register) => <option key={register.id} value={register.id}>{register.name} ({register.code})</option>)}</select></label>{device.status === "active" ? <div className="flex flex-wrap items-end gap-2"><Button aria-label={`Save ${device.name} assignment`} disabled={busy || !registerId || (storeId === device.storeId && registerId === device.registerId)} onClick={() => onRebind(device.id, storeId, registerId)} size="icon" type="button" variant="outline">{busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}</Button><Button disabled={busy} onClick={() => onRetire("replace")} type="button" variant="outline"><RotateCcw />Replace</Button><Button aria-label={`Disable ${device.name}`} disabled={busy} onClick={() => onRetire("disable")} type="button" variant="destructive"><ShieldBan />Disable</Button></div> : <p className="self-end text-xs text-muted-foreground">Disabled {dateTime(device.revokedAt)}</p>}</div>
   </article>;
+}
+
+function DeviceRetirementDialog({ busy, onCancel, onConfirm, request }: {
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: (decision: CustodyDecision, reason: string, confirmation: string) => void;
+  request: RetirementRequest;
+}) {
+  const [decision, setDecision] = useState<CustodyDecision | null>(null);
+  const [reason, setReason] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const lost = decision === "DEVICE_UNAVAILABLE_ACCEPT_BOUNDED_LOSS";
+  const canSubmit = Boolean(
+    decision
+    && reason.trim().length >= 10
+    && (!lost || confirmation === "ACCEPT LOCAL-ONLY TRANSACTION LOSS"),
+  );
+  const telemetry = request.device.telemetry;
+
+  return <Dialog.Root onOpenChange={(open) => { if (!open && !busy) onCancel(); }} open>
+    <DialogContent closeLabel="Cancel device retirement" showCloseButton={!busy}>
+      <DialogHeader>
+        <DialogTitle>{request.intent === "replace" ? "Replace" : "Disable"} {request.device.name}</DialogTitle>
+        <DialogDescription>Choose what happened to this terminal&apos;s transaction custody. This decision is permanent and recorded in the audit trail.</DialogDescription>
+      </DialogHeader>
+      <DialogBody className="space-y-4">
+        <div className="rounded-xl border bg-muted/30 p-3 text-sm">
+          <p>Last contact: <strong>{dateTime(newestContact(request.device))}</strong></p>
+          <p>Queue / conflicts / failed: <strong>{telemetry?.queueDepth ?? "unknown"} / {telemetry?.conflictCount ?? "unknown"} / {telemetry?.failedCount ?? "unknown"}</strong></p>
+          <p>Checkpoint: <strong>{telemetry ? `${telemetry.serverCheckpoint} cloud / ${telemetry.deviceCheckpoint} device` : "unknown"}</strong></p>
+        </div>
+        <label className="flex cursor-pointer gap-3 rounded-xl border p-3">
+          <input checked={decision === "RECONCILED"} disabled={busy} name="custody-decision" onChange={() => setDecision("RECONCILED")} type="radio" />
+          <span><strong>Reconciled with cloud</strong><span className="mt-1 block text-sm text-muted-foreground">Use only after the old terminal is online, recently checked in, has no queue/review items, and its offline shift custody is finalized. The server verifies these conditions.</span></span>
+        </label>
+        <label className="flex cursor-pointer gap-3 rounded-xl border border-destructive/40 p-3">
+          <input checked={lost} disabled={busy} name="custody-decision" onChange={() => setDecision("DEVICE_UNAVAILABLE_ACCEPT_BOUNDED_LOSS")} type="radio" />
+          <span><strong>Terminal is lost or cannot be recovered</strong><span className="mt-1 block text-sm text-muted-foreground">Use only when the old terminal cannot reconnect. Any transaction whose only copy remained on that device cannot be recovered. Store Hub has stock-awareness metadata, not a complete financial backup.</span></span>
+        </label>
+        <label className="grid gap-1.5 text-sm font-medium">Reason<textarea className="min-h-24 rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal" disabled={busy} maxLength={500} onChange={(event) => setReason(event.target.value)} placeholder="Explain what was checked and why the terminal is being retired." value={reason} /></label>
+        {lost ? <label className="grid gap-1.5 text-sm font-medium">Type <strong>ACCEPT LOCAL-ONLY TRANSACTION LOSS</strong> to continue<Input autoComplete="off" disabled={busy} onChange={(event) => setConfirmation(event.target.value)} value={confirmation} /></label> : null}
+        <p className="text-xs leading-5 text-muted-foreground">Retirement never copies credentials to the replacement. A replacement must enroll with a new device ID and secret. Existing cloud financial records remain unchanged.</p>
+        <DialogFooter className="justify-end">
+          <Button disabled={busy} onClick={onCancel} type="button" variant="outline">Cancel</Button>
+          <Button disabled={busy || !canSubmit} onClick={() => decision && onConfirm(decision, reason.trim(), confirmation)} type="button" variant="destructive">{busy ? <LoaderCircle className="animate-spin" /> : <ShieldBan />}{request.intent === "replace" ? "Retire old terminal" : "Disable terminal"}</Button>
+        </DialogFooter>
+      </DialogBody>
+    </DialogContent>
+  </Dialog.Root>;
 }
 
 function SummaryCard({ label, value }: { label: string; value: number }) {

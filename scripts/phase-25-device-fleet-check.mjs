@@ -24,11 +24,14 @@ test("Phase 25 fleet UI covers Source-of-Truth capabilities", () => {
 test("Phase 25 preserves server-side device authority", () => {
   const actions = read("src/features/devices/actions.ts");
   const migration = read("archive/database/supabase-migrations/20260824190000_improvement_12_device_register_management.sql");
-  for (const marker of ["devices.manage", "register_pos_device", "change_pos_device_register", "revoke_pos_device"]) {
+  for (const marker of ["devices.manage", "register_pos_device", "change_pos_device_register", "retire_pos_device"]) {
     assert.ok(actions.includes(marker), `device actions must retain ${marker}`);
   }
   assert.ok(migration.includes("private.pos_device_credentials") && migration.includes("extensions.digest(target_secret, 'sha256')"), "device credentials must remain private and hashed");
   assert.ok(migration.includes("device.organization_id = target_organization_id"), "device mutations must remain organization scoped");
+  const retirement = read("database/migrations/0018_mobile_device_retirement_custody.sql");
+  assert.ok(retirement.includes("private.require_device_manager(target_organization_id)"), "device retirement must remain server-authorized");
+  assert.ok(retirement.includes("DEVICE_UNAVAILABLE_ACCEPT_BOUNDED_LOSS"), "lost-device retirement must require an explicit custody decision");
 });
 
 test("Phase 25 native enrollment remains secure and self-generated", () => {

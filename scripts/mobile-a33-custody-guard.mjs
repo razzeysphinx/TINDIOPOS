@@ -152,7 +152,7 @@ const revokeAttempt = await attemptWithAuthorizedIdentity(authenticated, "revoke
   target_organization_id: ORGANIZATION_ID,
   target_device_id: DEVICE_ID,
   target_reason: "A33 custody guard certification attempt",
-}, "This device has active offline shift custody. Reconcile and close the shift before reassigning or revoking it.");
+}, "Device retirement now requires an explicit transaction-custody decision. Refresh Fleet Management and try again.");
 
 const after = readSnapshot();
 assert.deepEqual(after.device, before.device, "A rejected A33 device mutation changed the device.");

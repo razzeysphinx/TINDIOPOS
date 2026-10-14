@@ -8294,6 +8294,22 @@ export type Database = {
           status: string
         }[]
       }
+      retire_pos_device: {
+        Args: {
+          target_custody_decision: string
+          target_device_id: string
+          target_loss_confirmation?: string
+          target_organization_id: string
+          target_reason: string
+        }
+        Returns: {
+          custody_decision: string
+          device_id: string
+          lost_custody_count: number
+          revoked_at: string
+          status: string
+        }[]
+      }
       rotate_loyalty_card_qr: {
         Args: {
           target_loyalty_card_id: string

@@ -23,9 +23,22 @@ export const changePosDeviceRegisterSchema = z.object({
   registerId: z.uuid(),
 });
 
-export const revokePosDeviceSchema = z.object({
+export const retirePosDeviceSchema = z.object({
   deviceId: z.uuid(),
-  reason: z.string().trim().max(500).optional(),
+  custodyDecision: z.enum(["RECONCILED", "DEVICE_UNAVAILABLE_ACCEPT_BOUNDED_LOSS"]),
+  reason: z.string().trim().min(10).max(500),
+  lossConfirmation: z.string().optional(),
+}).superRefine((value, context) => {
+  if (
+    value.custodyDecision === "DEVICE_UNAVAILABLE_ACCEPT_BOUNDED_LOSS"
+    && value.lossConfirmation !== "ACCEPT LOCAL-ONLY TRANSACTION LOSS"
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "The bounded-loss confirmation does not match.",
+      path: ["lossConfirmation"],
+    });
+  }
 });
 
 export const posDeviceValidationSchema = z.object({

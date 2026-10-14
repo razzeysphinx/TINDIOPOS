@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import {
   changePosDeviceRegisterSchema,
   registerPosDeviceSchema,
-  revokePosDeviceSchema,
+  retirePosDeviceSchema,
 } from "@/features/devices/device-schema";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
@@ -89,30 +89,35 @@ export async function changePosDeviceRegisterAction(input: unknown): Promise<Dev
   return { ok: true, message: "The device is now bound to the selected register." };
 }
 
-export async function revokePosDeviceAction(input: unknown): Promise<DeviceActionResult> {
+export async function retirePosDeviceAction(input: unknown): Promise<DeviceActionResult> {
   const context = await requireBusinessContext();
   if (!hasPermission(context, "devices.manage")) {
     return { ok: false, message: "You do not have permission to revoke POS devices." };
   }
 
-  const parsed = revokePosDeviceSchema.safeParse(input);
+  const parsed = retirePosDeviceSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, message: "This POS device is invalid." };
+    return { ok: false, message: "Choose a custody decision, enter a specific reason, and complete the required confirmation." };
   }
 
   const database = await createClient() as unknown as {
     rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { code?: string; message?: string } | null }>;
   };
-  const { error } = await database.rpc("revoke_pos_device", {
+  const { data, error } = await database.rpc("retire_pos_device", {
     target_organization_id: context.organization.id,
     target_device_id: parsed.data.deviceId,
-    target_reason: parsed.data.reason || null,
+    target_custody_decision: parsed.data.custodyDecision,
+    target_reason: parsed.data.reason,
+    target_loss_confirmation: parsed.data.lossConfirmation || null,
   });
 
   if (error) {
-    return { ok: false, message: databaseMessage(error, "TINDIO could not revoke this device.") };
+    return { ok: false, message: databaseMessage(error, "TINDIO could not retire this device.") };
   }
 
   revalidateDeviceViews();
-  return { ok: true, message: "The device was revoked and can no longer use its register." };
+  const retirement = Array.isArray(data) ? data[0] as { custody_decision?: string; lost_custody_count?: number } | undefined : undefined;
+  return retirement?.custody_decision === "DEVICE_UNAVAILABLE_ACCEPT_BOUNDED_LOSS"
+    ? { ok: true, message: `The unavailable device was disabled. ${retirement.lost_custody_count ?? 0} active custody record(s) were preserved as LOST for audit and drawer review.` }
+    : { ok: true, message: "The reconciled device was disabled and can no longer use its register." };
 }

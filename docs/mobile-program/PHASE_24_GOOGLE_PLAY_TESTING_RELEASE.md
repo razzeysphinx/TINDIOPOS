@@ -89,7 +89,7 @@ Required scenarios include:
 - missing ACK replay
 - reconnect exactly once
 - camera barcode
-- HID barcode where hardware exists
+- verify the listing does not claim external HID-scanner support for v1
 - tenant isolation
 - store isolation
 - revoked device

@@ -43,7 +43,7 @@ If the submitted build declares optional customer, ticket, transfer, time-clock,
 5. Wait for initial preparation to finish. The home screen shows the employee, assigned store, connection state, and terminal-readiness state.
 6. Open **shift**. If there is no active shift, open one with the synthetic opening cash amount supplied in Play Console.
 7. Open **pos**. Search or scan the supplied synthetic product, add it to the cart, and use **cash** for checkout. Electronic/card payment while offline is intentionally unavailable because no compliant provider has been selected.
-8. Open **receipts** to view the resulting receipt. Printing is optional; the receipt remains viewable when no printer is attached.
+8. Open **receipts** to view the resulting receipt. Physical receipt printers are unsupported in v1; the committed receipt remains viewable in-app.
 9. Open **sync-status** to see preparation, pending delivery, conflict, and recovery state. Accepted transactions are never cleared merely to recover connectivity.
 10. Open **hardware** to test camera barcode scanning. If camera permission is denied or no camera is available, manual barcode/SKU entry remains available in **pos**.
 11. Open **settings**, **production-readiness**, and **offline-payments** for terminal/device details, readiness limitations, and the explicit offline-electronic-payment restriction.

@@ -51,7 +51,9 @@ It only identifies the product to add through existing POS logic.
 
 ### USB / Bluetooth barcode scanners
 
-Scanners operating as Android keyboard/HID wedges are supported through the existing barcode/SKU input.
+Keyboard/HID wedge input behavior remains implemented behind the existing
+barcode/SKU field, but external scanners are explicitly unsupported in the v1
+release because physical disconnect/reconnect certification is blocked.
 
 A scanner that emits Enter can submit the lookup directly.
 
@@ -114,16 +116,20 @@ It must not:
 ## Support matrix
 
 ```text
-Camera barcode scanner    IMPLEMENTED
-HID barcode scanner       OS MANAGED
-Bluetooth printer         ADAPTER REQUIRED
-USB printer               ADAPTER REQUIRED
-LAN printer               ADAPTER REQUIRED
-Cash drawer               ADAPTER REQUIRED
-Customer display          ADAPTER REQUIRED
-KDS                       ADAPTER REQUIRED
-Payment terminal          ADAPTER REQUIRED
+Camera barcode scanner    SUPPORTED BUILT-IN
+HID barcode scanner       UNSUPPORTED V1
+Bluetooth printer         UNSUPPORTED V1
+USB printer               UNSUPPORTED V1
+LAN printer               UNSUPPORTED V1
+Cash drawer               UNSUPPORTED V1
+Customer display          UNSUPPORTED V1
+KDS                       UNSUPPORTED V1
+Payment terminal          UNSUPPORTED V1
 ```
+
+Manual barcode/SKU entry is supported and requires no peripheral. Adapter
+contracts remain in source for future integrations; their presence is not a
+support claim.
 
 ## Why adapters are required
 

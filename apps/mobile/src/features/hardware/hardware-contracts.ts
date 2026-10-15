@@ -10,9 +10,8 @@ export type HardwareCapability =
   | "PAYMENT_TERMINAL";
 
 export type HardwareSupportState =
-  | "IMPLEMENTED"
-  | "OS_MANAGED"
-  | "ADAPTER_REQUIRED";
+  | "SUPPORTED_BUILT_IN"
+  | "UNSUPPORTED_V1";
 
 export type HardwareCapabilityDescriptor = {
   capability: HardwareCapability;
@@ -120,7 +119,7 @@ export const hardwareCapabilityMatrix:
     {
       capability:
         "CAMERA_BARCODE_SCANNER",
-      support: "IMPLEMENTED",
+      support: "SUPPORTED_BUILT_IN",
       transactionRole: "INPUT_ONLY",
       note:
         "Uses the device camera to populate the existing local barcode lookup path.",
@@ -128,15 +127,15 @@ export const hardwareCapabilityMatrix:
     {
       capability:
         "HID_BARCODE_SCANNER",
-      support: "OS_MANAGED",
+      support: "UNSUPPORTED_V1",
       transactionRole: "INPUT_ONLY",
       note:
-        "USB/Bluetooth scanners operating as keyboard/HID wedges use the existing barcode input and Enter submit behavior.",
+        "Keyboard/HID wedge behavior is retained for future certification, but no external scanner is supported in the v1 release.",
     },
     {
       capability:
         "BLUETOOTH_PRINTER",
-      support: "ADAPTER_REQUIRED",
+      support: "UNSUPPORTED_V1",
       transactionRole:
         "POST_TRANSACTION_SIDE_EFFECT",
       note:
@@ -145,7 +144,7 @@ export const hardwareCapabilityMatrix:
     {
       capability:
         "USB_PRINTER",
-      support: "ADAPTER_REQUIRED",
+      support: "UNSUPPORTED_V1",
       transactionRole:
         "POST_TRANSACTION_SIDE_EFFECT",
       note:
@@ -154,7 +153,7 @@ export const hardwareCapabilityMatrix:
     {
       capability:
         "LAN_PRINTER",
-      support: "ADAPTER_REQUIRED",
+      support: "UNSUPPORTED_V1",
       transactionRole:
         "POST_TRANSACTION_SIDE_EFFECT",
       note:
@@ -162,7 +161,7 @@ export const hardwareCapabilityMatrix:
     },
     {
       capability: "CASH_DRAWER",
-      support: "ADAPTER_REQUIRED",
+      support: "UNSUPPORTED_V1",
       transactionRole:
         "POST_TRANSACTION_SIDE_EFFECT",
       note:
@@ -171,7 +170,7 @@ export const hardwareCapabilityMatrix:
     {
       capability:
         "CUSTOMER_DISPLAY",
-      support: "ADAPTER_REQUIRED",
+      support: "UNSUPPORTED_V1",
       transactionRole:
         "POST_TRANSACTION_SIDE_EFFECT",
       note:
@@ -179,7 +178,7 @@ export const hardwareCapabilityMatrix:
     },
     {
       capability: "KDS",
-      support: "ADAPTER_REQUIRED",
+      support: "UNSUPPORTED_V1",
       transactionRole:
         "POST_TRANSACTION_SIDE_EFFECT",
       note:
@@ -188,10 +187,20 @@ export const hardwareCapabilityMatrix:
     {
       capability:
         "PAYMENT_TERMINAL",
-      support: "ADAPTER_REQUIRED",
+      support: "UNSUPPORTED_V1",
       transactionRole:
         "EXTERNAL_PAYMENT_PROVIDER",
       note:
         "Online terminal providers must use compliant provider adapters. Offline electronic payments remain Phase 20.",
     },
   ];
+
+export function isHardwareSupportedInV1(
+  capability: HardwareCapability,
+) {
+  return hardwareCapabilityMatrix.some(
+    (descriptor) =>
+      descriptor.capability === capability
+      && descriptor.support === "SUPPORTED_BUILT_IN",
+  );
+}

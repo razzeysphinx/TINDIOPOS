@@ -1023,7 +1023,7 @@ export default function PosScreen() {
       />
 
       <Text>
-        USB/Bluetooth scanners configured as keyboard/HID wedges can scan into this field and submit Enter.
+        External USB/Bluetooth scanners are not supported in this release. Use manual barcode/SKU entry or the built-in camera scanner.
       </Text>
 
       <Pressable

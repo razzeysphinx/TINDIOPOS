@@ -25,6 +25,14 @@ export default function HardwareScreen() {
       </Text>
 
       <Text>
+        V1 supported hardware: this Android device&apos;s built-in camera for barcode scanning. Manual barcode and SKU entry does not require hardware.
+      </Text>
+
+      <Text>
+        External scanners, receipt printers, cash drawers, customer displays, KDS transports, and payment terminals are not supported in the v1 release.
+      </Text>
+
+      <Text>
         A hardware failure may fail that hardware action, but it must never duplicate, erase, or roll back a TINDIO transaction.
       </Text>
 
@@ -56,7 +64,7 @@ export default function HardwareScreen() {
       )}
 
       <Text>
-        Provider-specific printer, drawer, display, KDS, and payment-terminal transports are intentionally not faked. They must implement the hardware adapter contracts without entering TINDIO business/domain logic.
+        Provider-specific printer, drawer, display, KDS, and payment-terminal transports are intentionally not faked. A future release must implement the adapter contract and pass physical release-binary certification before claiming support.
       </Text>
     </ScrollView>
   );

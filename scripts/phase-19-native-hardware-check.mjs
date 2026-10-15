@@ -138,9 +138,9 @@ test(
         "onSubmitEditing",
       )
       && pos.includes(
-        "keyboard/HID wedges",
+        "External USB/Bluetooth scanners are not supported",
       ),
-      "POS must expose camera and HID scanner input",
+      "POS must expose camera/manual input without advertising uncertified HID support",
     );
 
     assert.ok(

@@ -1,0 +1,90 @@
+{
+  "acceptance_case": "A50",
+  "slice": "MOB-10 Slice 24",
+  "starting_commit": "e97e82727f5bab3183e24e1c5357cbd977d64221",
+  "status": "PASS",
+  "generated_at": "2026-10-15T11:43:06.466Z",
+  "source": {
+    "project_id": "divine-sound-41148108",
+    "branch_id": "br-snowy-heart-b5nf6q3n",
+    "database": "tindio_r6_recovery",
+    "primary": true,
+    "default": true,
+    "writes": 0
+  },
+  "restore": {
+    "branch_id": "br-mute-queen-b5xvyxra",
+    "branch_name": "a50-isolated-restore-20261015-114144",
+    "parent_branch_id": "br-snowy-heart-b5nf6q3n",
+    "parent_lsn": "0/5A91D58",
+    "recovery_point": "2026-10-15T06:54:52Z",
+    "endpoint_type": "read_only",
+    "primary": false,
+    "default": false,
+    "written_data_bytes": 0,
+    "expires_at": "2026-10-16T11:41:44Z"
+  },
+  "objectives": {
+    "recovery_time_seconds": 82.329,
+    "recovery_point_lag_seconds": 17212.137,
+    "observed_data_loss_rows": 0,
+    "project_history_retention_seconds": 21600
+  },
+  "reconciliation": {
+    "protected_table_count": 21,
+    "exact_table_fingerprints": "PASS",
+    "financial_totals": "PASS",
+    "inventory_totals": "PASS",
+    "relationship_checks": "PASS: 17/17 zero",
+    "raw_business_rows_persisted": false,
+    "counts": {
+      "sales": 1113,
+      "sale_items": 1113,
+      "payments": 1113,
+      "receipts": 1113,
+      "refunds": 1,
+      "refund_items": 1,
+      "refund_payments": 1,
+      "inventory_levels": 1,
+      "inventory_movements": 1118,
+      "device_sequence_receipts": 1111,
+      "device_sync_checkpoints": 1,
+      "shift_custody_leases": 2
+    },
+    "totals_minor_or_quantity": {
+      "sale_total_minor": 111300,
+      "payment_amount_minor": 111300,
+      "refund_total_minor": 100,
+      "refund_payment_amount_minor": 100,
+      "inventory_quantity": 98,
+      "inventory_movement_delta": 98,
+      "inventory_value_delta_minor": 0
+    }
+  },
+  "compatibility": {
+    "canonical_neon_writes": 0,
+    "neon_migrations": 0,
+    "sqlite_changes": 0,
+    "api_changes": 0,
+    "environment_changes": 0,
+    "production_cutover_changes": 0
+  },
+  "automated_results": {
+    "a50_contract": "PASS: 4/4",
+    "a50_live": "PASS",
+    "canonical_target_guard": "PASS: 2/2",
+    "r9_integrity": "PASS: 213 immutable historical migrations",
+    "root_typecheck": "PASS",
+    "mobile_typecheck": "PASS",
+    "root_lint": "PASS: 0 errors; 3 pre-existing warnings",
+    "mobile_lint": "PASS: 0 errors; 1 pre-existing warning",
+    "static_certification": "155/157 PASS; local Supabase source unavailable for phase-14 restore and phase-04 Docker connectivity",
+    "git_diff_check": "PASS"
+  },
+  "release_boundaries": {
+    "A47": "BLOCKED",
+    "A48": "NOT_RUN",
+    "A49": "BLOCKED",
+    "A50": "PASS"
+  }
+}

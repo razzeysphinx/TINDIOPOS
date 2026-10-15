@@ -38,6 +38,8 @@
     "apply:mobile-a45-operational-alerts": "node scripts/apply-mobile-a45-operational-alerts.mjs",
     "rehearse:mobile-a45-operational-alerts": "node scripts/apply-mobile-a45-operational-alerts.mjs --rehearse-only",
     "certify:mobile-a45-live": "node scripts/mobile-a45-operational-alerts-live.mjs",
+    "test:mobile-a50-cloud-restore": "node --test scripts/mobile-a50-cloud-restore.test.mjs",
+    "certify:mobile-a50-live": "node scripts/mobile-a50-cloud-restore-reconciliation.mjs",
     "apply:mobile-a44-device-retirement": "node scripts/apply-mobile-device-retirement-custody.mjs",
     "rehearse:mobile-a44-device-retirement": "node scripts/apply-mobile-device-retirement-custody.mjs --rehearse-only",
     "certify:mobile-a44-live": "node scripts/mobile-a44-device-retirement-live.mjs",

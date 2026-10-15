@@ -4,7 +4,7 @@
 
 TINDIO retains historical business records rather than offering destructive tenant deletion. It records a completed tenant export delivery, enforces a fresh delivered export before an organization can be archived, preserves a minimum seven-year audit and archived-data retention setting, and keeps immutable recovery-drill evidence.
 
-The application does not automatically restore a Supabase project. A platform restore can overwrite a whole project, so it must be performed by an authorized platform administrator during an agreed recovery window.
+The application does not automatically restore its authoritative Neon database. Production branch restore or endpoint cutover can affect every connected service, so it must be performed by an authorized platform administrator during an agreed recovery window. Supabase remains the authentication provider and requires its own identity/session recovery procedure; it is not the authoritative business database.
 
 ## Routine procedure for each business owner
 
@@ -23,25 +23,25 @@ The application does not automatically restore a Supabase project. A platform re
 4. In **Backup & recovery**, refresh status and confirm the export is current.
 5. Select **Archive safely**. TINDIO retains the tenant and its historical records; it does not delete the business.
 
-## Supabase platform recovery
+## Neon business-database recovery
 
-For a hosted project, use the authorized Supabase administrator account to review **Database → Backups**. Supabase daily backups and Point-in-Time Recovery depend on the selected hosted plan and configuration. The platform documentation explains restore downtime, clone-based recovery, and the distinction between database metadata and Storage objects:
+TINDIO's authoritative business database is Neon Postgres. Use an isolated, expiring branch from the required recovery point for investigation and reconciliation. Never rewind the primary/default branch during a drill. Neon branches are copy-on-write isolated database states and can be created from current data or a retained point in time:
 
-- [Supabase Database Backups](https://supabase.com/docs/guides/platform/backups)
-- [Supabase Backup and Restore using the CLI](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore)
-- [Supabase Restore to a New Project](https://supabase.com/docs/guides/platform/clone-project)
+- [Neon branching](https://neon.com/docs/introduction/branching)
+- [Neon branch restore](https://neon.com/docs/introduction/branch-restore)
 
 Before a production restore:
 
 1. Declare an incident owner and pause normal operations.
 2. Record the intended recovery point and estimated data-loss window.
-3. Prefer restoring to a new project or clone for investigation when feasible.
-4. Include Storage objects separately: database backups contain Storage metadata but do not restore objects deleted after the backup.
-5. Rotate or verify credentials after a physical restore, verify Auth, storage, webhooks, Realtime, and environment settings, then run the TINDIO recovery checks before reopening sales.
+3. Create a non-primary, non-default, expiring recovery branch with a separate endpoint. Prefer read-only compute for verification.
+4. Reconcile financial headers and lines, payments, receipts, refunds, shifts, inventory levels and movements, device sequences, checkpoints, and unresolved custody before considering cutover.
+5. Record the parent branch, LSN/timestamp, recovery time, recoverable-data window, table fingerprints, relationship checks, and branch expiration.
+6. If an actual incident requires cutover, separately approve the production change, pause writes, preserve the original branch, rotate or verify credentials, validate Supabase Auth and all integrations, then run the full TINDIO certification before reopening sales.
 
 ## Local development only
 
-The local Supabase stack is for development and recovery drills, not production. Keep the local Docker stack running, and use a separate local database or project for a restore drill. Never run a destructive reset or restore command against the live business database during a drill.
+The local Supabase stack is for development and local recovery drills, not production cloud-restore certification. Keep the local Docker stack running and use a separate local database for local drills. Never run a destructive reset or restore command against the live business database during a drill.
 
 ## Current limitations
 

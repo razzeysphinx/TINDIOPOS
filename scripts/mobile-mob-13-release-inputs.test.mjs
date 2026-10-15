@@ -131,6 +131,9 @@ function pngDimensions(file) {
 
 test("MOB-13 candidate artwork replaces Expo templates at exact export sizes", () => {
   const app = JSON.parse(fs.readFileSync("apps/mobile/app.json", "utf8")).expo;
+  const splash = app.plugins.find(
+    (plugin) => Array.isArray(plugin) && plugin[0] === "expo-splash-screen",
+  )?.[1];
   assert.equal(app.icon, "./assets/branding/tindio-icon-candidate-1024.png");
   assert.equal(
     app.android.adaptiveIcon.foregroundImage,
@@ -140,6 +143,10 @@ test("MOB-13 candidate artwork replaces Expo templates at exact export sizes", (
   assert.equal(app.android.adaptiveIcon.backgroundImage, undefined);
   assert.equal(app.android.adaptiveIcon.monochromeImage, undefined);
   assert.equal(app.web.favicon, app.icon);
+  assert.deepEqual(splash?.dark, {
+    backgroundColor: "#F4EFE5",
+    image: "./assets/branding/tindio-mark-candidate-1024.png",
+  });
   assert.deepEqual(
     pngDimensions("apps/mobile/assets/branding/tindio-icon-candidate-1024.png"),
     { width: 1024, height: 1024 },

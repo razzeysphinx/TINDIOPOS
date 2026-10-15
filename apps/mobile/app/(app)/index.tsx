@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -39,28 +40,58 @@ export default function MobileHomeScreen() {
 
   if (loading && !data) {
     return (
-      <View>
+      <View
+        accessibilityLabel="Loading register"
+        style={styles.centeredState}
+      >
         <ActivityIndicator />
+        <Text style={styles.stateDescription}>
+          Opening this register…
+        </Text>
       </View>
     );
   }
 
   if (error || !data) {
     return (
-      <View>
-        <Text accessibilityRole="alert">
-          Terminal readiness: {cashierReadinessLabel(cashierReadinessState)}
-        </Text>
-        <Text>
-          {error
-            ?? "Business context is unavailable."}
-        </Text>
+      <View style={styles.unavailableScreen}>
+        <View style={styles.unavailableCard}>
+          <Text style={styles.eyebrow}>
+            TINDIO POS
+          </Text>
+          <Text
+            accessibilityRole="header"
+            style={styles.stateTitle}
+          >
+            We couldn’t open this register
+          </Text>
+          <Text
+            accessibilityRole="alert"
+            style={styles.readinessBadge}
+          >
+            {cashierReadinessLabel(cashierReadinessState)}
+          </Text>
+          <Text style={styles.stateDescription}>
+            {error
+              ?? "Business context is unavailable."}
+          </Text>
+          <Text style={styles.stateGuidance}>
+            Check the connection, then try again. Saved transactions remain on this device.
+          </Text>
 
-        <Pressable
-          onPress={() => void reload()}
-        >
-          <Text>Retry</Text>
-        </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void reload()}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.primaryButtonPressed,
+            ]}
+          >
+            <Text style={styles.primaryButtonLabel}>
+              Try again
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -272,3 +303,84 @@ export default function MobileHomeScreen() {
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  centeredState: {
+    alignItems: "center",
+    flex: 1,
+    gap: 12,
+    justifyContent: "center",
+    padding: 24,
+  },
+  eyebrow: {
+    color: "#047857",
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+  },
+  primaryButton: {
+    alignItems: "center",
+    alignSelf: "stretch",
+    backgroundColor: "#047857",
+    borderRadius: 12,
+    justifyContent: "center",
+    minHeight: 52,
+    paddingHorizontal: 20,
+  },
+  primaryButtonLabel: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "800",
+  },
+  primaryButtonPressed: {
+    opacity: 0.82,
+  },
+  readinessBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#FEF3C7",
+    borderRadius: 999,
+    color: "#92400E",
+    fontSize: 13,
+    fontWeight: "800",
+    overflow: "hidden",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  stateDescription: {
+    color: "#374151",
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  stateGuidance: {
+    color: "#6B7280",
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  stateTitle: {
+    color: "#111827",
+    fontSize: 26,
+    fontWeight: "800",
+    lineHeight: 32,
+  },
+  unavailableCard: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#D1D5DB",
+    borderRadius: 20,
+    borderWidth: 1,
+    elevation: 2,
+    gap: 16,
+    maxWidth: 520,
+    padding: 24,
+    shadowColor: "#111827",
+    shadowOffset: { height: 2, width: 0 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    width: "100%",
+  },
+  unavailableScreen: {
+    backgroundColor: "#F4EFE5",
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+  },
+});

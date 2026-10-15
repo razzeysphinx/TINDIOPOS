@@ -80,3 +80,15 @@ test("MOB-13 preserves operational recovery and permission-based workflows", () 
     assert.match(navigation, new RegExp(`input\\.gates\\.${gate}`));
   }
 });
+
+test("MOB-13 presents a safe, touch-sized business-context recovery state", () => {
+  const home = read("apps/mobile/app/(app)/index.tsx");
+
+  assert.match(home, /We couldn’t open this register/);
+  assert.match(home, /Saved transactions remain on this device/);
+  assert.match(home, /accessibilityRole="alert"/);
+  assert.match(home, /accessibilityRole="button"/);
+  assert.match(home, /minHeight: 52/);
+  assert.match(home, /backgroundColor: "#F4EFE5"/);
+  assert.match(home, /onPress=\{\(\) => void reload\(\)\}/);
+});

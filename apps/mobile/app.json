@@ -40,7 +40,11 @@
         {
           "backgroundColor": "#F4EFE5",
           "image": "./assets/branding/tindio-mark-candidate-1024.png",
-          "imageWidth": 96
+          "imageWidth": 96,
+          "dark": {
+            "backgroundColor": "#F4EFE5",
+            "image": "./assets/branding/tindio-mark-candidate-1024.png"
+          }
         }
       ],
       [

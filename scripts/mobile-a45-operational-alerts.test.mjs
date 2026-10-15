@@ -7,6 +7,7 @@ const migration = read("database/migrations/0019_mobile_a45_operational_alerts.s
 const route = read("src/app/api/pos/v2/sync/telemetry/route.ts");
 const reporter = read("apps/mobile/src/features/sync/sync-telemetry-reporter.tsx");
 const state = read("apps/mobile/src/features/observability/production-crash-state.ts");
+const reconciliation = read("apps/mobile/src/features/observability/android-exit-reconciliation.ts");
 const monitor = read("apps/mobile/src/features/observability/production-responsiveness-monitor.tsx");
 const center = read("src/features/observability/production-observability-center.tsx");
 const androidExitModule = read("apps/mobile/modules/tindio-exit-observer/android/src/main/java/com/tindio/exitobserver/TindioExitObserverModule.kt");
@@ -38,15 +39,17 @@ test("A45 mobile state records counts and timestamps only", () => {
   assert.doesNotMatch(`${state}\n${monitor}`, /error\.message|error\.stack|componentStack|payload|receipt|customer|payment|token|secret/i);
 });
 
-test("A45 reconciles native Android exits before cloud context is available and deduplicates them", () => {
+test("A45 reconciles native Android exits before cloud context and deduplicates across clock changes", () => {
   assert.ok(
     reporter.indexOf("await reconcileAndroidProcessExitHistory()")
       < reporter.indexOf("if (!core) return"),
     "native exit history must be retained locally even while cloud business context is unavailable",
   );
-  assert.match(state, /event\.timestampMs > current\.lastProcessedAndroidExitAtMs/);
-  assert.match(state, /lastProcessedAndroidExitAtMs:/);
-  assert.match(state, /event\.type === "ANR"/);
+  assert.match(reconciliation, /processedAndroidExitFingerprints/);
+  assert.match(reconciliation, /legacyMigration/);
+  assert.match(reconciliation, /Math\.max\(/);
+  assert.match(reconciliation, /event\.type === "ANR"/);
+  assert.match(state, /reconcileAndroidExitEvents\(current, events\)/);
   assert.match(state, /if \(next === current\) return current/);
 });
 

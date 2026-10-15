@@ -1,5 +1,6 @@
 import { readLocalMetadata, writeLocalMetadata } from "../../db/database";
 import { getHistoricalAndroidExitEvents } from "../../../modules/tindio-exit-observer";
+import { reconcileAndroidExitEvents } from "./android-exit-reconciliation";
 
 const STORAGE_KEY = "production_crash_state";
 
@@ -10,10 +11,21 @@ export type ProductionCrashState = {
   anrCount: number;
   lastAnrAt: string | null;
   lastProcessedAndroidExitAtMs: number;
+  androidExitHistoryInitialized: boolean;
+  processedAndroidExitFingerprints: string[];
 };
 
 function createState(): ProductionCrashState {
-  return { count: 0, windowStartedAt: new Date().toISOString(), lastCrashAt: null, anrCount: 0, lastAnrAt: null, lastProcessedAndroidExitAtMs: 0 };
+  return {
+    count: 0,
+    windowStartedAt: new Date().toISOString(),
+    lastCrashAt: null,
+    anrCount: 0,
+    lastAnrAt: null,
+    lastProcessedAndroidExitAtMs: 0,
+    androidExitHistoryInitialized: false,
+    processedAndroidExitFingerprints: [],
+  };
 }
 
 let pendingMutation: Promise<unknown> = Promise.resolve();
@@ -43,6 +55,10 @@ export async function readProductionCrashState(): Promise<ProductionCrashState> 
       anrCount: typeof parsed.anrCount === "number" && Number.isInteger(parsed.anrCount) && parsed.anrCount >= 0 ? parsed.anrCount : 0,
       lastAnrAt: typeof parsed.lastAnrAt === "string" ? parsed.lastAnrAt : null,
       lastProcessedAndroidExitAtMs: typeof parsed.lastProcessedAndroidExitAtMs === "number" && Number.isSafeInteger(parsed.lastProcessedAndroidExitAtMs) && parsed.lastProcessedAndroidExitAtMs >= 0 ? parsed.lastProcessedAndroidExitAtMs : 0,
+      androidExitHistoryInitialized: parsed.androidExitHistoryInitialized === true,
+      processedAndroidExitFingerprints: Array.isArray(parsed.processedAndroidExitFingerprints)
+        ? parsed.processedAndroidExitFingerprints.filter((value): value is string => typeof value === "string").slice(-64)
+        : [],
     };
   } catch {
     return createState();
@@ -58,35 +74,6 @@ export async function recordProductionAnr() {
 }
 
 export async function reconcileAndroidProcessExitHistory() {
-  const events = (await getHistoricalAndroidExitEvents())
-    .filter((event) => Number.isSafeInteger(event.timestampMs) && event.timestampMs > 0)
-    .sort((left, right) => left.timestampMs - right.timestampMs);
-  if (events.length === 0) return readProductionCrashState();
-
-  return mutateProductionCrashState((current) => {
-    const unseen = events.filter((event) => event.timestampMs > current.lastProcessedAndroidExitAtMs);
-    if (unseen.length === 0) return current;
-    let count = current.count;
-    let anrCount = current.anrCount;
-    let lastCrashAt = current.lastCrashAt;
-    let lastAnrAt = current.lastAnrAt;
-    for (const event of unseen) {
-      const occurredAt = new Date(event.timestampMs).toISOString();
-      if (event.type === "ANR") {
-        anrCount += 1;
-        lastAnrAt = occurredAt;
-      } else {
-        count += 1;
-        lastCrashAt = occurredAt;
-      }
-    }
-    return {
-      ...current,
-      count,
-      anrCount,
-      lastCrashAt,
-      lastAnrAt,
-      lastProcessedAndroidExitAtMs: unseen.at(-1)?.timestampMs ?? current.lastProcessedAndroidExitAtMs,
-    };
-  });
+  const events = await getHistoricalAndroidExitEvents();
+  return mutateProductionCrashState((current) => reconcileAndroidExitEvents(current, events));
 }

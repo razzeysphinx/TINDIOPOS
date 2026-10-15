@@ -212,6 +212,7 @@
     "test:phase-24-google-play": "node --test scripts/phase-24-google-play-config-check.mjs scripts/phase-24-release-evidence-check.mjs",
     "test:mobile-mob-14-production-gate": "node --test scripts/mobile-mob-14-production-evidence-gate.test.mjs",
     "test:mobile-mob-14-production-submit": "node --test scripts/mobile-mob-14-production-submission.test.mjs",
+    "test:mobile-mob-14-crash-reconciliation": "node --test scripts/mobile-mob-14-crash-reconciliation.test.mjs",
     "gate:phase-24:production": "node scripts/phase-24-production-release-gate.mjs",
     "mobile:build:android:store": "cd apps/mobile && pnpm dlx eas-cli@latest build --platform android --profile production",
     "mobile:submit:android:internal": "cd apps/mobile && pnpm dlx eas-cli@latest submit --platform android --profile internal",

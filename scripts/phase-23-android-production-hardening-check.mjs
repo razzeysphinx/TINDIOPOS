@@ -134,7 +134,6 @@ test(
     for (
       const profile of [
         "preview",
-        "production",
         undefined,
       ]
     ) {
@@ -144,6 +143,12 @@ test(
         `${profile ?? "unspecified"} builds must disable cleartext traffic`,
       );
     }
+
+    assert.throws(
+      () => cleartextForProfile("production"),
+      /MOB-13_PRODUCTION_RELEASE_BLOCKED/,
+      "production configuration must fail before build while release inputs are unapproved",
+    );
   },
 );
 

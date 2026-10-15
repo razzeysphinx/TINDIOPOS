@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "status": "BLOCKED",
+  "eas": {
+    "owner": null,
+    "projectId": null
+  },
+  "endpoints": {
+    "tindioApiOrigin": null,
+    "supabaseAuthOrigin": null
+  },
+  "signing": {
+    "credentialsSource": "remote",
+    "status": "NOT_VERIFIED",
+    "verifiedAt": null
+  },
+  "branding": {
+    "appIcon": "UNAPPROVED_EXPO_TEMPLATE",
+    "adaptiveIcon": "UNAPPROVED_EXPO_TEMPLATE",
+    "splash": "UNAPPROVED_EXPO_TEMPLATE"
+  },
+  "storeListing": {
+    "status": "NOT_PROVIDED",
+    "featureGraphic": null,
+    "phoneScreenshots": [],
+    "sevenInchTabletScreenshots": [],
+    "tenInchTabletScreenshots": [],
+    "shortDescription": null,
+    "fullDescription": null,
+    "supportEmail": null
+  },
+  "publicPolicyEvidencePath": "docs/mobile-program/evidence/PHASE_24_GOOGLE_PLAY_RELEASE_EVIDENCE.json",
+  "notes": "Production remains blocked until the approved EAS project, public production origins, remote signing verification, TINDIO branding, Play listing inputs, and A47 public-policy evidence are complete."
+}

@@ -1,0 +1,131 @@
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import fs from "node:fs";
+import test from "node:test";
+
+const require = createRequire(import.meta.url);
+const {
+  assertProductionReleaseInputs,
+  productionOrigin,
+} = require("../apps/mobile/release-inputs.js");
+
+const blockedManifest = JSON.parse(
+  fs.readFileSync("apps/mobile/production-release.json", "utf8"),
+);
+
+const readyManifest = {
+  ...blockedManifest,
+  status: "READY",
+  eas: {
+    owner: "tindio-release",
+    projectId: "53b9f9a6-8194-4a7e-8600-1373b84f4c90",
+  },
+  endpoints: {
+    tindioApiOrigin: "https://pos.tindio.com",
+    supabaseAuthOrigin: "https://auth.tindio.com",
+  },
+  signing: {
+    credentialsSource: "remote",
+    status: "VERIFIED",
+    verifiedAt: "2026-10-15T00:00:00.000Z",
+  },
+  branding: {
+    appIcon: "APPROVED",
+    adaptiveIcon: "APPROVED",
+    splash: "APPROVED",
+  },
+  storeListing: {
+    status: "READY",
+    featureGraphic: "assets/images/icon.png",
+    phoneScreenshots: ["assets/images/icon.png"],
+    sevenInchTabletScreenshots: [],
+    tenInchTabletScreenshots: [],
+    shortDescription: "Approved description",
+    fullDescription: "Approved full description",
+    supportEmail: "support@tindio.com",
+  },
+};
+
+const readyEnvironment = {
+  EXPO_PUBLIC_TINDIO_API_URL: "https://pos.tindio.com",
+  EXPO_PUBLIC_SUPABASE_URL: "https://auth.tindio.com",
+  EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_release_contract_value",
+};
+
+test("MOB-13 blocks production while release inputs are unapproved", () => {
+  assert.equal(blockedManifest.status, "BLOCKED");
+  assert.throws(
+    () => assertProductionReleaseInputs(blockedManifest, readyEnvironment),
+    /MOB-13_PRODUCTION_RELEASE_BLOCKED/,
+  );
+
+  const configureApp = require("../apps/mobile/app.config.js");
+  const previous = process.env.EAS_BUILD_PROFILE;
+  process.env.EAS_BUILD_PROFILE = "production";
+  try {
+    assert.throws(
+      () => configureApp({ config: { plugins: [] } }),
+      /MOB-13_PRODUCTION_RELEASE_BLOCKED/,
+    );
+  } finally {
+    if (previous === undefined) delete process.env.EAS_BUILD_PROFILE;
+    else process.env.EAS_BUILD_PROFILE = previous;
+  }
+});
+
+test("MOB-13 validates exact EAS identity and embedded production origins", () => {
+  assert.deepEqual(
+    assertProductionReleaseInputs(readyManifest, readyEnvironment),
+    {
+      owner: "tindio-release",
+      projectId: "53b9f9a6-8194-4a7e-8600-1373b84f4c90",
+    },
+  );
+
+  assert.throws(
+    () => assertProductionReleaseInputs(readyManifest, {
+      ...readyEnvironment,
+      EXPO_PUBLIC_TINDIO_API_URL: "https://wrong.tindio.com",
+    }),
+    /does not match the approved release manifest/,
+  );
+});
+
+test("MOB-13 rejects local, insecure, credentialed, and placeholder origins", () => {
+  for (const value of [
+    "http://pos.tindio.com",
+    "https://localhost",
+    "https://intranet",
+    "https://127.0.0.1",
+    "https://pos.tindio.test",
+    "https://YOUR-TINDIO-BACKEND.example.com",
+    "https://user:password@pos.tindio.com",
+    "https://pos.tindio.com/api",
+    "https://pos.tindio.com?preview=true",
+  ]) {
+    assert.throws(() => productionOrigin(value, "testOrigin"));
+  }
+});
+
+test("MOB-13 inventory truthfully records missing branding and Play assets", () => {
+  assert.equal(blockedManifest.branding.appIcon, "UNAPPROVED_EXPO_TEMPLATE");
+  assert.equal(blockedManifest.branding.adaptiveIcon, "UNAPPROVED_EXPO_TEMPLATE");
+  assert.equal(blockedManifest.storeListing.status, "NOT_PROVIDED");
+  assert.equal(blockedManifest.storeListing.featureGraphic, null);
+  assert.deepEqual(blockedManifest.storeListing.phoneScreenshots, []);
+  assert.equal(blockedManifest.publicPolicyEvidencePath,
+    "docs/mobile-program/evidence/PHASE_24_GOOGLE_PLAY_RELEASE_EVIDENCE.json");
+});
+
+test("MOB-13 requires referenced Play listing assets to exist", () => {
+  assert.throws(
+    () => assertProductionReleaseInputs({
+      ...readyManifest,
+      storeListing: {
+        ...readyManifest.storeListing,
+        featureGraphic: "assets/play/missing-feature-graphic.png",
+      },
+    }, readyEnvironment),
+    /Google Play listing asset is missing/,
+  );
+});

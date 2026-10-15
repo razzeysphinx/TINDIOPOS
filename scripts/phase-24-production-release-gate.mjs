@@ -11,6 +11,13 @@ const evidence =
     ),
   );
 
+const releaseInputs = JSON.parse(
+  fs.readFileSync(
+    "apps/mobile/production-release.json",
+    "utf8",
+  ),
+);
+
 const scenarios =
   Object.entries(
     evidence.realStoreScenarios,
@@ -28,6 +35,11 @@ function requirePass(
     );
   }
 }
+
+requirePass(
+  "MOB-13 production release inputs",
+  releaseInputs.status === "READY" ? "PASS" : releaseInputs.status,
+);
 
 requirePass(
   "Google Play reviewer access",

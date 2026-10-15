@@ -30,6 +30,17 @@ Production artifact:
 Android App Bundle (.aab)
 ```
 
+Before starting the production build, complete
+`apps/mobile/production-release.json` with the approved non-secret EAS
+identity and public origins, verified remote-signing state, approved TINDIO
+branding, and Play listing inputs. Change its status to `READY` only after the
+recorded values have been reviewed. The Expo production configuration fails
+closed while the manifest is `BLOCKED`, while an embedded origin differs from
+the approved origin, or while any required release input is incomplete. Asset
+paths in that manifest are relative to `apps/mobile` and must exist.
+
+Do not use the example values from `.env.example` in a release build.
+
 ## Signing
 
 Use EAS remote Android credentials.

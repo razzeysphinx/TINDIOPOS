@@ -13,6 +13,13 @@ const evidence =
     ),
   );
 
+const releaseInputs = JSON.parse(
+  fs.readFileSync(
+    "apps/mobile/production-release.json",
+    "utf8",
+  ),
+);
+
 const scenarioNames = [
   "loginAndBusinessContext",
   "deviceEnrollment",
@@ -36,6 +43,49 @@ const scenarioNames = [
   "noDuplicateMoney",
   "noDuplicateInventoryMovement",
 ];
+
+test(
+  "MOB-13 production release input inventory is explicit and fail closed",
+  () => {
+    assert.equal(releaseInputs.schemaVersion, 1);
+    assert.ok(["BLOCKED", "READY"].includes(releaseInputs.status));
+    assert.equal(releaseInputs.signing.credentialsSource, "remote");
+    assert.equal(
+      releaseInputs.publicPolicyEvidencePath,
+      evidencePath,
+    );
+
+    for (const key of [
+      "appIcon",
+      "adaptiveIcon",
+      "splash",
+    ]) {
+      assert.ok(releaseInputs.branding[key], `missing branding inventory ${key}`);
+    }
+
+    for (const key of [
+      "featureGraphic",
+      "phoneScreenshots",
+      "sevenInchTabletScreenshots",
+      "tenInchTabletScreenshots",
+      "shortDescription",
+      "fullDescription",
+      "supportEmail",
+    ]) {
+      assert.ok(key in releaseInputs.storeListing, `missing listing inventory ${key}`);
+    }
+
+    if (releaseInputs.status === "READY") {
+      assert.ok(releaseInputs.eas.owner?.trim());
+      assert.ok(releaseInputs.eas.projectId?.trim());
+      assert.ok(releaseInputs.endpoints.tindioApiOrigin?.startsWith("https://"));
+      assert.ok(releaseInputs.endpoints.supabaseAuthOrigin?.startsWith("https://"));
+      assert.equal(releaseInputs.signing.status, "VERIFIED");
+      assert.equal(releaseInputs.storeListing.status, "READY");
+      assert.equal(evidence.publicPolicyAccess.status, "PASS");
+    }
+  },
+);
 
 test(
   "Phase 24 release evidence schema is complete",
@@ -96,7 +146,8 @@ test(
   "production cannot be eligible before the entire release ladder passes",
   () => {
     const ladderPassed =
-      evidence.reviewerAccess.status
+      releaseInputs.status === "READY"
+      && evidence.reviewerAccess.status
         === "PASS"
       && evidence.publicPolicyAccess.status
         === "PASS"

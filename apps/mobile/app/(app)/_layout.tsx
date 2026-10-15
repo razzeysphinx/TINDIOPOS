@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
   BusinessContextProvider,
@@ -51,12 +52,13 @@ export default function AppLayout() {
     <BusinessContextProvider>
       <ProductionResponsivenessMonitor />
       <SyncTelemetryReporter />
-
-      <Stack
-        screenOptions={{
-          headerShown: false,
-        }}
-      />
+      <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1 }}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+          }}
+        />
+      </SafeAreaView>
     </BusinessContextProvider>
   );
 }

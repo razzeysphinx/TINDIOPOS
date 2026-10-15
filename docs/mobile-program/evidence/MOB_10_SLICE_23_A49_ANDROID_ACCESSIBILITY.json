@@ -1,0 +1,52 @@
+{
+  "acceptance_case": "A49",
+  "slice": "MOB-10 Slice 23",
+  "starting_commit": "534455498cf1d91e974b4ee7846e942dfcc30396",
+  "status": "BLOCKED",
+  "repository_implementation": "COMPLETE",
+  "acceptance_requirement": "Core sale flow usable on low-end phone/tablet with keyboard, large text and accessibility; no clipped tender, confirm or recovery controls.",
+  "implementation_evidence": {
+    "checkout_controls_inside_scroll_surface": true,
+    "android_keyboard_resize_preserved": true,
+    "automatic_keyboard_insets": true,
+    "safe_area_context": true,
+    "scrollable_sign_in": true,
+    "scrollable_variable_price_editor": true,
+    "scrollable_modifier_picker": true,
+    "accessible_cart_controls": true,
+    "minimum_changed_control_height_dp": 48,
+    "transaction_or_custody_logic_changed": false
+  },
+  "physical_evidence": {
+    "adb_available": false,
+    "low_end_phone": "NOT_RUN",
+    "tablet": "NOT_RUN",
+    "large_text": "NOT_RUN",
+    "talkback": "NOT_RUN",
+    "physical_keyboard_or_hid": "NOT_RUN"
+  },
+  "automated_results": {
+    "mobile_physical_ui_hardening": "PASS: 6/6",
+    "phase_06_native_shells": "PASS: 1/1",
+    "phase_13_native_cashier_parity": "PASS: 1/1",
+    "phase_22_performance": "PASS: 3/3",
+    "phase_23_android_hardening": "PASS: 6/6",
+    "mobile_typecheck": "PASS",
+    "mobile_lint": "PASS: 0 errors; 1 pre-existing warning",
+    "root_typecheck": "PASS",
+    "root_lint": "PASS: 0 errors; 3 pre-existing warnings",
+    "android_export": "PASS: 1450 modules bundled",
+    "static_certification": "155/156 PASS; local Supabase source unavailable for phase-04 Docker connectivity",
+    "git_diff_check": "PASS"
+  },
+  "database_impact": "NONE",
+  "sqlite_impact": "NONE",
+  "api_impact": "NONE",
+  "custody_impact": "NONE",
+  "release_boundaries": {
+    "A47": "BLOCKED",
+    "A48": "NOT_RUN",
+    "A49": "BLOCKED",
+    "A50": "NOT_RUN"
+  }
+}

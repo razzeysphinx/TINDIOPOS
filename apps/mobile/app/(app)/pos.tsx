@@ -988,7 +988,8 @@ export default function PosScreen() {
       style={{ flex: 1 }}
     >
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 12 }}
+        automaticallyAdjustKeyboardInsets
+        contentContainerStyle={{ padding: 20, paddingBottom: 64, gap: 12 }}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         testID="pos-scroll"
@@ -1357,8 +1358,6 @@ export default function PosScreen() {
         The operation key remains unchanged after an ambiguous retry and rotates only when the sale meaning changes or completes.
       </Text>
 
-      </ScrollView>
-
       <View
         style={{
           backgroundColor: "white",
@@ -1382,6 +1381,7 @@ export default function PosScreen() {
         keyboardType="decimal-pad"
         placeholder="Cash tendered, e.g. 20.00"
         returnKeyType="done"
+        style={{ minHeight: 48 }}
         testID="cash-tender-input"
       />
 
@@ -1422,6 +1422,7 @@ export default function PosScreen() {
           || tenderedMinor < totals.totalMinor
         }
         onPress={() => void saveOfflineCashSale()}
+        style={{ minHeight: 48, justifyContent: "center" }}
       >
         <Text>{savingOffline ? "Saving locally…" : "SAVE OFFLINE CASH SALE"}</Text>
       </Pressable>
@@ -1449,6 +1450,7 @@ export default function PosScreen() {
           )
         }
         onPress={() => void completeOnlineCashSale()}
+        style={{ minHeight: 48, justifyContent: "center" }}
       >
         <Text>
           {onlineCheckoutPending
@@ -1461,6 +1463,7 @@ export default function PosScreen() {
 
       {saleMessage ? <Text accessibilityLiveRegion="polite">{saleMessage}</Text> : null}
       </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }

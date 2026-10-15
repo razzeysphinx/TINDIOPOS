@@ -3,6 +3,7 @@ import "react-native-url-polyfill/auto";
 import {
   Stack,
 } from "expo-router";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
   ProductionErrorBoundary,
@@ -13,14 +14,16 @@ import {
 
 export default function RootLayout() {
   return (
-    <ProductionErrorBoundary>
-      <SessionProvider>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-          }}
-        />
-      </SessionProvider>
-    </ProductionErrorBoundary>
+    <SafeAreaProvider>
+      <ProductionErrorBoundary>
+        <SessionProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+            }}
+          />
+        </SessionProvider>
+      </ProductionErrorBoundary>
+    </SafeAreaProvider>
   );
 }

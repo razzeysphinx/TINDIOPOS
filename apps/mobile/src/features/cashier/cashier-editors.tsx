@@ -1,11 +1,21 @@
 import { useMemo, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import type {
   PosCatalogItem,
   PosModifierGroup,
   PosModifierOption,
 } from "../../../../../src/contracts/pos";
 import { minorToMoney, parseMoneyToMinor } from "./cashier-validation";
+
+const actionStyle = { minHeight: 48, justifyContent: "center" as const };
 
 export function VariablePriceEditor({
   item,
@@ -23,22 +33,41 @@ export function VariablePriceEditor({
   const valid = parsed !== null && parsed > 0 && parsed <= 9_999_999_999;
 
   return (
-    <View>
-      <Text>VARIABLE PRICE</Text>
-      <Text>{item.productName}{item.variantName ? ` / ${item.variantName}` : ""}</Text>
-      <TextInput
-        value={value}
-        onChangeText={setValue}
-        keyboardType="decimal-pad"
-        placeholder="0.00"
-      />
-      <Pressable onPress={onCancel}>
-        <Text>Cancel</Text>
-      </Pressable>
-      <Pressable disabled={!valid} onPress={() => valid && onContinue(parsed)}>
-        <Text>Continue</Text>
-      </Pressable>
-    </View>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={{ flex: 1 }}
+    >
+      <ScrollView
+        automaticallyAdjustKeyboardInsets
+        contentContainerStyle={{ flexGrow: 1, gap: 12, padding: 20, paddingBottom: 64 }}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        testID="variable-price-scroll"
+      >
+        <Text accessibilityRole="header">VARIABLE PRICE</Text>
+        <Text>{item.productName}{item.variantName ? ` / ${item.variantName}` : ""}</Text>
+        <TextInput
+          accessibilityLabel={`Price for ${item.productName}`}
+          value={value}
+          onChangeText={setValue}
+          keyboardType="decimal-pad"
+          placeholder="0.00"
+          returnKeyType="done"
+          style={{ minHeight: 48 }}
+        />
+        <Pressable accessibilityRole="button" onPress={onCancel} style={actionStyle}>
+          <Text>Cancel</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={!valid}
+          onPress={() => valid && onContinue(parsed)}
+          style={actionStyle}
+        >
+          <Text>Continue</Text>
+        </Pressable>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -76,9 +105,7 @@ export function ModifierPicker({
       }
 
       const selectedInGroup = group.options.filter((candidate) => next.has(candidate.id));
-      if (selectedInGroup.length >= group.maxSelections) {
-        return current;
-      }
+      if (selectedInGroup.length >= group.maxSelections) return current;
 
       next.add(option.id);
       return next;
@@ -90,8 +117,11 @@ export function ModifierPicker({
   );
 
   return (
-    <View>
-      <Text>MODIFIERS</Text>
+    <ScrollView
+      contentContainerStyle={{ flexGrow: 1, gap: 12, padding: 20, paddingBottom: 64 }}
+      testID="modifier-picker-scroll"
+    >
+      <Text accessibilityRole="header">MODIFIERS</Text>
       <Text>{item.productName}{item.variantName ? ` / ${item.variantName}` : ""}</Text>
 
       {groups.map((group) => {
@@ -104,25 +134,40 @@ export function ModifierPicker({
               {group.minSelections > 0 ? ` — minimum ${group.minSelections}` : ""}
             </Text>
 
-            {group.options.map((option) => (
-              <Pressable key={option.id} onPress={() => toggle(group, option)}>
-                <Text>
-                  {selected.has(option.id) ? "✓ " : ""}
-                  {option.name}
-                  {option.priceMinor ? ` +${minorToMoney(option.priceMinor)}` : ""}
-                </Text>
-              </Pressable>
-            ))}
+            {group.options.map((option) => {
+              const isSelected = selected.has(option.id);
+
+              return (
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: isSelected }}
+                  key={option.id}
+                  onPress={() => toggle(group, option)}
+                  style={actionStyle}
+                >
+                  <Text>
+                    {isSelected ? "✓ " : ""}
+                    {option.name}
+                    {option.priceMinor ? ` +${minorToMoney(option.priceMinor)}` : ""}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         );
       })}
 
-      <Pressable onPress={onCancel}>
+      <Pressable accessibilityRole="button" onPress={onCancel} style={actionStyle}>
         <Text>Cancel</Text>
       </Pressable>
-      <Pressable disabled={!valid} onPress={() => valid && onConfirm(selectedOptions)}>
+      <Pressable
+        accessibilityRole="button"
+        disabled={!valid}
+        onPress={() => valid && onConfirm(selectedOptions)}
+        style={actionStyle}
+      >
         <Text>Apply modifiers</Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }

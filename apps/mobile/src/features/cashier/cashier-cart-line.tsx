@@ -61,29 +61,44 @@ export function CashierCartLine({
       ) : null}
 
       <TextInput
+        accessibilityLabel={`${line.productName} quantity`}
         value={quantity}
         onChangeText={setQuantity}
         onEndEditing={commitQuantity}
         editable={canEditQuantity}
         keyboardType="decimal-pad"
         placeholder="Quantity"
+        style={{ minHeight: 48 }}
       />
 
       <TextInput
+        accessibilityLabel={`${line.productName} line note`}
         value={note}
         onChangeText={setNote}
         onEndEditing={() => onNote(note.trim() || null)}
         maxLength={500}
         placeholder="Line note"
+        style={{ minHeight: 48 }}
       />
 
       {line.isVariablePrice || line.hasModifiers ? (
-        <Pressable onPress={onReconfigure}>
+        <Pressable
+          accessibilityLabel={`Edit price or modifiers for ${line.productName}`}
+          accessibilityRole="button"
+          onPress={onReconfigure}
+          style={{ minHeight: 48, justifyContent: "center" }}
+        >
           <Text>Edit price / modifiers</Text>
         </Pressable>
       ) : null}
 
-      <Pressable disabled={!canRemove} onPress={onRemove}>
+      <Pressable
+        accessibilityLabel={`Remove ${line.productName}`}
+        accessibilityRole="button"
+        disabled={!canRemove}
+        onPress={onRemove}
+        style={{ minHeight: 48, justifyContent: "center" }}
+      >
         <Text>Remove</Text>
       </Pressable>
     </View>

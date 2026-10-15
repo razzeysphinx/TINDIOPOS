@@ -9,6 +9,9 @@ const reporter = read("apps/mobile/src/features/sync/sync-telemetry-reporter.tsx
 const state = read("apps/mobile/src/features/observability/production-crash-state.ts");
 const monitor = read("apps/mobile/src/features/observability/production-responsiveness-monitor.tsx");
 const center = read("src/features/observability/production-observability-center.tsx");
+const androidExitModule = read("apps/mobile/modules/tindio-exit-observer/android/src/main/java/com/tindio/exitobserver/TindioExitObserverModule.kt");
+const androidExitBridge = read("apps/mobile/modules/tindio-exit-observer/index.ts");
+const certificationScreen = read("apps/mobile/app/(app)/a45-certification.tsx");
 
 test("A45 routes four aggregate incident families without a second telemetry pipeline", () => {
   assert.match(migration, /create table if not exists public\.pos_operational_alerts/);
@@ -33,6 +36,31 @@ test("A45 mobile state records counts and timestamps only", () => {
   assert.match(monitor, /AppState\.addEventListener/);
   assert.match(monitor, /UNRESPONSIVE_THRESHOLD_MS/);
   assert.doesNotMatch(`${state}\n${monitor}`, /error\.message|error\.stack|componentStack|payload|receipt|customer|payment|token|secret/i);
+});
+
+test("A45 reconciles native Android exits before cloud context is available and deduplicates them", () => {
+  assert.ok(
+    reporter.indexOf("await reconcileAndroidProcessExitHistory()")
+      < reporter.indexOf("if (!core) return"),
+    "native exit history must be retained locally even while cloud business context is unavailable",
+  );
+  assert.match(state, /event\.timestampMs > current\.lastProcessedAndroidExitAtMs/);
+  assert.match(state, /lastProcessedAndroidExitAtMs:/);
+  assert.match(state, /event\.type === "ANR"/);
+  assert.match(state, /if \(next === current\) return current/);
+});
+
+test("A45 physical failure triggers are debug-only and expose aggregate exit metadata only", () => {
+  assert.match(androidExitModule, /ApplicationInfo\.FLAG_DEBUGGABLE/);
+  assert.match(androidExitModule, /requireCertificationBuild\(\)/);
+  assert.match(androidExitModule, /REASON_CRASH_NATIVE/);
+  assert.match(androidExitModule, /REASON_ANR/);
+  assert.match(androidExitModule, /"type" to type/);
+  assert.match(androidExitModule, /"timestampMs" to exit\.timestamp\.toDouble\(\)/);
+  assert.doesNotMatch(androidExitModule, /getDescription|getTraceInputStream|stack_trace|payload_json|receipt|customer|payment|access_token|device_secret/i);
+  assert.match(androidExitBridge, /catch \{\s*return \[\];\s*\}/s);
+  assert.match(certificationScreen, /isA45CertificationTriggerAvailable/);
+  assert.match(certificationScreen, /available \? \(/);
 });
 
 test("A45 gives every routed alert a named operator, channel, runbook, and acknowledgement", () => {

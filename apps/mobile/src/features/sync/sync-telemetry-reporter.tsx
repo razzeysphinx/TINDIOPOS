@@ -9,7 +9,7 @@ import { reportPosV2SyncTelemetry } from "../../lib/tindio-api";
 import { useBusinessContext } from "../business/use-business-context";
 import { loadMobileDeviceIdentity } from "../device/device-store";
 import { readConnectionModeState } from "../offline/connection-mode-state";
-import { readProductionCrashState } from "../observability/production-crash-state";
+import { readProductionCrashState, reconcileAndroidProcessExitHistory } from "../observability/production-crash-state";
 import { getPerformanceMetrics } from "../performance/performance-metrics";
 
 function metric(value: number) { return Number.isFinite(value) && value >= 0 ? Math.round(value) : 0; }
@@ -18,6 +18,7 @@ export function SyncTelemetryReporter() {
   const { data, connectionMode } = useBusinessContext();
   const core = data?.core;
   const report = useCallback(async () => {
+    await reconcileAndroidProcessExitHistory();
     if (!core) return;
     const identity = await loadMobileDeviceIdentity(core.organization.id);
     if (!identity?.binding) return;

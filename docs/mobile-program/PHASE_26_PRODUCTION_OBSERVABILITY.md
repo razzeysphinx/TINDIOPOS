@@ -16,7 +16,7 @@ Phase 26 extends Phase 17 sync telemetry, Phase 22 performance metrics, the Phas
 
 ## Privacy
 
-Crash and responsiveness telemetry records only aggregate counts and timestamps. API and sync telemetry record aggregate latency/failure numbers only. Alert diagnostics are constructed by the server from an explicit aggregate-field allowlist. Transaction content, customer content, payment content, credentials, exception messages, and stack traces are excluded.
+Crash and responsiveness telemetry records only aggregate counts and timestamps. On Android 11+, native process-crash and ANR exit classes are reconciled from `ApplicationExitInfo` after restart; descriptions and trace streams are not collected. API and sync telemetry record aggregate latency/failure numbers only. Alert diagnostics are constructed by the server from an explicit aggregate-field allowlist. Transaction content, customer content, payment content, credentials, exception messages, and stack traces are excluded.
 
 ## Attention rules
 
@@ -43,4 +43,4 @@ STATUS: VALIDATING
 CERTIFICATION: NOT CERTIFIED
 ```
 
-The A45 synthetic authenticated runtime proves server routing, sanitization, acknowledgement, and recovery. It does not prove a native Android process crash or operating-system ANR. Physical Android injection plus pilot/production operation remains required to certify alert effectiveness.
+The A45 authenticated runtime proves server routing, sanitization, acknowledgement, and recovery. Its physical Android closure additionally proves an OS-classified native crash and input-dispatch ANR, cold-restart reconciliation, local deduplication, unchanged transaction-custody hashes, and named-operator routing for the exact enrolled device. Phase 26 implementation is complete, but production certification still requires the eventual production-signed/Play-delivered release candidate and merchant-pilot evidence.

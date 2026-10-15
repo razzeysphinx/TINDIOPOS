@@ -1,6 +1,6 @@
 # MOB-10 Slice 20 — A45 operational alert routing
 
-Status: **A45 PARTIAL — physical native crash/ANR evidence remains NOT_RUN**
+Status: **A45 PASS — physical native crash, Android ANR, sanitized routing, and custody preservation verified**
 
 Starting commit: `ed985b15c8662ded9b61b1b91ca5729abbfa3478`
 
@@ -16,11 +16,17 @@ Four durable alert classes are evaluated: `APP_CRASH`, `ANR`, `API_OUTAGE`, and 
 
 The mobile shell records active-JavaScript responsiveness stalls through one app-level, AppState-aware watchdog. It does not run while the app is backgrounded, never renews authorization, and never mutates financial or custody state.
 
+Android 11+ builds also reconcile `ApplicationExitInfo` after restart. Only the exit class (`NATIVE_CRASH`, `JAVA_CRASH`, or `ANR`) and timestamp cross the native boundary. Reconciliation occurs before cloud business context is required, so an exit during startup or an expired cloud session is retained locally and uploaded after validated context returns. A monotonic processed timestamp prevents historical exits from being counted again.
+
+The physical injection controls exist only on the hidden authenticated certification route and fail closed unless Android marks the installed package `DEBUGGABLE`. Production builds expose neither enabled controls nor an alternate financial/synchronization path.
+
 ## Changed files
 
 - `database/migrations/0019_mobile_a45_operational_alerts.sql`
 - `apps/mobile/src/features/observability/production-crash-state.ts`
 - `apps/mobile/src/features/observability/production-responsiveness-monitor.tsx`
+- `apps/mobile/modules/tindio-exit-observer/`
+- `apps/mobile/app/(app)/a45-certification.tsx`
 - `apps/mobile/app/(app)/_layout.tsx`
 - `apps/mobile/src/features/sync/sync-telemetry-reporter.tsx`
 - `apps/mobile/src/lib/tindio-api.ts`
@@ -63,9 +69,46 @@ The authenticated telemetry RPC produced all four alerts. Diagnostics contained 
 
 Financial counts were identical before and after: sales `1113`, payments `1113`, receipts `1113`, and inventory movements `1118`.
 
+## Physical Android crash and ANR evidence
+
+The existing installation on Xiaomi `21121210G`, Android API 34, ARM64, was updated in place with the same signer. `firstInstallTime` remained `2026-10-09 22:13:25`; the application was never uninstalled and app data was never cleared.
+
+Before injection, the app-private SQLite snapshot contained 1,111 outbox events, 1,111 local receipts, one checkout intent, and five recovery records. Android reported zero actionable historical exits.
+
+The debuggable-only native crash control terminated PID `17743`. Android recorded:
+
+```text
+timestamp=2026-10-15 14:39:26.069
+reason=5 (APP CRASH(NATIVE))
+status=11
+```
+
+After cold restart, the native history exposed `NATIVE_CRASH · 2026-10-15T06:39:26.069Z`, and local aggregate state became `crashCount=1`, `anrCount=0`.
+
+The debuggable-only ANR control then blocked the main looper. A real input event crossed Android's five-second dispatch deadline. Android recorded:
+
+```text
+timestamp=2026-10-15 14:41:43.942
+reason=6 (ANR)
+description=Input dispatching timed out ... Waited 5000ms for MotionEvent(action=DOWN)
+```
+
+After the next cold restart, the diagnostic view showed both original timestamps and local aggregate state became exactly `crashCount=1`, `anrCount=1`. A further cold restart retained those counts, proving exit-history deduplication.
+
+Custody hashes were identical before the crash, after the crash, after the ANR, and after the deduplication restart:
+
+| Protected state | Rows | SHA-256 |
+|---|---:|---|
+| Outbox identities, sequences, payloads, snapshots, and states | 1,111 | `e6da7484a487526104726d1712f15307263af116792ddc0365cc1f08f647d4a3` |
+| Immutable local receipts | 1,111 | `263bbc45f2cb2b9e2147e50df570b1baeaf491068bf8e7b55e7a3f0e0c1d3f94` |
+| Checkout intents | 1 | `785e272d175715f0cd3e6dcc33f4c6b56ebc8bf209baa102d45e11e3ba4ba60d` |
+| Recovery actions | 5 | `b0197134d172bca89db19b9e274fa4e9fae319b94a043da560cef2013dd165c8` |
+
+The exact enrolled physical device `72c8267d-1aaf-4bc0-91f9-86d6eea47797` then reported the two OS-verified aggregate signals to canonical Neon. `APP_CRASH` and `ANR` each opened once for `TINDIO Phase 04 Certification User` in `Back Office > Production Observability`. Their diagnostics contained only app version, count, and the matching physical timestamp. Replaying the same aggregate report produced no new occurrence. Financial counts remained sales `1113`, payments `1113`, receipts `1113`, and inventory movements `1118`.
+
 ## Regression results
 
-- A45 behavioral suite: **4/4 passed**.
+- A45 behavioral suite: **6/6 passed**.
 - Phase 26 observability: **6/6 passed**.
 - Phase 16 isolated-device contract: **1/1 passed**.
 - Phase 17 sync-control contract: **1/1 passed**.
@@ -76,8 +119,9 @@ Financial counts were identical before and after: sales `1113`, payments `1113`,
 - Canonical Neon authenticated live fixture: **implementation runtime passed**.
 - Root typecheck: **passed**.
 - Mobile typecheck: **passed**.
-- Lint: **passed with 0 errors and 3 pre-existing warnings**.
-- Production-profile Android export: **passed**, Hermes bundle with 1,447 modules.
+- Lint: **passed with 0 errors and 1 pre-existing warning** (`_info` in the production error boundary).
+- Android export: **passed**, Hermes bundle with 1,449 modules.
+- Native Android compilation: the local exit-observer module compiled in both debug and release library variants during the physical-test build. A subsequent full `assembleRelease` verification remained CPU-active but exceeded the ten-minute command ceiling and produced no APK; it is recorded as **TIMED OUT**, not passed. This is not A48 evidence.
 - Static repository certification: **155/156 automated package commands passed**. The sole failure was `test:phase-04-docker-source-connectivity` because the local Supabase source was unavailable; it is unrelated to A45.
 - `git diff --check`: **passed**.
 
@@ -87,11 +131,11 @@ Financial counts were identical before and after: sales `1113`, payments `1113`,
 |---|---|---|
 | A45 — API outage | **PASS** | Authenticated canonical-Neon injection created a named, sanitized alert and current recovered telemetry resolved it. |
 | A45 — stale queue | **PASS** | Authenticated canonical-Neon injection created a named, sanitized alert and zero-queue/current-checkpoint telemetry resolved it. |
-| A45 — application crash routing | **IMPLEMENTATION PASS / PHYSICAL NOT_RUN** | Aggregate application-crash signal, durable routing, runbook, and acknowledgement are proven; physical native-process crash is not. |
-| A45 — ANR routing | **IMPLEMENTATION PASS / PHYSICAL NOT_RUN** | Active-JavaScript stall reporting, durable routing, runbook, and acknowledgement are proven; an operating-system Android ANR is not. |
+| A45 — application crash routing | **PASS** | Android classified the physical injected failure as native crash reason 5/status 11; restart retained it exactly once and canonical Neon routed one sanitized named-operator alert. |
+| A45 — ANR routing | **PASS** | Android classified the physical main-thread/input-dispatch failure as ANR reason 6 after 5,000 ms; restart retained it exactly once and canonical Neon routed one sanitized named-operator alert. |
 
-A45 is therefore not yet fully certified. A physical Android build must inject a true native process crash and a true Android ANR, then prove that sanitized diagnostics reach the named operator. A48 remains **NOT_RUN**.
+A45 is complete. The phone was restored in place to the saved same-signer non-debug APK after injection; its original install time remained unchanged and Android denied debug `run-as` access. This does not certify a production-signed AAB, Google Play delivery, 16 KB-page release hardware, unavailable HID/printer/second-terminal cases, or merchant-pilot readiness. A48 remains **NOT_RUN**.
 
 ## Next smallest safe slice
 
-Install an updated development artifact on the existing physical Android device and run only the remaining A45 native-crash and Android-ANR injections. Do not clear app data or begin A48.
+Proceed to A46, the Play-reviewer credential and restricted-feature-access evidence slice. Keep A48 separate until the real Phase 23/24 production release candidate exists.

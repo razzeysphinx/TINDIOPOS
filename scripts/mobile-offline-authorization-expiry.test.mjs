@@ -214,14 +214,18 @@ test("A09 accepted and pending financial custody remains accessible after expiry
   const business = read("apps/mobile/src/features/business/business-context-provider.tsx");
   const layout = read("apps/mobile/app/(app)/_layout.tsx");
   const home = read("apps/mobile/app/(app)/index.tsx");
+  const navigation = read(
+    "apps/mobile/src/features/cashier/cashier-navigation.ts",
+  );
   const signIn = read("apps/mobile/app/sign-in.tsx");
   const custody = read("apps/mobile/src/features/offline/transaction-custody.ts");
   const schema = read("apps/mobile/src/db/schema.ts");
   assert.match(business, /evaluateRestrictedOfflineReadiness/);
   assert.match(business, /setData\(cachedBootstrap\(restrictedCore\)\)/);
   assert.match(layout, /accessMode !== "online"[\s\S]*accessMode !== "offline"/);
-  assert.match(home, /"\/receipts"/);
-  assert.match(home, /"\/sync-status"/);
+  assert.match(navigation, /"\/receipts"/);
+  assert.match(navigation, /"\/sync-status"/);
+  assert.match(home, /buildCashierNavigation/);
   assert.match(signIn, /cashierReadinessLabel\(readinessState\)/);
   assert.match(custody, /outbox_events/);
   assert.match(custody, /checkout_intents/);

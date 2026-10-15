@@ -1,6 +1,7 @@
 import {
   Redirect,
   Stack,
+  usePathname,
 } from "expo-router";
 import {
   ActivityIndicator,
@@ -12,12 +13,59 @@ import {
   BusinessContextProvider,
 } from "../../src/features/business/business-context-provider";
 import {
+  useBusinessContext,
+} from "../../src/features/business/use-business-context";
+import {
   useSession,
 } from "../../src/features/session/session-provider";
 import {
   SyncTelemetryReporter,
 } from "../../src/features/sync/sync-telemetry-reporter";
 import { ProductionResponsivenessMonitor } from "../../src/features/observability/production-responsiveness-monitor";
+
+const authorizedSupportPaths = new Set([
+  "/hardware",
+  "/offline-payments",
+  "/production-readiness",
+]);
+
+function AuthorizedAppStack() {
+  const pathname = usePathname();
+  const { data, loading } = useBusinessContext();
+  const requiresSupportAccess =
+    authorizedSupportPaths.has(pathname);
+  const hasSupportAccess = Boolean(
+    data?.core.permissions.includes("devices.manage")
+    || data?.core.permissions.includes("settings.manage"),
+  );
+
+  if (requiresSupportAccess && loading) {
+    return (
+      <View
+        accessibilityLabel="Checking support access"
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  if (requiresSupportAccess && !hasSupportAccess) {
+    return <Redirect href="/(app)" />;
+  }
+
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+      }}
+    />
+  );
+}
 
 export default function AppLayout() {
   const {
@@ -53,11 +101,7 @@ export default function AppLayout() {
       <ProductionResponsivenessMonitor />
       <SyncTelemetryReporter />
       <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1 }}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-          }}
-        />
+        <AuthorizedAppStack />
       </SafeAreaView>
     </BusinessContextProvider>
   );

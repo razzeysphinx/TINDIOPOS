@@ -8,6 +8,10 @@ import {
   View,
 } from "react-native";
 import { cashierFeatureGates } from "../../src/features/cashier/cashier-feature-gates";
+import {
+  buildCashierNavigation,
+  type CashierNavigationSection,
+} from "../../src/features/cashier/cashier-navigation";
 import { useBusinessContext } from "../../src/features/business/use-business-context";
 import { DeviceSetup } from "../../src/features/device/device-setup";
 import {
@@ -64,19 +68,18 @@ export default function MobileHomeScreen() {
   const { core } = data;
   const gates = cashierFeatureGates(core);
 
-  const routes = [
-    "/pos",
-    ...(gates.receipts ? ["/receipts"] : []),
-    ...(gates.customers ? ["/customers"] : []),
-    ...(gates.shift ? ["/shift"] : []),
-    "/sync-status",
-    "/hardware",
-    "/offline-payments",
-    "/production-readiness",
-    "/settings",
-    ...(gates.tickets ? ["/tickets"] : []),
-    ...(gates.transfers ? ["/transfers"] : []),
-    ...(gates.timeClock ? ["/time-clock"] : []),
+  const navigation = buildCashierNavigation({
+    gates,
+    permissions: core.permissions,
+  });
+
+  const navigationSections: Array<{
+    key: CashierNavigationSection;
+    label: string;
+  }> = [
+    { key: "CHECKOUT", label: "Checkout" },
+    { key: "OPERATIONS", label: "Store work" },
+    { key: "SUPPORT", label: "Help and recovery" },
   ];
 
   const switchOrganization =
@@ -118,6 +121,15 @@ export default function MobileHomeScreen() {
       }}
     >
       <Text
+        accessibilityRole="header"
+        style={{ fontSize: 30, fontWeight: "800" }}
+      >
+        TINDIO POS
+      </Text>
+      <Text style={{ fontSize: 18, fontWeight: "600" }}>
+        {core.organization.name}
+      </Text>
+      <Text
         accessibilityRole={cashierReadinessState === "READY_OFFLINE" ? undefined : "alert"}
       >
         Terminal readiness: {cashierReadinessLabel(cashierReadinessState)}
@@ -133,7 +145,9 @@ export default function MobileHomeScreen() {
         </Text>
       ) : null}
       <Text>
-        Connection mode: {connectionMode}
+        {connectionMode === "CLOUD_ONLINE"
+          ? "Connected to TINDIO"
+          : "Working with saved store data"}
       </Text>
 
       {mode === "offline" ? (
@@ -156,27 +170,57 @@ export default function MobileHomeScreen() {
           </Text>
         </View>
       ) : (
-        <Text>Backend V1 connected</Text>
+        <Text>Your latest store data is available.</Text>
       )}
 
-      <Text>{core.organization.name}</Text>
-      <Text>{core.employee.name}</Text>
+      <Text>Signed in as {core.employee.name}</Text>
       <Text>
         Roles:{" "}
         {core.roleNames.join(", ")
           || "No role names"}
       </Text>
 
-      {routes.map((path) => (
-        <Pressable
-          key={path}
-          onPress={() =>
-            router.push(path as never)
-          }
-        >
-          <Text>{path.slice(1)}</Text>
-        </Pressable>
-      ))}
+      {navigationSections.map((section) => {
+        const items = navigation.filter(
+          (item) => item.section === section.key,
+        );
+
+        if (items.length === 0) return null;
+
+        return (
+          <View key={section.key} style={{ gap: 10 }}>
+            <Text
+              accessibilityRole="header"
+              style={{ fontSize: 18, fontWeight: "700" }}
+            >
+              {section.label}
+            </Text>
+            {items.map((item) => (
+              <Pressable
+                accessibilityHint={item.description}
+                accessibilityLabel={item.label}
+                accessibilityRole="button"
+                key={item.path}
+                onPress={() => router.push(item.path as never)}
+                style={{
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  gap: 4,
+                  justifyContent: "center",
+                  minHeight: 64,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                }}
+              >
+                <Text style={{ fontSize: 17, fontWeight: "700" }}>
+                  {item.label}
+                </Text>
+                <Text>{item.description}</Text>
+              </Pressable>
+            ))}
+          </View>
+        );
+      })}
 
       <Text>Assigned stores</Text>
 

@@ -115,6 +115,10 @@ test(
     ));
     const instructions = read(evidence.reviewerAccess.instructionsPath);
     const mobileHome = read("apps/mobile/app/(app)/index.tsx");
+    const mobileNavigation = read(
+      "apps/mobile/src/features/cashier/cashier-navigation.ts",
+    );
+    const declaredMobileRoutes = mobileHome + mobileNavigation;
     const deviceSetup = read("apps/mobile/src/features/device/device-setup.tsx");
 
     assert.equal(evidence.reviewerAccess.credentialSource, "PLAY_CONSOLE_ONLY");
@@ -140,7 +144,7 @@ test(
       "transfers",
       "time-clock",
     ]) {
-      assert.match(mobileHome, new RegExp(`/${route}`), `mobile route ${route} is not declared`);
+      assert.match(declaredMobileRoutes, new RegExp(`/${route}`), `mobile route ${route} is not declared`);
       assert.match(instructions, new RegExp(`\\*\\*${route}\\*\\*`), `reviewer instructions omit ${route}`);
     }
 

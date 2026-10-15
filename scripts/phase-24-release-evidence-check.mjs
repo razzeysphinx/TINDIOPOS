@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
+import { REQUIRED_REAL_STORE_SCENARIOS } from "./lib/phase-24-production-evidence.mjs";
 
 const evidencePath =
   "docs/mobile-program/evidence/PHASE_24_GOOGLE_PLAY_RELEASE_EVIDENCE.json";
@@ -20,29 +21,7 @@ const releaseInputs = JSON.parse(
   ),
 );
 
-const scenarioNames = [
-  "loginAndBusinessContext",
-  "deviceEnrollment",
-  "storeRegisterAssignment",
-  "initialSync",
-  "onlineCashSale",
-  "offlineCashSale",
-  "appKillRecovery",
-  "phoneRestartRecovery",
-  "networkLossBeforeCommit",
-  "networkLossAfterCommit",
-  "missingAckReplay",
-  "reconnectExactlyOnce",
-  "cameraBarcode",
-  "hidBarcode",
-  "tenantIsolation",
-  "storeIsolation",
-  "revokedDevice",
-  "closedShift",
-  "upgradeWithUnsyncedEvent",
-  "noDuplicateMoney",
-  "noDuplicateInventoryMovement",
-];
+const scenarioNames = REQUIRED_REAL_STORE_SCENARIOS;
 
 test(
   "MOB-13 production release input inventory is explicit and fail closed",
@@ -138,7 +117,26 @@ test(
         in evidence.realStoreScenarios,
         `missing scenario ${key}`,
       );
+      assert.ok(
+        key in evidence.realStoreScenarioEvidence,
+        `missing scenario evidence slot ${key}`,
+      );
     }
+
+    for (const key of [
+      "sourceCommit",
+      "lockfileSha256",
+      "aabSha256",
+      "artifactUrl",
+      "reviewer",
+      "reviewedAt",
+    ]) {
+      assert.ok(key in evidence.signedAab, `missing signed AAB identity ${key}`);
+    }
+
+    assert.ok("requirementApplies" in evidence.playAccountTestingRequirements);
+    assert.ok("minimumTesterCount" in evidence.playAccountTestingRequirements);
+    assert.ok("minimumContinuousDays" in evidence.playAccountTestingRequirements);
   },
 );
 

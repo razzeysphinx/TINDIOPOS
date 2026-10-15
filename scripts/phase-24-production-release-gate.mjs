@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { evaluatePhase24ProductionEvidence } from "./lib/phase-24-production-evidence.mjs";
 
 const path =
   "docs/mobile-program/evidence/PHASE_24_GOOGLE_PLAY_RELEASE_EVIDENCE.json";
@@ -18,78 +19,9 @@ const releaseInputs = JSON.parse(
   ),
 );
 
-const scenarios =
-  Object.entries(
-    evidence.realStoreScenarios,
-  );
+const { passed, failures } = evaluatePhase24ProductionEvidence(evidence, releaseInputs);
 
-const failures = [];
-
-function requirePass(
-  label,
-  status,
-) {
-  if (status !== "PASS") {
-    failures.push(
-      `${label}: ${status}`,
-    );
-  }
-}
-
-requirePass(
-  "MOB-13 production release inputs",
-  releaseInputs.status === "READY" ? "PASS" : releaseInputs.status,
-);
-
-requirePass(
-  "Google Play reviewer access",
-  evidence.reviewerAccess.status,
-);
-
-requirePass(
-  "Public privacy/support/deletion access",
-  evidence.publicPolicyAccess.status,
-);
-
-requirePass(
-  "Signed AAB",
-  evidence.signedAab.status,
-);
-
-requirePass(
-  "Development device",
-  evidence.developmentDevice.status,
-);
-
-requirePass(
-  "Internal testing",
-  evidence.internalTesting.status,
-);
-
-requirePass(
-  "Closed testing",
-  evidence.closedTesting.status,
-);
-
-requirePass(
-  "Pilot merchants",
-  evidence.pilotMerchants.status,
-);
-
-for (
-  const [
-    name,
-    status,
-  ]
-  of scenarios
-) {
-  requirePass(
-    `Scenario ${name}`,
-    status,
-  );
-}
-
-if (failures.length > 0) {
+if (!passed) {
   process.stderr.write(
     [
       "PHASE_24_PRODUCTION_BLOCKED",

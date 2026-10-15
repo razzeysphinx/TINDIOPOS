@@ -158,6 +158,24 @@ node scripts/phase-24-production-release-gate.mjs
 
 must PASS.
 
+The gate validates the evidence itself; a collection of `PASS` labels is not
+enough. Every release record must identify the exact source commit, lockfile
+hash, EAS build, AAB SHA-256, package version and evidence artifact. Device,
+internal, closed, pilot and real-store evidence must repeat the same AAB hash.
+Missing required scenarios fail closed.
+
+Record the current Play Console testing rule for the actual developer account
+in `playAccountTestingRequirements`. When a tester-count or continuous-day
+minimum applies, the gate compares the closed-test result with that recorded
+minimum. Do not copy the personal-account requirement onto an organization
+account without verifying it in Play Console.
+
+Pilot minimums are owner-approved release inputs. Record both the approved
+minimums and observed merchant/store/register/day counts; the gate rejects an
+observed result below the approved scope. Artifact URLs must point to access-
+controlled evidence and must never expose credentials, device secrets or real
+customer data.
+
 After pilot approval, production still requires deliberate human review in Google Play Console.
 
 ## Account-specific testing requirements

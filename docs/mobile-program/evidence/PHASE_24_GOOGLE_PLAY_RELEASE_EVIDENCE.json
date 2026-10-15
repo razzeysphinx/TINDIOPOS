@@ -48,23 +48,55 @@
     "status": "NOT_RUN",
     "buildId": null,
     "versionName": "1.0.0",
-    "versionCode": null
+    "versionCode": null,
+    "sourceCommit": null,
+    "lockfileSha256": null,
+    "aabSha256": null,
+    "artifactUrl": null,
+    "reviewer": null,
+    "reviewedAt": null
   },
   "developmentDevice": {
     "status": "NOT_RUN",
+    "deviceModel": null,
+    "osApi": null,
+    "pageSizeBytes": null,
+    "aabSha256": null,
+    "artifactUrl": null,
+    "reviewer": null,
+    "reviewedAt": null,
     "notes": null
   },
   "internalTesting": {
     "status": "NOT_RUN",
     "releaseId": null,
     "testerCount": null,
+    "aabSha256": null,
+    "artifactUrl": null,
+    "reviewer": null,
+    "reviewedAt": null,
     "notes": null
+  },
+  "playAccountTestingRequirements": {
+    "status": "NOT_RUN",
+    "accountType": null,
+    "requirementApplies": null,
+    "minimumTesterCount": null,
+    "minimumContinuousDays": null,
+    "evidenceUrl": null,
+    "reviewer": null,
+    "reviewedAt": null,
+    "notes": "Record the current Play Console requirement for this exact developer account. Do not assume the personal-account threshold applies to an organization account."
   },
   "closedTesting": {
     "status": "NOT_RUN",
     "releaseId": null,
     "testerCount": null,
     "continuousDays": null,
+    "aabSha256": null,
+    "artifactUrl": null,
+    "reviewer": null,
+    "reviewedAt": null,
     "notes": null
   },
   "pilotMerchants": {
@@ -73,6 +105,14 @@
     "storeCount": null,
     "registerCount": null,
     "minimumPilotDays": null,
+    "ownerApprovedMinimumMerchantCount": null,
+    "ownerApprovedMinimumStoreCount": null,
+    "ownerApprovedMinimumRegisterCount": null,
+    "ownerApprovedMinimumPilotDays": null,
+    "aabSha256": null,
+    "artifactUrl": null,
+    "reviewer": null,
+    "reviewedAt": null,
     "notes": null
   },
   "realStoreScenarios": {
@@ -98,9 +138,35 @@
     "noDuplicateMoney": "NOT_RUN",
     "noDuplicateInventoryMovement": "NOT_RUN"
   },
+  "realStoreScenarioEvidence": {
+    "loginAndBusinessContext": null,
+    "deviceEnrollment": null,
+    "storeRegisterAssignment": null,
+    "initialSync": null,
+    "onlineCashSale": null,
+    "offlineCashSale": null,
+    "appKillRecovery": null,
+    "phoneRestartRecovery": null,
+    "networkLossBeforeCommit": null,
+    "networkLossAfterCommit": null,
+    "missingAckReplay": null,
+    "reconnectExactlyOnce": null,
+    "cameraBarcode": null,
+    "hidBarcode": null,
+    "tenantIsolation": null,
+    "storeIsolation": null,
+    "revokedDevice": null,
+    "closedShift": null,
+    "upgradeWithUnsyncedEvent": null,
+    "noDuplicateMoney": null,
+    "noDuplicateInventoryMovement": null
+  },
   "production": {
     "eligible": false,
     "releaseStatus": "BLOCKED",
+    "ownerApprovalBy": null,
+    "ownerApprovedAt": null,
+    "aabSha256": null,
     "reason": "Reviewer access, public policy access, internal, closed, pilot, real-store, and upgrade evidence have not all passed."
   }
 }

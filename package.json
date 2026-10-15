@@ -35,6 +35,7 @@
     "test:mobile-mob-12-hardware-scope": "node --test scripts/mobile-mob-12-hardware-scope.test.mjs",
     "test:mobile-mob-13-cashier-home": "node --test scripts/mobile-mob-13-cashier-home.test.mjs",
     "test:mobile-mob-13-release-inputs": "node --test scripts/mobile-mob-13-release-inputs.test.mjs",
+    "audit:mobile-release-readiness": "node scripts/mobile-mob-13-release-readiness.mjs",
     "test:mobile-a43-old-client-compatibility": "node --test scripts/mobile-a43-old-client-compatibility.test.mjs",
     "certify:mobile-a43-live": "node scripts/mobile-a43-old-client-live.mjs",
     "test:mobile-a44-device-retirement": "node --test scripts/mobile-a44-device-retirement-custody.test.mjs",

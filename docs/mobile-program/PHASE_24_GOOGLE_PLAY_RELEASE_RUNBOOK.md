@@ -41,6 +41,16 @@ paths in that manifest are relative to `apps/mobile` and must exist.
 
 Do not use the example values from `.env.example` in a release build.
 
+Run the non-mutating readiness audit before requesting a production build:
+
+```text
+pnpm audit:mobile-release-readiness
+```
+
+The command intentionally exits non-zero while any input is blocked and reports
+all missing approvals/configuration at once. It never prints credential values.
+Do not change the manifest to `READY` merely to make this audit pass.
+
 ## Signing
 
 Use EAS remote Android credentials.

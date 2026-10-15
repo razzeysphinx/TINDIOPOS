@@ -59,6 +59,168 @@ function productionOrigin(value, name) {
   return url.origin;
 }
 
+function auditProductionReleaseReadiness(manifest, environment) {
+  const checks = [];
+  const add = (id, ready, blockedReason) => {
+    checks.push({
+      id,
+      status: ready ? "PASS" : "BLOCKED",
+      ...(ready ? {} : { reason: blockedReason }),
+    });
+  };
+  const valid = (operation) => {
+    try {
+      operation();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const assetExists = (asset) => (
+    typeof asset === "string"
+    && asset.trim().length > 0
+    && existsSync(path.resolve(__dirname, asset))
+  );
+
+  add(
+    "manifest_status",
+    manifest.status === "READY",
+    "Release manifest approval is still required.",
+  );
+  add(
+    "eas_identity",
+    valid(() => {
+      const owner = requiredString(manifest.eas?.owner, "eas.owner");
+      const projectId = requiredString(manifest.eas?.projectId, "eas.projectId");
+      if (!EAS_OWNER_PATTERN.test(owner) || !EAS_PROJECT_ID_PATTERN.test(projectId)) {
+        throw new Error("Invalid EAS identity.");
+      }
+    }),
+    "Approved EAS owner and project ID are missing or invalid.",
+  );
+
+  const apiOriginReady = valid(() => {
+    const approved = productionOrigin(
+      manifest.endpoints?.tindioApiOrigin,
+      "endpoints.tindioApiOrigin",
+    );
+    const embedded = productionOrigin(
+      environment.EXPO_PUBLIC_TINDIO_API_URL,
+      "EXPO_PUBLIC_TINDIO_API_URL",
+    );
+    if (approved !== embedded) throw new Error("API origin mismatch.");
+  });
+  add(
+    "production_api_origin",
+    apiOriginReady,
+    "Approved and embedded public HTTPS API origins are missing, invalid, or different.",
+  );
+
+  const supabaseOriginReady = valid(() => {
+    const approved = productionOrigin(
+      manifest.endpoints?.supabaseAuthOrigin,
+      "endpoints.supabaseAuthOrigin",
+    );
+    const embedded = productionOrigin(
+      environment.EXPO_PUBLIC_SUPABASE_URL,
+      "EXPO_PUBLIC_SUPABASE_URL",
+    );
+    if (approved !== embedded) throw new Error("Supabase Auth origin mismatch.");
+  });
+  add(
+    "supabase_auth_origin",
+    supabaseOriginReady,
+    "Approved and embedded public HTTPS Supabase Auth origins are missing, invalid, or different.",
+  );
+  add(
+    "supabase_publishable_key",
+    valid(() => requiredString(
+      environment.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+      "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    )),
+    "The production Supabase publishable key is not available to the build environment.",
+  );
+  add(
+    "remote_signing",
+    manifest.signing?.credentialsSource === "remote"
+      && manifest.signing?.status === "VERIFIED"
+      && Boolean(manifest.signing?.verifiedAt),
+    "Remote Android signing credentials have not been verified.",
+  );
+
+  const branding = manifest.branding ?? {};
+  add(
+    "branding_approval",
+    branding.status === "APPROVED",
+    "Product-owner approval of the candidate branding is required.",
+  );
+  add(
+    "branding_assets",
+    [branding.appIcon, branding.adaptiveForeground, branding.splash]
+      .every(assetExists),
+    "One or more required branding assets are missing.",
+  );
+
+  const listing = manifest.storeListing ?? {};
+  add(
+    "listing_approval",
+    listing.status === "READY",
+    "Google Play listing approval is required.",
+  );
+  add(
+    "listing_copy",
+    typeof listing.shortDescription === "string"
+      && listing.shortDescription.trim().length > 0
+      && listing.shortDescription.length <= 80
+      && typeof listing.fullDescription === "string"
+      && listing.fullDescription.trim().length > 0,
+    "Approved short and full descriptions are required.",
+  );
+  add(
+    "support_email",
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(listing.supportEmail ?? ""),
+    "A monitored support email is required.",
+  );
+  add(
+    "feature_graphic",
+    assetExists(listing.featureGraphic),
+    "The approved feature graphic is missing.",
+  );
+  add(
+    "phone_screenshots",
+    Array.isArray(listing.phoneScreenshots)
+      && listing.phoneScreenshots.length > 0
+      && listing.phoneScreenshots.every(assetExists),
+    "Truthful release-candidate phone screenshots are required.",
+  );
+  const tabletScreenshots = [
+    ...(listing.sevenInchTabletScreenshots ?? []),
+    ...(listing.tenInchTabletScreenshots ?? []),
+  ];
+  add(
+    "tablet_screenshot_paths",
+    tabletScreenshots.every(assetExists),
+    "One or more configured tablet screenshots are missing.",
+  );
+  add(
+    "public_policy_evidence_file",
+    typeof manifest.publicPolicyEvidencePath === "string"
+      && existsSync(path.resolve(__dirname, "../..", manifest.publicPolicyEvidencePath)),
+    "The Phase 24 public-policy evidence file is missing.",
+  );
+
+  const blocked = checks
+    .filter((check) => check.status === "BLOCKED")
+    .map((check) => check.id);
+
+  return {
+    schemaVersion: 1,
+    status: blocked.length === 0 ? "READY" : "BLOCKED",
+    checks,
+    blocked,
+  };
+}
+
 function assertProductionReleaseInputs(manifest, environment) {
   if (manifest.status !== "READY") {
     throw new Error(
@@ -142,8 +304,11 @@ function assertProductionReleaseInputs(manifest, environment) {
     listing.status !== "READY"
     || !featureGraphic
     || phoneScreenshots.length === 0
-    || !listing.shortDescription
-    || !listing.fullDescription
+    || typeof listing.shortDescription !== "string"
+    || listing.shortDescription.trim().length === 0
+    || listing.shortDescription.length > 80
+    || typeof listing.fullDescription !== "string"
+    || listing.fullDescription.trim().length === 0
     || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(listing.supportEmail ?? "")
   ) {
     throw new Error("MOB-13 Google Play listing inputs are incomplete.");
@@ -167,6 +332,7 @@ function assertProductionReleaseInputs(manifest, environment) {
 }
 
 module.exports = {
+  auditProductionReleaseReadiness,
   assertProductionReleaseInputs,
   productionOrigin,
 };

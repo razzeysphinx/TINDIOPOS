@@ -5,6 +5,7 @@ import test from "node:test";
 
 const require = createRequire(import.meta.url);
 const {
+  auditProductionReleaseReadiness,
   assertProductionReleaseInputs,
   productionOrigin,
 } = require("../apps/mobile/release-inputs.js");
@@ -182,4 +183,62 @@ test("MOB-13 requires referenced Play listing assets to exist", () => {
     }, readyEnvironment),
     /Google Play listing asset is missing/,
   );
+});
+
+test("MOB-13 readiness audit reports every current blocker without secret values", () => {
+  const report = auditProductionReleaseReadiness(blockedManifest, {});
+
+  assert.equal(report.status, "BLOCKED");
+  assert.deepEqual(report.blocked, [
+    "manifest_status",
+    "eas_identity",
+    "production_api_origin",
+    "supabase_auth_origin",
+    "supabase_publishable_key",
+    "remote_signing",
+    "branding_approval",
+    "listing_approval",
+    "support_email",
+    "phone_screenshots",
+  ]);
+  assert.equal(report.checks.length, 15);
+  assert.doesNotMatch(JSON.stringify(report), /sb_publishable/u);
+});
+
+test("MOB-13 readiness audit becomes ready only with complete approved inputs", () => {
+  const report = auditProductionReleaseReadiness(
+    readyManifest,
+    readyEnvironment,
+  );
+
+  assert.equal(report.status, "READY");
+  assert.deepEqual(report.blocked, []);
+  assert.ok(report.checks.every((check) => check.status === "PASS"));
+});
+
+test("MOB-13 audit and validator reject invalid listing limits and optional asset paths", () => {
+  const overlong = {
+    ...readyManifest,
+    storeListing: {
+      ...readyManifest.storeListing,
+      shortDescription: "x".repeat(81),
+    },
+  };
+  assert.throws(
+    () => assertProductionReleaseInputs(overlong, readyEnvironment),
+    /Google Play listing inputs are incomplete/,
+  );
+
+  const missingTablet = {
+    ...readyManifest,
+    storeListing: {
+      ...readyManifest.storeListing,
+      sevenInchTabletScreenshots: ["assets/play/missing-tablet.png"],
+    },
+  };
+  const report = auditProductionReleaseReadiness(
+    missingTablet,
+    readyEnvironment,
+  );
+  assert.deepEqual(report.blocked, ["tablet_screenshot_paths"]);
 });

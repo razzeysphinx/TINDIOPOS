@@ -151,3 +151,7 @@ PASS
 ## Next smallest safe slice
 
 MOB-10's independently executable acceptance cases are complete. Resume the blocked physical/external evidence cases when their hardware, legal/contact details, reviewer credentials, trusted Store Hub environment, and production release candidate are available. Do not mark the Android application production-ready until those gates pass.
+
+The preserved blocker statuses, reopening conditions, first-release scope
+constraints, and transition to MOB-11 are recorded in
+`MOB_10_DEFERRED_EVIDENCE_REGISTER.md`.

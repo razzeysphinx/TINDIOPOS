@@ -30,6 +30,11 @@ function requirePass(
 }
 
 requirePass(
+  "Google Play reviewer access",
+  evidence.reviewerAccess.status,
+);
+
+requirePass(
   "Signed AAB",
   evidence.signedAab.status,
 );

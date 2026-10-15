@@ -2,6 +2,31 @@
   "phase": 24,
   "packageId": "com.tindio.pos",
   "generatedAt": null,
+  "reviewerAccess": {
+    "status": "NOT_RUN",
+    "credentialSource": "PLAY_CONSOLE_ONLY",
+    "usernameEnvironmentReference": "TINDIO_PLAY_REVIEWER_EMAIL",
+    "passwordEnvironmentReference": "TINDIO_PLAY_REVIEWER_PASSWORD",
+    "tenantType": "SYNTHETIC_STAGING",
+    "containsProductionMerchantData": false,
+    "freshInstallSelfEnrollmentRequired": true,
+    "requiredPermissions": [
+      "devices.manage",
+      "pos.access",
+      "sales.create",
+      "payments.accept",
+      "receipts.view",
+      "receipts.reprint",
+      "shifts.open",
+      "shifts.close"
+    ],
+    "instructionsPath": "docs/mobile-program/GOOGLE_PLAY_REVIEWER_ACCESS.md",
+    "credentialOwner": null,
+    "credentialVerifiedAt": null,
+    "playConsoleConfiguredAt": null,
+    "freshInstallVerifiedAt": null,
+    "notes": "A46 remains NOT_RUN until a dedicated credential is stored only in Play Console and a fresh-install reviewer walkthrough passes."
+  },
   "signedAab": {
     "status": "NOT_RUN",
     "buildId": null,
@@ -59,6 +84,6 @@
   "production": {
     "eligible": false,
     "releaseStatus": "BLOCKED",
-    "reason": "Internal, closed, pilot, real-store, and upgrade evidence have not all passed."
+    "reason": "Reviewer access, internal, closed, pilot, real-store, and upgrade evidence have not all passed."
   }
 }

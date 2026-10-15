@@ -106,3 +106,46 @@ test(
     );
   },
 );
+
+test(
+  "A46 reviewer access contract is self-enrolling, synthetic, and secret-safe",
+  () => {
+    const evidence = JSON.parse(read(
+      "docs/mobile-program/evidence/PHASE_24_GOOGLE_PLAY_RELEASE_EVIDENCE.json",
+    ));
+    const instructions = read(evidence.reviewerAccess.instructionsPath);
+    const mobileHome = read("apps/mobile/app/(app)/index.tsx");
+    const deviceSetup = read("apps/mobile/src/features/device/device-setup.tsx");
+
+    assert.equal(evidence.reviewerAccess.credentialSource, "PLAY_CONSOLE_ONLY");
+    assert.equal(evidence.reviewerAccess.containsProductionMerchantData, false);
+    assert.equal(evidence.reviewerAccess.freshInstallSelfEnrollmentRequired, true);
+    assert.match(deviceSetup, /permissions\.includes\("devices\.manage"\)/);
+    assert.match(instructions, /TINDIO_PLAY_REVIEWER_EMAIL/);
+    assert.match(instructions, /TINDIO_PLAY_REVIEWER_PASSWORD/);
+    assert.match(instructions, /Electronic\/card payment while offline is intentionally unavailable/);
+    assert.match(instructions, /manual barcode\/SKU entry remains available/);
+
+    for (const route of [
+      "pos",
+      "receipts",
+      "shift",
+      "sync-status",
+      "hardware",
+      "offline-payments",
+      "production-readiness",
+      "settings",
+      "customers",
+      "tickets",
+      "transfers",
+      "time-clock",
+    ]) {
+      assert.match(mobileHome, new RegExp(`/${route}`), `mobile route ${route} is not declared`);
+      assert.match(instructions, new RegExp(`\\*\\*${route}\\*\\*`), `reviewer instructions omit ${route}`);
+    }
+
+    const serializedEvidence = JSON.stringify(evidence);
+    assert.doesNotMatch(serializedEvidence, /@/u, "reviewer email must not be committed");
+    assert.doesNotMatch(serializedEvidence, /"password"\s*:/iu, "reviewer password must not be committed");
+  },
+);

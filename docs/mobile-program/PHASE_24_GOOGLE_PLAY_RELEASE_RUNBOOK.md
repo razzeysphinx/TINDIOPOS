@@ -59,6 +59,12 @@ Before first Play upload, the external Play Console must have:
 
 These are external platform/account tasks and are not fabricated by repository code.
 
+For app access, copy the secret-free procedure in
+`docs/mobile-program/GOOGLE_PLAY_REVIEWER_ACCESS.md` into Play Console and place
+the dedicated synthetic reviewer credential only in Play Console. A fresh
+install must be able to self-enroll; a credential that can sign in but lacks
+`devices.manage` is not valid reviewer access.
+
 ## Internal track
 
 Build:

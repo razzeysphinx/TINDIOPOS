@@ -50,6 +50,11 @@ releaseStatus: draft
 
 The local production evidence gate must pass before production is prepared.
 
+Google Play reviewer access is a separate fail-closed prerequisite. The
+dedicated credential must use a synthetic tenant, self-enroll a fresh install,
+reach every function declared to Play, and be stored only in Play Console and
+the approved secret manager. See `GOOGLE_PLAY_REVIEWER_ACCESS.md`.
+
 ## Current external dependency
 
 Phase 23 reported:

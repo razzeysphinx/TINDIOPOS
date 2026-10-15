@@ -50,6 +50,31 @@ test(
       "com.tindio.pos",
     );
 
+    assert.equal(evidence.reviewerAccess.credentialSource, "PLAY_CONSOLE_ONLY");
+    assert.equal(evidence.reviewerAccess.tenantType, "SYNTHETIC_STAGING");
+    assert.equal(evidence.reviewerAccess.containsProductionMerchantData, false);
+    assert.equal(evidence.reviewerAccess.freshInstallSelfEnrollmentRequired, true);
+    assert.equal(
+      evidence.reviewerAccess.instructionsPath,
+      "docs/mobile-program/GOOGLE_PLAY_REVIEWER_ACCESS.md",
+    );
+
+    for (const permission of [
+      "devices.manage",
+      "pos.access",
+      "sales.create",
+      "payments.accept",
+      "receipts.view",
+      "receipts.reprint",
+      "shifts.open",
+      "shifts.close",
+    ]) {
+      assert.ok(
+        evidence.reviewerAccess.requiredPermissions.includes(permission),
+        `reviewer access is missing ${permission}`,
+      );
+    }
+
     for (
       const key
       of scenarioNames
@@ -67,7 +92,9 @@ test(
   "production cannot be eligible before the entire release ladder passes",
   () => {
     const ladderPassed =
-      evidence.signedAab.status
+      evidence.reviewerAccess.status
+        === "PASS"
+      && evidence.signedAab.status
         === "PASS"
       && evidence.developmentDevice.status
         === "PASS"

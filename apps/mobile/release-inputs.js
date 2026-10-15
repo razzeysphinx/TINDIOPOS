@@ -115,9 +115,19 @@ function assertProductionReleaseInputs(manifest, environment) {
     throw new Error("MOB-13 production remote signing credentials are not verified.");
   }
 
-  for (const [name, status] of Object.entries(manifest.branding ?? {})) {
-    if (status !== "APPROVED") {
-      throw new Error(`MOB-13 production branding ${name} is not approved.`);
+  const branding = manifest.branding ?? {};
+  if (branding.status !== "APPROVED") {
+    throw new Error("MOB-13 production branding is not approved.");
+  }
+
+  for (const name of [
+    "appIcon",
+    "adaptiveForeground",
+    "splash",
+  ]) {
+    const asset = requiredString(branding[name], `branding.${name}`);
+    if (!existsSync(path.resolve(__dirname, asset))) {
+      throw new Error(`MOB-13 production branding asset is missing: ${asset}`);
     }
   }
 

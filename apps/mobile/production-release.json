@@ -15,20 +15,21 @@
     "verifiedAt": null
   },
   "branding": {
-    "appIcon": "UNAPPROVED_EXPO_TEMPLATE",
-    "adaptiveIcon": "UNAPPROVED_EXPO_TEMPLATE",
-    "splash": "UNAPPROVED_EXPO_TEMPLATE"
+    "status": "CANDIDATE_REVIEW_REQUIRED",
+    "appIcon": "assets/branding/tindio-icon-candidate-1024.png",
+    "adaptiveForeground": "assets/branding/tindio-mark-candidate-1024.png",
+    "splash": "assets/branding/tindio-mark-candidate-1024.png"
   },
   "storeListing": {
-    "status": "NOT_PROVIDED",
-    "featureGraphic": null,
+    "status": "CANDIDATE_REVIEW_REQUIRED",
+    "featureGraphic": "assets/play/feature-graphic-candidate-1024x500.png",
     "phoneScreenshots": [],
     "sevenInchTabletScreenshots": [],
     "tenInchTabletScreenshots": [],
-    "shortDescription": null,
-    "fullDescription": null,
+    "shortDescription": "Dependable point of sale with protected offline cash checkout.",
+    "fullDescription": "TINDIO POS gives authorized retail teams a focused Android checkout workspace connected to the TINDIO Back Office. Cashiers can search the store catalog, scan supported barcodes with the built-in camera, manage shifts, review receipts, and recover synchronization safely. When connectivity is interrupted, a prepared terminal can continue supported cash sales while preserving transaction identity and custody for later reconciliation. Electronic and card payments remain unavailable offline. External scanners, receipt printers, cash drawers, customer displays, and payment terminals are not supported in the v1 Android release.",
     "supportEmail": null
   },
   "publicPolicyEvidencePath": "docs/mobile-program/evidence/PHASE_24_GOOGLE_PLAY_RELEASE_EVIDENCE.json",
-  "notes": "Production remains blocked until the approved EAS project, public production origins, remote signing verification, TINDIO branding, Play listing inputs, and A47 public-policy evidence are complete."
+  "notes": "Production remains blocked until the candidate TINDIO branding and listing copy are approved, real release-candidate screenshots and a monitored support email are supplied, and the approved EAS project, public production origins, remote signing verification, and A47 public-policy evidence are complete."
 }

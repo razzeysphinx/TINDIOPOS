@@ -57,7 +57,7 @@ test(
 
     for (const key of [
       "appIcon",
-      "adaptiveIcon",
+      "adaptiveForeground",
       "splash",
     ]) {
       assert.ok(releaseInputs.branding[key], `missing branding inventory ${key}`);

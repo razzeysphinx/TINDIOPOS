@@ -30,9 +30,10 @@ const readyManifest = {
     verifiedAt: "2026-10-15T00:00:00.000Z",
   },
   branding: {
-    appIcon: "APPROVED",
-    adaptiveIcon: "APPROVED",
-    splash: "APPROVED",
+    status: "APPROVED",
+    appIcon: "assets/branding/tindio-icon-candidate-1024.png",
+    adaptiveForeground: "assets/branding/tindio-mark-candidate-1024.png",
+    splash: "assets/branding/tindio-mark-candidate-1024.png",
   },
   storeListing: {
     status: "READY",
@@ -108,13 +109,59 @@ test("MOB-13 rejects local, insecure, credentialed, and placeholder origins", ()
 });
 
 test("MOB-13 inventory truthfully records missing branding and Play assets", () => {
-  assert.equal(blockedManifest.branding.appIcon, "UNAPPROVED_EXPO_TEMPLATE");
-  assert.equal(blockedManifest.branding.adaptiveIcon, "UNAPPROVED_EXPO_TEMPLATE");
-  assert.equal(blockedManifest.storeListing.status, "NOT_PROVIDED");
-  assert.equal(blockedManifest.storeListing.featureGraphic, null);
+  assert.equal(blockedManifest.branding.status, "CANDIDATE_REVIEW_REQUIRED");
+  assert.equal(blockedManifest.storeListing.status, "CANDIDATE_REVIEW_REQUIRED");
+  assert.equal(
+    blockedManifest.storeListing.featureGraphic,
+    "assets/play/feature-graphic-candidate-1024x500.png",
+  );
   assert.deepEqual(blockedManifest.storeListing.phoneScreenshots, []);
   assert.equal(blockedManifest.publicPolicyEvidencePath,
     "docs/mobile-program/evidence/PHASE_24_GOOGLE_PLAY_RELEASE_EVIDENCE.json");
+});
+
+function pngDimensions(file) {
+  const png = fs.readFileSync(file);
+  assert.equal(png.subarray(1, 4).toString("ascii"), "PNG");
+  return {
+    width: png.readUInt32BE(16),
+    height: png.readUInt32BE(20),
+  };
+}
+
+test("MOB-13 candidate artwork replaces Expo templates at exact export sizes", () => {
+  const app = JSON.parse(fs.readFileSync("apps/mobile/app.json", "utf8")).expo;
+  assert.equal(app.icon, "./assets/branding/tindio-icon-candidate-1024.png");
+  assert.equal(
+    app.android.adaptiveIcon.foregroundImage,
+    "./assets/branding/tindio-mark-candidate-1024.png",
+  );
+  assert.equal(app.android.adaptiveIcon.backgroundColor, "#F4EFE5");
+  assert.equal(app.android.adaptiveIcon.backgroundImage, undefined);
+  assert.equal(app.android.adaptiveIcon.monochromeImage, undefined);
+  assert.equal(app.web.favicon, app.icon);
+  assert.deepEqual(
+    pngDimensions("apps/mobile/assets/branding/tindio-icon-candidate-1024.png"),
+    { width: 1024, height: 1024 },
+  );
+  assert.deepEqual(
+    pngDimensions("apps/mobile/assets/branding/tindio-mark-candidate-1024.png"),
+    { width: 1024, height: 1024 },
+  );
+  assert.deepEqual(
+    pngDimensions("apps/mobile/assets/play/feature-graphic-candidate-1024x500.png"),
+    { width: 1024, height: 500 },
+  );
+});
+
+test("MOB-13 listing copy is accurate and real screenshots remain required", () => {
+  const listing = blockedManifest.storeListing;
+  assert.ok(listing.shortDescription.length <= 80);
+  assert.match(listing.fullDescription, /supported cash sales/);
+  assert.match(listing.fullDescription, /Electronic and card payments remain unavailable offline/);
+  assert.match(listing.fullDescription, /not supported in the v1 Android release/);
+  assert.deepEqual(listing.phoneScreenshots, []);
+  assert.equal(listing.supportEmail, null);
 });
 
 test("MOB-13 requires referenced Play listing assets to exist", () => {

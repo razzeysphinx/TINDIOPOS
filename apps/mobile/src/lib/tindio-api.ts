@@ -676,6 +676,8 @@ export async function reportPosV2SyncTelemetry(
     crashCount: number;
     crashWindowStartedAt: string | null;
     lastCrashAt: string | null;
+    anrCount: number;
+    lastAnrAt: string | null;
     apiAverageLatencyMs: number;
     apiMaxLatencyMs: number;
     apiFailureCount: number;

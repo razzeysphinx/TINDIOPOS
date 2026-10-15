@@ -11,6 +11,7 @@ test("Phase 26 telemetry covers locked operational health signals", () => {
   for (const marker of ["crash_count", "api_average_latency_ms", "sync_average_latency_ms", "queue_depth", "failed_count", "conflict_count", "app_version", "offline_since", "last_heartbeat_at", "local_database_health"]) assert.ok(migration.includes(marker), `migration must include ${marker}`);
   for (const marker of ["getPerformanceMetrics", "getLocalDatabaseHealth", "readProductionCrashState"]) assert.ok(reporter.includes(marker), `reporter must include ${marker}`);
   for (const marker of ["Crash rate", "API avg / max", "Sync avg / max", "Pending queue", "Sync failures", "Conflicts", "Offline duration", "Heartbeat age", "Local database", "ATTENTION REQUIRED"]) assert.ok(center.includes(marker), `observability center must display ${marker}`);
+  for (const marker of ["ANR count", "Routed operational alerts", "Operator:", "Escalation:", "Runbook:"]) assert.ok(center.includes(marker), `observability center must display ${marker}`);
 });
 
 test("Phase 26 crash storage is aggregate-only", () => {

@@ -16,6 +16,7 @@ import {
 import {
   SyncTelemetryReporter,
 } from "../../src/features/sync/sync-telemetry-reporter";
+import { ProductionResponsivenessMonitor } from "../../src/features/observability/production-responsiveness-monitor";
 
 export default function AppLayout() {
   const {
@@ -48,6 +49,7 @@ export default function AppLayout() {
 
   return (
     <BusinessContextProvider>
+      <ProductionResponsivenessMonitor />
       <SyncTelemetryReporter />
 
       <Stack

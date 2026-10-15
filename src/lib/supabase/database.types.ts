@@ -3259,6 +3259,7 @@ export type Database = {
       }
       pos_device_sync_telemetry: {
         Row: {
+          anr_count: number
           api_average_latency_ms: number
           api_failure_count: number
           api_max_latency_ms: number
@@ -3273,6 +3274,7 @@ export type Database = {
           employee_name_snapshot: string
           failed_count: number
           last_crash_at: string | null
+          last_anr_at: string | null
           last_heartbeat_at: string
           last_successful_sync_at: string | null
           local_database_health: string
@@ -3288,6 +3290,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          anr_count?: number
           api_average_latency_ms?: number
           api_failure_count?: number
           api_max_latency_ms?: number
@@ -3302,6 +3305,7 @@ export type Database = {
           employee_name_snapshot: string
           failed_count?: number
           last_crash_at?: string | null
+          last_anr_at?: string | null
           last_heartbeat_at?: string
           last_successful_sync_at?: string | null
           local_database_health?: string
@@ -3317,6 +3321,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          anr_count?: number
           api_average_latency_ms?: number
           api_failure_count?: number
           api_max_latency_ms?: number
@@ -3331,6 +3336,7 @@ export type Database = {
           employee_name_snapshot?: string
           failed_count?: number
           last_crash_at?: string | null
+          last_anr_at?: string | null
           last_heartbeat_at?: string
           last_successful_sync_at?: string | null
           local_database_health?: string
@@ -8194,6 +8200,7 @@ export type Database = {
       }
       report_pos_device_sync_telemetry: {
         Args: {
+          target_anr_count?: number
           target_api_average_latency_ms?: number
           target_api_failure_count?: number
           target_api_max_latency_ms?: number
@@ -8208,6 +8215,7 @@ export type Database = {
           target_employee_name: string
           target_failed_count: number
           target_last_crash_at?: string
+          target_last_anr_at?: string
           target_last_successful_sync_at: string
           target_local_database_health?: string
           target_local_schema_version?: number

@@ -39,6 +39,7 @@ export function SyncTelemetryReporter() {
         queueDepth: outbox.pending + outbox.syncing + outbox.conflict + outbox.failed, conflictCount: outbox.conflict, failedCount: outbox.failed,
         offlineSince: modeState?.offlineSince ?? (connectionMode === "CLOUD_ONLINE" ? null : modeState?.changedAt ?? null),
         crashCount: crashState.count, crashWindowStartedAt: crashState.windowStartedAt, lastCrashAt: crashState.lastCrashAt,
+        anrCount: crashState.anrCount, lastAnrAt: crashState.lastAnrAt,
         apiAverageLatencyMs: metric(performance.apiAverageLatencyMs), apiMaxLatencyMs: metric(performance.apiMaxLatencyMs), apiFailureCount: metric(performance.apiFailures),
         syncAverageLatencyMs: metric(performance.syncAverageDurationMs), syncMaxLatencyMs: metric(performance.syncMaxDurationMs),
         localDatabaseHealth, localSchemaVersion: localDatabase.schemaVersion,

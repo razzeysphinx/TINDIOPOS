@@ -59,6 +59,13 @@ Before first Play upload, the external Play Console must have:
 
 These are external platform/account tasks and are not fabricated by repository code.
 
+For privacy, support and deletion declarations, use the deployed HTTPS versions
+of `/privacy`, `/support` and `/account-deletion`. Do not submit localhost,
+preview-only, authenticated, geofenced, PDF or placeholder URLs. The responsible
+entity, privacy contact, support owner, effective date and working deletion
+request channel must be approved before `publicPolicyAccess.status` becomes
+`PASS`.
+
 For app access, copy the secret-free procedure in
 `docs/mobile-program/GOOGLE_PLAY_REVIEWER_ACCESS.md` into Play Console and place
 the dedicated synthetic reviewer credential only in Play Console. A fresh

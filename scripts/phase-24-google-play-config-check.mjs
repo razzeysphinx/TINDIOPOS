@@ -149,3 +149,51 @@ test(
     assert.doesNotMatch(serializedEvidence, /"password"\s*:/iu, "reviewer password must not be committed");
   },
 );
+
+test(
+  "A47 public policy routes are discoverable, accurate about retention, and fail closed",
+  () => {
+    const evidence = JSON.parse(read(
+      "docs/mobile-program/evidence/PHASE_24_GOOGLE_PLAY_RELEASE_EVIDENCE.json",
+    ));
+    const privacy = read("src/app/privacy/page.tsx");
+    const support = read("src/app/support/page.tsx");
+    const deletion = read("src/app/account-deletion/page.tsx");
+    const signup = read("src/app/(auth)/signup/page.tsx");
+    const mobileLinks = read("apps/mobile/src/features/support/public-policy-links.tsx");
+    const signedOut = read("apps/mobile/app/sign-in.tsx");
+    const signedIn = read("apps/mobile/app/(app)/settings.tsx");
+
+    assert.equal(evidence.publicPolicyAccess.accountDeletionApplicable, true);
+    assert.ok(["NOT_RUN", "BLOCKED", "FAIL", "PASS"].includes(evidence.publicPolicyAccess.status));
+    if (evidence.publicPolicyAccess.status === "PASS") {
+      for (const key of [
+        "responsibleEntity",
+        "privacyContact",
+        "supportOwner",
+        "effectiveDate",
+        "publicHttpsOrigin",
+        "publicUrlsVerifiedAt",
+        "inAppLinksVerifiedAt",
+        "deletionRequestVerifiedAt",
+        "playConsoleConfiguredAt",
+      ]) {
+        assert.ok(evidence.publicPolicyAccess[key]?.trim(), `A47 PASS requires ${key}`);
+      }
+      assert.match(evidence.publicPolicyAccess.publicHttpsOrigin, /^https:\/\//u);
+    }
+    assert.match(signup, /Create account/);
+    assert.match(privacy, /Organization archival is not account deletion/);
+    assert.match(privacy, /sales, payment, receipt, inventory, shift, approval, and audit records/);
+    assert.match(deletion, /Temporary deactivation, suspension, or organization archival is not treated as completed account deletion/);
+    assert.match(deletion, /Request intake is not yet production-ready/);
+    assert.match(support, /Never uninstall the app, clear its storage, or delete pending transactions/);
+    assert.match(mobileLinks, /mobileEnvironment\.tindioApiUrl/);
+
+    for (const path of ["/privacy", "/support", "/account-deletion"]) {
+      assert.match(mobileLinks, new RegExp(path));
+    }
+    assert.match(signedOut, /<PublicPolicyLinks \/>/);
+    assert.match(signedIn, /<PublicPolicyLinks \/>/);
+  },
+);

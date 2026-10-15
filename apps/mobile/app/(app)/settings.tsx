@@ -15,6 +15,7 @@ import {
 } from "../../src/features/store-hub/store-hub-config";
 import { probeStoreHub } from "../../src/features/store-hub/store-hub-client";
 import { canReleaseTransactionCustody } from "../../src/features/offline/transaction-custody";
+import { PublicPolicyLinks } from "../../src/features/support/public-policy-links";
 
 export default function SettingsScreen() {
   const { data } = useBusinessContext();
@@ -158,6 +159,8 @@ export default function SettingsScreen() {
       </Pressable>
 
       <Text>{message}</Text>
+
+      <PublicPolicyLinks />
 
       <Pressable
         onPress={() => void signOut().then((result) => {

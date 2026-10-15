@@ -27,6 +27,23 @@
     "freshInstallVerifiedAt": null,
     "notes": "A46 remains NOT_RUN until a dedicated credential is stored only in Play Console and a fresh-install reviewer walkthrough passes."
   },
+  "publicPolicyAccess": {
+    "status": "NOT_RUN",
+    "privacyPath": "/privacy",
+    "supportPath": "/support",
+    "accountDeletionPath": "/account-deletion",
+    "accountDeletionApplicable": true,
+    "responsibleEntity": null,
+    "privacyContact": null,
+    "supportOwner": null,
+    "effectiveDate": null,
+    "publicHttpsOrigin": null,
+    "publicUrlsVerifiedAt": null,
+    "inAppLinksVerifiedAt": null,
+    "deletionRequestVerifiedAt": null,
+    "playConsoleConfiguredAt": null,
+    "notes": "A47 remains NOT_RUN until the responsible entity and monitored contacts are approved, all public HTTPS routes and the request channel are verified, and matching URLs are entered in Play Console."
+  },
   "signedAab": {
     "status": "NOT_RUN",
     "buildId": null,
@@ -84,6 +101,6 @@
   "production": {
     "eligible": false,
     "releaseStatus": "BLOCKED",
-    "reason": "Reviewer access, internal, closed, pilot, real-store, and upgrade evidence have not all passed."
+    "reason": "Reviewer access, public policy access, internal, closed, pilot, real-store, and upgrade evidence have not all passed."
   }
 }

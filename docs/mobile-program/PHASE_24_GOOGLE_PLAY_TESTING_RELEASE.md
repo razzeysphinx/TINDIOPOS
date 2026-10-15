@@ -55,6 +55,12 @@ dedicated credential must use a synthetic tenant, self-enroll a fresh install,
 reach every function declared to Play, and be stored only in Play Console and
 the approved secret manager. See `GOOGLE_PLAY_REVIEWER_ACCESS.md`.
 
+Public privacy, support and applicable account-deletion access are also a
+fail-closed prerequisite. Source routes and in-app discovery are implemented,
+but certification requires a public production HTTPS origin, approved legal
+entity/contact details, a monitored deletion-request channel, live URL checks
+and matching Play Console declarations.
+
 ## Current external dependency
 
 Phase 23 reported:

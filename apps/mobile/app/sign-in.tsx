@@ -6,6 +6,7 @@ import {
   deriveCashierReadinessState,
 } from "../src/features/offline/cashier-readiness-policy";
 import { useSession } from "../src/features/session/session-provider";
+import { PublicPolicyLinks } from "../src/features/support/public-policy-links";
 
 export default function SignInScreen() {
   const { signIn, offlineRestrictionReason, offlineAuthorizationState } = useSession();
@@ -45,6 +46,7 @@ export default function SignInScreen() {
         <Text>{pending ? "Signing in…" : "Sign in"}</Text>
         {pending ? <ActivityIndicator /> : null}
       </Pressable>
+      <PublicPolicyLinks />
     </View>
   );
 }

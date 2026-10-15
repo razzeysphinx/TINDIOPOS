@@ -35,6 +35,11 @@ requirePass(
 );
 
 requirePass(
+  "Public privacy/support/deletion access",
+  evidence.publicPolicyAccess.status,
+);
+
+requirePass(
   "Signed AAB",
   evidence.signedAab.status,
 );

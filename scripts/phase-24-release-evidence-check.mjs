@@ -58,6 +58,10 @@ test(
       evidence.reviewerAccess.instructionsPath,
       "docs/mobile-program/GOOGLE_PLAY_REVIEWER_ACCESS.md",
     );
+    assert.equal(evidence.publicPolicyAccess.accountDeletionApplicable, true);
+    assert.equal(evidence.publicPolicyAccess.privacyPath, "/privacy");
+    assert.equal(evidence.publicPolicyAccess.supportPath, "/support");
+    assert.equal(evidence.publicPolicyAccess.accountDeletionPath, "/account-deletion");
 
     for (const permission of [
       "devices.manage",
@@ -93,6 +97,8 @@ test(
   () => {
     const ladderPassed =
       evidence.reviewerAccess.status
+        === "PASS"
+      && evidence.publicPolicyAccess.status
         === "PASS"
       && evidence.signedAab.status
         === "PASS"

@@ -122,6 +122,11 @@ export default function Home() {
             <p className="mt-10 flex items-center gap-1.5 text-sm font-medium text-primary">
               Built for the whole retail day <ArrowUpRight className="size-4" />
             </p>
+            <nav aria-label="Legal and support" className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+              <Link className="text-muted-foreground hover:text-primary hover:underline" href="/privacy">Privacy</Link>
+              <Link className="text-muted-foreground hover:text-primary hover:underline" href="/support">Support</Link>
+              <Link className="text-muted-foreground hover:text-primary hover:underline" href="/account-deletion">Delete account</Link>
+            </nav>
           </aside>
         </section>
       </div>

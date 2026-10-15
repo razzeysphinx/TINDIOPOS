@@ -27,6 +27,7 @@ import { useSession } from "../../src/features/session/session-provider";
 import { reconcileCloud } from "../../src/features/sync/reconcile-cloud";
 import { getStoreHubState, type StoreHubState } from "../../src/db/store-hub-cache";
 import { synchronizeWithStoreHub } from "../../src/features/store-hub/store-hub-sync";
+import { isStoreHubEnabledForRelease } from "../../src/features/store-hub/store-hub-release-scope";
 import { getIsolatedRuntimeDiagnostics } from "../../src/features/offline/isolated-runtime-diagnostics";
 import {
   createMob10A30Queue,
@@ -41,6 +42,8 @@ export default function SyncStatusScreen() {
   const terminal = useTerminalDevice(organizationId);
   const identity = terminal.identity;
   const binding = identity?.binding;
+  const storeHubEnabled =
+    isStoreHubEnabledForRelease();
   const deviceId = identity?.credential.deviceId;
   const [health, setHealth] = useState<Awaited<ReturnType<typeof getLocalDatabaseHealth>> | null>(null);
   const [cached, setCached] = useState<boolean | null>(null);
@@ -309,12 +312,20 @@ export default function SyncStatusScreen() {
     <Text>Recovery safe for CLOUD_ONLINE: {isolatedDiagnostics?.recoverySafeForCloudOnline ? "YES" : "NO"}</Text>
     <Text>PHASE 15 STORE LOCAL MODE / STORE HUB</Text>
     <Text>Connection mode: {connectionMode}</Text>
-    <Text>Store Hub URL: {storeHubState?.hubUrl ?? "NOT CONFIGURED / NOT CONTACTED"}</Text>
-    <Text>Store Hub cursor: {storeHubState?.pullCursor ?? 0}</Text>
-    <Text>Store Hub last contact: {storeHubState?.lastContactAt ?? "NEVER"}</Text>
-    <Text>Store Hub last error: {storeHubState?.lastError ?? "NONE"}</Text>
-    <Pressable onPress={() => void syncStoreHub()}><Text>Synchronize With Store Hub</Text></Pressable>
-    <Text>Store Hub ACK never replaces cloud ACK.</Text>
+    {storeHubEnabled ? (
+      <>
+        <Text>Store Hub URL: {storeHubState?.hubUrl ?? "NOT CONFIGURED / NOT CONTACTED"}</Text>
+        <Text>Store Hub cursor: {storeHubState?.pullCursor ?? 0}</Text>
+        <Text>Store Hub last contact: {storeHubState?.lastContactAt ?? "NEVER"}</Text>
+        <Text>Store Hub last error: {storeHubState?.lastError ?? "NONE"}</Text>
+        <Pressable onPress={() => void syncStoreHub()}><Text>Synchronize With Store Hub</Text></Pressable>
+        <Text>Store Hub ACK never replaces cloud ACK.</Text>
+      </>
+    ) : (
+      <Text>
+        Store Hub is deferred from this release. This terminal uses isolated offline cash and authoritative cloud reconciliation.
+      </Text>
+    )}
     <Text>PHASE 14 OFFLINE INVENTORY INTELLIGENCE</Text>
     <Text>Authority: {inventoryDiagnostics?.authority ?? "SERVER_LEDGER_AUTHORITATIVE"}</Text>
     <Text>Local intelligence scope: {inventoryDiagnostics?.localScope ?? "CURRENT_DEVICE_ONLY"}</Text>

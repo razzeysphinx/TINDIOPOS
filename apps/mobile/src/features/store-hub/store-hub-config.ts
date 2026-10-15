@@ -1,5 +1,9 @@
 import { secureStorage } from "../../lib/secure-storage";
 import { isStoreHubTransportAllowed } from "./store-hub-transport-policy";
+import {
+  isStoreHubEnabledForRelease,
+  STORE_HUB_DEFERRED_REASON,
+} from "./store-hub-release-scope";
 
 export type StoreHubConfig = {
   version: 1;
@@ -98,6 +102,10 @@ export async function saveStoreHubConfig(input: {
   endpoint: string;
   token: string;
 }) {
+  if (!isStoreHubEnabledForRelease()) {
+    throw new Error(STORE_HUB_DEFERRED_REASON);
+  }
+
   const endpoint = normalizeStoreHubEndpoint(input.endpoint);
   const token = input.token.trim();
 
@@ -147,6 +155,10 @@ export async function saveStoreHubConfig(input: {
 export async function readStoreHubConfig(
   organizationId: string,
 ) {
+  if (!isStoreHubEnabledForRelease()) {
+    return null;
+  }
+
   const raw = await secureStorage.getItem(
     key(organizationId),
   );
@@ -175,6 +187,10 @@ export async function readStoreHubConfig(
 export async function clearStoreHubConfig(
   organizationId: string,
 ) {
+  if (!isStoreHubEnabledForRelease()) {
+    throw new Error(STORE_HUB_DEFERRED_REASON);
+  }
+
   await secureStorage.removeItem(
     key(organizationId),
   );

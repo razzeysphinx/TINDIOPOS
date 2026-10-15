@@ -2,6 +2,10 @@ import {
   readStoreHubConfig,
   type StoreHubConfig,
 } from "./store-hub-config";
+import {
+  isStoreHubEnabledForRelease,
+  STORE_HUB_DEFERRED_REASON,
+} from "./store-hub-release-scope";
 
 export type StoreHubActivityEvent = {
   eventId: string;
@@ -31,6 +35,10 @@ async function request(
   pathname: string,
   init: RequestInit = {},
 ) {
+  if (!isStoreHubEnabledForRelease()) {
+    throw new Error(STORE_HUB_DEFERRED_REASON);
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
@@ -61,6 +69,13 @@ export async function probeStoreHub(input: {
   organizationId: string;
   storeId: string;
 }) {
+  if (!isStoreHubEnabledForRelease()) {
+    return {
+      ok: false as const,
+      reason: STORE_HUB_DEFERRED_REASON,
+    };
+  }
+
   const config = await readStoreHubConfig(
     input.organizationId,
   );

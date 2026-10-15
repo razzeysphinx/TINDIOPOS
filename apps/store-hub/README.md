@@ -1,5 +1,11 @@
 # TINDIO Store Hub transport
 
+> **Current release scope:** Store Hub is deferred from the first production
+> release and is not a certified merchant feature. The implementation is
+> retained for later completion of MOB-11, A39, and A40. Do not deploy or
+> advertise it until the release-scope guard is deliberately reopened and the
+> required physical/trusted-network evidence passes.
+
 The production Store Hub serves HTTPS directly. Plain HTTP is disabled by default and cannot be enabled when `NODE_ENV=production`.
 
 ## Production configuration

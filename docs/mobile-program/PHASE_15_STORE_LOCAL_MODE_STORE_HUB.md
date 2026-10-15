@@ -10,6 +10,11 @@
 
 Full runtime certification is deferred by the user.
 
+MOB-11 records Store Hub as deferred from the first production release. The
+implementation is preserved, but the mobile release scope fails closed before
+reading Hub credentials or making Hub requests. A39 and A40 remain blocked;
+this scope decision does not certify Phase 15.
+
 ## Goal
 
 Allow terminals in one physical store to coordinate over the store LAN when cloud internet is unavailable.

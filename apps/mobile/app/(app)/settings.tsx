@@ -14,6 +14,7 @@ import {
   saveStoreHubConfig,
 } from "../../src/features/store-hub/store-hub-config";
 import { probeStoreHub } from "../../src/features/store-hub/store-hub-client";
+import { isStoreHubEnabledForRelease } from "../../src/features/store-hub/store-hub-release-scope";
 import { canReleaseTransactionCustody } from "../../src/features/offline/transaction-custody";
 import { PublicPolicyLinks } from "../../src/features/support/public-policy-links";
 
@@ -25,13 +26,15 @@ export default function SettingsScreen() {
     core?.organization.id,
   );
   const binding = terminal.identity?.binding;
+  const storeHubEnabled =
+    isStoreHubEnabledForRelease();
 
   const [endpoint, setEndpoint] = useState("");
   const [token, setToken] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    if (!core) return;
+    if (!core || !storeHubEnabled) return;
 
     let active = true;
 
@@ -46,7 +49,7 @@ export default function SettingsScreen() {
     return () => {
       active = false;
     };
-  }, [core]);
+  }, [core, storeHubEnabled]);
 
   if (!core) return <Text>Loadingâ€¦</Text>;
 
@@ -123,40 +126,48 @@ export default function SettingsScreen() {
 
       <Text>STORE HUB â€” PRIVATE LAN ONLY</Text>
 
-      <TextInput
-        value={endpoint}
-        onChangeText={setEndpoint}
-        placeholder="https://hub.example.local:8787"
-        autoCapitalize="none"
-      />
+      {storeHubEnabled ? (
+        <>
+          <TextInput
+            value={endpoint}
+            onChangeText={setEndpoint}
+            placeholder="https://hub.example.local:8787"
+            autoCapitalize="none"
+          />
 
-      <TextInput
-        value={token}
-        onChangeText={setToken}
-        placeholder="Enter/re-enter 32+ character Store Hub token"
-        autoCapitalize="none"
-        secureTextEntry
-      />
+          <TextInput
+            value={token}
+            onChangeText={setToken}
+            placeholder="Enter/re-enter 32+ character Store Hub token"
+            autoCapitalize="none"
+            secureTextEntry
+          />
 
-      <Pressable
-        disabled={!binding || !endpoint || token.length < 32}
-        onPress={() => void saveHub()}
-      >
-        <Text>Save Store Hub</Text>
-      </Pressable>
+          <Pressable
+            disabled={!binding || !endpoint || token.length < 32}
+            onPress={() => void saveHub()}
+          >
+            <Text>Save Store Hub</Text>
+          </Pressable>
 
-      <Pressable
-        disabled={!binding}
-        onPress={() => void testHub()}
-      >
-        <Text>Test Store Hub</Text>
-      </Pressable>
+          <Pressable
+            disabled={!binding}
+            onPress={() => void testHub()}
+          >
+            <Text>Test Store Hub</Text>
+          </Pressable>
 
-      <Pressable
-        onPress={() => void clearHub()}
-      >
-        <Text>Remove Store Hub</Text>
-      </Pressable>
+          <Pressable
+            onPress={() => void clearHub()}
+          >
+            <Text>Remove Store Hub</Text>
+          </Pressable>
+        </>
+      ) : (
+        <Text accessibilityRole="text">
+          Store Hub is not included in this release. Isolated offline cash remains available when this terminal is prepared. Any previously stored Hub configuration is retained and inactive.
+        </Text>
+      )}
 
       <Text>{message}</Text>
 

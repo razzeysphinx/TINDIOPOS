@@ -150,13 +150,19 @@ releaseStatus = draft
 
 This prevents the repository command from directly performing an uncontrolled global release.
 
-Before production:
+The only repository-supported production submission command is:
 
 ```bash
-node scripts/phase-24-production-release-gate.mjs
+pnpm mobile:submit:android:production-draft
 ```
 
-must PASS.
+It runs the evidence gate automatically, requires a clean worktree, verifies
+that the recorded build commit is in current history, proves that the current
+`apps/mobile` source still matches that commit, verifies the lockfile hash, and
+passes the recorded EAS build ID with `--id`. It cannot prompt the operator to
+select another build. The command stops before starting EAS when any check
+fails. Do not replace it with a direct `eas submit`, `--latest`, `--path`, or
+`--url` invocation.
 
 The gate validates the evidence itself; a collection of `PASS` labels is not
 enough. Every release record must identify the exact source commit, lockfile

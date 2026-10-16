@@ -31,7 +31,10 @@ import type {
 } from "../../../../src/contracts/pos";
 import type { CheckoutSaleActionResult } from "../../../../src/features/checkout/checkout-types";
 import { mobileEnvironment } from "./env";
-import { recordApiCall } from "../features/performance/performance-metrics";
+import {
+  observeApiResponseBytes,
+  recordApiCall,
+} from "../features/performance/performance-metrics";
 import { supabase } from "./supabase";
 import {
   fetchWithTimeout,
@@ -156,7 +159,12 @@ export async function requestPosV2Raw(
       });
     }
 
-    recordApiCall({ durationMs: Date.now() - startedAt, responseBytes: Number(response.headers.get("content-length") ?? 0) || 0, retried, failed: !response.ok });
+    recordApiCall({
+      durationMs: Date.now() - startedAt,
+      responseBytes: observeApiResponseBytes(response),
+      retried,
+      failed: !response.ok,
+    });
     return response;
   } catch (error) {
     recordApiCall({ durationMs: Date.now() - startedAt, responseBytes: 0, retried, failed: true });

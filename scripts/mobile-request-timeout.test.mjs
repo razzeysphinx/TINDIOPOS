@@ -66,6 +66,9 @@ test("MOB-09 both initial and refreshed-token attempts use the bounded transport
   assert.equal((apiSource.match(/fetchWithTimeout\(fetch/g) ?? []).length, 2);
   assert.match(apiSource, /let retried = false/);
   assert.match(apiSource, /response\.status === 401[\s\S]*retried = true/);
-  assert.match(apiSource, /recordApiCall\([^]*retried, failed: !response\.ok/);
+  assert.match(
+    apiSource,
+    /recordApiCall\([^]*retried,\s*failed: !response\.ok/,
+  );
   assert.match(apiSource, /REQUEST_TIMEOUT/);
 });

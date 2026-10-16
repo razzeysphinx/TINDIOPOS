@@ -76,6 +76,67 @@ export function resetPerformanceMetrics() {
   state = createState();
 }
 
+function normalizedByteCount(value: number) {
+  return Number.isFinite(value)
+    ? Math.max(0, Math.trunc(value))
+    : 0;
+}
+
+export function recordApiResponseBytes(
+  responseBytes: number,
+) {
+  state.apiResponseBytes +=
+    normalizedByteCount(responseBytes);
+}
+
+export function declaredApiResponseBytes(
+  headers: Pick<Headers, "get">,
+) {
+  const value =
+    headers.get("content-length")?.trim();
+
+  if (!value || !/^\d+$/.test(value)) {
+    return null;
+  }
+
+  const responseBytes = Number(value);
+
+  return Number.isSafeInteger(responseBytes)
+    ? responseBytes
+    : null;
+}
+
+export async function measureApiResponseBytes(
+  response: Pick<Response, "arrayBuffer">,
+) {
+  return normalizedByteCount(
+    (await response.arrayBuffer()).byteLength,
+  );
+}
+
+export function observeApiResponseBytes(
+  response: Pick<Response, "headers" | "clone">,
+) {
+  const declaredBytes =
+    declaredApiResponseBytes(response.headers);
+
+  if (declaredBytes !== null) {
+    return declaredBytes;
+  }
+
+  try {
+    void measureApiResponseBytes(
+      response.clone(),
+    )
+      .then(recordApiResponseBytes)
+      .catch(() => undefined);
+  } catch {
+    // Telemetry must never alter the API result returned to the caller.
+  }
+
+  return 0;
+}
+
 export function recordApiCall(input: {
   durationMs: number;
   responseBytes: number;
@@ -101,11 +162,9 @@ export function recordApiCall(input: {
       input.durationMs,
     );
 
-  state.apiResponseBytes +=
-    Math.max(
-      0,
-      input.responseBytes,
-    );
+  recordApiResponseBytes(
+    input.responseBytes,
+  );
 }
 
 export function recordSqliteQuery(input: {

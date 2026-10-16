@@ -83,6 +83,8 @@ test("MOB-10 Sync Status scrolls and refreshes database-backed diagnostics on fo
 
 test("MOB-10 Receipts refreshes saved device records whenever the screen regains focus", () => {
   const receipts = read("apps/mobile/app/(app)/receipts.tsx");
+  const screen = read("apps/mobile/src/ui/tindio-screen.tsx");
+  const feedback = read("apps/mobile/src/ui/tindio-feedback.tsx");
 
   assert.match(receipts, /useFocusEffect\(useCallback\(\(\) => \{/);
   assert.match(receipts, /void load\(queryRef\.current\)/);
@@ -92,8 +94,9 @@ test("MOB-10 Receipts refreshes saved device records whenever the screen regains
     receipts.indexOf("setLocalRows(local)") < receipts.indexOf("await serverPromise"),
     "saved device receipts must render even if the online receipt request later fails",
   );
-  assert.match(receipts, /<ScrollView[\s\S]*testID="receipts-scroll"/);
-  assert.match(receipts, /accessibilityLiveRegion="polite"/);
+  assert.match(receipts, /<TindioScreen[\s\S]*scroll testID="receipts-scroll"/);
+  assert.match(screen, /<ScrollView/);
+  assert.match(feedback, /accessibilityLiveRegion=/);
 });
 
 test("MOB-10 UI hardening does not add transaction reset or custody deletion paths", () => {

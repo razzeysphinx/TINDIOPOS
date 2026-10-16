@@ -110,7 +110,7 @@ test("Phase 13 native cashier parity implementation contract", () => {
   assert.ok(
     timeClock.includes("fetchPosV2AttendanceEmployees")
     && timeClock.includes("requestId")
-    && timeClock.includes("6–12 digit PIN"),
+    && timeClock.includes("6-12 digit PIN"),
     "time clock must use employee discovery and canonical request identity",
   );
 

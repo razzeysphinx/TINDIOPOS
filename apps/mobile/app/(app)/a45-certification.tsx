@@ -1,55 +1,31 @@
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text } from "react-native";
 
-import {
-  getHistoricalAndroidExitEvents,
-  isA45CertificationTriggerAvailable,
-  triggerA45Anr,
-  triggerA45NativeCrash,
-  type AndroidExitEvent,
-} from "../../modules/tindio-exit-observer";
+import { getHistoricalAndroidExitEvents, isA45CertificationTriggerAvailable, triggerA45Anr, triggerA45NativeCrash, type AndroidExitEvent } from "../../modules/tindio-exit-observer";
+import { TindioButton } from "../../src/ui/tindio-button";
+import { TindioCard } from "../../src/ui/tindio-card";
+import { TindioFeedback } from "../../src/ui/tindio-feedback";
+import { TindioScreen } from "../../src/ui/tindio-screen";
+import { TindioStatusBadge } from "../../src/ui/tindio-status-badge";
+import { TindioKeyValue, TindioWorkspaceHeader, TindioWorkspaceSection } from "../../src/ui/tindio-workspace";
 
 export default function A45CertificationScreen() {
   const available = isA45CertificationTriggerAvailable();
   const [events, setEvents] = useState<AndroidExitEvent[]>([]);
-
-  useEffect(() => {
-    void getHistoricalAndroidExitEvents().then(setEvents);
-  }, []);
-
+  useEffect(() => { void getHistoricalAndroidExitEvents().then(setEvents); }, []);
   return (
-    <ScrollView contentContainerStyle={{ gap: 18, padding: 24 }}>
-      <Text style={{ fontSize: 28, fontWeight: "700" }}>A45 certification diagnostics</Text>
-      <Text>
-        {available
-          ? "DEBUGGABLE TEST BUILD — synthetic native failure triggers enabled"
-          : "Production-safe build — synthetic failure triggers disabled"}
-      </Text>
-      <Text>Only Android exit reason and timestamp are retained. No exception, stack, customer, payment, receipt, or transaction payload is collected.</Text>
-      <Text>Historical actionable exits: {events.length}</Text>
-      {events.map((event) => (
-        <Text key={`${event.type}-${event.timestampMs}`}>
-          {event.type} · {new Date(event.timestampMs).toISOString()}
-        </Text>
-      ))}
+    <TindioScreen scroll testID="a45-certification-diagnostics">
+      <TindioWorkspaceHeader description="Android process-exit evidence and destructive synthetic triggers for controlled certification only." eyebrow="AUTHORIZED CERTIFICATION" title="A45 exit diagnostics" trailing={<TindioStatusBadge label={available ? "Test triggers enabled" : "Production-safe build"} tone={available ? "danger" : "success"} />} />
+      <TindioFeedback description="Only Android exit reason and timestamp are retained. No exception, stack, customer, payment, receipt, or transaction payload is collected." kind="review" title="Privacy boundary" />
+      <TindioWorkspaceSection title="Historical actionable exits">
+        <TindioKeyValue label="Recorded exits" value={String(events.length)} />
+        {events.map((event) => <TindioCard key={`${event.type}-${event.timestampMs}`} title={event.type}><TindioKeyValue label="Timestamp" value={new Date(event.timestampMs).toISOString()} /></TindioCard>)}
+      </TindioWorkspaceSection>
       {available ? (
-        <>
-          <Pressable
-            accessibilityRole="button"
-            onPress={triggerA45NativeCrash}
-            style={{ backgroundColor: "#991b1b", borderRadius: 10, padding: 16 }}
-          >
-            <Text style={{ color: "white", fontWeight: "700" }}>Trigger synthetic native crash</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={triggerA45Anr}
-            style={{ backgroundColor: "#9a3412", borderRadius: 10, padding: 16 }}
-          >
-            <Text style={{ color: "white", fontWeight: "700" }}>Trigger synthetic Android ANR</Text>
-          </Pressable>
-        </>
+        <TindioCard description="These actions intentionally terminate or stall the app. Use only during a controlled certification run." title="Destructive test triggers">
+          <TindioButton onPress={triggerA45NativeCrash} variant="destructive">Trigger synthetic native crash</TindioButton>
+          <TindioButton onPress={triggerA45Anr} variant="destructive">Trigger synthetic Android ANR</TindioButton>
+        </TindioCard>
       ) : null}
-    </ScrollView>
+    </TindioScreen>
   );
 }

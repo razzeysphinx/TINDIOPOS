@@ -24,6 +24,7 @@ import {
 import { ProductionResponsivenessMonitor } from "../../src/features/observability/production-responsiveness-monitor";
 
 const authorizedSupportPaths = new Set([
+  "/a45-certification",
   "/hardware",
   "/offline-payments",
   "/production-readiness",

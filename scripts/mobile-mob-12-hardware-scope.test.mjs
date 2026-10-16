@@ -31,16 +31,19 @@ test("MOB-12 exposes one truthful v1 hardware capability", () => {
 test("MOB-12 product UI does not advertise uncertified peripherals", () => {
   const hardware = read("apps/mobile/app/(app)/hardware.tsx");
   const pos = read("apps/mobile/app/(app)/pos.tsx");
+  const catalogue = read("apps/mobile/src/features/cashier/cashier-catalogue.tsx");
   const payments = read("apps/mobile/app/(app)/offline-payments.tsx");
 
-  assert.match(hardware, /V1 supported hardware/);
-  assert.match(hardware, /not supported in the v1 release/);
-  assert.match(pos, /External USB\/Bluetooth scanners are not supported/);
+  assert.match(hardware, /Camera scanner supported/);
+  assert.match(hardware, /Not supported in v1/);
+  assert.match(catalogue, /Manual entry and the built-in camera are supported/);
+  assert.match(catalogue, /External scanners are not yet certified/);
   assert.doesNotMatch(
     pos,
     /keyboard\/HID wedges can scan into this field/,
   );
-  assert.match(payments, /No provider-specific electronic offline payment is enabled/);
+  assert.match(payments, /Electronic payments fail closed/);
+  assert.match(payments, /No offline card simulation/);
 });
 
 test("MOB-12 release documentation uses the same support matrix", () => {

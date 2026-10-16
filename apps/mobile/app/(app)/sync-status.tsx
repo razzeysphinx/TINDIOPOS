@@ -34,6 +34,10 @@ import {
   isMob10A30CertificationBuild,
   type Mob10A30QueueResult,
 } from "../../src/features/certification/mob-10-a30";
+import { TindioCard } from "../../src/ui/tindio-card";
+import { TindioFeedback } from "../../src/ui/tindio-feedback";
+import { TindioStatusBadge } from "../../src/ui/tindio-status-badge";
+import { TindioWorkspaceHeader, TindioWorkspaceSection } from "../../src/ui/tindio-workspace";
 
 export default function SyncStatusScreen() {
   const { data, reload, mode, connectionMode } = useBusinessContext();
@@ -249,6 +253,19 @@ export default function SyncStatusScreen() {
     keyboardShouldPersistTaps="handled"
     testID="sync-status-scroll"
   >
+    <TindioWorkspaceHeader
+      description="Review connectivity, durable transaction custody, and supervised recovery without deleting accepted work."
+      eyebrow="SYNC & RECOVERY"
+      title="Transaction safety"
+      trailing={<TindioStatusBadge label={mode === "online" ? "Connected" : "Offline"} tone={mode === "online" ? "success" : "warning"} />}
+    />
+    <TindioCard description="Accepted offline sales remain on this device until the cloud acknowledges them." title="Current custody">
+      <Text>Waiting to sync: {outbox?.summary.pending ?? 0}</Text>
+      <Text>Needs review: {(outbox?.summary.conflict ?? 0) + (outbox?.summary.failed ?? 0)}</Text>
+      <Text>Offline readiness: {offlineState}</Text>
+    </TindioCard>
+    {mode !== "online" ? <TindioFeedback description="New supported offline cash work follows the current readiness state. Existing receipts and unresolved transactions remain available." kind="restriction" title="Cloud connection unavailable" /> : null}
+    <TindioWorkspaceSection description="Preparation, cache, sequence, checkpoint, and performance details are intended for supervised support and recovery." title="Authorized diagnostics">
     <Text>Cloud Backend: {mode === "offline" ? "OFFLINE" : "CONNECTED / CHECK REQUIRED"}</Text><Text>Native SQLite: {health?.ready ? "READY — PHASE 07" : "CHECK REQUIRED"}</Text><Text>SQLite schema: {health?.schemaVersion ?? 0}/{health?.expectedSchemaVersion ?? 2}</Text><Text>SQLite integrity: {health?.integrity === "ok" ? "OK" : "CHECK REQUIRED"}</Text><Text>Business context cached: {cached === null ? "UNKNOWN" : cached ? "YES" : "NO"}</Text><Text>Business context rows: {stats?.businessContext ?? 0}</Text><Text>Reference snapshots: {stats?.reference ?? 0}</Text><Text>Catalog items: {stats?.catalog ?? 0}</Text><Text>Observed customers: {stats?.customers ?? 0}</Text><Text>Shift snapshots: {stats?.shifts ?? 0}</Text><Text>Receipt summaries: {stats?.receipts ?? 0}</Text><Text>Persistence verified: {health?.persistenceVerifiedAt ?? "NOT YET"}</Text><Text>Restart proof: {restartProof ? `${restartProof.organizationId} at ${restartProof.armedAt}` : "NOT ARMED"}</Text>
     <Text>Phase 08 Offline Authorization: {offlineState}</Text><Text>Offline authorization expires: {grant?.expiresAt ?? "NOT PREPARED"}</Text><Text>Offline organization: {grant?.organizationId ?? "—"}</Text><Text>Offline store / register: {grant ? `${grant.storeId} / ${grant.registerId}` : "—"}</Text><Text>Offline shift: {grant?.shiftId ?? "—"}</Text><Text>Complete catalog: {offlineState === "READY" ? "YES" : "NO"}</Text><Text>Cached catalog items: {stats?.catalog ?? 0}</Text><Text>Reference/configuration: {stats?.reference ? "READY" : "MISSING"}</Text>{message ? <Text accessibilityLiveRegion="polite">{message}</Text> : null}
     <Pressable onPress={() => void verify()}><Text>Verify SQLite persistence</Text></Pressable><Pressable onPress={() => void arm()}><Text>Arm Phase 07 restart proof</Text></Pressable><Pressable disabled={mode !== "online"} onPress={() => void prepare()}><Text>Prepare Offline Mode</Text></Pressable><Pressable onPress={() => void revoke()}><Text>Revoke Offline Authorization</Text></Pressable><Pressable accessibilityRole="button" testID="recheck-backend" onPress={() => void recheck()}><Text>Recheck Backend</Text></Pressable>
@@ -342,5 +359,6 @@ export default function SyncStatusScreen() {
     <Text>Sync throughput records/sec: {performance.syncThroughputPerSecond.toFixed(2)}</Text>
     <Text>Recovery duration avg / max ms: {performance.recoveryAverageDurationMs.toFixed(1)} / {performance.recoveryMaxDurationMs}</Text>
     <Pressable onPress={() => { resetPerformanceMetrics(); setMessage("Phase 22 performance window reset."); }}><Text>Reset Phase 22 performance window</Text></Pressable>
+    </TindioWorkspaceSection>
   </ScrollView>;
 }

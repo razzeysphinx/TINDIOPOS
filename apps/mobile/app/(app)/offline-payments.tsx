@@ -1,88 +1,30 @@
-import {
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
-
-import {
-  hasOfflinePaymentProvider,
-  listOfflinePaymentProviders,
-} from "../../src/features/payments/offline-payment-provider-registry";
-import {
-  failClosedOfflineElectronicPolicy,
-} from "../../src/features/payments/offline-payment-risk";
+import { hasOfflinePaymentProvider, listOfflinePaymentProviders } from "../../src/features/payments/offline-payment-provider-registry";
+import { failClosedOfflineElectronicPolicy } from "../../src/features/payments/offline-payment-risk";
+import { TindioCard } from "../../src/ui/tindio-card";
+import { TindioFeedback } from "../../src/ui/tindio-feedback";
+import { TindioScreen } from "../../src/ui/tindio-screen";
+import { TindioStatusBadge } from "../../src/ui/tindio-status-badge";
+import { TindioKeyValue, TindioWorkspaceHeader } from "../../src/ui/tindio-workspace";
 
 export default function OfflinePaymentsScreen() {
-  const providers =
-    listOfflinePaymentProviders();
-
-  const providerAvailable =
-    hasOfflinePaymentProvider();
-
+  const providers = listOfflinePaymentProviders();
+  const providerAvailable = hasOfflinePaymentProvider();
   return (
-    <ScrollView
-      contentContainerStyle={{
-        padding: 20,
-        gap: 14,
-      }}
-    >
-      <Text>
-        OFFLINE PAYMENTS + RISK ENGINE
-      </Text>
-
-      <View
-        style={{
-          gap: 5,
-        }}
-      >
-        <Text>
-          Offline cash: ENABLED THROUGH EXISTING DURABLE CASH FLOW
-        </Text>
-
-        <Text>
-          Electronic offline payments: {providerAvailable ? "PROVIDER AVAILABLE" : "DISABLED — NO COMPLIANT PSP STORE-AND-FORWARD ADAPTER"}
-        </Text>
-
-        <Text>
-          Registered offline electronic providers: {providers.length}
-        </Text>
-      </View>
-
-      <Text>
-        TINDIO never stores raw card credentials to simulate offline card acceptance.
-      </Text>
-
-      <Text>
-        Electronic offline payment can only become available when a real PSP/terminal adapter explicitly supports compliant store-and-forward.
-      </Text>
-
-      <Text>
-        Default electronic policy: {failClosedOfflineElectronicPolicy.electronicOfflineAllowed ? "ENABLED" : "FAIL CLOSED"}
-      </Text>
-
-      <Text>
-        Risk controls supported by the engine:
-      </Text>
-
-      <Text>
-        • maximum transaction amount
-      </Text>
-
-      <Text>
-        • maximum total offline exposure
-      </Text>
-
-      <Text>
-        • maximum offline duration
-      </Text>
-
-      <Text>
-        • manager approval threshold
-      </Text>
-
-      <Text>
-        No provider-specific electronic offline payment is enabled in this build.
-      </Text>
-    </ScrollView>
+    <TindioScreen scroll testID="offline-payment-diagnostics">
+      <TindioWorkspaceHeader description="Payment capabilities available when the authoritative cloud cannot be reached." eyebrow="AUTHORIZED SUPPORT" title="Offline payment policy" trailing={<TindioStatusBadge label="Electronic payments fail closed" tone="warning" />} />
+      <TindioCard title="Current release">
+        <TindioKeyValue label="Offline cash" value="Enabled through durable cash flow" />
+        <TindioKeyValue label="Offline electronic payments" value={providerAvailable ? "Provider available" : "Disabled"} />
+        <TindioKeyValue label="Registered providers" value={String(providers.length)} />
+        <TindioKeyValue label="Default electronic policy" value={failClosedOfflineElectronicPolicy.electronicOfflineAllowed ? "Enabled" : "Fail closed"} />
+      </TindioCard>
+      <TindioFeedback description="TINDIO never stores raw card credentials to simulate offline card acceptance. Electronic offline payment requires a real compliant PSP or terminal store-and-forward adapter." kind="restriction" title="No offline card simulation" />
+      <TindioCard description="The engine is ready to enforce these controls when a compliant provider enters scope." title="Risk controls">
+        <TindioKeyValue label="Transaction exposure" value="Maximum amount" />
+        <TindioKeyValue label="Aggregate exposure" value="Maximum offline total" />
+        <TindioKeyValue label="Time exposure" value="Maximum offline duration" />
+        <TindioKeyValue label="Escalation" value="Manager approval threshold" />
+      </TindioCard>
+    </TindioScreen>
   );
 }

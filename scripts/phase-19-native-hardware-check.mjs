@@ -38,10 +38,9 @@ test(
         "apps/mobile/src/features/hardware/camera-barcode-scanner.tsx",
       );
 
-    const pos =
-      read(
-        "apps/mobile/app/(app)/pos.tsx",
-      );
+    const catalogue = read(
+      "apps/mobile/src/features/cashier/cashier-catalogue.tsx",
+    );
 
     const hardwareScreen =
       read(
@@ -131,22 +130,21 @@ test(
     );
 
     assert.ok(
-      pos.includes(
-        "Scan barcode with camera",
+      catalogue.includes(
+        "Scan with camera",
       )
-      && pos.includes(
+      && catalogue.includes(
         "onSubmitEditing",
       )
-      && pos.includes(
-        "External USB/Bluetooth scanners are not supported",
+      && catalogue.includes(
+        "External scanners are not yet certified",
       ),
       "POS must expose camera/manual input without advertising uncertified HID support",
     );
 
     assert.ok(
-      hardwareScreen.includes(
-        "Hardware adapters are isolated from transaction authority.",
-      ),
+      hardwareScreen.includes("Hardware is not transaction authority")
+      && hardwareScreen.includes("must never duplicate, erase, or roll back a TINDIO transaction"),
       "hardware diagnostics must state the transaction boundary",
     );
 

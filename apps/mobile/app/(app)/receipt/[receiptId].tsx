@@ -1,6 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import type {
   PosPaymentMethod,
@@ -15,6 +15,12 @@ import {
   fetchPosV2Reference,
   refundPosV2Receipt,
 } from "../../../src/lib/tindio-api";
+import { TindioButton } from "../../../src/ui/tindio-button";
+import { TindioCard } from "../../../src/ui/tindio-card";
+import { TindioFeedback } from "../../../src/ui/tindio-feedback";
+import { TindioInput } from "../../../src/ui/tindio-input";
+import { TindioScreen } from "../../../src/ui/tindio-screen";
+import { TindioListItem, TindioWorkspaceSection } from "../../../src/ui/tindio-workspace";
 
 export default function ReceiptDetailScreen() {
   const { receiptId } = useLocalSearchParams<{ receiptId: string }>();
@@ -31,6 +37,8 @@ export default function ReceiptDetailScreen() {
   const [refundKey, setRefundKey] = useState(() => Crypto.randomUUID());
   const [deliveryKey, setDeliveryKey] = useState(() => Crypto.randomUUID());
   const [message, setMessage] = useState("");
+  const [deliveryPending, setDeliveryPending] = useState(false);
+  const [refundPending, setRefundPending] = useState(false);
 
   const core = data?.core;
   const canRefund = Boolean(core?.permissions.includes("sales.refund"));
@@ -107,10 +115,10 @@ export default function ReceiptDetailScreen() {
     [detail, quantities, refundedBySaleItem, returnToStock],
   );
 
-  if (!core) return <Text>Receipt workspace unavailable.</Text>;
+  if (!core) return <TindioScreen><TindioFeedback description="Select an authorized business before viewing this receipt." kind="restriction" title="Receipt workspace unavailable" /></TindioScreen>;
 
   if (mode !== "online") {
-    return <Text>Receipt detail, delivery, and refunds are online only.</Text>;
+    return <TindioScreen><TindioFeedback description="Official receipt detail, delivery, and refunds require connectivity. Saved device records remain available in receipt history." kind="restriction" title="Official receipt is online only" /></TindioScreen>;
   }
 
   if (!detail) {
@@ -123,8 +131,9 @@ export default function ReceiptDetailScreen() {
   }
 
   const delivery = async () => {
-    if (!canDeliver || !recipient.trim()) return;
+    if (deliveryPending || !canDeliver || !recipient.trim()) return;
 
+    setDeliveryPending(true);
     try {
       const result = await deliverPosV2Receipt(
         core.organization.id,
@@ -145,17 +154,21 @@ export default function ReceiptDetailScreen() {
       setMessage(
         "Receipt delivery status is unknown. Retry this unchanged request to reuse the same operation identity.",
       );
+    } finally {
+      setDeliveryPending(false);
     }
   };
 
   const refund = async () => {
     if (
-      !canRefund
+      refundPending
+      || !canRefund
       || !paymentMethodId
       || reason.trim().length < 2
       || selectedRefundItems.length === 0
     ) return;
 
+    setRefundPending(true);
     try {
       const result = await refundPosV2Receipt(
         core.organization.id,
@@ -187,11 +200,13 @@ export default function ReceiptDetailScreen() {
       setMessage(
         "Refund status is unknown. Do not create a new refund key. Retry this exact refund or verify the receipt first.",
       );
+    } finally {
+      setRefundPending(false);
     }
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
+    <TindioScreen scroll testID="official-receipt-workspace">
       <CashierReceiptSummary
         cashierName={detail.sale.cashierName}
         currencyCode={detail.sale.currencyCode}
@@ -222,130 +237,67 @@ export default function ReceiptDetailScreen() {
         totalMinor={detail.sale.totalMinor}
       />
 
-      {canRefund ? <Text>REFUNDABLE ITEMS</Text> : null}
-      {canRefund ? detail.items.map((item) => {
-        const refunded = refundedBySaleItem.get(item.id) ?? 0;
-        const refundable = Math.max(0, Math.floor(item.quantity - refunded));
-
-        return (
-          <View key={item.id}>
-            <Text>
-              {item.name}
-              {item.sku ? ` — ${item.sku}` : ""}
-              {" — "}
-              {item.quantity} {item.unit}
-              {" — "}
-              {formatMoney(item.lineTotalMinor, detail.sale.currencyCode)}
-            </Text>
-
-            {canRefund ? (
-              <>
-                <Text>Refundable whole quantity: {refundable}</Text>
-                <TextInput
-                  accessibilityLabel={`Refund quantity for ${item.name}`}
-                  value={quantities[item.id] ?? "0"}
-                  onChangeText={(value) =>
-                    setQuantities((current) => ({
-                      ...current,
-                      [item.id]: value.replace(/[^\d]/g, ""),
-                    }))
-                  }
-                  keyboardType="number-pad"
-                  editable={refundable > 0}
-                  placeholder="Refund qty"
-                />
-              </>
-            ) : null}
-          </View>
-        );
-      }) : null}
+      {canRefund ? (
+        <TindioWorkspaceSection description="Only whole, remaining quantities can be refunded." title="Refundable items">
+          {detail.items.map((item) => {
+            const refunded = refundedBySaleItem.get(item.id) ?? 0;
+            const refundable = Math.max(0, Math.floor(item.quantity - refunded));
+            return (
+              <TindioCard description={`Purchased ${item.quantity} ${item.unit} / refundable ${refundable}`} key={item.id} title={item.name}>
+                <TindioInput accessibilityLabel={`Refund quantity for ${item.name}`} editable={refundable > 0} keyboardType="number-pad" label="Refund quantity" onChangeText={(value) => setQuantities((current) => ({ ...current, [item.id]: value.replace(/[^\d]/g, "") }))} placeholder="0" value={quantities[item.id] ?? "0"} />
+              </TindioCard>
+            );
+          })}
+        </TindioWorkspaceSection>
+      ) : null}
 
       {detail.refunds.length ? (
-        <>
-          <Text>REFUNDS</Text>
+        <TindioWorkspaceSection title="Refund history">
           {detail.refunds.map((entry) => (
-            <View key={entry.id}>
-              <Text>
-                Refund #{entry.number}
-                {" — "}
-                {formatMoney(entry.totalMinor, detail.sale.currencyCode)}
-                {" — "}
-                {entry.reason}
-              </Text>
-              {entry.items.map((item) => (
-                <Text key={item.id}>
-                  {item.name} — {item.quantity} {item.unit}
-                </Text>
-              ))}
-            </View>
+            <TindioCard description={entry.reason} key={entry.id} title={`Refund #${entry.number} / ${formatMoney(entry.totalMinor, detail.sale.currencyCode)}`}>
+              {entry.items.map((item) => <Text key={item.id}>{item.name} / {item.quantity} {item.unit}</Text>)}
+            </TindioCard>
           ))}
-        </>
+        </TindioWorkspaceSection>
       ) : null}
 
       {canDeliver ? (
-        <>
-          <Text>EMAIL RECEIPT</Text>
-          <TextInput
-            value={recipient}
-            onChangeText={setRecipient}
-            placeholder="Email recipient"
-            keyboardType="email-address"
-          />
-          <Pressable disabled={!recipient.trim()} onPress={() => void delivery()}>
-            <Text>Email receipt</Text>
-          </Pressable>
-        </>
+        <TindioCard description="Delivery uses a stable operation identity when an outcome is unknown." title="Email receipt">
+          <TindioInput keyboardType="email-address" label="Recipient" onChangeText={setRecipient} placeholder="Email recipient" value={recipient} />
+          <TindioButton busy={deliveryPending} disabled={!recipient.trim()} onPress={() => void delivery()}>Email receipt</TindioButton>
+        </TindioCard>
       ) : null}
 
       {canRefund ? (
-        <>
-          <Text>REFUND — ONLINE ONLY</Text>
-
+        <TindioCard description="Refunds are online only. An unknown result must be retried unchanged with the original identity." title="Submit refund">
           {paymentMethods.map((method) => (
-            <Pressable
+            <TindioListItem
+              detail={method.requiresReference ? "Reference required" : undefined}
               key={method.id}
               onPress={() => setPaymentMethodId(method.id)}
-            >
-              <Text>
-                {paymentMethodId === method.id ? "✓ " : ""}
-                {method.name}
-                {method.requiresReference ? " — reference required" : ""}
-              </Text>
-            </Pressable>
+              selected={paymentMethodId === method.id}
+              title={method.name}
+            />
           ))}
-
-          <TextInput
-            value={referenceNumber}
-            onChangeText={setReferenceNumber}
-            placeholder="Refund reference"
-            maxLength={120}
-          />
-
-          <TextInput
-            value={reason}
-            onChangeText={setReason}
-            placeholder="Refund reason"
-            maxLength={500}
-          />
-
-          <Pressable onPress={() => setReturnToStock((current) => !current)}>
-            <Text>{returnToStock ? "✓ " : ""}Return eligible items to stock</Text>
-          </Pressable>
-
-          <Pressable
+          <TindioInput label="Refund reference" maxLength={120} onChangeText={setReferenceNumber} placeholder="Reference" value={referenceNumber} />
+          <TindioInput label="Refund reason" maxLength={500} onChangeText={setReason} placeholder="Required reason" value={reason} />
+          <TindioListItem onPress={() => setReturnToStock((current) => !current)} selected={returnToStock} title="Return eligible items to stock" />
+          <TindioButton
+            busy={refundPending}
             disabled={
               !paymentMethodId
               || reason.trim().length < 2
               || selectedRefundItems.length === 0
             }
             onPress={() => void refund()}
+            variant="destructive"
           >
-            <Text>Submit selected refund</Text>
-          </Pressable>
-        </>
+            Submit selected refund
+          </TindioButton>
+        </TindioCard>
       ) : null}
 
-      <Text>{message}</Text>
-    </ScrollView>
+      {message ? <TindioFeedback description={message} kind="review" title="Receipt update" /> : null}
+    </TindioScreen>
   );
 }

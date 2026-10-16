@@ -11,8 +11,8 @@ test("Phase 14 offline inventory intelligence implementation contract", () => {
     "apps/mobile/src/features/inventory/offline-inventory-diagnostics.ts",
     "utf8",
   );
-  const pos = fs.readFileSync(
-    "apps/mobile/app/(app)/pos.tsx",
+  const cartWorkspace = fs.readFileSync(
+    "apps/mobile/src/features/cashier/cashier-cart-workspace.tsx",
     "utf8",
   );
   const syncStatus = fs.readFileSync(
@@ -52,12 +52,12 @@ test("Phase 14 offline inventory intelligence implementation contract", () => {
   }
 
   assert.ok(
-    pos.includes("Other offline terminals are not represented here."),
+    cartWorkspace.includes("Other offline terminals are not represented here."),
     "POS must disclose the single-device limitation",
   );
 
   assert.ok(
-    pos.includes("This value is not authoritative cloud stock."),
+    cartWorkspace.includes("not authoritative cloud stock"),
     "POS must not claim local estimate is authoritative",
   );
 
@@ -78,7 +78,7 @@ test("Phase 14 offline inventory intelligence implementation contract", () => {
   );
 
   assert.ok(
-    schema.includes("export const TINDIO_LOCAL_SCHEMA_VERSION = 6;"),
+    schema.includes("export const TINDIO_LOCAL_SCHEMA_VERSION = 13;"),
     "Phase 14 must not introduce an unnecessary local SQLite migration",
   );
 

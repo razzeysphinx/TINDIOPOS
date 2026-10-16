@@ -33,8 +33,8 @@ test("Phase 16 Slice 03 isolated diagnostics", () => {
   }
 
   assert.ok(
-    home.includes("RECOVERING — CLOUD RETURNED")
-    && home.includes("SYNC REVIEW REQUIRED"),
+    home.includes("Reconnecting saved work")
+    && home.includes("Review required"),
     "home must distinguish recovery/review from isolated mode",
   );
 

@@ -90,8 +90,8 @@ test("A36 offline ticket and electronic payment paths remain fail closed", () =>
   const payments = read("apps/mobile/app/(app)/offline-payments.tsx");
   const risk = read("apps/mobile/src/features/payments/offline-payment-risk.ts");
   assert.match(pos, /disabled=\{mode !== "online"\}/);
-  assert.match(tickets, /ONLINE ONLY/);
-  assert.match(payments, /NO COMPLIANT PSP STORE-AND-FORWARD ADAPTER/);
+  assert.match(tickets, /online only/i);
+  assert.match(payments, /Electronic payments fail closed/);
   assert.match(payments, /never stores raw card credentials/);
   assert.match(risk, /electronicOfflineAllowed: false/);
 });

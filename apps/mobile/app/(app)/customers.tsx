@@ -1,30 +1,31 @@
 import { useState } from "react";
-import { Pressable, ScrollView, Text, TextInput } from "react-native";
+
 import type { PosCustomer } from "../../../../src/contracts/pos";
-import {
-  saveCustomerSearchResults,
-  searchCachedCustomers,
-} from "../../src/db/customer-cache";
+import { saveCustomerSearchResults, searchCachedCustomers } from "../../src/db/customer-cache";
 import { useBusinessContext } from "../../src/features/business/use-business-context";
 import { useTerminalDevice } from "../../src/features/device/use-terminal-device";
-import {
-  createPosV2Customer,
-  searchPosV2Customers,
-} from "../../src/lib/tindio-api";
+import { createPosV2Customer, searchPosV2Customers } from "../../src/lib/tindio-api";
+import { TindioButton } from "../../src/ui/tindio-button";
+import { TindioCard } from "../../src/ui/tindio-card";
+import { TindioFeedback } from "../../src/ui/tindio-feedback";
+import { TindioInput } from "../../src/ui/tindio-input";
+import { TindioScreen } from "../../src/ui/tindio-screen";
+import { TindioListItem, TindioWorkspaceHeader, TindioWorkspaceSection } from "../../src/ui/tindio-workspace";
 
 export default function Customers() {
   const { data, mode } = useBusinessContext();
   const terminal = useTerminalDevice(data?.core.organization.id);
-
   const [query, setQuery] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [rows, setRows] = useState<PosCustomer[]>([]);
   const [message, setMessage] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   if (!data || !terminal.identity?.binding) {
-    return <Text>Customer workspace requires an enrolled terminal.</Text>;
+    return <TindioScreen><TindioFeedback description="Enroll and assign this terminal before accessing store customers." kind="restriction" title="Customer workspace unavailable" /></TindioScreen>;
   }
 
   const { core } = data;
@@ -32,52 +33,33 @@ export default function Customers() {
   const canCreate = core.permissions.includes("customers.manage");
 
   const search = async () => {
+    if (searching) return;
+    setSearching(true);
     try {
       if (mode === "online") {
-        const result = await searchPosV2Customers(
-          core.organization.id,
-          binding.storeId,
-          query,
-        );
+        const result = await searchPosV2Customers(core.organization.id, binding.storeId, query);
         setRows(result.customers);
-        await saveCustomerSearchResults(
-          core.organization.id,
-          binding.storeId,
-          result,
-        );
-        setMessage("SERVER CUSTOMERS");
+        await saveCustomerSearchResults(core.organization.id, binding.storeId, result);
+        setMessage("Customer results are up to date.");
         return;
       }
-
-      setRows(
-        await searchCachedCustomers(
-          core.organization.id,
-          binding.storeId,
-          query,
-        ),
-      );
-      setMessage("CACHED CUSTOMERS — READ ONLY");
+      setRows(await searchCachedCustomers(core.organization.id, binding.storeId, query));
+      setMessage("Showing customers saved on this device. Search and creation require a connection.");
     } catch {
       setMessage("Customer search unavailable.");
+    } finally {
+      setSearching(false);
     }
   };
 
   const create = async () => {
-    if (mode !== "online" || !canCreate || !name.trim()) return;
-
+    if (creating || mode !== "online" || !canCreate || !name.trim()) return;
+    setCreating(true);
     try {
       const result = await createPosV2Customer(core.organization.id, {
-        fullName: name.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        address: "",
-        birthday: "",
-        notes: "",
-        loyaltyCardCode: "",
+        fullName: name.trim(), email: email.trim(), phone: phone.trim(), address: "", birthday: "", notes: "", loyaltyCardCode: "",
       });
-
       setMessage(result.message);
-
       if (result.ok) {
         setName("");
         setEmail("");
@@ -86,63 +68,37 @@ export default function Customers() {
       }
     } catch {
       setMessage("Customer creation could not be confirmed.");
+    } finally {
+      setCreating(false);
     }
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
-      <Text>Customers</Text>
+    <TindioScreen scroll testID="customers-workspace">
+      <TindioWorkspaceHeader description="Find a customer for the current store or add one while connected." eyebrow="CUSTOMERS" title="Customer directory" />
+      {mode !== "online" ? <TindioFeedback description="You can search customers already saved on this device. Creating a customer requires a connection." kind="restriction" title="Offline customer access" /> : null}
 
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Name, phone, email or customer number"
-      />
+      <TindioCard>
+        <TindioInput accessibilityLabel="Customer search" label="Search" onChangeText={setQuery} placeholder="Name, phone, email or customer number" value={query} />
+        <TindioButton busy={searching} onPress={() => void search()}>{mode === "online" ? "Search customers" : "Search saved customers"}</TindioButton>
+      </TindioCard>
 
-      <Pressable onPress={() => void search()}>
-        <Text>{mode === "online" ? "Search customers" : "Search cached customers"}</Text>
-      </Pressable>
-
-      {rows.map((row) => (
-        <Text key={row.id}>
-          {row.fullName} — #{row.customerNumber} — loyalty {row.loyaltyPoints}
-          {row.phone ? ` — ${row.phone}` : ""}
-          {row.email ? ` — ${row.email}` : ""}
-        </Text>
-      ))}
+      <TindioWorkspaceSection description="Results are scoped to the assigned store." title="Results">
+        {rows.length ? rows.map((row) => (
+          <TindioListItem detail={[row.phone, row.email].filter(Boolean).join(" / ") || "No contact details"} key={row.id} meta={`#${row.customerNumber} / ${row.loyaltyPoints} points`} title={row.fullName} />
+        )) : <TindioFeedback description="Search by name, phone, email, or customer number." kind="empty" title="No customers shown" />}
+      </TindioWorkspaceSection>
 
       {canCreate ? (
-        <>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="New customer name"
-            editable={mode === "online"}
-          />
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Email"
-            keyboardType="email-address"
-            editable={mode === "online"}
-          />
-          <TextInput
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="Phone"
-            editable={mode === "online"}
-          />
-
-          <Pressable
-            disabled={mode !== "online" || !name.trim()}
-            onPress={() => void create()}
-          >
-            <Text>Create customer online</Text>
-          </Pressable>
-        </>
+        <TindioCard description="New customers are created in the connected business account." title="Add customer">
+          <TindioInput editable={mode === "online"} label="Full name" onChangeText={setName} placeholder="New customer name" value={name} />
+          <TindioInput editable={mode === "online"} keyboardType="email-address" label="Email" onChangeText={setEmail} placeholder="Email" value={email} />
+          <TindioInput editable={mode === "online"} label="Phone" onChangeText={setPhone} placeholder="Phone" value={phone} />
+          <TindioButton busy={creating} disabled={mode !== "online" || !name.trim()} onPress={() => void create()}>Create customer</TindioButton>
+        </TindioCard>
       ) : null}
 
-      <Text>{message}</Text>
-    </ScrollView>
+      {message ? <TindioFeedback description={message} kind="review" title="Customer update" /> : null}
+    </TindioScreen>
   );
 }

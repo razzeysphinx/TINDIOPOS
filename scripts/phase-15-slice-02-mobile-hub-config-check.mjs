@@ -65,7 +65,7 @@ test("Phase 15 Slice 02 mobile Store Hub config", () => {
   );
 
   assert.ok(
-    settings.includes("PRIVATE LAN ONLY"),
+    settings.includes("private-network capability"),
     "Settings must explain Store Hub LAN scope",
   );
 });

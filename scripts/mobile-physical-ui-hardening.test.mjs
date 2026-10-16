@@ -6,6 +6,8 @@ const read = (path) => readFileSync(path, "utf8");
 
 test("A49 POS keeps checkout controls scrollable with a resizing keyboard and large text", () => {
   const pos = read("apps/mobile/app/(app)/pos.tsx");
+  const tenderPanel = read("apps/mobile/src/features/cashier/cashier-tender-panel.tsx");
+  const button = read("apps/mobile/src/ui/tindio-button.tsx");
   const config = JSON.parse(read("apps/mobile/app.json"));
 
   assert.equal(config.expo.android.softwareKeyboardLayoutMode, "resize");
@@ -14,25 +16,24 @@ test("A49 POS keeps checkout controls scrollable with a resizing keyboard and la
   assert.match(pos, /automaticallyAdjustKeyboardInsets/);
   assert.match(pos, /keyboardDismissMode="on-drag"/);
   assert.match(pos, /keyboardShouldPersistTaps="handled"/);
-  assert.match(pos, /testID="checkout-panel"/);
-  assert.match(pos, /testID="cash-tender-input"/);
-  assert.match(pos, /testID="save-offline-cash-sale"/);
-  assert.match(pos, /testID="complete-online-cash-checkout"/);
+  assert.match(tenderPanel, /testID="checkout-panel"/);
+  assert.match(tenderPanel, /testID="cash-tender-input"/);
+  assert.match(tenderPanel, /testID="save-offline-cash-sale"/);
+  assert.match(tenderPanel, /testID="complete-online-cash-checkout"/);
 
   const scrollStart = pos.indexOf("<ScrollView");
   const scrollEnd = pos.lastIndexOf("</ScrollView>");
-  const checkoutPanel = pos.indexOf('testID="checkout-panel"');
-  const tender = pos.indexOf('testID="cash-tender-input"');
+  const checkoutPanel = pos.indexOf("<CashierTenderPanel");
   assert.ok(
     scrollStart >= 0
       && checkoutPanel > scrollStart
-      && tender > checkoutPanel
-      && scrollEnd > tender,
+      && scrollEnd > checkoutPanel,
     "tender and checkout actions must remain inside the scrollable keyboard-aware surface",
   );
-  assert.match(pos, /accessibilityLabel="Cash tendered"[\s\S]*?style=\{\{ minHeight: 48 \}\}[\s\S]*?testID="cash-tender-input"/);
-  assert.match(pos, /testID="save-offline-cash-sale"[\s\S]*?style=\{\{ minHeight: 48, justifyContent: "center" \}\}/);
-  assert.match(pos, /testID="complete-online-cash-checkout"[\s\S]*?style=\{\{ minHeight: 48, justifyContent: "center" \}\}/);
+  assert.match(tenderPanel, /accessibilityLabel="Cash tendered"[\s\S]*?testID="cash-tender-input"/);
+  assert.match(tenderPanel, /busy=\{savingOffline\}[\s\S]*?testID="save-offline-cash-sale"/);
+  assert.match(tenderPanel, /busy=\{onlineCheckoutPending\}[\s\S]*?testID="complete-online-cash-checkout"/);
+  assert.match(button, /minHeight: tindioTheme\.target\.minimum/);
 });
 
 test("A49 sign-in and cashier editors remain reachable with keyboard and enlarged text", () => {

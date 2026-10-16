@@ -6,6 +6,7 @@ import type {
   PosPaymentMethod,
   PosReceiptDetail,
 } from "../../../../../src/contracts/pos";
+import { CashierReceiptSummary } from "../../../src/features/cashier/cashier-receipt-summary";
 import { formatMoney } from "../../../src/features/cashier/cashier-format";
 import { useBusinessContext } from "../../../src/features/business/use-business-context";
 import {
@@ -191,14 +192,38 @@ export default function ReceiptDetailScreen() {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
-      <Text>Receipt #{detail.receipt.number}</Text>
-      <Text>{detail.sale.organizationName}</Text>
-      <Text>{detail.sale.storeName} / {detail.sale.registerName}</Text>
-      <Text>Cashier: {detail.sale.cashierName}</Text>
-      <Text>{detail.receipt.issuedAt}</Text>
+      <CashierReceiptSummary
+        cashierName={detail.sale.cashierName}
+        currencyCode={detail.sale.currencyCode}
+        discountMinor={detail.sale.discountMinor}
+        issuedAt={detail.receipt.issuedAt}
+        lines={detail.items.map((item) => ({
+          detail: item.sku,
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          totalMinor: item.lineTotalMinor,
+          unit: item.unit,
+        }))}
+        organizationName={detail.sale.organizationName}
+        payments={detail.payments.map((payment) => ({
+          amountMinor: payment.amountMinor,
+          changeMinor: payment.changeMinor,
+          id: payment.id,
+          name: payment.name,
+          tenderedMinor: payment.tenderedMinor,
+        }))}
+        reference={String(detail.receipt.number)}
+        registerName={detail.sale.registerName}
+        status="official"
+        storeName={detail.sale.storeName}
+        subtotalMinor={detail.sale.subtotalMinor}
+        taxMinor={detail.sale.taxMinor}
+        totalMinor={detail.sale.totalMinor}
+      />
 
-      <Text>ITEMS</Text>
-      {detail.items.map((item) => {
+      {canRefund ? <Text>REFUNDABLE ITEMS</Text> : null}
+      {canRefund ? detail.items.map((item) => {
         const refunded = refundedBySaleItem.get(item.id) ?? 0;
         const refundable = Math.max(0, Math.floor(item.quantity - refunded));
 
@@ -217,6 +242,7 @@ export default function ReceiptDetailScreen() {
               <>
                 <Text>Refundable whole quantity: {refundable}</Text>
                 <TextInput
+                  accessibilityLabel={`Refund quantity for ${item.name}`}
                   value={quantities[item.id] ?? "0"}
                   onChangeText={(value) =>
                     setQuantities((current) => ({
@@ -232,35 +258,7 @@ export default function ReceiptDetailScreen() {
             ) : null}
           </View>
         );
-      })}
-
-      <Text>
-        Subtotal {formatMoney(detail.sale.subtotalMinor, detail.sale.currencyCode)}
-      </Text>
-      <Text>
-        Discount {formatMoney(detail.sale.discountMinor, detail.sale.currencyCode)}
-      </Text>
-      <Text>
-        Tax {formatMoney(detail.sale.taxMinor, detail.sale.currencyCode)}
-      </Text>
-      <Text>
-        Total {formatMoney(detail.sale.totalMinor, detail.sale.currencyCode)}
-      </Text>
-
-      <Text>PAYMENTS</Text>
-      {detail.payments.map((payment) => (
-        <Text key={payment.id}>
-          {payment.name}
-          {" — "}
-          {formatMoney(payment.amountMinor, detail.sale.currencyCode)}
-          {payment.tenderedMinor !== null
-            ? ` — tendered ${formatMoney(payment.tenderedMinor, detail.sale.currencyCode)}`
-            : ""}
-          {payment.changeMinor !== null
-            ? ` — change ${formatMoney(payment.changeMinor, detail.sale.currencyCode)}`
-            : ""}
-        </Text>
-      ))}
+      }) : null}
 
       {detail.refunds.length ? (
         <>

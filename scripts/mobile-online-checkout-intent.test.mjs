@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 const intentSource = fs.readFileSync("apps/mobile/src/db/checkout-intents.ts", "utf8");
 const schemaSource = fs.readFileSync("apps/mobile/src/db/schema.ts", "utf8");
 const posSource = fs.readFileSync("apps/mobile/app/(app)/pos.tsx", "utf8");
+const tenderSource = fs.readFileSync("apps/mobile/src/features/cashier/cashier-tender-panel.tsx", "utf8");
 const cacheAdminSource = fs.readFileSync("apps/mobile/src/db/cache-admin.ts", "utf8");
 const custodySource = fs.readFileSync("apps/mobile/src/features/offline/transaction-custody.ts", "utf8");
 
@@ -167,7 +168,8 @@ test("MOB-01 POS persists before send, recovers on startup, and blocks new offli
   assert.match(posSource, /onlineIntent\.storeId === binding\.storeId/);
   assert.match(posSource, /onlineIntent\.registerId === binding\.registerId/);
   assert.match(posSource, /!onlineIntentMatchesCurrentContext/);
-  assert.match(posSource, /RETRY ORIGINAL ONLINE CHECKOUT/);
+  assert.match(tenderSource, /Retry original checkout/);
+  assert.match(tenderSource, /Offline fallback stays blocked until its result is resolved/);
 });
 
 test("MOB-01 corrupt durable payloads fail closed instead of disappearing", () => {

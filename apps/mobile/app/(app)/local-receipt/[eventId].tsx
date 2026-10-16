@@ -1,7 +1,8 @@
 import * as Crypto from "expo-crypto";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+
 import {
   getLocalReceipt,
   listReceiptCopyJobs,
@@ -9,15 +10,19 @@ import {
   type LocalReceipt,
   type ReceiptCopyJob,
 } from "../../../src/db/local-receipts";
-import { formatMoney } from "../../../src/features/cashier/cashier-format";
+import { CashierReceiptSummary } from "../../../src/features/cashier/cashier-receipt-summary";
 import { useBusinessContext } from "../../../src/features/business/use-business-context";
+import { TindioButton } from "../../../src/ui/tindio-button";
+import { TindioFeedback } from "../../../src/ui/tindio-feedback";
+import { TindioScreen } from "../../../src/ui/tindio-screen";
+import { tindioTheme } from "../../../src/ui/theme";
 
 export default function LocalReceiptDetail() {
   const params = useLocalSearchParams<{ eventId?: string | string[] }>();
   const { data } = useBusinessContext();
   const [receipt, setReceipt] = useState<LocalReceipt | null>(null);
   const [copies, setCopies] = useState<ReceiptCopyJob[]>([]);
-  const [message, setMessage] = useState("Loading saved receipt…");
+  const [message, setMessage] = useState("Loading saved receipt...");
   const eventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
   const organizationId = data?.core.organization.id;
   const storeIds = data?.core.storeIds;
@@ -40,8 +45,21 @@ export default function LocalReceiptDetail() {
     return () => { active = false; };
   }, [eventId, mayView, organizationId, storeIds]);
 
-  if (!data) return <Text>Receipt workspace unavailable.</Text>;
-  if (!mayView) return <Text>Receipt access is not permitted.</Text>;
+  if (!data) {
+    return (
+      <TindioScreen>
+        <TindioFeedback description="Select an authorized business before viewing this record." kind="restriction" title="Receipt workspace unavailable" />
+      </TindioScreen>
+    );
+  }
+
+  if (!mayView) {
+    return (
+      <TindioScreen>
+        <TindioFeedback description="Your current role does not include receipt access." kind="restriction" title="Receipt access is not permitted" />
+      </TindioScreen>
+    );
+  }
 
   const prepareCopy = async () => {
     if (!receipt || !data.core.permissions.includes("receipts.reprint")) return;
@@ -66,54 +84,87 @@ export default function LocalReceiptDetail() {
     }
   };
 
+  const snapshot = receipt?.snapshot;
+  const modernSnapshot = snapshot?.version === 2 ? snapshot : null;
+
   return (
-    <ScrollView contentContainerStyle={{ padding: 20, gap: 10 }}>
-      <Text>Saved receipt</Text>
-      {receipt ? (
+    <TindioScreen scroll testID="local-receipt-result">
+      {receipt && snapshot ? (
         <>
-          <Text>
-            {receipt.officialReceiptNumber === null
-              ? "PROVISIONAL SALE RECORD — NOT AN OFFICIAL RECEIPT"
-              : `OFFICIAL RECEIPT #${receipt.officialReceiptNumber}`}
-          </Text>
-          <Text>{receipt.localReference}</Text>
-          <Text>{new Date(receipt.createdAt).toLocaleString()}</Text>
-          {receipt.snapshot.version === 2 ? (
-            <>
-              <Text>{receipt.snapshot.organizationName}</Text>
-              <Text>{receipt.snapshot.storeName} — {receipt.snapshot.registerName}</Text>
-              <Text>Cashier: {receipt.snapshot.employeeName}</Text>
-              {receipt.snapshot.lines.map((line) => (
-                <Text key={line.lineNumber}>
-                  {line.quantity} {line.unit} × {line.productName}
-                  {line.variantName ? ` — ${line.variantName}` : ""}
-                  {" — "}{formatMoney(line.lineTotalMinor, receipt.snapshot.currencyCode)}
-                </Text>
-              ))}
-            </>
-          ) : (
-            <Text>Legacy saved sale: item detail was not captured by this older app version.</Text>
-          )}
-          <Text>Subtotal: {formatMoney(receipt.snapshot.subtotalMinor, receipt.snapshot.currencyCode)}</Text>
-          <Text>Discount: {formatMoney(receipt.snapshot.discountMinor, receipt.snapshot.currencyCode)}</Text>
-          <Text>Tax: {formatMoney(receipt.snapshot.taxMinor, receipt.snapshot.currencyCode)}</Text>
-          <Text>Total: {formatMoney(receipt.snapshot.totalMinor, receipt.snapshot.currencyCode)}</Text>
-          <Text>Tendered: {formatMoney(receipt.snapshot.tenderedMinor, receipt.snapshot.currencyCode)}</Text>
-          <Text>Change: {formatMoney(receipt.snapshot.changeMinor, receipt.snapshot.currencyCode)}</Text>
-          {data.core.permissions.includes("receipts.reprint") ? (
-            <Pressable accessibilityRole="button" onPress={() => void prepareCopy()}>
-              <Text>Prepare duplicate copy</Text>
-            </Pressable>
+          <CashierReceiptSummary
+            cashierName={modernSnapshot?.employeeName}
+            currencyCode={snapshot.currencyCode}
+            discountMinor={snapshot.discountMinor}
+            issuedAt={receipt.createdAt}
+            lines={(modernSnapshot?.lines ?? []).map((line) => ({
+              detail: line.variantName,
+              id: line.lineNumber,
+              name: line.productName,
+              quantity: line.quantity,
+              totalMinor: line.lineTotalMinor,
+              unit: line.unit,
+            }))}
+            organizationName={modernSnapshot?.organizationName}
+            payments={[{
+              amountMinor: snapshot.totalMinor,
+              changeMinor: snapshot.changeMinor,
+              id: modernSnapshot?.payment.methodId ?? "cash",
+              name: modernSnapshot?.payment.methodName ?? "Cash",
+              tenderedMinor: snapshot.tenderedMinor,
+            }]}
+            reference={receipt.officialReceiptNumber === null ? receipt.localReference : String(receipt.officialReceiptNumber)}
+            registerName={modernSnapshot?.registerName}
+            status={receipt.officialReceiptNumber === null ? "provisional" : "official"}
+            storeName={modernSnapshot?.storeName}
+            subtotalMinor={snapshot.subtotalMinor}
+            taxMinor={snapshot.taxMinor}
+            totalMinor={snapshot.totalMinor}
+          />
+
+          {modernSnapshot === null ? (
+            <TindioFeedback
+              description="Item detail was not captured by the older app version that saved this sale. The stored totals remain the durable record."
+              kind="review"
+              title="Legacy saved sale"
+            />
           ) : null}
-          <Text>Copy history</Text>
-          {copies.map((copy) => (
-            <Text key={copy.jobId}>
-              DUPLICATE COPY {copy.copyNumber} — {copy.documentKind} — {copy.state}
-            </Text>
-          ))}
+
+          {data.core.permissions.includes("receipts.reprint") ? (
+            <TindioButton onPress={() => void prepareCopy()} variant="secondary">
+              Prepare duplicate copy
+            </TindioButton>
+          ) : null}
+
+          <View style={styles.copySection}>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>Copy history</Text>
+            {copies.length ? copies.map((copy) => (
+              <View key={copy.jobId} style={styles.copyCard}>
+                <Text style={styles.copyTitle}>Duplicate copy {copy.copyNumber}</Text>
+                <Text style={styles.copyMeta}>{copy.documentKind} / {copy.state}</Text>
+              </View>
+            )) : (
+              <Text style={styles.emptyCopy}>No duplicate copies prepared.</Text>
+            )}
+          </View>
         </>
       ) : null}
-      <Text>{message}</Text>
-    </ScrollView>
+
+      {message ? (
+        <TindioFeedback
+          description={message}
+          kind={message.startsWith("Loading") ? "loading" : "review"}
+          title={message.startsWith("Loading") ? "Loading receipt" : "Receipt update"}
+        />
+      ) : null}
+    </TindioScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  copySection: { gap: tindioTheme.space.sm },
+  sectionTitle: { ...tindioTheme.typography.role.section, color: tindioTheme.color.content.primary },
+  copyCard: { backgroundColor: tindioTheme.color.surface.card, borderColor: tindioTheme.color.border.default, borderRadius: tindioTheme.radius.md, borderWidth: 1, gap: tindioTheme.space.xxs, padding: tindioTheme.space.md },
+  copyTitle: { ...tindioTheme.typography.role.label, color: tindioTheme.color.content.primary },
+  copyMeta: { ...tindioTheme.typography.role.caption, color: tindioTheme.color.content.secondary },
+  emptyCopy: { ...tindioTheme.typography.role.body, color: tindioTheme.color.content.secondary },
+});

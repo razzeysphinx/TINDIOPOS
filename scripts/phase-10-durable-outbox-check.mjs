@@ -10,13 +10,16 @@ test("Phase 10 durable outbox contract", () => {
   const acceptance = read("apps/mobile/src/features/outbox/create-offline-sale.ts");
   const sync = read("apps/mobile/src/features/outbox/outbox-sync.ts");
   const pos = read("apps/mobile/app/(app)/pos.tsx");
+  const tender = read("apps/mobile/src/features/cashier/cashier-tender-panel.tsx");
   const cacheAdmin = read("apps/mobile/src/db/cache-admin.ts");
 
   for (const text of ["TINDIO_LOCAL_SCHEMA_VERSION = 13", "outbox_events", "SALE_COMPLETED", "idx_outbox_pending"]) assert.ok(schema.includes(text));
   for (const text of ["withExclusiveTransactionAsync", "LOCAL_PENDING", "recoverInterruptedOutboxEvents", "getOldestUnresolvedOutboxEvent"]) assert.ok(outbox.includes(text));
   for (const text of ["validateOfflineAuthorizationGrant", "ELIGIBLE_CASH_PAYMENT_METHOD_REQUIRED", "Crypto.randomUUID", "OFF-"]) assert.ok(acceptance.includes(text));
   for (const text of ["pushPosV2SyncBatch", "runOutboxSingleFlight", "for (const event of events)", "loadMobileDeviceIdentity", "SYNCING", "CONFLICT", "FAILED"]) assert.ok(sync.includes(text));
-  assert.ok(pos.includes("SAVE OFFLINE CASH SALE") && pos.includes("SAVED LOCALLY"));
+  assert.match(pos, /createOfflineCashSale/);
+  assert.match(tender, /Sale saved on this device/);
+  assert.match(tender, /durably accepted on this register/);
   for (const text of ["outbox_events", "local_receipts", "device_sync_state", "sync_cursors", "intentionally excluded"]) assert.ok(cacheAdmin.includes(text));
   for (const text of ["device_sequence", "server_checkpoint", "sync_cursors"]) assert.ok(schema.includes(text));
   assert.doesNotMatch(sync, /Promise\.all/);

@@ -11,6 +11,7 @@ const outboxSource = read("apps/mobile/src/db/outbox.ts");
 const syncSource = read("apps/mobile/src/features/outbox/outbox-sync.ts");
 const cacheSource = read("apps/mobile/src/db/cache-admin.ts");
 const detailSource = read("apps/mobile/app/(app)/local-receipt/[eventId].tsx");
+const summarySource = read("apps/mobile/src/features/cashier/cashier-receipt-summary.tsx");
 
 function templateAfter(source, marker) {
   const markerAt = source.indexOf(marker);
@@ -164,5 +165,7 @@ test("MOB-07 product wiring uses v2 committed data and never treats copy prepara
   assert.doesNotMatch(cacheSource, /ORGANIZATION_TABLES[^\n]*local_receipts/);
   assert.match(cacheSource, /local_receipts, receipt_copy_jobs/);
   assert.match(detailSource, /No physical printer adapter is configured/);
-  assert.match(detailSource, /PROVISIONAL SALE RECORD — NOT AN OFFICIAL RECEIPT/);
+  assert.match(detailSource, /status=\{receipt\.officialReceiptNumber === null \? "provisional" : "official"\}/);
+  assert.match(summarySource, /durable sale evidence, not an official receipt/);
+  assert.match(summarySource, /official receipt number is added after synchronization/);
 });

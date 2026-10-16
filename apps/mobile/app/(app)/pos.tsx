@@ -37,7 +37,10 @@ import { CashierCatalogue } from "../../src/features/cashier/cashier-catalogue";
 import { CashierCartWorkspace } from "../../src/features/cashier/cashier-cart-workspace";
 import { ModifierPicker, VariablePriceEditor } from "../../src/features/cashier/cashier-editors";
 import { cashierFeatureGates } from "../../src/features/cashier/cashier-feature-gates";
-import { formatMoney } from "../../src/features/cashier/cashier-format";
+import {
+  CashierTenderPanel,
+  type CashierSaleResult,
+} from "../../src/features/cashier/cashier-tender-panel";
 import {
   cartSupportsDurableOfflineCash,
   offlineCashCartRestriction,
@@ -149,6 +152,7 @@ export default function PosScreen() {
   const [cartInventoryIntelligence, setCartInventoryIntelligence] =
     useState<CartInventoryIntelligenceLine[]>([]);
   const [saleMessage, setSaleMessage] = useState<string | null>(null);
+  const [saleResult, setSaleResult] = useState<CashierSaleResult | null>(null);
   const [savingOffline, setSavingOffline] = useState(false);
   const [onlineCheckoutPending, setOnlineCheckoutPending] = useState(false);
   const [checkoutKey, setCheckoutKey] = useState(() => Crypto.randomUUID());
@@ -349,6 +353,34 @@ export default function PosScreen() {
   const offlineCartRestriction = offlineCashCartRestriction(cart, offlineCartInput);
   const offlineCartEligible = cartSupportsDurableOfflineCash(cart, offlineCartInput);
   const offlineSaleReady = canAcceptOfflineSale(cashierReadinessState);
+  const offlinePaymentDisabled = (
+    onlineIntentLoading
+    || savingOffline
+    || !offlineSaleReady
+    || Boolean(onlineIntent)
+    || !offlineCartEligible
+    || cart.length === 0
+    || tenderedMinor === null
+    || tenderedMinor < totals.totalMinor
+  );
+  const onlinePaymentDisabled = (
+    mode !== "online"
+    || onlineCheckoutPending
+    || onlineIntentLoading
+    || !canCreateSales
+    || !canAcceptPayments
+    || !onlineIntentMatchesCurrentContext
+    || (
+      !onlineIntent
+      && (
+        !shiftMatches
+        || !cashMethod
+        || cart.length === 0
+        || tenderedMinor === null
+        || tenderedMinor < totals.totalMinor
+      )
+    )
+  );
 
   useEffect(() => {
     if (!core || !binding || !identity) return;
@@ -384,6 +416,7 @@ export default function PosScreen() {
   }
 
   const markCartChanged = () => {
+    setSaleResult(null);
     if (onlineIntent) {
       setSaleMessage(
         "The unresolved online checkout is frozen. Retry its original payload before starting another sale.",
@@ -815,11 +848,16 @@ export default function PosScreen() {
         return;
       }
 
-      clearSaleState();
+      const acceptedResult: CashierSaleResult = {
+        kind: "saved",
+        reference: result.event.localReference,
+        totalMinor: result.event.snapshot.totalMinor,
+        changeMinor: result.event.snapshot.changeMinor,
+      };
 
-      setSaleMessage(
-        `SAVED LOCALLY ${result.event.localReference}. Change due: ${formatMoney(result.event.snapshot.changeMinor, core.organization.currencyCode)}.`,
-      );
+      clearSaleState();
+      setSaleMessage(null);
+      setSaleResult(acceptedResult);
 
       if (mode === "online") {
         void syncOutboxEvents(core.organization.id);
@@ -909,8 +947,17 @@ export default function PosScreen() {
           intent.intentId,
           result.data,
         );
+        const acceptedResult: CashierSaleResult = {
+          kind: "official",
+          reference: String(result.data.receiptNumber),
+          totalMinor: result.data.totalMinor,
+          changeMinor: result.data.changeMinor,
+          replayed: result.data.wasReplayed,
+        };
+
         clearSaleState();
-        setSaleMessage(`SERVER RECEIPT #${result.data.receiptNumber}`);
+        setSaleMessage(null);
+        setSaleResult(acceptedResult);
         void syncOutboxEvents(core.organization.id);
         return;
       }
@@ -1137,123 +1184,30 @@ export default function PosScreen() {
         </View>
       ) : null}
 
-      {onlineIntent && !onlineIntentMatchesCurrentContext ? (
-        <Text>
-          This unresolved checkout belongs to its original employee, shift, store, and register.
-          Restore that operating context or reconcile it under supervised recovery; do not start a new sale.
-        </Text>
-      ) : null}
-
-      <Text>Current checkout operation: {checkoutKey}</Text>
-      <Text>
-        The operation key remains unchanged after an ambiguous retry and rotates only when the sale meaning changes or completes.
-      </Text>
-
-      <View
-        style={{
-          backgroundColor: "white",
-          borderTopColor: "#d1d5db",
-          borderTopWidth: 1,
-          gap: 8,
-          paddingBottom: 20,
-          paddingHorizontal: 20,
-          paddingTop: 12,
-        }}
-        testID="checkout-panel"
-      >
-      <Text>
-        Checkout total: {formatMoney(totals.totalMinor, core.organization.currencyCode)}
-      </Text>
-
-      <TextInput
-        accessibilityLabel="Cash tendered"
-        value={cashTender}
-        onChangeText={setCashTender}
-        keyboardType="decimal-pad"
-        placeholder="Cash tendered, e.g. 20.00"
-        returnKeyType="done"
-        style={{ minHeight: 48 }}
-        testID="cash-tender-input"
+      <CashierTenderPanel
+        cashMethodAvailable={Boolean(cashMethod)}
+        cashTender={cashTender}
+        changeMinor={changeMinor}
+        currencyCode={core.organization.currencyCode}
+        hasCart={cart.length > 0}
+        offlineDisabled={offlinePaymentDisabled}
+        offlineReadinessLabel={cashierReadinessLabel(cashierReadinessState)}
+        offlineSaleReady={offlineSaleReady}
+        onCashTender={setCashTender}
+        onCompleteOnline={() => void completeOnlineCashSale()}
+        onDismissResult={() => setSaleResult(null)}
+        online={mode === "online"}
+        onlineCheckoutPending={onlineCheckoutPending}
+        onlineDisabled={onlinePaymentDisabled}
+        onlineIntent={Boolean(onlineIntent)}
+        onlineIntentMatchesCurrentContext={onlineIntentMatchesCurrentContext}
+        onSaveOffline={() => void saveOfflineCashSale()}
+        saleMessage={saleMessage}
+        saleResult={saleResult}
+        savingOffline={savingOffline}
+        tenderedMinor={tenderedMinor}
+        totalMinor={totals.totalMinor}
       />
-
-      <Text>
-        Cash change preview:{" "}
-        {changeMinor === null
-          ? "Enter a valid tender"
-          : formatMoney(changeMinor, core.organization.currencyCode)}
-      </Text>
-
-      {!cashMethod ? <Text>No enabled cash payment method is cached for this store.</Text> : null}
-
-      <Text
-        accessibilityLiveRegion="polite"
-        accessibilityRole={offlineSaleReady ? undefined : "alert"}
-        testID="offline-readiness"
-      >
-        Offline readiness: {cashierReadinessLabel(cashierReadinessState)}
-      </Text>
-      {!offlineSaleReady && cart.length > 0 ? (
-        <Text accessibilityRole="alert">
-          Offline payment is paused. This cart remains available while you reconnect or complete preparation.
-        </Text>
-      ) : null}
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Save offline cash sale"
-        testID="save-offline-cash-sale"
-        disabled={
-          onlineIntentLoading
-          || savingOffline
-          || !offlineSaleReady
-          || Boolean(onlineIntent)
-          || !offlineCartEligible
-          || cart.length === 0
-          || tenderedMinor === null
-          || tenderedMinor < totals.totalMinor
-        }
-        onPress={() => void saveOfflineCashSale()}
-        style={{ minHeight: 48, justifyContent: "center" }}
-      >
-        <Text>{savingOffline ? "Saving locally…" : "SAVE OFFLINE CASH SALE"}</Text>
-      </Pressable>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={onlineIntent ? "Retry original online checkout" : "Complete online cash checkout"}
-        testID="complete-online-cash-checkout"
-        disabled={
-          mode !== "online"
-          || onlineCheckoutPending
-          || onlineIntentLoading
-          || !canCreateSales
-          || !canAcceptPayments
-          || !onlineIntentMatchesCurrentContext
-          || (
-            !onlineIntent
-            && (
-              !shiftMatches
-              || !cashMethod
-              || cart.length === 0
-              || tenderedMinor === null
-              || tenderedMinor < totals.totalMinor
-            )
-          )
-        }
-        onPress={() => void completeOnlineCashSale()}
-        style={{ minHeight: 48, justifyContent: "center" }}
-      >
-        <Text>
-          {onlineCheckoutPending
-            ? "Processing server checkout…"
-            : onlineIntent
-              ? "RETRY ORIGINAL ONLINE CHECKOUT"
-              : "COMPLETE ONLINE CASH CHECKOUT"}
-        </Text>
-      </Pressable>
-
-      {saleMessage ? <Text accessibilityLiveRegion="polite">{saleMessage}</Text> : null}
-      </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );

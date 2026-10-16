@@ -4,6 +4,7 @@ import { TindioButton } from "../../ui/tindio-button";
 import { TindioFeedback } from "../../ui/tindio-feedback";
 import { TindioInput } from "../../ui/tindio-input";
 import { tindioTheme } from "../../ui/theme";
+import { useTindioResponsiveLayout } from "../../ui/tindio-responsive";
 import { formatMoney } from "./cashier-format";
 
 export type CashierSaleResult = {
@@ -63,6 +64,9 @@ export function CashierTenderPanel({
   onCompleteOnline,
   onDismissResult,
 }: CashierTenderPanelProps) {
+  const { isLargeText, viewportClass } = useTindioResponsiveLayout();
+  const stacked = isLargeText || viewportClass === "compact-phone";
+
   if (saleResult) {
     return (
       <SaleResult
@@ -77,13 +81,13 @@ export function CashierTenderPanel({
 
   return (
     <View style={styles.panel} testID="checkout-panel">
-      <View style={styles.heading}>
+      <View style={[styles.heading, stacked ? styles.stacked : null]}>
         <View style={styles.headingCopy}>
           <Text style={styles.eyebrow}>PAYMENT</Text>
           <Text accessibilityRole="header" style={styles.title}>Cash tender</Text>
           <Text style={styles.description}>Confirm the amount received before accepting this sale.</Text>
         </View>
-        <View style={styles.amountDue}>
+        <View style={[styles.amountDue, stacked ? styles.alignStart : null]}>
           <Text style={styles.amountLabel}>Amount due</Text>
           <Text accessibilityLabel={`Amount due ${formatMoney(totalMinor, currencyCode)}`} style={styles.amountValue}>
             {formatMoney(totalMinor, currencyCode)}
@@ -103,7 +107,7 @@ export function CashierTenderPanel({
         value={cashTender}
       />
 
-      <View accessibilityLiveRegion="polite" style={styles.changeCard}>
+      <View accessibilityLiveRegion="polite" style={[styles.changeCard, stacked ? styles.stacked : null]}>
         <Text style={styles.changeLabel}>Change due</Text>
         <Text style={styles.changeValue}>
           {changeMinor === null ? "Enter cash received" : formatMoney(changeMinor, currencyCode)}
@@ -248,6 +252,8 @@ const styles = StyleSheet.create({
   ready: { ...tindioTheme.typography.role.label, color: tindioTheme.color.status.success.content },
   notReady: { ...tindioTheme.typography.role.label, color: tindioTheme.color.status.warning.content },
   actions: { gap: tindioTheme.space.sm },
+  stacked: { alignItems: "stretch", flexDirection: "column" },
+  alignStart: { alignItems: "flex-start" },
   result: { ...tindioTheme.shadow.overlay, alignItems: "center", backgroundColor: tindioTheme.color.status.success.surface, borderColor: tindioTheme.color.status.success.border, borderRadius: tindioTheme.radius.lg, borderWidth: 1, gap: tindioTheme.space.md, padding: tindioTheme.space.lg },
   resultMark: { ...tindioTheme.typography.role.display, color: tindioTheme.color.status.success.content },
   resultTitle: { ...tindioTheme.typography.role.title, color: tindioTheme.color.status.success.content, textAlign: "center" },

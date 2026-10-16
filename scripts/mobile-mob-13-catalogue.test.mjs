@@ -24,11 +24,13 @@ test("Slice 09 preserves local search and product configuration handlers", () =>
 
 test("Slice 09 exposes accessible search, categories, products, and responsive grid", () => {
   const catalogue = read("apps/mobile/src/features/cashier/cashier-catalogue.tsx");
+  const responsive = read("apps/mobile/src/ui/tindio-responsive.ts");
   assert.match(catalogue, /accessibilityLabel="Search products"/);
   assert.match(catalogue, /accessibilityRole="tab"/);
   assert.match(catalogue, /accessibilityState=\{\{ selected: active \}\}/);
   assert.match(catalogue, /accessibilityHint="Adds this product to the sale"/);
-  assert.match(catalogue, /CATALOGUE_GRID_MIN_WIDTH = 600/);
+  assert.match(catalogue, /useTindioResponsiveLayout/);
+  assert.match(responsive, /allowsDenseGrid: width >= 600 && !isLargeText/);
   assert.match(catalogue, /minHeight: tindioTheme\.target\.minimum/);
 });
 

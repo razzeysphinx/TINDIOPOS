@@ -7,7 +7,9 @@ const read = (path) => fs.readFileSync(path, "utf8");
 test("Slice 10 provides a phone cart summary and persistent tablet cart pane", () => {
   const pos = read("apps/mobile/app/(app)/pos.tsx");
   const workspace = read("apps/mobile/src/features/cashier/cashier-cart-workspace.tsx");
-  assert.match(pos, /TABLET_CART_PANE_MIN_WIDTH = 900/);
+  const responsive = read("apps/mobile/src/ui/tindio-responsive.ts");
+  assert.match(pos, /usesTabletCartPane = allowsColumns && viewportClass === "tablet"/);
+  assert.match(responsive, /compactTabletMax: 899/);
   assert.match(pos, /compact=\{!usesTabletCartPane\}/);
   assert.match(pos, /expanded=\{usesTabletCartPane \|\| cartExpanded\}/);
   assert.match(pos, /saleWorkspaceTablet/);

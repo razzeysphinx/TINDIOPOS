@@ -3,10 +3,7 @@ import {
   Stack,
   usePathname,
 } from "expo-router";
-import {
-  ActivityIndicator,
-  View,
-} from "react-native";
+import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
@@ -22,6 +19,7 @@ import {
   SyncTelemetryReporter,
 } from "../../src/features/sync/sync-telemetry-reporter";
 import { ProductionResponsivenessMonitor } from "../../src/features/observability/production-responsiveness-monitor";
+import { TindioProgressIndicator } from "../../src/ui/tindio-progress-indicator";
 
 const authorizedSupportPaths = new Set([
   "/a45-certification",
@@ -50,7 +48,7 @@ function AuthorizedAppStack() {
           justifyContent: "center",
         }}
       >
-        <ActivityIndicator />
+        <TindioProgressIndicator label="Checking support access" />
       </View>
     );
   }
@@ -83,7 +81,7 @@ export default function AppLayout() {
           justifyContent: "center",
         }}
       >
-        <ActivityIndicator />
+        <TindioProgressIndicator label="Opening cashier workspace" />
       </View>
     );
   }

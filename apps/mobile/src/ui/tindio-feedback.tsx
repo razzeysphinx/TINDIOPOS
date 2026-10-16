@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View, type ViewProps } from "react
 
 import type { TindioStatusTone } from "../../../../src/contracts/ui/tindio-design-tokens";
 import { tindioTheme } from "./theme";
+import { useTindioAccessibilityPreferences } from "./tindio-accessibility";
 
 export type TindioFeedbackKind = "loading" | "empty" | "error" | "restriction" | "recovery" | "review";
 
@@ -23,17 +24,18 @@ const toneByKind: Record<TindioFeedbackKind, TindioStatusTone> = {
 };
 
 export function TindioFeedback({ action, description, kind, style, title, ...props }: TindioFeedbackProps) {
+  const { reduceMotionEnabled } = useTindioAccessibilityPreferences();
   const colors = tindioTheme.color.status[toneByKind[kind]];
   const isAlert = kind === "error" || kind === "restriction" || kind === "review";
 
   return (
     <View
-      accessibilityLiveRegion={kind === "loading" || kind === "recovery" ? "polite" : undefined}
+      accessibilityLiveRegion={isAlert ? "assertive" : "polite"}
       accessibilityRole={isAlert ? "alert" : undefined}
       style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }, style]}
       {...props}
     >
-      {kind === "loading" || kind === "recovery" ? <ActivityIndicator color={colors.content} /> : null}
+      {(kind === "loading" || kind === "recovery") && !reduceMotionEnabled ? <ActivityIndicator color={colors.content} /> : null}
       <View style={styles.copy}>
         <Text style={[styles.title, { color: colors.content }]}>{title}</Text>
         <Text style={[styles.description, { color: colors.content }]}>{description}</Text>

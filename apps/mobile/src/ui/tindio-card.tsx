@@ -12,7 +12,7 @@ type TindioCardProps = ViewProps & {
 export function TindioCard({ children, description, style, title, ...props }: TindioCardProps) {
   return (
     <View style={[styles.card, style]} {...props}>
-      {title ? <Text style={styles.title}>{title}</Text> : null}
+      {title ? <Text accessibilityRole="header" style={styles.title}>{title}</Text> : null}
       {description ? <Text style={styles.description}>{description}</Text> : null}
       {children}
     </View>

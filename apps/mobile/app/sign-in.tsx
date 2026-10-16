@@ -1,7 +1,6 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,6 +15,7 @@ import {
 } from "../src/features/offline/cashier-readiness-policy";
 import { useSession } from "../src/features/session/session-provider";
 import { PublicPolicyLinks } from "../src/features/support/public-policy-links";
+import { TindioProgressIndicator } from "../src/ui/tindio-progress-indicator";
 
 export default function SignInScreen() {
   const { signIn, offlineRestrictionReason, offlineAuthorizationState } = useSession();
@@ -104,7 +104,7 @@ export default function SignInScreen() {
             style={{ minHeight: 48, justifyContent: "center" }}
           >
             <Text>{pending ? "Signing in…" : "Sign in"}</Text>
-            {pending ? <ActivityIndicator /> : null}
+            {pending ? <TindioProgressIndicator label="Signing in" /> : null}
           </Pressable>
           <PublicPolicyLinks />
         </ScrollView>

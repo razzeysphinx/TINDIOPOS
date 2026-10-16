@@ -39,6 +39,7 @@
     "test:mobile-mob-13-cart-workspace": "node --test scripts/mobile-mob-13-cart-workspace.test.mjs",
     "test:mobile-mob-13-tender-receipt": "node --test scripts/mobile-mob-13-tender-receipt.test.mjs",
     "test:mobile-mob-13-supporting-workflows": "node --test scripts/mobile-mob-13-supporting-workflows.test.mjs",
+    "test:mobile-mob-13-responsive-accessibility": "node --test scripts/mobile-mob-13-responsive-accessibility.test.mjs",
     "test:mobile-mob-13-release-inputs": "node --test scripts/mobile-mob-13-release-inputs.test.mjs",
     "audit:mobile-release-readiness": "node scripts/mobile-mob-13-release-readiness.mjs",
     "test:mobile-a43-old-client-compatibility": "node --test scripts/mobile-a43-old-client-compatibility.test.mjs",

@@ -70,7 +70,7 @@ test("MOB-10 Sync Status scrolls and refreshes database-backed diagnostics on fo
 
   assert.match(sync, /useFocusEffect\(useCallback\(\(\) => \{/);
   assert.match(sync, /if \(active\) void load\(\)/);
-  assert.match(sync, /<ScrollView[\s\S]*testID="sync-status-scroll"/);
+  assert.match(sync, /<TindioScreen[\s\S]*scroll testID="sync-status-scroll"/);
   assert.match(sync, /testID="recheck-backend"/);
   assert.match(sync, /testID="sync-durable-outbox"/);
   assert.match(sync, /testID="refresh-server-checkpoint"/);

@@ -11,19 +11,22 @@ import {
 import {
   SessionProvider,
 } from "../src/features/session/session-provider";
+import { TindioAccessibilityProvider } from "../src/ui/tindio-accessibility";
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <ProductionErrorBoundary>
-        <SessionProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-            }}
-          />
-        </SessionProvider>
-      </ProductionErrorBoundary>
+      <TindioAccessibilityProvider>
+        <ProductionErrorBoundary>
+          <SessionProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+              }}
+            />
+          </SessionProvider>
+        </ProductionErrorBoundary>
+      </TindioAccessibilityProvider>
     </SafeAreaProvider>
   );
 }

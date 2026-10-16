@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Deterministic development viewport baselines for MOB-13 Slice 13",
+  "certificationEvidence": false,
+  "captureRoute": "/sign-in",
+  "browserCaptureStatus": "BLOCKED",
+  "browserCaptureBlocker": "Expo web returned Worker chunk not found for expo-sqlite/web/worker.ts before the real sign-in state rendered.",
+  "states": [
+    { "id": "compact-phone-portrait", "width": 320, "height": 568, "fontScale": 1, "orientation": "portrait" },
+    { "id": "standard-phone-portrait", "width": 390, "height": 844, "fontScale": 1, "orientation": "portrait" },
+    { "id": "standard-phone-keyboard", "width": 390, "height": 480, "fontScale": 1, "orientation": "portrait" },
+    { "id": "standard-phone-large-text", "width": 390, "height": 844, "fontScale": 2, "orientation": "portrait" },
+    { "id": "compact-tablet-portrait", "width": 800, "height": 1280, "fontScale": 1, "orientation": "portrait" },
+    { "id": "tablet-landscape", "width": 1280, "height": 800, "fontScale": 1, "orientation": "landscape" }
+  ],
+  "physicalRuntimeStatus": "NOT_RUN",
+  "notes": "Browser screenshots are development references only. Android fontScale, TalkBack, keyboard, and performance require the Slice 14 physical campaign."
+}

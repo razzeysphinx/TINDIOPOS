@@ -1,12 +1,12 @@
 import type { PosBootstrapV2CoreResponse } from "../../../../../src/contracts/pos";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { TindioProgressIndicator } from "../../ui/tindio-progress-indicator";
 
 import {
   enrollPosV2Device,
@@ -158,8 +158,7 @@ export function DeviceSetup({
   if (loading) {
     return (
       <View>
-        <ActivityIndicator />
-        <Text>Checking POS device…</Text>
+        <TindioProgressIndicator label="Checking POS device" />
       </View>
     );
   }

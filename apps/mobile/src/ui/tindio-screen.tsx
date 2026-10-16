@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from "re
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 
 import { tindioTheme } from "./theme";
+import { useTindioResponsiveLayout } from "./tindio-responsive";
 
 type TindioScreenProps = {
   children: ReactNode;
@@ -21,17 +22,22 @@ export function TindioScreen({
   scroll = false,
   testID,
 }: TindioScreenProps) {
+  const { viewportClass } = useTindioResponsiveLayout();
+  const compact = viewportClass === "compact-phone";
+
   return (
     <SafeAreaView edges={edges} style={styles.safeArea} testID={testID}>
       {scroll ? (
         <ScrollView
-          contentContainerStyle={[styles.content, contentContainerStyle]}
+          automaticallyAdjustKeyboardInsets
+          contentContainerStyle={[styles.content, compact ? styles.contentCompact : null, contentContainerStyle]}
+          keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
         >
           {children}
         </ScrollView>
       ) : (
-        <View style={[styles.content, styles.fill, contentContainerStyle]}>{children}</View>
+        <View style={[styles.content, compact ? styles.contentCompact : null, styles.fill, contentContainerStyle]}>{children}</View>
       )}
     </SafeAreaView>
   );
@@ -40,5 +46,6 @@ export function TindioScreen({
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: tindioTheme.color.surface.app, flex: 1 },
   content: { gap: tindioTheme.space.md, padding: tindioTheme.space.md },
+  contentCompact: { padding: tindioTheme.space.sm },
   fill: { flex: 1 },
 });

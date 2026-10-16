@@ -9,6 +9,7 @@ import {
 } from "react-native";
 
 import { tindioTheme } from "./theme";
+import { useTindioAccessibilityPreferences } from "./tindio-accessibility";
 
 export type TindioButtonVariant = "primary" | "secondary" | "ghost" | "destructive";
 
@@ -29,6 +30,7 @@ export function TindioButton({
   variant = "primary",
   ...props
 }: TindioButtonProps) {
+  const { reduceMotionEnabled } = useTindioAccessibilityPreferences();
   const unavailable = disabled || busy;
   const palette = buttonPalettes[variant];
 
@@ -47,7 +49,7 @@ export function TindioButton({
       ]}
       {...props}
     >
-      {busy ? <ActivityIndicator color={palette.label.color} /> : null}
+      {busy && !reduceMotionEnabled ? <ActivityIndicator color={palette.label.color} /> : null}
       <Text style={[styles.label, palette.label]}>{children}</Text>
     </Pressable>
   );

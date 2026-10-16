@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View, type PressableProps, type ViewProps } from "react-native";
 
 import { tindioTheme } from "./theme";
+import { useTindioResponsiveLayout } from "./tindio-responsive";
 
 type WorkspaceHeaderProps = {
   eyebrow?: string;
@@ -11,8 +12,11 @@ type WorkspaceHeaderProps = {
 };
 
 export function TindioWorkspaceHeader({ description, eyebrow, title, trailing }: WorkspaceHeaderProps) {
+  const { isLargeText, viewportClass } = useTindioResponsiveLayout();
+  const stacked = isLargeText || viewportClass === "compact-phone";
+
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, stacked ? styles.stacked : null]}>
       <View style={styles.headerCopy}>
         {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
         <Text accessibilityRole="header" style={styles.title}>{title}</Text>
@@ -49,10 +53,12 @@ type ListItemProps = Omit<PressableProps, "children" | "style"> & {
 };
 
 export function TindioListItem({ detail, disabled, meta, onPress, selected = false, title, ...props }: ListItemProps) {
+  const { isLargeText, viewportClass } = useTindioResponsiveLayout();
+  const stacked = isLargeText || viewportClass === "compact-phone";
   const content = <ListItemContent detail={detail} meta={meta} title={title} />;
 
   if (!onPress) {
-    return <View style={[styles.listItem, selected ? styles.listItemSelected : null, disabled ? styles.disabled : null]}>{content}</View>;
+    return <View style={[styles.listItem, stacked ? styles.stacked : null, selected ? styles.listItemSelected : null, disabled ? styles.disabled : null]}>{content}</View>;
   }
 
   return (
@@ -63,6 +69,7 @@ export function TindioListItem({ detail, disabled, meta, onPress, selected = fal
       onPress={onPress}
       style={({ pressed }) => [
         styles.listItem,
+        stacked ? styles.stacked : null,
         selected ? styles.listItemSelected : null,
         pressed && !disabled ? styles.pressed : null,
         disabled ? styles.disabled : null,
@@ -87,10 +94,13 @@ function ListItemContent({ detail, meta, title }: { detail?: string; meta?: stri
 }
 
 export function TindioKeyValue({ label, value }: { label: string; value: string }) {
+  const { isLargeText, viewportClass } = useTindioResponsiveLayout();
+  const stacked = isLargeText || viewportClass === "compact-phone";
+
   return (
-    <View style={styles.keyValue}>
+    <View style={[styles.keyValue, stacked ? styles.stacked : null]}>
       <Text style={styles.key}>{label}</Text>
-      <Text style={styles.value}>{value}</Text>
+      <Text style={[styles.value, stacked ? styles.valueStacked : null]}>{value}</Text>
     </View>
   );
 }
@@ -112,8 +122,10 @@ const styles = StyleSheet.create({
   listDetail: { ...tindioTheme.typography.role.body, color: tindioTheme.color.content.secondary },
   listMeta: { ...tindioTheme.typography.role.caption, color: tindioTheme.color.brand.primary, flexShrink: 1, textAlign: "right" },
   keyValue: { flexDirection: "row", flexWrap: "wrap", gap: tindioTheme.space.md, justifyContent: "space-between" },
+  stacked: { alignItems: "stretch", flexDirection: "column" },
   key: { ...tindioTheme.typography.role.body, color: tindioTheme.color.content.secondary },
   value: { ...tindioTheme.typography.role.label, color: tindioTheme.color.content.primary, flexShrink: 1, textAlign: "right" },
+  valueStacked: { textAlign: "left" },
   pressed: { opacity: 0.82 },
   disabled: { opacity: 0.48 },
 });

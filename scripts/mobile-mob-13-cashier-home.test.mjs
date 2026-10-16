@@ -8,10 +8,12 @@ test("MOB-13 replaces raw route names with responsive cashier task cards", () =>
   const home = read("apps/mobile/app/(app)/index.tsx");
   const navigation = read("apps/mobile/src/features/cashier/cashier-navigation.ts");
   const taskCard = read("apps/mobile/src/features/cashier/cashier-task-card.tsx");
+  const responsive = read("apps/mobile/src/ui/tindio-responsive.ts");
   for (const label of ["Start selling", "Receipts", "Customers", "Shift and cash drawer", "Sync and recovery", "Account and support"]) assert.match(navigation, new RegExp(label));
   for (const section of ["Checkout", "Store work", "Help and recovery"]) assert.match(home, new RegExp(section));
   assert.match(home, /CashierTaskCard/);
-  assert.match(home, /TABLET_SHELL_MIN_WIDTH = 720/);
+  assert.match(home, /useTindioResponsiveLayout/);
+  assert.match(responsive, /allowsColumns: width >= 720 && !isLargeText/);
   assert.match(home, /cashier-home-scroll/);
   assert.match(taskCard, /accessibilityRole="button"/);
   assert.match(taskCard, /minHeight: 88/);

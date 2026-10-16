@@ -3,12 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  useWindowDimensions,
   View,
 } from "react-native";
 import type {
@@ -81,6 +78,10 @@ import {
 import { createOfflineCashSale } from "../../src/features/outbox/create-offline-sale";
 import { syncOutboxEvents } from "../../src/features/outbox/outbox-sync";
 import { tindioTheme } from "../../src/ui/theme";
+import { useTindioResponsiveLayout } from "../../src/ui/tindio-responsive";
+import { TindioButton } from "../../src/ui/tindio-button";
+import { TindioInput } from "../../src/ui/tindio-input";
+import { TindioListItem, TindioWorkspaceSection } from "../../src/ui/tindio-workspace";
 import {
   checkoutPosV2,
   createPosV2Customer,
@@ -100,8 +101,6 @@ type ModifierState = ConfigureState & {
   groups: PosModifierGroup[];
 };
 
-const TABLET_CART_PANE_MIN_WIDTH = 900;
-
 function baseCartLine(item: PosCatalogItem): PosCartLine {
   return {
     ...item,
@@ -114,7 +113,7 @@ function baseCartLine(item: PosCatalogItem): PosCartLine {
 }
 
 export default function PosScreen() {
-  const { width } = useWindowDimensions();
+  const { allowsColumns, viewportClass } = useTindioResponsiveLayout();
   const { data, mode, cashierReadinessState } = useBusinessContext();
   const core = data?.core;
   const terminal =
@@ -190,7 +189,7 @@ export default function PosScreen() {
   const canApplyDiscounts = Boolean(core?.permissions.includes("discounts.apply"));
   const canCreateCustomers = Boolean(core?.permissions.includes("customers.manage"));
   const canUseTickets = Boolean(gates?.tickets);
-  const usesTabletCartPane = width >= TABLET_CART_PANE_MIN_WIDTH;
+  const usesTabletCartPane = allowsColumns && viewportClass === "tablet";
 
   const shiftMatches = Boolean(
     core?.activeShift
@@ -1136,35 +1135,42 @@ export default function PosScreen() {
       </View>
 
       {canUseTickets ? (
-        <View>
-          <Text>OPEN TICKET</Text>
-          <Pressable disabled={mode !== "online"} onPress={() => void loadTickets()}>
-            <Text>Load tickets</Text>
-          </Pressable>
+        <TindioWorkspaceSection
+          description="Save this cart for later or reopen an existing ticket. Ticket changes require a connection."
+          title="Open ticket"
+        >
+          <TindioButton disabled={mode !== "online"} onPress={() => void loadTickets()} variant="secondary">
+            Load tickets
+          </TindioButton>
 
           {openTickets.map((ticket) => (
-            <Pressable key={ticket.id} onPress={() => loadTicketIntoCart(ticket)}>
-              <Text>
-                {activeTicketId === ticket.id ? "✓ " : ""}
-                {ticket.label} — {ticket.cart.length} line(s)
-              </Text>
-            </Pressable>
+            <TindioListItem
+              detail={`${ticket.cart.length} line(s)`}
+              key={ticket.id}
+              meta={activeTicketId === ticket.id ? "Selected" : undefined}
+              onPress={() => loadTicketIntoCart(ticket)}
+              selected={activeTicketId === ticket.id}
+              title={ticket.label}
+            />
           ))}
 
-          <TextInput
+          <TindioInput
+            label="Ticket label"
             value={ticketLabel}
             onChangeText={setTicketLabel}
             placeholder="Ticket label"
           />
 
-          <TextInput
+          <TindioInput
+            label="Ticket note"
             value={ticketNote}
             onChangeText={setTicketNote}
             placeholder="Ticket note"
             maxLength={500}
           />
 
-          <Pressable
+          <TindioButton
+            busy={ticketPending}
             disabled={
               mode !== "online"
               || ticketPending
@@ -1173,15 +1179,13 @@ export default function PosScreen() {
             }
             onPress={() => void saveCurrentTicket()}
           >
-            <Text>
-              {ticketPending
-                ? "Saving ticket..."
-                : activeTicketId
-                  ? "Update open ticket"
-                  : "Save as open ticket"}
-            </Text>
-          </Pressable>
-        </View>
+            {ticketPending
+              ? "Saving ticket"
+              : activeTicketId
+                ? "Update open ticket"
+                : "Save as open ticket"}
+          </TindioButton>
+        </TindioWorkspaceSection>
       ) : null}
 
       <CashierTenderPanel

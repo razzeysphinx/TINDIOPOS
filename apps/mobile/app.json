@@ -4,7 +4,7 @@
     "slug": "tindio-pos",
     "scheme": "mobile",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/branding/tindio-icon-candidate-1024.png",
     "userInterfaceStyle": "automatic",
     "ios": {

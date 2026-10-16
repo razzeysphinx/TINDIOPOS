@@ -13,6 +13,7 @@ import { TindioButton } from "../../ui/tindio-button";
 import { TindioFeedback } from "../../ui/tindio-feedback";
 import { TindioInput } from "../../ui/tindio-input";
 import { tindioTheme } from "../../ui/theme";
+import { useTindioResponsiveLayout } from "../../ui/tindio-responsive";
 import type { CartInventoryIntelligenceLine } from "../inventory/offline-inventory-intelligence";
 import type { LocalCartTotals } from "../local-first/local-cart";
 import { CashierCartLine } from "./cashier-cart-line";
@@ -62,6 +63,7 @@ type CashierCartWorkspaceProps = {
 };
 
 export function CashierCartWorkspace(props: CashierCartWorkspaceProps) {
+  const { isLargeText, viewportClass } = useTindioResponsiveLayout();
   const {
     cart,
     compact,
@@ -71,10 +73,11 @@ export function CashierCartWorkspace(props: CashierCartWorkspaceProps) {
     totals,
   } = props;
   const itemCount = cart.reduce((sum, line) => sum + line.quantity, 0);
+  const stacked = isLargeText || viewportClass === "compact-phone";
 
   return (
     <View style={styles.panel} testID="cashier-cart-workspace">
-      <View style={styles.header}>
+      <View style={[styles.header, stacked ? styles.stacked : null]}>
         <View style={styles.headerCopy}>
           <Text style={styles.eyebrow}>CURRENT SALE</Text>
           <Text accessibilityRole="header" style={styles.title}>Cart</Text>
@@ -82,7 +85,7 @@ export function CashierCartWorkspace(props: CashierCartWorkspaceProps) {
             {cart.length === 0 ? "No items yet" : `${formatQuantity(itemCount)} item${itemCount === 1 ? "" : "s"}`}
           </Text>
         </View>
-        <View style={styles.headerTotal}>
+        <View style={[styles.headerTotal, stacked ? styles.alignStart : null]}>
           <Text style={styles.totalLabel}>Total</Text>
           <Text accessibilityLabel={`Cart total ${formatMoney(totals.totalMinor, currencyCode)}`} style={styles.totalValue}>
             {formatMoney(totals.totalMinor, currencyCode)}
@@ -496,4 +499,6 @@ const styles = StyleSheet.create({
   inventoryValueNumber: { ...tindioTheme.typography.role.numeric, color: tindioTheme.color.brand.ink },
   inventoryMeta: { ...tindioTheme.typography.role.caption, color: tindioTheme.color.content.secondary },
   pressed: { opacity: 0.8 },
+  stacked: { alignItems: "stretch", flexDirection: "column" },
+  alignStart: { alignItems: "flex-start" },
 });

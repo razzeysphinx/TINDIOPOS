@@ -1,6 +1,6 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { getOrganizationCacheStats, type OrganizationCacheStats } from "../../src/db/cache-stats";
 import { hasBusinessContextSnapshot } from "../../src/db/business-context-cache";
 import { getDeviceSyncState, type DeviceSyncState } from "../../src/db/device-sync-state";
@@ -37,6 +37,8 @@ import {
 import { TindioCard } from "../../src/ui/tindio-card";
 import { TindioFeedback } from "../../src/ui/tindio-feedback";
 import { TindioStatusBadge } from "../../src/ui/tindio-status-badge";
+import { TindioScreen } from "../../src/ui/tindio-screen";
+import { tindioTheme } from "../../src/ui/theme";
 import { TindioWorkspaceHeader, TindioWorkspaceSection } from "../../src/ui/tindio-workspace";
 
 export default function SyncStatusScreen() {
@@ -246,13 +248,7 @@ export default function SyncStatusScreen() {
   );
   const hiddenRecoveryCount = recoveryItems.length - visibleRecoveryItems.length;
 
-  return <ScrollView
-    automaticallyAdjustKeyboardInsets
-    contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 8 }}
-    keyboardDismissMode="on-drag"
-    keyboardShouldPersistTaps="handled"
-    testID="sync-status-scroll"
-  >
+  return <TindioScreen contentContainerStyle={styles.screen} edges={[]} scroll testID="sync-status-scroll">
     <TindioWorkspaceHeader
       description="Review connectivity, durable transaction custody, and supervised recovery without deleting accepted work."
       eyebrow="SYNC & RECOVERY"
@@ -266,11 +262,16 @@ export default function SyncStatusScreen() {
     </TindioCard>
     {mode !== "online" ? <TindioFeedback description="New supported offline cash work follows the current readiness state. Existing receipts and unresolved transactions remain available." kind="restriction" title="Cloud connection unavailable" /> : null}
     <TindioWorkspaceSection description="Preparation, cache, sequence, checkpoint, and performance details are intended for supervised support and recovery." title="Authorized diagnostics">
+    <TindioCard title="Device and offline preparation">
     <Text>Cloud Backend: {mode === "offline" ? "OFFLINE" : "CONNECTED / CHECK REQUIRED"}</Text><Text>Native SQLite: {health?.ready ? "READY — PHASE 07" : "CHECK REQUIRED"}</Text><Text>SQLite schema: {health?.schemaVersion ?? 0}/{health?.expectedSchemaVersion ?? 2}</Text><Text>SQLite integrity: {health?.integrity === "ok" ? "OK" : "CHECK REQUIRED"}</Text><Text>Business context cached: {cached === null ? "UNKNOWN" : cached ? "YES" : "NO"}</Text><Text>Business context rows: {stats?.businessContext ?? 0}</Text><Text>Reference snapshots: {stats?.reference ?? 0}</Text><Text>Catalog items: {stats?.catalog ?? 0}</Text><Text>Observed customers: {stats?.customers ?? 0}</Text><Text>Shift snapshots: {stats?.shifts ?? 0}</Text><Text>Receipt summaries: {stats?.receipts ?? 0}</Text><Text>Persistence verified: {health?.persistenceVerifiedAt ?? "NOT YET"}</Text><Text>Restart proof: {restartProof ? `${restartProof.organizationId} at ${restartProof.armedAt}` : "NOT ARMED"}</Text>
     <Text>Phase 08 Offline Authorization: {offlineState}</Text><Text>Offline authorization expires: {grant?.expiresAt ?? "NOT PREPARED"}</Text><Text>Offline organization: {grant?.organizationId ?? "—"}</Text><Text>Offline store / register: {grant ? `${grant.storeId} / ${grant.registerId}` : "—"}</Text><Text>Offline shift: {grant?.shiftId ?? "—"}</Text><Text>Complete catalog: {offlineState === "READY" ? "YES" : "NO"}</Text><Text>Cached catalog items: {stats?.catalog ?? 0}</Text><Text>Reference/configuration: {stats?.reference ? "READY" : "MISSING"}</Text>{message ? <Text accessibilityLiveRegion="polite">{message}</Text> : null}
-    <Pressable onPress={() => void verify()}><Text>Verify SQLite persistence</Text></Pressable><Pressable onPress={() => void arm()}><Text>Arm Phase 07 restart proof</Text></Pressable><Pressable disabled={mode !== "online"} onPress={() => void prepare()}><Text>Prepare Offline Mode</Text></Pressable><Pressable onPress={() => void revoke()}><Text>Revoke Offline Authorization</Text></Pressable><Pressable accessibilityRole="button" testID="recheck-backend" onPress={() => void recheck()}><Text>Recheck Backend</Text></Pressable>
+    <Pressable accessibilityRole="button" onPress={() => void verify()} style={styles.action}><Text>Verify SQLite persistence</Text></Pressable><Pressable accessibilityRole="button" onPress={() => void arm()} style={styles.action}><Text>Arm Phase 07 restart proof</Text></Pressable><Pressable accessibilityRole="button" disabled={mode !== "online"} onPress={() => void prepare()} style={styles.action}><Text>Prepare Offline Mode</Text></Pressable><Pressable accessibilityRole="button" onPress={() => void revoke()} style={styles.action}><Text>Revoke Offline Authorization</Text></Pressable><Pressable accessibilityRole="button" testID="recheck-backend" onPress={() => void recheck()} style={styles.action}><Text>Recheck Backend</Text></Pressable>
+    </TindioCard>
+    <TindioCard title="Local catalogue">
     <Text>Cold-start Offline: PHASE 08</Text><Text>Phase 09 Local-First: IMPLEMENTED</Text><Text>Catalog source: SQLite</Text><Text>Local-first metrics: SQLite catalog reads {getLocalFirstMetrics().sqliteCatalogReads}; SQLite barcode reads {getLocalFirstMetrics().sqliteBarcodeReads}; SQLite reference reads {getLocalFirstMetrics().sqliteReferenceReads}; modifier cache hits {getLocalFirstMetrics().modifierCacheHits}; modifier network fallbacks {getLocalFirstMetrics().modifierNetworkFallbacks}; cloud catalog searches {getLocalFirstMetrics().cloudCatalogSearches}</Text>
-    <Text>Durable Outbox: PHASE 10</Text><Text>Outbox pending / syncing / conflict / failed: {outbox?.summary.pending ?? 0} / {outbox?.summary.syncing ?? 0} / {outbox?.summary.conflict ?? 0} / {outbox?.summary.failed ?? 0}</Text><Text>Oldest unresolved: {outbox?.oldestUnresolved ? `${outbox.oldestUnresolved.localReference} — sequence ${outbox.oldestUnresolved.deviceSequence} — ${outbox.oldestUnresolved.state} — ${outbox.oldestUnresolved.totalMinor} ${outbox.oldestUnresolved.currencyCode}` : "NONE"}</Text><Pressable accessibilityRole="button" testID="sync-durable-outbox" disabled={mode !== "online"} onPress={() => void syncOutbox()}><Text>Sync durable outbox now</Text></Pressable>
+    </TindioCard>
+    <TindioCard title="Durable transaction queue">
+    <Text>Durable Outbox: PHASE 10</Text><Text>Outbox pending / syncing / conflict / failed: {outbox?.summary.pending ?? 0} / {outbox?.summary.syncing ?? 0} / {outbox?.summary.conflict ?? 0} / {outbox?.summary.failed ?? 0}</Text><Text>Oldest unresolved: {outbox?.oldestUnresolved ? `${outbox.oldestUnresolved.localReference} — sequence ${outbox.oldestUnresolved.deviceSequence} — ${outbox.oldestUnresolved.state} — ${outbox.oldestUnresolved.totalMinor} ${outbox.oldestUnresolved.currencyCode}` : "NONE"}</Text><Pressable accessibilityRole="button" testID="sync-durable-outbox" disabled={mode !== "online"} onPress={() => void syncOutbox()} style={styles.action}><Text>Sync durable outbox now</Text></Pressable>
     {isMob10A30CertificationBuild() ? <View>
       <Text>MOB-10 A30 SYNTHETIC QUEUE CERTIFICATION</Text>
       <Text>Safety gate: certification organization/product, prepared offline terminal, and empty unresolved queue required.</Text>
@@ -283,15 +284,17 @@ export default function SyncStatusScreen() {
         <Text>A30 total / expected stock delta: {a30Result.totalMinor} minor / {a30Result.expectedStockDelta}</Text>
         <Text>A30 product: {a30Result.productName} / {a30Result.productId}</Text>
       </> : a30Result ? <Text>A30 stopped after {a30Result.accepted}: {a30Result.reason}</Text> : null}
-      <Pressable accessibilityRole="button" testID="create-a30-100" disabled={a30Busy} onPress={() => void createA30Queue(100)}><Text>Create A30 100-sale queue</Text></Pressable>
-      <Pressable accessibilityRole="button" testID="create-a30-1000" disabled={a30Busy} onPress={() => void createA30Queue(1_000)}><Text>Create A30 1,000-sale queue</Text></Pressable>
+      <Pressable accessibilityRole="button" testID="create-a30-100" disabled={a30Busy} onPress={() => void createA30Queue(100)} style={styles.action}><Text>Create A30 100-sale queue</Text></Pressable>
+      <Pressable accessibilityRole="button" testID="create-a30-1000" disabled={a30Busy} onPress={() => void createA30Queue(1_000)} style={styles.action}><Text>Create A30 1,000-sale queue</Text></Pressable>
     </View> : null}
+    </TindioCard>
+    <TindioCard title="Supervised transaction recovery">
     <Text>MOB-04 TRANSACTION RECOVERY</Text>
     <Text>Authentication state: {accessMode === "online" ? "ONLINE AUTHENTICATED" : "REAUTHENTICATION REQUIRED"}</Text>
-    <TextInput accessibilityLabel="Recovery employee email" autoCapitalize="none" autoComplete="email" editable={!recoveryBusy} keyboardType="email-address" onChangeText={setRecoveryEmail} placeholder="Recovery employee email" value={recoveryEmail} />
-    <TextInput accessibilityLabel="Recovery employee password" autoComplete="current-password" editable={!recoveryBusy} onChangeText={setRecoveryPassword} placeholder="Password" secureTextEntry value={recoveryPassword} />
-    <Pressable accessibilityRole="button" disabled={recoveryBusy || !recoveryEmail.trim() || !recoveryPassword} onPress={() => void reauthenticateForRecovery()}><Text>Reauthenticate in place</Text></Pressable>
-    <TextInput accessibilityLabel="Manager recovery note" editable={!recoveryBusy} onChangeText={setRecoveryNote} placeholder="Manager recovery note (required for review)" value={recoveryNote} />
+    <TextInput accessibilityLabel="Recovery employee email" autoCapitalize="none" autoComplete="email" editable={!recoveryBusy} keyboardType="email-address" onChangeText={setRecoveryEmail} placeholder="Recovery employee email" style={styles.input} value={recoveryEmail} />
+    <TextInput accessibilityLabel="Recovery employee password" autoComplete="current-password" editable={!recoveryBusy} onChangeText={setRecoveryPassword} placeholder="Password" secureTextEntry style={styles.input} value={recoveryPassword} />
+    <Pressable accessibilityRole="button" disabled={recoveryBusy || !recoveryEmail.trim() || !recoveryPassword} onPress={() => void reauthenticateForRecovery()} style={styles.action}><Text>Reauthenticate in place</Text></Pressable>
+    <TextInput accessibilityLabel="Manager recovery note" editable={!recoveryBusy} onChangeText={setRecoveryNote} placeholder="Manager recovery note (required for review)" style={styles.input} value={recoveryNote} />
     {visibleRecoveryItems.map((event) => {
       const decision = identity?.binding && data?.core
         ? evaluateOutboxRecovery(event, {
@@ -309,12 +312,16 @@ export default function SyncStatusScreen() {
         <Text>{event.localReference} — sequence {event.deviceSequence ?? "CORRUPT"} — {event.state}</Text>
         <Text>{event.corrupt ? "Damaged local record; escalation required." : `${event.totalMinor ?? "?"} ${event.currencyCode ?? ""} — ${event.itemCount ?? "?"} item(s)`}</Text>
         <Text>{event.conflictType ?? "NO CLASSIFICATION"}: {event.lastError ?? "No error detail recorded."}</Text>
-        {decision.ok ? <Pressable accessibilityRole="button" disabled={accessMode !== "online" || recoveryBusy} onPress={() => void retryRecoveryEvent(event.eventId)}><Text>Retry original transaction</Text></Pressable> : <Text>Recovery blocked: {decision.reason}</Text>}
+        {decision.ok ? <Pressable accessibilityRole="button" disabled={accessMode !== "online" || recoveryBusy} onPress={() => void retryRecoveryEvent(event.eventId)} style={styles.action}><Text>Retry original transaction</Text></Pressable> : <Text>Recovery blocked: {decision.reason}</Text>}
       </View>;
     })}
     {hiddenRecoveryCount > 0 ? <Text>{hiddenRecoveryCount} unresolved transaction(s) are hidden because this employee is not assigned to their store. Custody remains protected.</Text> : null}
-    <Text>PHASE 11 DEVICE SEQUENCE</Text><Text>Device: {deviceId ?? "NOT AVAILABLE"}</Text><Text>Next local sequence: {sequenceState?.nextSequence ?? "CHECK REQUIRED"}</Text><Text>Local known server checkpoint: {sequenceState?.serverCheckpoint ?? "CHECK REQUIRED"}</Text><Text>Remote server checkpoint: {remoteCheckpoint ?? "NOT CHECKED"}</Text><Text>Next expected server sequence: {sequenceState ? sequenceState.serverCheckpoint + 1 : "CHECK REQUIRED"}</Text><Text>Sequence health: {sequenceHealth}</Text><Pressable accessibilityRole="button" accessibilityLabel="Refresh server checkpoint" testID="refresh-server-checkpoint" disabled={mode !== "online"} onPress={() => void refreshCheckpoint()}><Text>Refresh Server Checkpoint</Text></Pressable>
-    <Text>PHASE 12 CLOUD RECONCILIATION</Text><Text>Delta sync: {cursor?.initialized ? "INITIALIZED" : "NOT INITIALIZED"}</Text><Text>Pull cursor: {cursor?.pullCursor ?? 0}</Text><Text>Last push: {cursor?.lastPushAt ?? "NEVER"}</Text><Text>Last pull: {cursor?.lastPullAt ?? "NEVER"}</Text><Text>Last reconciliation: {cursor?.lastReconcileAt ?? "NEVER"}</Text><Text>Last sync error: {cursor?.lastError ?? "NONE"}</Text><Text>Server changes remaining: UNKNOWN UNTIL RECONCILE</Text><Pressable disabled={mode !== "online"} onPress={() => void reconcile()}><Text>Reconcile With Cloud</Text></Pressable>
+    </TindioCard>
+    <TindioCard title="Device sequence and cloud reconciliation">
+    <Text>PHASE 11 DEVICE SEQUENCE</Text><Text>Device: {deviceId ?? "NOT AVAILABLE"}</Text><Text>Next local sequence: {sequenceState?.nextSequence ?? "CHECK REQUIRED"}</Text><Text>Local known server checkpoint: {sequenceState?.serverCheckpoint ?? "CHECK REQUIRED"}</Text><Text>Remote server checkpoint: {remoteCheckpoint ?? "NOT CHECKED"}</Text><Text>Next expected server sequence: {sequenceState ? sequenceState.serverCheckpoint + 1 : "CHECK REQUIRED"}</Text><Text>Sequence health: {sequenceHealth}</Text><Pressable accessibilityRole="button" accessibilityLabel="Refresh server checkpoint" testID="refresh-server-checkpoint" disabled={mode !== "online"} onPress={() => void refreshCheckpoint()} style={styles.action}><Text>Refresh Server Checkpoint</Text></Pressable>
+    <Text>PHASE 12 CLOUD RECONCILIATION</Text><Text>Delta sync: {cursor?.initialized ? "INITIALIZED" : "NOT INITIALIZED"}</Text><Text>Pull cursor: {cursor?.pullCursor ?? 0}</Text><Text>Last push: {cursor?.lastPushAt ?? "NEVER"}</Text><Text>Last pull: {cursor?.lastPullAt ?? "NEVER"}</Text><Text>Last reconciliation: {cursor?.lastReconcileAt ?? "NEVER"}</Text><Text>Last sync error: {cursor?.lastError ?? "NONE"}</Text><Text>Server changes remaining: UNKNOWN UNTIL RECONCILE</Text><Pressable accessibilityRole="button" disabled={mode !== "online"} onPress={() => void reconcile()} style={styles.action}><Text>Reconcile With Cloud</Text></Pressable>
+    </TindioCard>
+    <TindioCard title="Connection modes">
     <Text>PHASE 16 ISOLATED DEVICE MODE</Text>
     <Text>Persisted mode: {isolatedDiagnostics?.connectionMode ?? "UNKNOWN"}</Text>
     <Text>Mode changed at: {isolatedDiagnostics?.connectionChangedAt ?? "UNKNOWN"}</Text>
@@ -335,7 +342,7 @@ export default function SyncStatusScreen() {
         <Text>Store Hub cursor: {storeHubState?.pullCursor ?? 0}</Text>
         <Text>Store Hub last contact: {storeHubState?.lastContactAt ?? "NEVER"}</Text>
         <Text>Store Hub last error: {storeHubState?.lastError ?? "NONE"}</Text>
-        <Pressable onPress={() => void syncStoreHub()}><Text>Synchronize With Store Hub</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => void syncStoreHub()} style={styles.action}><Text>Synchronize With Store Hub</Text></Pressable>
         <Text>Store Hub ACK never replaces cloud ACK.</Text>
       </>
     ) : (
@@ -343,6 +350,8 @@ export default function SyncStatusScreen() {
         Store Hub is deferred from this release. This terminal uses isolated offline cash and authoritative cloud reconciliation.
       </Text>
     )}
+    </TindioCard>
+    <TindioCard title="Inventory and performance">
     <Text>PHASE 14 OFFLINE INVENTORY INTELLIGENCE</Text>
     <Text>Authority: {inventoryDiagnostics?.authority ?? "SERVER_LEDGER_AUTHORITATIVE"}</Text>
     <Text>Local intelligence scope: {inventoryDiagnostics?.localScope ?? "CURRENT_DEVICE_ONLY"}</Text>
@@ -358,7 +367,14 @@ export default function SyncStatusScreen() {
     <Text>SQLite search latency avg / max ms: {performance.sqliteAverageLatencyMs.toFixed(1)} / {performance.sqliteMaxLatencyMs}</Text>
     <Text>Sync throughput records/sec: {performance.syncThroughputPerSecond.toFixed(2)}</Text>
     <Text>Recovery duration avg / max ms: {performance.recoveryAverageDurationMs.toFixed(1)} / {performance.recoveryMaxDurationMs}</Text>
-    <Pressable onPress={() => { resetPerformanceMetrics(); setMessage("Phase 22 performance window reset."); }}><Text>Reset Phase 22 performance window</Text></Pressable>
+    <Pressable accessibilityRole="button" onPress={() => { resetPerformanceMetrics(); setMessage("Phase 22 performance window reset."); }} style={styles.action}><Text>Reset Phase 22 performance window</Text></Pressable>
+    </TindioCard>
     </TindioWorkspaceSection>
-  </ScrollView>;
+  </TindioScreen>;
 }
+
+const styles = StyleSheet.create({
+  screen: { alignSelf: "center", maxWidth: 1120, paddingBottom: tindioTheme.space.xxl, width: "100%" },
+  action: { justifyContent: "center", minHeight: tindioTheme.target.minimum, paddingVertical: tindioTheme.space.xs },
+  input: { backgroundColor: tindioTheme.color.surface.input, borderColor: tindioTheme.color.border.default, borderRadius: tindioTheme.radius.md, borderWidth: 1, color: tindioTheme.color.content.primary, minHeight: tindioTheme.target.minimum, padding: tindioTheme.space.sm },
+});

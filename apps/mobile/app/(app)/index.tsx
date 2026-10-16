@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { cashierFeatureGates } from "../../src/features/cashier/cashier-feature-gates";
 import { buildCashierNavigation, type CashierNavigationSection } from "../../src/features/cashier/cashier-navigation";
@@ -16,20 +16,20 @@ import { TindioButton } from "../../src/ui/tindio-button";
 import { TindioCard } from "../../src/ui/tindio-card";
 import { TindioFeedback } from "../../src/ui/tindio-feedback";
 import { TindioScreen } from "../../src/ui/tindio-screen";
+import { useTindioResponsiveLayout } from "../../src/ui/tindio-responsive";
+import { TindioProgressIndicator } from "../../src/ui/tindio-progress-indicator";
 
-const TABLET_SHELL_MIN_WIDTH = 720;
 const navigationSections: Array<{ key: CashierNavigationSection; label: string }> = [
   { key: "CHECKOUT", label: "Checkout" }, { key: "OPERATIONS", label: "Store work" }, { key: "SUPPORT", label: "Help and recovery" },
 ];
 
 export default function MobileHomeScreen() {
-  const { width } = useWindowDimensions();
-  const isTabletShell = width >= TABLET_SHELL_MIN_WIDTH;
+  const { allowsColumns, allowsDenseGrid, viewportClass } = useTindioResponsiveLayout();
   const { signOut } = useSession();
   const { data, loading, error, reload, mode, connectionMode, offlineExpiresAt, cashierReadinessState } = useBusinessContext();
   const [message, setMessage] = useState<string | null>(null);
 
-  if (loading && !data) return <View accessibilityLabel="Loading register" style={styles.centeredState}><ActivityIndicator color={tindioTheme.color.brand.primary} /><Text style={styles.secondaryText}>Opening this register…</Text></View>;
+  if (loading && !data) return <View accessibilityLabel="Loading register" style={styles.centeredState}><TindioProgressIndicator color={tindioTheme.color.brand.primary} label="Opening this register" /></View>;
 
   if (error || !data) {
     return <TindioScreen contentContainerStyle={styles.unavailableScreen} edges={[]}><TindioCard style={styles.unavailableCard}><Text style={styles.eyebrow}>TINDIO POS</Text><Text accessibilityRole="header" style={styles.stateTitle}>We couldn’t open this register</Text><TindioFeedback description={error ?? "Business context is unavailable. Check the connection, then try again. Saved transactions remain on this device."} kind="error" title="Register unavailable" /><TindioButton accessibilityLabel="Try opening the register again" onPress={() => void reload()}>Try again</TindioButton></TindioCard></TindioScreen>;
@@ -49,15 +49,15 @@ export default function MobileHomeScreen() {
   const safeSignOut = async () => { const result = await signOut(); if (!result.ok) setMessage(result.message); };
 
   return (
-    <TindioScreen contentContainerStyle={[styles.screenContent, isTabletShell ? styles.screenContentTablet : null]} edges={[]} scroll testID="cashier-home-scroll">
+    <TindioScreen contentContainerStyle={[styles.screenContent, allowsColumns ? styles.screenContentTablet : null]} edges={[]} scroll testID="cashier-home-scroll">
       <CashierTerminalHeader connectionLabel={connectionLabel} employeeName={core.employee.name} organizationName={core.organization.name} readinessState={cashierReadinessState} />
       <CashierReadinessPanel expiresAt={offlineExpiresAt} state={cashierReadinessState} />
-      <View style={[styles.workspace, isTabletShell ? styles.workspaceTablet : null]}>
+      <View accessibilityLabel={`${viewportClass} cashier workspace`} style={[styles.workspace, allowsColumns ? styles.workspaceTablet : null]}>
         <View style={styles.primaryColumn}>
           {navigationSections.map((section) => {
             const items = navigation.filter((item) => item.section === section.key);
             if (items.length === 0) return null;
-            return <View key={section.key} style={styles.section}><Text accessibilityRole="header" style={styles.sectionTitle}>{section.label}</Text><View style={styles.taskGrid}>{items.map((item) => <CashierTaskCard description={item.description} key={item.path} label={item.label} onPress={() => router.push(item.path as never)} style={isTabletShell ? styles.taskCardTablet : undefined} />)}</View></View>;
+            return <View key={section.key} style={styles.section}><Text accessibilityRole="header" style={styles.sectionTitle}>{section.label}</Text><View style={styles.taskGrid}>{items.map((item) => <CashierTaskCard description={item.description} key={item.path} label={item.label} onPress={() => router.push(item.path as never)} style={allowsDenseGrid ? styles.taskCardTablet : undefined} />)}</View></View>;
           })}
         </View>
         <View style={styles.contextColumn}>

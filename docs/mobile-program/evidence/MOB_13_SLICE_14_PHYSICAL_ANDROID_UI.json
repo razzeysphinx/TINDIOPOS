@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "phase": "MOB-13",
+  "slice": 14,
+  "status": "BLOCKED",
+  "certificationEvidence": false,
+  "sourceCommit": "b16dd8fa1d4796ac4915c382772206ea59276ec8",
+  "observedAt": "2026-10-17T00:20:00+08:00",
+  "packageId": "com.tindio.pos",
+  "appVersion": "1.0.0",
+  "versionCode": 2,
+  "environment": {
+    "androidUsbInterface": "DETECTED_XIAOMI_VID_2717",
+    "adbExecutable": "C:\\tmp\\android-platform-tools\\platform-tools\\adb.exe",
+    "adbAuthorization": "DEVICE_VISIBLE_BRIEFLY_THEN_TRANSPORT_LOST_AFTER_RECONNECT",
+    "apkArtifact": "NOT_AVAILABLE",
+    "productionReleaseCandidate": "NOT_AVAILABLE"
+  },
+  "deviceClasses": {
+    "phone": "NOT_RUN",
+    "tablet": "NOT_RUN",
+    "physicalKeyboardOrHid": "NOT_RUN"
+  },
+  "campaign": [
+    { "id": "sign-in-enrollment-assignment-preparation", "result": "NOT_RUN" },
+    { "id": "ready-offline", "result": "NOT_RUN" },
+    { "id": "catalogue-search-scan-selection", "result": "NOT_RUN" },
+    { "id": "cart-editing-modifiers-variable-price", "result": "NOT_RUN" },
+    { "id": "synthetic-online-cash-checkout", "result": "NOT_RUN" },
+    { "id": "synthetic-offline-cash-acceptance", "result": "NOT_RUN" },
+    { "id": "force-stop-cold-restart-custody", "result": "NOT_RUN" },
+    { "id": "receipt-visibility", "result": "NOT_RUN" },
+    { "id": "reconnect-recovery-sync-review", "result": "NOT_RUN" },
+    { "id": "keyboard-large-text", "result": "NOT_RUN" },
+    { "id": "talkback", "result": "NOT_RUN" },
+    { "id": "phone-responsive-layout", "result": "NOT_RUN" },
+    { "id": "tablet-responsive-layout", "result": "NOT_RUN" }
+  ],
+  "requiredEvidence": {
+    "deviceMetadata": ["manufacturer", "model", "androidVersion", "apiLevel", "abi", "serial"],
+    "buildMetadata": ["sourceCommit", "packageId", "versionName", "versionCode", "artifactSha256", "signerCertificateSha256"],
+    "screenshotsRequired": true,
+    "syntheticTransactionsOnly": true,
+    "releaseCandidateRequiredForProductionCertification": true
+  },
+  "blockers": [
+    "AUTHORIZED_ADB_TRANSPORT_UNAVAILABLE",
+    "APK_ARTIFACT_NOT_AVAILABLE",
+    "PHYSICAL_PHONE_CAMPAIGN_NOT_RUN",
+    "PHYSICAL_TABLET_CAMPAIGN_NOT_RUN",
+    "PHYSICAL_KEYBOARD_OR_HID_CAMPAIGN_NOT_RUN",
+    "LARGE_TEXT_CAMPAIGN_NOT_RUN",
+    "TALKBACK_CAMPAIGN_NOT_RUN",
+    "BOUND_PHASE_23_24_RELEASE_CANDIDATE_NOT_AVAILABLE"
+  ],
+  "notes": "No physical result is promoted from source tests or prior screenshots. The earlier Xiaomi 21121210G record proves only its historical slice and does not certify the current source commit."
+}

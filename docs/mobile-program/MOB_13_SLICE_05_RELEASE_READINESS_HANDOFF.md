@@ -2,6 +2,13 @@
 
 Status: **IMPLEMENTATION COMPLETE; PRODUCTION RELEASE INPUTS BLOCKED**
 
+> Scope addendum (2026-10-16): this completion statement remains valid for the
+> deterministic release-input handoff implemented by Slice 05. A later physical
+> review of the full cashier checkout identified an additional presentation
+> gap. MOB-13 UI convergence is therefore reopened as Slices 06-14 under
+> `TINDIO_POS_WEB_MOBILE_UI_SOURCE_OF_TRUTH.md`. This addendum does not invalidate
+> Slice 05 tests or authorize production release.
+
 ## Phase and ticket
 
 - Phase: Mobile Phases 23 and 24

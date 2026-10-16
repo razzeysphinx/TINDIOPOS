@@ -1134,6 +1134,14 @@ Normal reconnection does not require full-database reload.
 
 ## PHASE 13 — NATIVE CASHIER FEATURE PARITY
 
+UI convergence clarification (2026-10-16): functional cashier parity does not
+by itself establish web/mobile visual parity or production UI certification.
+The authoritative presentation, navigation, responsive-layout, and UI evidence
+contract is `docs/mobile-program/TINDIO_POS_WEB_MOBILE_UI_SOURCE_OF_TRUTH.md`.
+Its additional MOB-13 Slices 06-14 refine Phase 13 without renumbering the
+canonical Mobile Phases 00-26 or weakening any transaction, security, offline,
+or release gate in this document.
+
 Port cashier workflows in controlled order:
 
 catalog

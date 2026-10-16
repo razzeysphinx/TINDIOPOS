@@ -4,6 +4,13 @@
 
 **IMPLEMENTATION COMPLETE**
 
+Scope clarification (2026-10-16): this status records functional cashier
+coverage at the scope documented below. It does not certify complete visual
+parity with the web POS. Web/mobile presentation convergence is reopened as
+MOB-13 Slices 06-14 under
+`TINDIO_POS_WEB_MOBILE_UI_SOURCE_OF_TRUTH.md`. The historical functional result
+is retained; production UI implementation and certification remain open.
+
 ## Certification status
 
 **VALIDATING**

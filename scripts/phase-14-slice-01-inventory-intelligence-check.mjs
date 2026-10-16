@@ -16,6 +16,10 @@ test("Phase 14 Slice 01 inventory intelligence contract", () => {
 
   const intelligence = fs.readFileSync(intelligencePath, "utf8");
   const pos = fs.readFileSync(posPath, "utf8");
+  const cart = fs.readFileSync(
+    "apps/mobile/src/features/cashier/cashier-cart-workspace.tsx",
+    "utf8",
+  );
   const outboxTypes = fs.readFileSync(
     "apps/mobile/src/features/outbox/outbox-types.ts",
     "utf8",
@@ -47,12 +51,12 @@ test("Phase 14 Slice 01 inventory intelligence contract", () => {
   );
 
   assert.ok(
-    pos.includes("INVENTORY INTELLIGENCE â€” ESTIMATE ONLY"),
+    cart.includes("Estimated stock (may change after sync)"),
     "POS must clearly label inventory intelligence as an estimate",
   );
 
   assert.ok(
-    pos.includes("This value is not authoritative cloud stock."),
+    cart.includes("They are not authoritative cloud stock."),
     "POS must not present local inventory estimate as authoritative",
   );
 

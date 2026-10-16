@@ -11,6 +11,10 @@ test("Phase 14 Slice 02 cart inventory intelligence", () => {
     "apps/mobile/app/(app)/pos.tsx",
     "utf8",
   );
+  const cart = fs.readFileSync(
+    "apps/mobile/src/features/cashier/cashier-cart-workspace.tsx",
+    "utf8",
+  );
   const outbox = fs.readFileSync(
     "apps/mobile/src/features/outbox/outbox-types.ts",
     "utf8",
@@ -27,13 +31,12 @@ test("Phase 14 Slice 02 cart inventory intelligence", () => {
   }
 
   for (const marker of [
-    "CURRENT DEVICE ONLY",
-    "Other offline terminals are not represented here.",
+    "Current device only. Other offline terminals are not represented here.",
     "Cloud baseline age:",
-    "Projected after current cart:",
-    "WARNING: this device estimate projects stock below zero.",
+    "After this cart",
+    "This device estimate projects stock below zero.",
   ]) {
-    assert.ok(pos.includes(marker), `POS must include ${marker}`);
+    assert.ok(cart.includes(marker), `cart workspace must include ${marker}`);
   }
 
   assert.ok(

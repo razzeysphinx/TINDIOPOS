@@ -1,8 +1,24 @@
 import { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import type { PosCartLine } from "../../../../../src/contracts/pos";
+
+import { TindioButton } from "../../ui/tindio-button";
+import { TindioInput } from "../../ui/tindio-input";
+import { tindioTheme } from "../../ui/theme";
+import { localCartLineTotalMinor } from "../local-first/local-cart";
 import { formatMoney } from "./cashier-format";
 import { normalizeQuantity } from "./cashier-validation";
+
+type CashierCartLineProps = {
+  line: PosCartLine;
+  currencyCode: string;
+  canEditQuantity: boolean;
+  canRemove: boolean;
+  onQuantity(value: number): void;
+  onNote(value: string | null): void;
+  onReconfigure(): void;
+  onRemove(): void;
+};
 
 export function CashierCartLine({
   line,
@@ -13,22 +29,11 @@ export function CashierCartLine({
   onNote,
   onReconfigure,
   onRemove,
-}: {
-  line: PosCartLine;
-  currencyCode: string;
-  canEditQuantity: boolean;
-  canRemove: boolean;
-  onQuantity(value: number): void;
-  onNote(value: string | null): void;
-  onReconfigure(): void;
-  onRemove(): void;
-}) {
+}: CashierCartLineProps) {
   const [quantity, setQuantity] = useState(String(line.quantity));
   const [note, setNote] = useState(line.itemNote ?? "");
-
-  const baseMinor = line.manualPriceMinor ?? line.priceMinor;
-  const modifierMinor = (line.modifiers ?? []).reduce((sum, modifier) => sum + modifier.priceMinor, 0);
-  const lineMinor = Math.round((baseMinor + modifierMinor) * line.quantity);
+  const step = line.allowFractionalQuantity ? 0.1 : 1;
+  const lineMinor = localCartLineTotalMinor(line);
 
   const commitQuantity = () => {
     const normalized = normalizeQuantity(quantity, line.allowFractionalQuantity);
@@ -38,69 +43,136 @@ export function CashierCartLine({
       return;
     }
 
+    setQuantity(String(normalized));
     onQuantity(normalized);
   };
 
-  return (
-    <View>
-      <Text>
-        {line.productName}
-        {line.variantName ? ` / ${line.variantName}` : ""}
-      </Text>
+  const changeQuantity = (direction: -1 | 1) => {
+    const next = Math.round((line.quantity + direction * step) * 1_000) / 1_000;
+    const normalized = normalizeQuantity(next, line.allowFractionalQuantity);
+    if (normalized === null) return;
+    setQuantity(String(normalized));
+    onQuantity(normalized);
+  };
 
-      <Text>{formatMoney(lineMinor, currencyCode)}</Text>
+  const productLabel = `${line.productName}${line.variantName ? ` / ${line.variantName}` : ""}`;
+
+  return (
+    <View accessibilityLabel={`${productLabel} cart line`} style={styles.card}>
+      <View style={styles.heading}>
+        <View style={styles.productCopy}>
+          <Text style={styles.productName}>{productLabel}</Text>
+          <Text style={styles.unitPrice}>
+            {formatMoney(line.manualPriceMinor ?? line.priceMinor, currencyCode)} / {line.unit}
+          </Text>
+        </View>
+        <Text accessibilityLabel={`Line total ${formatMoney(lineMinor, currencyCode)}`} style={styles.lineTotal}>
+          {formatMoney(lineMinor, currencyCode)}
+        </Text>
+      </View>
 
       {line.modifiers?.length ? (
-        <Text>
-          {line.modifiers.map((modifier) => modifier.name).join(", ")}
-        </Text>
+        <Text style={styles.detail}>Options: {line.modifiers.map((modifier) => modifier.name).join(", ")}</Text>
       ) : null}
 
       {line.isVariablePrice ? (
-        <Text>Manual price: {formatMoney(line.manualPriceMinor ?? line.priceMinor, currencyCode)}</Text>
+        <Text style={styles.detail}>
+          Entered price: {formatMoney(line.manualPriceMinor ?? line.priceMinor, currencyCode)}
+        </Text>
       ) : null}
 
-      <TextInput
-        accessibilityLabel={`${line.productName} quantity`}
-        value={quantity}
-        onChangeText={setQuantity}
-        onEndEditing={commitQuantity}
-        editable={canEditQuantity}
-        keyboardType="decimal-pad"
-        placeholder="Quantity"
-        style={{ minHeight: 48 }}
-      />
+      <View style={styles.quantityRow}>
+        <TindioButton
+          accessibilityLabel={`Decrease ${line.productName} quantity`}
+          disabled={!canEditQuantity || line.quantity <= step}
+          onPress={() => changeQuantity(-1)}
+          style={styles.stepButton}
+          variant="secondary"
+        >
+          -
+        </TindioButton>
+        <View style={styles.quantityInput}>
+          <TindioInput
+            accessibilityLabel={`${line.productName} quantity`}
+            editable={canEditQuantity}
+            keyboardType="decimal-pad"
+            label="Quantity"
+            onChangeText={setQuantity}
+            onEndEditing={commitQuantity}
+            placeholder="Quantity"
+            value={quantity}
+          />
+        </View>
+        <TindioButton
+          accessibilityLabel={`Increase ${line.productName} quantity`}
+          disabled={!canEditQuantity}
+          onPress={() => changeQuantity(1)}
+          style={styles.stepButton}
+          variant="secondary"
+        >
+          +
+        </TindioButton>
+      </View>
 
-      <TextInput
+      <TindioInput
         accessibilityLabel={`${line.productName} line note`}
-        value={note}
+        helperText="Notes require a connection at checkout."
+        label="Line note"
+        maxLength={500}
         onChangeText={setNote}
         onEndEditing={() => onNote(note.trim() || null)}
-        maxLength={500}
-        placeholder="Line note"
-        style={{ minHeight: 48 }}
+        placeholder="Add a preparation note"
+        value={note}
       />
 
-      {line.isVariablePrice || line.hasModifiers ? (
-        <Pressable
-          accessibilityLabel={`Edit price or modifiers for ${line.productName}`}
-          accessibilityRole="button"
-          onPress={onReconfigure}
-          style={{ minHeight: 48, justifyContent: "center" }}
+      <View style={styles.actions}>
+        {line.isVariablePrice || line.hasModifiers ? (
+          <TindioButton
+            accessibilityLabel={`Edit price or modifiers for ${line.productName}`}
+            onPress={onReconfigure}
+            style={styles.action}
+            variant="secondary"
+          >
+            Edit price or options
+          </TindioButton>
+        ) : null}
+        <TindioButton
+          accessibilityLabel={`Remove ${line.productName}`}
+          disabled={!canRemove}
+          onPress={onRemove}
+          style={styles.action}
+          variant="destructive"
         >
-          <Text>Edit price / modifiers</Text>
-        </Pressable>
-      ) : null}
-
-      <Pressable
-        accessibilityLabel={`Remove ${line.productName}`}
-        accessibilityRole="button"
-        disabled={!canRemove}
-        onPress={onRemove}
-        style={{ minHeight: 48, justifyContent: "center" }}
-      >
-        <Text>Remove</Text>
-      </Pressable>
+          Remove item
+        </TindioButton>
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: tindioTheme.color.surface.card,
+    borderColor: tindioTheme.color.border.default,
+    borderRadius: tindioTheme.radius.lg,
+    borderWidth: 1,
+    gap: tindioTheme.space.sm,
+    padding: tindioTheme.space.md,
+  },
+  heading: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: tindioTheme.space.sm,
+    justifyContent: "space-between",
+  },
+  productCopy: { flex: 1, gap: tindioTheme.space.xxs },
+  productName: { ...tindioTheme.typography.role.label, color: tindioTheme.color.content.primary },
+  unitPrice: { ...tindioTheme.typography.role.caption, color: tindioTheme.color.content.secondary },
+  lineTotal: { ...tindioTheme.typography.role.numeric, color: tindioTheme.color.brand.ink },
+  detail: { ...tindioTheme.typography.role.caption, color: tindioTheme.color.content.secondary },
+  quantityRow: { alignItems: "flex-end", flexDirection: "row", gap: tindioTheme.space.xs },
+  quantityInput: { flex: 1 },
+  stepButton: { minWidth: tindioTheme.target.minimum, paddingHorizontal: tindioTheme.space.xs },
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: tindioTheme.space.xs },
+  action: { flexGrow: 1 },
+});

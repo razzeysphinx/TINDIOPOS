@@ -21,6 +21,7 @@ type TindioButtonProps = Omit<PressableProps, "children" | "style"> & {
 
 export function TindioButton({
   accessibilityLabel,
+  accessibilityState,
   busy = false,
   children,
   disabled = false,
@@ -35,7 +36,7 @@ export function TindioButton({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      accessibilityState={{ busy, disabled: unavailable }}
+      accessibilityState={{ ...accessibilityState, busy, disabled: unavailable }}
       disabled={unavailable}
       style={({ pressed }) => [
         styles.base,

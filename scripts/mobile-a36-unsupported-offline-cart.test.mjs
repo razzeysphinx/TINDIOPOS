@@ -64,8 +64,9 @@ for (const scenario of [
 
 test("A36 POS exposes the reason and retains its defensive acceptance boundary", () => {
   const pos = read("apps/mobile/app/(app)/pos.tsx");
+  const cart = read("apps/mobile/src/features/cashier/cashier-cart-workspace.tsx");
   const acceptance = read("apps/mobile/src/features/outbox/create-offline-sale.ts");
-  assert.match(pos, /testID="offline-cart-restriction"/);
+  assert.match(cart, /testID="offline-cart-restriction"/);
   assert.match(pos, /offlineCashCartRestrictionMessage\(offlineCartRestriction\)/);
   assert.ok(
     pos.indexOf("if (offlineCartRestriction)") < pos.indexOf("await createOfflineCashSale"),

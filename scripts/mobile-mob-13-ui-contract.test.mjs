@@ -32,7 +32,7 @@ test("native primitives preserve accessibility and touch target contracts", asyn
     read("apps/mobile/src/ui/tindio-screen.tsx"),
   ]);
   assert.match(button, /accessibilityRole="button"/);
-  assert.match(button, /accessibilityState=\{\{ busy, disabled: unavailable \}\}/);
+  assert.match(button, /accessibilityState=\{\{ \.\.\.accessibilityState, busy, disabled: unavailable \}\}/);
   assert.match(button, /minHeight: tindioTheme\.target\.minimum/);
   assert.match(input, /accessibilityLabel=\{accessibilityLabel \?\? label\}/);
   assert.match(input, /minHeight: tindioTheme\.target\.minimum/);

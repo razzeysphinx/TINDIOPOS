@@ -5,8 +5,10 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import type {
@@ -32,7 +34,7 @@ import {
 } from "../../src/db/checkout-intents";
 import { saveCustomerSearchResults, searchCachedCustomers } from "../../src/db/customer-cache";
 import { CashierCatalogue } from "../../src/features/cashier/cashier-catalogue";
-import { CashierCartLine } from "../../src/features/cashier/cashier-cart-line";
+import { CashierCartWorkspace } from "../../src/features/cashier/cashier-cart-workspace";
 import { ModifierPicker, VariablePriceEditor } from "../../src/features/cashier/cashier-editors";
 import { cashierFeatureGates } from "../../src/features/cashier/cashier-feature-gates";
 import { formatMoney } from "../../src/features/cashier/cashier-format";
@@ -75,6 +77,7 @@ import {
 // readOfflineInventoryIntelligence remains the per-line foundation of cart intelligence.
 import { createOfflineCashSale } from "../../src/features/outbox/create-offline-sale";
 import { syncOutboxEvents } from "../../src/features/outbox/outbox-sync";
+import { tindioTheme } from "../../src/ui/theme";
 import {
   checkoutPosV2,
   createPosV2Customer,
@@ -94,6 +97,8 @@ type ModifierState = ConfigureState & {
   groups: PosModifierGroup[];
 };
 
+const TABLET_CART_PANE_MIN_WIDTH = 900;
+
 function baseCartLine(item: PosCatalogItem): PosCartLine {
   return {
     ...item,
@@ -106,6 +111,7 @@ function baseCartLine(item: PosCatalogItem): PosCartLine {
 }
 
 export default function PosScreen() {
+  const { width } = useWindowDimensions();
   const { data, mode, cashierReadinessState } = useBusinessContext();
   const core = data?.core;
   const terminal =
@@ -130,6 +136,7 @@ export default function PosScreen() {
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [cart, setCart] = useState<PosCartLine[]>([]);
+  const [cartExpanded, setCartExpanded] = useState(false);
   const [categories, setCategories] = useState<PosCategory[]>([]);
   const [discounts, setDiscounts] = useState<Awaited<ReturnType<typeof getLocalDiscounts>>>([]);
   const [taxes, setTaxes] = useState<Awaited<ReturnType<typeof getLocalTaxRates>>>([]);
@@ -179,6 +186,7 @@ export default function PosScreen() {
   const canApplyDiscounts = Boolean(core?.permissions.includes("discounts.apply"));
   const canCreateCustomers = Boolean(core?.permissions.includes("customers.manage"));
   const canUseTickets = Boolean(gates?.tickets);
+  const usesTabletCartPane = width >= TABLET_CART_PANE_MIN_WIDTH;
 
   const shiftMatches = Boolean(
     core?.activeShift
@@ -1009,6 +1017,8 @@ export default function PosScreen() {
         keyboardShouldPersistTaps="handled"
         testID="pos-scroll"
       >
+      <View style={[styles.saleWorkspace, usesTabletCartPane ? styles.saleWorkspaceTablet : null]}>
+      <View style={styles.cataloguePane}>
       <CashierCatalogue
         categories={categories}
         categoryId={categoryId}
@@ -1028,227 +1038,54 @@ export default function PosScreen() {
           ? `${core.organization.name} · Register ready`
           : `${core.organization.name} · Shift required before checkout`}
       />
-
-      <Text>Cart lines: {cart.length}</Text>
-
-      {cart.map((line) => (
-        <CashierCartLine
-          key={`${posItemKey(line)}:${line.quantity}:${line.itemNote ?? ""}`}
-          line={line}
-          currencyCode={core.organization.currencyCode}
-          canEditQuantity={canEditQuantity}
-          canRemove={canRemoveItems}
-          onQuantity={(quantity) => setLineQuantity(line, quantity)}
-          onNote={(note) => setLineNote(line, note)}
-          onReconfigure={() => void startConfigure(line, line)}
-          onRemove={() => removeLine(line)}
-        />
-      ))}
-
-      <Text>LOCAL PREVIEW ONLY</Text>
-      <Text>
-        Subtotal {formatMoney(totals.subtotalMinor, core.organization.currencyCode)}
-        {" — "}Discount {formatMoney(totals.discountMinor, core.organization.currencyCode)}
-        {" — "}Tax {formatMoney(totals.taxMinor, core.organization.currencyCode)}
-        {" — "}Total {formatMoney(totals.totalMinor, core.organization.currencyCode)}
-      </Text>
-
-      <View>
-        <Text>INVENTORY INTELLIGENCE â€” ESTIMATE ONLY</Text>
-        <Text>
-          Scope is CURRENT_DEVICE_ONLY until a Store Hub sync succeeds.
-          STORE_LOCAL_AWARE includes known peer terminal activity from the local Hub.
-        </Text>
-        <Text>This value is not authoritative cloud stock.</Text>
-
-        {cartInventoryIntelligence.length ? (
-          cartInventoryIntelligence.map((row) => (
-            <View key={`${row.productId}:${row.variantId ?? "simple"}`}>
-              <Text>{row.label}</Text>
-              <Text>
-                Last confirmed cloud stock:{" "}
-                {row.lastConfirmedCloudStock ?? "UNKNOWN"}
-              </Text>
-              <Text>
-                Cloud baseline age:{" "}
-                {row.baselineAgeMinutes === null
-                  ? "NO BASELINE"
-                  : `${row.baselineAgeMinutes} minute(s)`}
-              </Text>
-              <Text>
-                Known synced activity from this terminal after baseline:{" "}
-                {row.knownSyncedActivityFromThisTerminal}
-              </Text>
-              <Text>
-                Device-only unsynced activity:{" "}
-                {row.deviceOnlyUnsyncedActivity}
-              </Text>
-              <Text>
-                Store-local peer activity:{" "}
-                {row.peerStoreLocalActivity}
-                {" — "}
-                {row.peerDeviceCount} peer device(s)
-              </Text>
-              <Text>
-                Store Hub last contact:{" "}
-                {row.storeHubLastContactAt ?? "NOT AVAILABLE"}
-              </Text>
-              <Text>
-                Intelligence scope: {row.scope}
-              </Text>
-              <Text>
-                Estimated available before current cart:{" "}
-                {row.estimatedAvailableStock ?? "UNKNOWN"}
-              </Text>
-              <Text>
-                Current cart quantity: {row.cartQuantity}
-              </Text>
-              <Text>
-                Projected after current cart:{" "}
-                {row.projectedAfterCurrentCart ?? "UNKNOWN"}
-              </Text>
-              <Text>
-                {row.projectedBelowZero
-                  ? "WARNING: this device estimate projects stock below zero."
-                  : "No local negative-stock warning from this estimate."}
-              </Text>
-              <Text>
-                Unresolved local sale events affecting this item:{" "}
-                {row.unresolvedEventCount}
-              </Text>
-            </View>
-          ))
-        ) : (
-          <Text>Add an item to the cart to calculate inventory intelligence.</Text>
-        )}
       </View>
 
-      {canApplyDiscounts ? (
-        <>
-          <Pressable onPress={() => { setDiscountId(null); markCartChanged(); }}>
-            <Text>No discount</Text>
-          </Pressable>
-          {discounts.map((discount) => (
-            <Pressable
-              key={discount.id}
-              onPress={() => {
-                setDiscountId(discount.id);
-                markCartChanged();
-              }}
-            >
-              <Text>
-                {discountId === discount.id ? "✓ " : ""}
-                Discount {discount.name}
-              </Text>
-            </Pressable>
-          ))}
-        </>
-      ) : null}
-
-      {taxes.map((tax) => (
-        <Pressable
-          key={tax.id}
-          onPress={() => {
-            setTaxId(tax.id);
-            markCartChanged();
-          }}
-        >
-          <Text>
-            {taxId === tax.id ? "✓ " : ""}
-            Tax {tax.name}
-          </Text>
-        </Pressable>
-      ))}
-
-      {gates?.dining ? (
-        <View>
-          <Text>Dining option</Text>
-          {diningOptions.map((option) => (
-            <Pressable
-              key={option.id}
-              onPress={() => {
-                setDiningOptionId(option.id);
-                markCartChanged();
-              }}
-            >
-              <Text>
-                {diningOptionId === option.id ? "✓ " : ""}
-                {option.name}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
-      <View>
-        <Text>CUSTOMER</Text>
-
-        {selectedCustomer ? (
-          <>
-            <Text>
-              Selected: {selectedCustomer.fullName} — loyalty {selectedCustomer.loyaltyPoints}
-            </Text>
-            <Pressable
-              onPress={() => {
-                setSelectedCustomer(null);
-                markCartChanged();
-              }}
-            >
-              <Text>Clear customer</Text>
-            </Pressable>
-          </>
-        ) : null}
-
-        <TextInput
-          value={customerQuery}
-          onChangeText={setCustomerQuery}
-          placeholder="Search customer"
-        />
-
-        <Pressable onPress={() => void searchCustomers()}>
-          <Text>{mode === "online" ? "Search customers" : "Search cached customers"}</Text>
-        </Pressable>
-
-        {customerRows.map((customer) => (
-          <Pressable
-            key={customer.id}
-            onPress={() => {
-              setSelectedCustomer(customer);
-              markCartChanged();
-            }}
-          >
-            <Text>
-              {customer.fullName} — #{customer.customerNumber} — loyalty {customer.loyaltyPoints}
-            </Text>
-          </Pressable>
-        ))}
-
-        {canCreateCustomers && mode === "online" ? (
-          <>
-            <TextInput
-              value={newCustomerName}
-              onChangeText={setNewCustomerName}
-              placeholder="New customer name"
-            />
-            <TextInput
-              value={newCustomerEmail}
-              onChangeText={setNewCustomerEmail}
-              placeholder="Email"
-              keyboardType="email-address"
-            />
-            <TextInput
-              value={newCustomerPhone}
-              onChangeText={setNewCustomerPhone}
-              placeholder="Phone"
-            />
-            <Pressable
-              disabled={!newCustomerName.trim()}
-              onPress={() => void createCustomer()}
-            >
-              <Text>Create + select customer</Text>
-            </Pressable>
-          </>
-        ) : null}
+      <View style={styles.cartPane}>
+      <CashierCartWorkspace
+        canApplyDiscounts={canApplyDiscounts}
+        canCreateCustomers={canCreateCustomers}
+        canEditQuantity={canEditQuantity}
+        canRemove={canRemoveItems}
+        cart={cart}
+        compact={!usesTabletCartPane}
+        currencyCode={core.organization.currencyCode}
+        customerQuery={customerQuery}
+        customerRows={customerRows}
+        diningEnabled={Boolean(gates?.dining)}
+        diningOptionId={diningOptionId}
+        diningOptions={diningOptions}
+        discountId={discountId}
+        discounts={discounts}
+        expanded={usesTabletCartPane || cartExpanded}
+        inventory={cartInventoryIntelligence}
+        newCustomerEmail={newCustomerEmail}
+        newCustomerName={newCustomerName}
+        newCustomerPhone={newCustomerPhone}
+        onCreateCustomer={() => void createCustomer()}
+        onCustomerQuery={setCustomerQuery}
+        onDining={(value) => { setDiningOptionId(value); markCartChanged(); }}
+        onDiscount={(value) => { setDiscountId(value); markCartChanged(); }}
+        onNewCustomerEmail={setNewCustomerEmail}
+        onNewCustomerName={setNewCustomerName}
+        onNewCustomerPhone={setNewCustomerPhone}
+        onNote={setLineNote}
+        onQuantity={setLineQuantity}
+        onReconfigure={(line) => void startConfigure(line, line)}
+        onRemove={removeLine}
+        onSearchCustomers={() => void searchCustomers()}
+        onSelectCustomer={(value) => { setSelectedCustomer(value); markCartChanged(); }}
+        onTax={(value) => { setTaxId(value); markCartChanged(); }}
+        onToggle={() => setCartExpanded((current) => !current)}
+        online={mode === "online"}
+        restrictionMessage={offlineCartRestriction && offlineCartRestriction !== "EMPTY_CART"
+          ? offlineCashCartRestrictionMessage(offlineCartRestriction)
+          : null}
+        selectedCustomer={selectedCustomer}
+        taxId={taxId}
+        taxes={taxes}
+        totals={totals}
+      />
+      </View>
       </View>
 
       {canUseTickets ? (
@@ -1298,12 +1135,6 @@ export default function PosScreen() {
             </Text>
           </Pressable>
         </View>
-      ) : null}
-
-      {offlineCartRestriction && offlineCartRestriction !== "EMPTY_CART" ? (
-        <Text accessibilityRole="alert" testID="offline-cart-restriction">
-          {offlineCashCartRestrictionMessage(offlineCartRestriction)}
-        </Text>
       ) : null}
 
       {onlineIntent && !onlineIntentMatchesCurrentContext ? (
@@ -1427,3 +1258,10 @@ export default function PosScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  saleWorkspace: { gap: tindioTheme.space.md },
+  saleWorkspaceTablet: { alignItems: "flex-start", flexDirection: "row" },
+  cataloguePane: { flex: 3, minWidth: 0 },
+  cartPane: { flex: 2, minWidth: 0 },
+});

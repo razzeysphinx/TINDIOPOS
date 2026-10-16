@@ -57,7 +57,7 @@ export default function MobileHomeScreen() {
           {navigationSections.map((section) => {
             const items = navigation.filter((item) => item.section === section.key);
             if (items.length === 0) return null;
-            return <View key={section.key} style={styles.section}><Text accessibilityRole="header" style={styles.sectionTitle}>{section.label}</Text><View style={styles.taskGrid}>{items.map((item) => <CashierTaskCard description={item.description} key={item.path} label={item.label} onPress={() => router.push(item.path as never)} style={allowsDenseGrid ? styles.taskCardTablet : undefined} />)}</View></View>;
+            return <View key={section.key} style={styles.section}><Text accessibilityRole="header" style={styles.sectionTitle}>{section.label}</Text><View style={styles.taskGrid}>{items.map((item) => <CashierTaskCard description={item.description} key={item.path} label={item.label} onPress={() => router.push(item.path as never)} style={allowsDenseGrid ? styles.taskCardTablet : styles.taskCardPhone} />)}</View></View>;
           })}
         </View>
         <View style={styles.contextColumn}>
@@ -77,6 +77,6 @@ const styles = StyleSheet.create({
   eyebrow: { ...tindioTheme.typography.role.caption, color: tindioTheme.color.brand.primary, letterSpacing: 1.2 }, stateTitle: { ...tindioTheme.typography.role.title, color: tindioTheme.color.content.primary },
   screenContent: { alignSelf: "center", maxWidth: 1120, width: "100%" }, screenContentTablet: { padding: tindioTheme.space.lg },
   workspace: { gap: tindioTheme.space.lg }, workspaceTablet: { alignItems: "flex-start", flexDirection: "row" }, primaryColumn: { flex: 2, gap: tindioTheme.space.lg, minWidth: 0 }, contextColumn: { flex: 1, gap: tindioTheme.space.md, minWidth: 280 },
-  section: { gap: tindioTheme.space.sm }, sectionTitle: { ...tindioTheme.typography.role.section, color: tindioTheme.color.content.primary }, taskGrid: { flexDirection: "row", flexWrap: "wrap", gap: tindioTheme.space.sm }, taskCardTablet: { flexBasis: "47%", flexGrow: 1 },
+  section: { gap: tindioTheme.space.sm }, sectionTitle: { ...tindioTheme.typography.role.section, color: tindioTheme.color.content.primary }, taskGrid: { flexDirection: "row", flexWrap: "wrap", gap: tindioTheme.space.sm }, taskCardPhone: { width: "100%" }, taskCardTablet: { flexBasis: "47%", flexGrow: 1 },
   secondaryText: { ...tindioTheme.typography.role.body, color: tindioTheme.color.content.secondary }, detailText: { ...tindioTheme.typography.role.label, color: tindioTheme.color.content.primary },
 });

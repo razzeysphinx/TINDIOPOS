@@ -1,146 +1,95 @@
 # MOB-13 Slice 14 — physical Android UI certification and handoff
 
-Status: **AUTOMATED HANDOFF PASS; PHYSICAL CERTIFICATION BLOCKED**
+Status: **PHONE CAMPAIGN PARTIAL PASS; FULL CERTIFICATION BLOCKED**
 
-## Phase and ticket
+## Outcome
 
-```text
-Phase: MOB-13 UI convergence
-Ticket: MOB-13
-Slice: 14 — physical Android UI certification and release handoff
-Starting commit: b16dd8fa1d4796ac4915c382772206ea59276ec8
-```
+The Xiaomi phone was recovered, the current application was rebuilt and installed in place without clearing device data, and the physical campaign progressed through catalogue selection, cart editing, offline cash acceptance, process restart, and receipt recovery.
 
-## Observed defect
+The campaign reproduced a real phone-only layout defect: cashier task cards inherited content-sized widths, became tall narrow columns, and overlapped Store work. Phone cards now occupy the full available width while the existing dense tablet grid remains unchanged. The rebuilt APK was installed over the existing application and the corrected layout was verified on the same phone.
 
-The repository defined the physical Android campaign, but did not provide one executable preflight or a current-slice evidence record that prevented source tests and historical screenshots from being mistaken for certification of the current commit.
+Full Slice 14 certification remains blocked. No physical tablet or keyboard/HID was available, TalkBack was not run, the maximum-font check covered only the sign-in surface, and online checkout/reconnect stopped at the Android-to-local-API transport boundary.
 
-This session detected a connected Xiaomi USB interface (`VID_2717`). The previously used Xiaomi `21121210G`, serial `82eaaf10`, briefly appeared as an authorized ADB device, then its transport disappeared after an ADB reconnect. No APK artifact bound to the starting commit or production release candidate was available. The physical campaign therefore could not truthfully begin.
+## Physical device and build
 
-## Architecture decision
+| Item | Observed value |
+|---|---|
+| Device | Xiaomi 21121210G (`82eaaf10`) |
+| Android | 14 / API 34 / arm64-v8a |
+| Display | 1080×2400, physical density 440 dpi |
+| Package | `com.tindio.pos` 1.0.0 (`versionCode` 2) |
+| Candidate APK SHA-256 | `74062A3949F4ED0EC3E10C677D06C54CEF2A185EE67406E71FD17DD1F7E84FF4` |
+| Signer certificate SHA-256 | `FAC61745DC0903786FB9EDE62A962B399F7348F0BB6F899B8332667591033B9C` |
+| Packaging checks | APK v2 signature PASS; 16 KiB zip alignment PASS |
+| Install | `adb install -r`; first-install time preserved at `2026-10-09 22:13:25` |
+| Production release candidate | NOT AVAILABLE |
 
-Keep the application, transaction flows, local custody, API contracts, and prior evidence unchanged. Add an evidence-only certification boundary:
+A second APK with localhost as the API origin was used only to diagnose `adb reverse`; its SHA-256 is `3777B41D5259EF09C338A36166CE10A5F593663013429E97A34A21D33E13A346`. It is not a release candidate and does not add production evidence.
 
-- a machine-readable Slice 14 evidence record with every required physical flow explicitly `NOT_RUN`;
-- a read-only preflight that locates ADB, inventories authorized devices, fingerprints a caller-provided APK, and reports blockers;
-- a contract test that prevents A49 or Slice 14 from being promoted by source checks alone.
+## Campaign results
 
-The preflight never installs an APK, clears app data, changes enrollment, performs a transaction, or mutates device custody.
-
-## Gap matrix
-
-| Requirement | Current result | Closure condition |
+| Requirement | Result | Observation |
 |---|---|---|
-| Current-commit Android artifact | BLOCKED | Provide an APK through `MOB13_APK_PATH` and retain its SHA-256/signing metadata |
-| Physical phone flow | NOT_RUN | Re-authorize/reconnect the supported phone and run every recorded campaign step |
-| Physical tablet flow | NOT_RUN | Connect a supported tablet and repeat the responsive/accessibility campaign |
-| Keyboard/HID | NOT_RUN | Exercise soft keyboard and supported physical keyboard/HID paths |
-| Large text | NOT_RUN | Run at the largest supported Android font/display size |
-| TalkBack | NOT_RUN | Verify names, roles, state, focus order, and announcements |
-| Production certification | BLOCKED | Use the actual bound Phase 23/24 release candidate after the production release gate is ready |
+| Fresh sign-in, enrollment, assignment, preparation | NOT_RUN | The in-place update retained a previously prepared synthetic context; these steps were not rerun |
+| READY OFFLINE presentation | BLOCKED | Diagnostics reported READY, while the home label was EXPIRING SOON |
+| Catalogue search/scan/selection | BLOCKED | Product selection passed; search and scan were not exercised |
+| Cart editing/modifiers/variable price | BLOCKED | Quantity and line-note editing passed; fixture had no modifier or variable-price path |
+| Synthetic online cash checkout | BLOCKED | Android-to-local-API transport did not reach the local server |
+| Synthetic offline cash acceptance | PASS | PHP 1.00 accepted as provisional `OFF-795A00197A`; change PHP 0.00 |
+| Force-stop/cold-restart custody | PASS | Cold launch succeeded and local sale custody remained intact |
+| Receipt visibility | PASS | `OFF-795A00197A` remained first in Saved device records |
+| Reconnect/recovery/sync review | BLOCKED | One pending outbox record was visible; reconnect could not cross the transport boundary |
+| Software keyboard | PASS | Line-note field and actions remained reachable with the keyboard visible |
+| Maximum font | BLOCKED | Sign-in remained reachable at font scale 2.0; complete cashier flow not run; original 0.86 restored |
+| TalkBack | NOT_RUN | Not enabled on the available device |
+| Phone responsive layout | PASS | Defect reproduced and corrected at 1080×2400 |
+| Tablet responsive layout | NOT_RUN | No supported physical tablet available |
+| Physical keyboard/HID | NOT_RUN | No supported device available |
 
-## Protected components
+## Online boundary diagnosis
 
-- checkout, payment, receipt, inventory, and outbox identities;
-- SQLite databases, cached authorization, and transaction custody;
-- device enrollment, assignment, and local preparation state;
-- POS v2 and authentication contracts;
-- all historical physical evidence and acceptance outcomes.
+The local Next server was healthy on the host and returned the expected unauthenticated `401` for `/api/pos/v2/bootstrap`. The phone could not reach the host at `192.168.1.8:3000`, and a localhost validation build produced no server request through `adb reverse tcp:3000 tcp:3000`. The supervised retry stopped there in accordance with the end-to-end verification rule. The unverified boundary is Android transport → local API; no claim is made about online checkout or reconciliation beyond that point.
 
-## Changed files
+## Transaction custody
 
-- `scripts/mobile-mob-13-physical-ui-preflight.mjs`
-- `scripts/mobile-mob-13-physical-certification.test.mjs`
-- `docs/mobile-program/evidence/MOB_13_SLICE_14_PHYSICAL_ANDROID_UI.json`
-- `package.json`
-- this handoff report
+- Only synthetic data was used.
+- No app data was cleared and the package was not uninstalled.
+- Offline record `OFF-795A00197A` remains pending in local custody.
+- After restart, Receipts displayed the provisional record and Sync & Recovery reported one pending item in `DEVICE_ISOLATED` mode.
+- The later authentication retry reported that the account was not authorized for the protected business; local transactions remained saved.
 
-## Database, SQLite, and API compatibility
+## Evidence
+
+Screenshots and matching UI-automation dumps are under `docs/mobile-program/evidence/mob-13-slice-14/`. The structured record at `docs/mobile-program/evidence/MOB_13_SLICE_14_PHYSICAL_ANDROID_UI.json` contains exact hashes and explains what each retained artifact proves.
+
+## Compatibility
 
 ```text
 Neon/PostgreSQL migration: NONE
 SQLite migration/reset: NONE
 POS v2 API change: NONE
-Authentication change: NONE
+Authentication contract change: NONE
 Production environment change: NONE
 ```
 
-## Security and transaction-custody impact
-
-- No device data was cleared, reset, uninstalled, or overwritten.
-- No credential, enrollment, assignment, cached authorization, receipt, transaction, or outbox record was changed.
-- No synthetic or real financial transaction was attempted because the current build/device prerequisites were not satisfied.
-- The evidence record contains no secrets or merchant data.
-
-## Tests and exact results
+## Verification
 
 ```text
-MOB-13 UI contract: PASS — 4/4
-MOB-13 cashier home: PASS — 5/5
-MOB-13 catalogue: PASS — 4/4
-MOB-13 cart workspace: PASS — 5/5
-MOB-13 tender/receipt: PASS — 3/3
-MOB-13 supporting workflows: PASS — 4/4
-MOB-13 responsive/accessibility: PASS — 6/6
-MOB-13 release inputs: PASS — 10/10
-MOB-13 physical certification contract: PASS — 3/3
+MOB-13 regression suite: PASS — 44/44
+Physical UI / checkout / outbox / expiry regressions: PASS — 30/30
 Phase 06 native shells: PASS — 1/1
-Phase 13 native cashier parity: PASS — 1/1
-Phase 22 performance: PASS — 3/3
+Phase 13 cashier parity: PASS — 1/1
+Phase 22 performance contracts: PASS — 3/3
 Phase 23 Android hardening: PASS — 6/6
-Physical UI hardening: PASS — 6/6
-Online checkout custody: PASS — 5/5
-Outbox recovery custody: PASS — 5/5
-Offline authorization/expiry: PASS — 14/14
 Mobile typecheck: PASS
 Mobile lint: PASS — 0 errors, 1 pre-existing warning
 Root typecheck: PASS
 Root lint: PASS — 0 errors, 3 pre-existing warnings
-Android export: PASS — 1,472 modules bundled; 27 assets; Android Hermes bundle emitted
-git diff --check: PASS before this report; repeated before commit
+Android export: PASS — 1,472 modules, 27 assets, Hermes bundle emitted
+Physical font-scale restoration: PASS — 2.0 test scale restored to 0.86
+git diff --check: PASS
 ```
 
-## Physical evidence
+## Remaining closure work
 
-```text
-Xiaomi USB interface: DETECTED
-ADB executable: C:\tmp\android-platform-tools\platform-tools\adb.exe
-Authorized device: 82eaaf10 briefly visible, then transport unavailable
-Current-commit APK: NOT AVAILABLE
-Phone campaign: NOT RUN
-Tablet campaign: NOT RUN
-Large-text campaign: NOT RUN
-TalkBack campaign: NOT RUN
-Keyboard/HID campaign: NOT RUN
-A49: BLOCKED
-Slice 14 physical certification: BLOCKED
-```
-
-The structured record is `docs/mobile-program/evidence/MOB_13_SLICE_14_PHYSICAL_ANDROID_UI.json`. Prior Xiaomi screenshots certify only their named historical slice; they are not reused as proof for this source commit.
-
-## Resume command
-
-After reconnecting and authorizing the phone and producing the exact APK to test:
-
-```powershell
-$env:MOB13_ADB_PATH = 'C:\tmp\android-platform-tools\platform-tools\adb.exe'
-$env:MOB13_APK_PATH = 'C:\absolute\path\to\current-candidate.apk'
-pnpm audit:mobile-mob-13-physical-ui
-```
-
-The command fingerprints the APK and reports the attached device inventory. A successful preflight only permits the campaign to start; it does not itself certify the UI.
-
-## Remaining limitations
-
-- The phone must be unlocked/reconnected with USB debugging authorized.
-- A current-commit APK must be built and retained before testing.
-- A supported physical tablet and physical keyboard/HID remain unavailable.
-- The production release manifest, signing, public origins, support email, approved listing assets, and release-candidate screenshots remain blocked elsewhere; therefore this is not production certification.
-
-## Commit
-
-Recorded by the focused Slice 14 handoff commit following validation.
-
-## Next smallest safe slice
-
-Resume Slice 14 when the phone transport and current APK are available. Run the phone campaign first without clearing existing custody, then the tablet/large-text/TalkBack/keyboard campaign. Update only the new Slice 14 evidence record with truthful screenshots, device/build metadata, and observed results. Do not mark A49 `PASS` until every required device class and accessibility condition has evidence.
+Resume with a reachable bound API and a fresh authorized synthetic account to complete online checkout, reconnect, and preparation-state presentation. Then run the same build on the agreed tablet with a physical keyboard/HID, complete cashier flows at maximum text, and TalkBack focus/announcement checks. A49 and Slice 14 remain **BLOCKED** until all required device classes and accessibility conditions have evidence.

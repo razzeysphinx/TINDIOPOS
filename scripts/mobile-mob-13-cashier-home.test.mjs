@@ -15,6 +15,8 @@ test("MOB-13 replaces raw route names with responsive cashier task cards", () =>
   assert.match(home, /useTindioResponsiveLayout/);
   assert.match(responsive, /allowsColumns: width >= 720 && !isLargeText/);
   assert.match(home, /cashier-home-scroll/);
+  assert.match(home, /allowsDenseGrid \? styles\.taskCardTablet : styles\.taskCardPhone/);
+  assert.match(home, /taskCardPhone: \{ width: "100%" \}/);
   assert.match(taskCard, /accessibilityRole="button"/);
   assert.match(taskCard, /minHeight: 88/);
   assert.doesNotMatch(home, /path\.slice\(1\)|Backend V1 connected/);

@@ -1,40 +1,115 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "phase": "MOB-13",
   "slice": 14,
   "status": "BLOCKED",
   "certificationEvidence": false,
-  "sourceCommit": "b16dd8fa1d4796ac4915c382772206ea59276ec8",
-  "observedAt": "2026-10-17T00:20:00+08:00",
+  "baseSourceCommit": "21f5893b89487bec8a31bd2bf164e257b00ba8d7",
+  "observedAt": "2026-10-17T01:03:00+08:00",
   "packageId": "com.tindio.pos",
   "appVersion": "1.0.0",
   "versionCode": 2,
-  "environment": {
-    "androidUsbInterface": "DETECTED_XIAOMI_VID_2717",
-    "adbExecutable": "C:\\tmp\\android-platform-tools\\platform-tools\\adb.exe",
-    "adbAuthorization": "DEVICE_VISIBLE_BRIEFLY_THEN_TRANSPORT_LOST_AFTER_RECONNECT",
-    "apkArtifact": "NOT_AVAILABLE",
+  "device": {
+    "manufacturer": "Xiaomi",
+    "model": "21121210G",
+    "androidVersion": "14",
+    "apiLevel": 34,
+    "abi": "arm64-v8a",
+    "serial": "82eaaf10",
+    "resolution": "1080x2400",
+    "physicalDensityDpi": 440,
+    "originalFontScale": 0.86,
+    "largeTextFontScale": 2.0,
+    "restoredFontScale": 0.86
+  },
+  "build": {
+    "sourceCommit": "21f5893b89487bec8a31bd2bf164e257b00ba8d7",
+    "sourceTreeChange": "Phone task cards use full available width; dense tablet grid behavior is unchanged.",
+    "candidateApk": "C:\\tmp\\TINDIOPOS-MOB13-S14-phone-layout-fix.apk",
+    "artifactSha256": "74062A3949F4ED0EC3E10C677D06C54CEF2A185EE67406E71FD17DD1F7E84FF4",
+    "signerCertificateSha256": "FAC61745DC0903786FB9EDE62A962B399F7348F0BB6F899B8332667591033B9C",
+    "apkSignatureV2": "PASS",
+    "zipalign16KiB": "PASS",
+    "installMode": "ADB_INSTALL_R_IN_PLACE",
+    "firstInstallTimePreserved": "2026-10-09 22:13:25",
+    "validationOnlyLocalhostApk": {
+      "path": "C:\\tmp\\TINDIOPOS-MOB13-S14-localhost-validation.apk",
+      "sha256": "3777B41D5259EF09C338A36166CE10A5F593663013429E97A34A21D33E13A346",
+      "purpose": "ADB reverse transport diagnosis only; not a production candidate"
+    },
     "productionReleaseCandidate": "NOT_AVAILABLE"
   },
   "deviceClasses": {
-    "phone": "NOT_RUN",
+    "phone": "BLOCKED",
     "tablet": "NOT_RUN",
     "physicalKeyboardOrHid": "NOT_RUN"
   },
   "campaign": [
-    { "id": "sign-in-enrollment-assignment-preparation", "result": "NOT_RUN" },
-    { "id": "ready-offline", "result": "NOT_RUN" },
-    { "id": "catalogue-search-scan-selection", "result": "NOT_RUN" },
-    { "id": "cart-editing-modifiers-variable-price", "result": "NOT_RUN" },
-    { "id": "synthetic-online-cash-checkout", "result": "NOT_RUN" },
-    { "id": "synthetic-offline-cash-acceptance", "result": "NOT_RUN" },
-    { "id": "force-stop-cold-restart-custody", "result": "NOT_RUN" },
-    { "id": "receipt-visibility", "result": "NOT_RUN" },
-    { "id": "reconnect-recovery-sync-review", "result": "NOT_RUN" },
-    { "id": "keyboard-large-text", "result": "NOT_RUN" },
-    { "id": "talkback", "result": "NOT_RUN" },
-    { "id": "phone-responsive-layout", "result": "NOT_RUN" },
-    { "id": "tablet-responsive-layout", "result": "NOT_RUN" }
+    {
+      "id": "sign-in-enrollment-assignment-preparation",
+      "result": "NOT_RUN",
+      "notes": "The in-place upgrade retained the previously prepared synthetic terminal context; fresh sign-in, enrollment, assignment, and preparation were not rerun."
+    },
+    {
+      "id": "ready-offline",
+      "result": "BLOCKED",
+      "notes": "Diagnostics reported offline readiness READY, but the home readiness label was EXPIRING SOON; the exact READY OFFLINE presentation was not witnessed."
+    },
+    {
+      "id": "catalogue-search-scan-selection",
+      "result": "BLOCKED",
+      "notes": "Physical catalogue selection passed for the available synthetic product; search and camera/HID scan were not exercised."
+    },
+    {
+      "id": "cart-editing-modifiers-variable-price",
+      "result": "BLOCKED",
+      "notes": "Quantity increment/reset and add/clear line note passed with the software keyboard visible; the fixture exposed no modifier or variable-price path."
+    },
+    {
+      "id": "synthetic-online-cash-checkout",
+      "result": "BLOCKED",
+      "notes": "Stopped at the Android-to-local-API transport boundary. The phone produced no request in the reachable local Next server log over LAN or adb reverse."
+    },
+    {
+      "id": "synthetic-offline-cash-acceptance",
+      "result": "PASS",
+      "notes": "Accepted a PHP 1.00 synthetic offline cash sale as provisional record OFF-795A00197A with PHP 0.00 change."
+    },
+    {
+      "id": "force-stop-cold-restart-custody",
+      "result": "PASS",
+      "notes": "After force-stop and cold launch, the app opened without a fatal runtime error and retained the provisional sale."
+    },
+    {
+      "id": "receipt-visibility",
+      "result": "PASS",
+      "notes": "OFF-795A00197A remained first in Saved device records after restart."
+    },
+    {
+      "id": "reconnect-recovery-sync-review",
+      "result": "BLOCKED",
+      "notes": "Sync & Recovery showed one pending outbox record in DEVICE_ISOLATED mode, but reconnect could not cross the Android-to-local-API transport boundary."
+    },
+    {
+      "id": "keyboard-large-text",
+      "result": "BLOCKED",
+      "notes": "Software-keyboard reachability passed and the sign-in surface remained reachable at Android font scale 2.0. A physical keyboard/HID and the complete cashier flow at maximum text were not tested."
+    },
+    {
+      "id": "talkback",
+      "result": "NOT_RUN",
+      "notes": "TalkBack was not enabled on the available device."
+    },
+    {
+      "id": "phone-responsive-layout",
+      "result": "PASS",
+      "notes": "A task-card width defect was reproduced, fixed, rebuilt, installed in place, and visually verified at 1080x2400 without card overlap."
+    },
+    {
+      "id": "tablet-responsive-layout",
+      "result": "NOT_RUN",
+      "notes": "No supported physical tablet was available."
+    }
   ],
   "requiredEvidence": {
     "deviceMetadata": ["manufacturer", "model", "androidVersion", "apiLevel", "abi", "serial"],
@@ -43,15 +118,24 @@
     "syntheticTransactionsOnly": true,
     "releaseCandidateRequiredForProductionCertification": true
   },
+  "evidenceFiles": [
+    { "path": "mob-13-slice-14/phone-post-update.png", "sha256": "40ECC181EA6E3A1FB37122201805E93D160FC853B022C2FDCD02DED19346F12E", "proves": "task-card overlap reproduction" },
+    { "path": "mob-13-slice-14/phone-home-top-fixed.png", "sha256": "A2671F90ACB415731FA77C25CC2F106138A1436F92FDEC60D596A95FFDCEC34A", "proves": "phone task-card layout fix" },
+    { "path": "mob-13-slice-14/phone-keyboard-note.png", "sha256": "DAF7E104BD747FD569DC09016711D25AE18C3AD770475E7EE02810BB4B75D9A6", "proves": "software keyboard and line-note reachability" },
+    { "path": "mob-13-slice-14/phone-offline-accepted.png", "sha256": "286E30917BDC3C75F6F08FA181DBC0865560F0F032E565050C679EF92C17EBD6", "proves": "synthetic offline cash acceptance" },
+    { "path": "mob-13-slice-14/phone-cold-restart.png", "sha256": "CB77936C28ACF71618189931A7B0296D48878C2B4D1E54C98CD8D57DD53F60E5", "proves": "cold-restart application recovery" },
+    { "path": "mob-13-slice-14/phone-receipts.png", "sha256": "180A51D6236C6B47B020816A724478F63F08E08A581911421A863791C037A005", "proves": "provisional receipt visibility after restart" },
+    { "path": "mob-13-slice-14/phone-large-text.png", "sha256": "59965E55060B3B3E44FDEE6648D813EA6602AD4FDA8FA9311E2E26D0F78F3EDE", "proves": "sign-in surface at Android font scale 2.0" },
+    { "path": "mob-13-slice-14/phone-sync-recovery.xml", "sha256": "C0AA85A326B1F10F0FB209B480D2C4408AF99BFB6019DFB1C69BC8906927077C", "proves": "one pending outbox item and recovery state" }
+  ],
   "blockers": [
-    "AUTHORIZED_ADB_TRANSPORT_UNAVAILABLE",
-    "APK_ARTIFACT_NOT_AVAILABLE",
-    "PHYSICAL_PHONE_CAMPAIGN_NOT_RUN",
+    "FRESH_PHONE_PREPARATION_FLOW_NOT_RUN",
+    "ANDROID_TO_LOCAL_API_TRANSPORT_BLOCKED",
     "PHYSICAL_TABLET_CAMPAIGN_NOT_RUN",
     "PHYSICAL_KEYBOARD_OR_HID_CAMPAIGN_NOT_RUN",
-    "LARGE_TEXT_CAMPAIGN_NOT_RUN",
+    "COMPLETE_LARGE_TEXT_CAMPAIGN_NOT_RUN",
     "TALKBACK_CAMPAIGN_NOT_RUN",
     "BOUND_PHASE_23_24_RELEASE_CANDIDATE_NOT_AVAILABLE"
   ],
-  "notes": "No physical result is promoted from source tests or prior screenshots. The earlier Xiaomi 21121210G record proves only its historical slice and does not certify the current source commit."
+  "notes": "The phone campaign produced valid partial physical evidence and one application fix, but A49 remains BLOCKED. No source check or partial device result is promoted to complete certification."
 }

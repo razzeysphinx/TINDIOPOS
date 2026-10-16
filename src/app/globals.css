@@ -49,6 +49,26 @@
 }
 
 :root {
+  /* TINDIO semantic adapter. Brand values remain candidates until owner approval. */
+  --tindio-brand-primary: #007a67;
+  --tindio-brand-ink: #14231f;
+  --tindio-brand-cream: #f4efe5;
+  --tindio-surface-app: var(--background);
+  --tindio-surface-card: var(--card);
+  --tindio-content-primary: var(--foreground);
+  --tindio-content-secondary: var(--muted-foreground);
+  --tindio-border-default: var(--border);
+  --tindio-border-focus: var(--ring);
+  --tindio-status-success: oklch(0.49 0.12 172);
+  --tindio-status-warning: oklch(0.62 0.13 86);
+  --tindio-status-danger: var(--destructive);
+  --tindio-status-information: oklch(0.55 0.1 240);
+  --tindio-status-recovering: oklch(0.54 0.08 288);
+  --tindio-status-review: oklch(0.62 0.13 38);
+  --tindio-target-minimum: 3rem;
+  --tindio-motion-fast: 120ms;
+  --tindio-motion-standard: 200ms;
+  --tindio-motion-deliberate: 320ms;
   --background: oklch(0.982 0.006 95);
   --foreground: oklch(0.225 0.025 258);
   --card: oklch(1 0 0);

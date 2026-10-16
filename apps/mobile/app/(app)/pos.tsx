@@ -13,6 +13,7 @@ import type {
   CheckoutSaleValues,
   PosCartLine,
   PosCatalogItem,
+  PosCategory,
   PosCustomer,
   PosModifierGroup,
   PosModifierOption,
@@ -30,6 +31,7 @@ import {
   type DurableOnlineCheckoutIntent,
 } from "../../src/db/checkout-intents";
 import { saveCustomerSearchResults, searchCachedCustomers } from "../../src/db/customer-cache";
+import { CashierCatalogue } from "../../src/features/cashier/cashier-catalogue";
 import { CashierCartLine } from "../../src/features/cashier/cashier-cart-line";
 import { ModifierPicker, VariablePriceEditor } from "../../src/features/cashier/cashier-editors";
 import { cashierFeatureGates } from "../../src/features/cashier/cashier-feature-gates";
@@ -125,8 +127,10 @@ export default function PosScreen() {
   ] = useState(false);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [items, setItems] = useState<PosCatalogItem[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [cart, setCart] = useState<PosCartLine[]>([]);
-  const [categories, setCategories] = useState<Awaited<ReturnType<typeof getLocalCategories>>>([]);
+  const [categories, setCategories] = useState<PosCategory[]>([]);
   const [discounts, setDiscounts] = useState<Awaited<ReturnType<typeof getLocalDiscounts>>>([]);
   const [taxes, setTaxes] = useState<Awaited<ReturnType<typeof getLocalTaxRates>>>([]);
   const [diningOptions, setDiningOptions] = useState<Awaited<ReturnType<typeof getLocalDiningOptions>>>([]);
@@ -186,40 +190,51 @@ export default function PosScreen() {
   const load = useCallback(async () => {
     if (!core || !binding) return;
 
-    const [
-      nextItems,
-      nextCategories,
-      nextDiscounts,
-      nextTaxes,
-      nextDining,
-      nextPayments,
-    ] = await Promise.all([
-      searchLocalCatalog({
-        organizationId: core.organization.id,
-        storeId: binding.storeId,
-        query,
-        categoryId,
-      }),
-      getLocalCategories(core.organization.id),
-      getLocalDiscounts(core.organization.id),
-      getLocalTaxRates(core.organization.id),
-      getLocalDiningOptions(core.organization.id),
-      getLocalPaymentMethods(core.organization.id, binding.storeId),
-    ]);
+    setCatalogLoading(true);
+    setCatalogError(null);
 
-    setItems(nextItems);
-    setCategories(nextCategories);
-    setDiscounts(nextDiscounts);
-    setTaxes(nextTaxes);
-    setDiningOptions(nextDining);
-    setPaymentMethods(nextPayments);
+    try {
+      const [
+        nextItems,
+        nextCategories,
+        nextDiscounts,
+        nextTaxes,
+        nextDining,
+        nextPayments,
+      ] = await Promise.all([
+        searchLocalCatalog({
+          organizationId: core.organization.id,
+          storeId: binding.storeId,
+          query,
+          categoryId,
+        }),
+        getLocalCategories(core.organization.id),
+        getLocalDiscounts(core.organization.id),
+        getLocalTaxRates(core.organization.id),
+        getLocalDiningOptions(core.organization.id),
+        getLocalPaymentMethods(core.organization.id, binding.storeId),
+      ]);
 
-    if (!taxId) {
-      setTaxId(nextTaxes.find((tax) => tax.isDefault)?.id ?? null);
-    }
+      setItems(nextItems);
+      setCategories(nextCategories);
+      setDiscounts(nextDiscounts);
+      setTaxes(nextTaxes);
+      setDiningOptions(nextDining);
+      setPaymentMethods(nextPayments);
 
-    if (!diningOptionId && core.features.dining) {
-      setDiningOptionId(nextDining.find((option) => option.isDefault)?.id ?? null);
+      if (!taxId) {
+        setTaxId(nextTaxes.find((tax) => tax.isDefault)?.id ?? null);
+      }
+
+      if (!diningOptionId && core.features.dining) {
+        setDiningOptionId(nextDining.find((option) => option.isDefault)?.id ?? null);
+      }
+    } catch {
+      setCatalogError(
+        "Products saved on this device could not be opened. Try again or reconnect to TINDIO.",
+      );
+    } finally {
+      setCatalogLoading(false);
     }
   }, [binding, categoryId, core, diningOptionId, query, taxId]);
 
@@ -994,80 +1009,25 @@ export default function PosScreen() {
         keyboardShouldPersistTaps="handled"
         testID="pos-scroll"
       >
-      <Text>LOCAL-FIRST POS</Text>
-      <Text>Catalog source: SQLite</Text>
-      <Text>Business: {core.organization.name}</Text>
-      <Text>Store/register: {binding.storeId} / {binding.registerId}</Text>
-      <Text>
-        {shiftMatches
-          ? "Active shift matches this terminal."
-          : "Open the matching register shift before checkout."}
-      </Text>
-
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search local catalog"
+      <CashierCatalogue
+        categories={categories}
+        categoryId={categoryId}
+        currencyCode={core.organization.currencyCode}
+        error={catalogError}
+        items={items}
+        loading={catalogLoading}
+        lookup={lookup}
+        onCategory={setCategoryId}
+        onFindBarcode={() => void find()}
+        onLookupChange={setLookup}
+        onOpenCamera={() => setCameraScannerOpen(true)}
+        onProduct={(item) => void add(item)}
+        onQueryChange={setQuery}
+        query={query}
+        terminalLabel={shiftMatches
+          ? `${core.organization.name} · Register ready`
+          : `${core.organization.name} · Shift required before checkout`}
       />
-
-      <TextInput
-        value={lookup}
-        onChangeText={setLookup}
-        onSubmitEditing={() =>
-          void find()
-        }
-        placeholder="Barcode or SKU"
-        autoCapitalize="none"
-        autoCorrect={false}
-        returnKeyType="search"
-      />
-
-      <Text>
-        External USB/Bluetooth scanners are not supported in this release. Use manual barcode/SKU entry or the built-in camera scanner.
-      </Text>
-
-      <Pressable
-        onPress={() =>
-          setCameraScannerOpen(true)
-        }
-      >
-        <Text>
-          Scan barcode with camera
-        </Text>
-      </Pressable>
-
-      <Pressable onPress={() => void find()}>
-        <Text>Find local barcode/SKU</Text>
-      </Pressable>
-
-      <Pressable onPress={() => setCategoryId(null)}>
-        <Text>All categories</Text>
-      </Pressable>
-
-      {categories.map((category) => (
-        <Pressable
-          key={category.id}
-          onPress={() => setCategoryId(category.id)}
-        >
-          <Text>{category.name}</Text>
-        </Pressable>
-      ))}
-
-      {items.map((item) => (
-        <Pressable
-          key={`${item.productId}:${item.variantId ?? "simple"}`}
-          onPress={() => void add(item)}
-        >
-          <Text>
-            {item.productName}
-            {item.variantName ? ` / ${item.variantName}` : ""}
-            {" — "}
-            {formatMoney(item.priceMinor, core.organization.currencyCode)}
-            {item.isVariablePrice ? " — variable price" : ""}
-            {item.hasModifiers ? " — modifiers" : ""}
-          </Text>
-        </Pressable>
-      ))}
 
       <Text>Cart lines: {cart.length}</Text>
 

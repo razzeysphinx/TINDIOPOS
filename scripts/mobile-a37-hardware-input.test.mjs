@@ -34,11 +34,13 @@ test("A37 a later intentional scan is accepted after completion", () => {
 test("A37 camera denial explicitly preserves manual barcode and SKU entry", () => {
   const camera = read("apps/mobile/src/features/hardware/camera-barcode-scanner.tsx");
   const pos = read("apps/mobile/app/(app)/pos.tsx");
+  const catalogue = read("apps/mobile/src/features/cashier/cashier-catalogue.tsx");
   assert.match(camera, /Manual barcode and SKU entry remains available in the POS/);
   assert.match(camera, /Back to POS/);
-  assert.match(pos, /placeholder="Barcode or SKU"/);
-  assert.match(pos, /onSubmitEditing=\{\(\) =>[\s\S]*void find\(\)/);
-  assert.match(pos, /Find local barcode\/SKU/);
+  assert.match(catalogue, /placeholder="Barcode or SKU"/);
+  assert.match(catalogue, /onSubmitEditing=\{onFindBarcode\}/);
+  assert.match(catalogue, /Find item/);
+  assert.match(pos, /onFindBarcode=\{\(\) => void find\(\)\}/);
 });
 
 test("A37 camera and HID paths acquire synchronously before asynchronous lookup", () => {

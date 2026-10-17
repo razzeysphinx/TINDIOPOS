@@ -25564,7 +25564,7 @@
     },
     {
       "path": ".gitattributes",
-      "size": 409
+      "size": 519
     },
     {
       "path": ".github/workflows/tindio-baseline-certification.yml",
@@ -29460,7 +29460,7 @@
     },
     {
       "path": "scripts/repository-structure-check.mjs",
-      "size": 3725
+      "size": 4754
     },
     {
       "path": "scripts/shift-audit-report-check.mjs",

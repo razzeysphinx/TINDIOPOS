@@ -85,6 +85,9 @@ jobs:
       - name: Run authoritative TINDIO certification
         run: pnpm certify
 
+      - name: Run Phase 12 composite production concurrency certification
+        run: node scripts/composite-production-concurrency-certification.mjs
+
       - name: Run Phase 02 bearer-auth certification
         if: github.event_name == 'pull_request' || github.ref == 'refs/heads/TINDIO-PREPRODUCTION'
         run: pnpm certify:phase-02:bearer-auth

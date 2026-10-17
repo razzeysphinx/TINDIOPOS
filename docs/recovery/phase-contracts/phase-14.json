@@ -5,7 +5,7 @@
     "scripts/phase-14-migration-rehearsal.mjs",
     "scripts/phase-14-local-restore-drill.mjs",
     "docs/recovery/phase-14-manual-certification.md",
-    ".github/workflows/phase-14-final-certification.yml",
+    ".github/workflows/tindio-baseline-certification.yml",
     "playwright.config.ts",
     "scripts/phase-14-playwright-run.mjs",
     "scripts/phase-14-browser-evidence.mjs",
@@ -47,15 +47,15 @@
       "text": "PHASE 14 ISOLATED LOCAL RESTORE DRILL: PASS"
     },
     {
-      "path": ".github/workflows/phase-14-final-certification.yml",
+      "path": ".github/workflows/tindio-baseline-certification.yml",
       "text": "pnpm certify"
     },
     {
-      "path": ".github/workflows/phase-14-final-certification.yml",
+      "path": ".github/workflows/tindio-baseline-certification.yml",
       "text": "phase-14-migration-rehearsal.mjs"
     },
     {
-      "path": ".github/workflows/phase-14-final-certification.yml",
+      "path": ".github/workflows/tindio-baseline-certification.yml",
       "text": "phase-14-local-restore-drill.mjs"
     },
     {

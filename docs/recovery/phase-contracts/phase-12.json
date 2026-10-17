@@ -7,7 +7,7 @@
     "scripts/composite-production-concurrency-certification.mjs",
     "src/features/catalog/service.ts",
     "src/features/inventory/advanced-inventory-actions.ts",
-    ".github/workflows/phase-12-certification.yml"
+    ".github/workflows/tindio-baseline-certification.yml"
   ],
   "requiredText": [
     {
@@ -75,11 +75,11 @@
       "text": "Scenario C"
     },
     {
-      "path": ".github/workflows/phase-12-certification.yml",
+      "path": ".github/workflows/tindio-baseline-certification.yml",
       "text": "run: pnpm certify"
     },
     {
-      "path": ".github/workflows/phase-12-certification.yml",
+      "path": ".github/workflows/tindio-baseline-certification.yml",
       "text": "node scripts/composite-production-concurrency-certification.mjs"
     }
   ],

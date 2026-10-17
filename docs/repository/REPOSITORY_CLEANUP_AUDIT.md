@@ -1,6 +1,6 @@
 # TINDIO Repository Cleanup Audit
 
-Status: **IN PROGRESS — VERIFIED-SAFE CHANGES ONLY**
+Status: **COMPLETE — VERIFIED-SAFE CHANGES ONLY**
 
 Starting branch: `TINDIO-PREPRODUCTION`
 
@@ -9,6 +9,10 @@ Starting SHA: `e01929308627b7f7842f80e183e3ec2add2af631`
 Initial tracked files: **1,498**
 
 Initial canonical remote SHA: `e01929308627b7f7842f80e183e3ec2add2af631`
+
+Final tracked files: **1,480**
+
+Directories scanned: **237**
 
 Phase 0 passed with one canonical worktree and a clean tree. The previously
 observed untracked Realme files were no longer present when the gate was rerun;
@@ -66,7 +70,7 @@ and plural inventory count scripts cover different semantics and must remain.
 | `plan/*.txt` | MOVE_SAFE | `docs/archive/plans/*.md` | Implemented historical specifications; no path references | 0 | Low | link/path scan |
 | five `public/*.svg` starter files | DELETE_CANDIDATE | removed | Re-proven zero references | 0 each | Low | build + structure check |
 | `public/service-worker.js` | KEEP_ACTIVE | same | Registered offline runtime asset | 2 direct runtime refs | High if removed | build + offline tests |
-| Expo starter assets under `apps/mobile/assets/images` and `expo.icon` | DELETE_CANDIDATE | removed | No application/config/document references | 0 | Low | Android export |
+| 23 Expo starter assets under `apps/mobile/assets/images` and `expo.icon` | DELETE_CANDIDATE | removed | No application/config/document references | 0 | Low | Android export |
 | historical workflows | MERGE_CANDIDATE | baseline workflow | Dead branch triggers; protections already present or merged | phase contracts updated atomically | Medium | contract + static certification |
 | root scripts | KEEP_ACTIVE / KEEP_HISTORICAL | same | Broad reference graph and operational roles | varied | High if moved | package reference check |
 | mobile routes | KEEP_ACTIVE / KEEP_DEFERRED | same | URLs and permission inheritance are stable | varied | Medium if moved | route checks |
@@ -78,3 +82,44 @@ and plural inventory count scripts cover different semantics and must remain.
 No database migration, production data, Neon production state, Supabase business
 schema, package ID, signing input, release outcome, evidence outcome, or Git
 history is changed by this cleanup.
+
+## Validation result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Frozen dependency install | PASS | Lockfile remained unchanged |
+| Web typecheck | PASS | `pnpm typecheck` |
+| Mobile typecheck | PASS | `pnpm mobile:typecheck` |
+| Lint | PASS WITH WARNINGS | 0 errors; 3 pre-existing warnings |
+| Web production build | PASS | 90 routes built |
+| Android export | PASS | Expo Android bundle exported successfully |
+| Static certification | PASS | All 173 automated package commands passed |
+| Structure regression check | PASS | 7/7 checks passed |
+| Git whitespace | PASS | `git diff --check` |
+| Full local certification | FAIL | Static phase passed; local pgTAP found 11 pre-existing contract failures in two database test files |
+
+The full local certification failure is outside this repository-hygiene change:
+
+- `improvement_12_device_register_management.test.sql` has four assertions that
+  still use the retired two-argument device-revocation contract. The canonical
+  function now requires an explicit transaction-custody decision.
+- `phase_26_production_observability.test.sql` has seven assertions for an older
+  telemetry RPC signature and therefore cannot persist the expected aggregate
+  fields.
+
+No schema, migration, or business behavior was changed to conceal these failures.
+The local canonical installer completed successfully before pgTAP ran. Production
+and hosted Neon databases were never targeted.
+
+## Final change summary
+
+- Deleted 28 proven-unused template assets and two obsolete historical workflows.
+- Moved five implemented plans from `plan/` to indexed historical documentation.
+- Consolidated required workflow protections into the one canonical baseline
+  workflow.
+- Rewrote repository and mobile entry-point documentation and added documentation,
+  archive, script, API compatibility, structure, deprecation, and audit guides.
+- Added a deterministic repository inventory and seven-check structural regression
+  suite to static certification.
+- Preserved all canonical migrations, archived migrations, recovery/mobile evidence,
+  compatibility routes, Store Hub, and root Neon infrastructure paths.

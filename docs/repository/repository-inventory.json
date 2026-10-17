@@ -1223,7 +1223,7 @@
       "extension": ".png",
       "ownerDomain": "mobile",
       "references": {
-        "runtimeImportOrPath": 1,
+        "runtimeImportOrPath": 0,
         "packageScript": 0,
         "githubWorkflow": 0,
         "documentation": 0
@@ -24346,7 +24346,7 @@
         "runtimeImportOrPath": 2,
         "packageScript": 0,
         "githubWorkflow": 0,
-        "documentation": 1
+        "documentation": 2
       },
       "generated": false,
       "lifecycle": "active",
@@ -24941,7 +24941,7 @@
         "runtimeImportOrPath": 0,
         "packageScript": 0,
         "githubWorkflow": 0,
-        "documentation": 0
+        "documentation": 1
       },
       "generated": false,
       "lifecycle": "active",
@@ -25584,7 +25584,7 @@
     },
     {
       "path": "README.md",
-      "size": 3731
+      "size": 3965
     },
     {
       "path": "apps/mobile/.claude/settings.json",
@@ -25884,7 +25884,7 @@
     },
     {
       "path": "apps/mobile/src/features/cashier/cashier-catalogue.tsx",
-      "size": 10205
+      "size": 10443
     },
     {
       "path": "apps/mobile/src/features/cashier/cashier-editors.tsx",
@@ -28196,7 +28196,7 @@
     },
     {
       "path": "docs/repository/REPOSITORY_CLEANUP_AUDIT.md",
-      "size": 4693
+      "size": 6889
     },
     {
       "path": "docs/repository/REPOSITORY_STRUCTURE.md",
@@ -28424,7 +28424,7 @@
     },
     {
       "path": "scripts/inventory-final-recovery-certification-check.mjs",
-      "size": 7238
+      "size": 7267
     },
     {
       "path": "scripts/inventory-final-ux-check.mjs",
@@ -28696,7 +28696,7 @@
     },
     {
       "path": "scripts/mobile-mob-13-release-inputs.test.mjs",
-      "size": 8074
+      "size": 8126
     },
     {
       "path": "scripts/mobile-mob-13-release-readiness.mjs",

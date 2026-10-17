@@ -1,0 +1,1436 @@
+TINDIO — EMPLOYEE PIN ATTENDANCE + EMPLOYEE LIFECYCLE CRUD
+FULL BACKEND + FRONTEND IMPLEMENTATION
+
+OBJECTIVE
+
+Implement TWO connected employee systems:
+
+A. EMPLOYEE PIN-VERIFIED ATTENDANCE
+B. EMPLOYEE LIFECYCLE / CONTROLLED CRUD
+
+The purpose is to finally give Employee PIN a clear operational use while also giving owners proper employee-management controls.
+
+These systems MUST share the existing canonical employee identity.
+
+DO NOT create a second employee model.
+DO NOT create a second authentication system.
+DO NOT create parallel attendance/shift logic.
+
+==================================================
+NON-NEGOTIABLE BUSINESS DISTINCTION
+==================================================
+
+TIME CLOCK / ATTENDANCE
+=
+tracks employee work attendance.
+
+REGISTER SHIFT
+=
+tracks cashier/register/cash-drawer accountability.
+
+They are NOT the same system.
+
+Therefore:
+
+CLOCK IN
+does NOT automatically open a register shift.
+
+CLOCK OUT
+does NOT automatically close a register shift.
+
+Opening/closing a register shift remains an explicit separate workflow.
+
+Preserve:
+
+NO ACTIVE REGISTER SHIFT = NO POS TRANSACTION.
+
+Clocking in alone must NOT unlock selling.
+
+==================================================
+EXISTING APPLICATION ARCHITECTURE
+==================================================
+
+Preserve the existing TINDIO layering:
+
+UI / Pages
+↓
+Server Actions / Route Handlers
+↓
+Services
+↓
+Data Layer
+↓
+Supabase Server Client / PostgreSQL RPC
+↓
+PostgreSQL + RLS
+
+Keep client presentation separate from server-only business logic.
+
+Do NOT put:
+
+- PIN validation
+- attendance integrity rules
+- employee deletion rules
+- role checks
+- store authorization
+
+inside React components as the source of truth.
+
+Frontend controls are presentation.
+
+Backend authorization remains authoritative.
+
+==================================================
+PHASE 0 — AUDIT FIRST
+==================================================
+
+Before changing code, inspect the existing:
+
+- employees table/model
+- organization employee relationship
+- auth user relationship
+- employee status fields
+- employee store assignments
+- roles
+- permissions
+- employee PIN implementation
+- PIN hashing
+- PIN verification
+- PIN lockout
+- manager approval PIN logic
+- time clock
+- attendance/timecards
+- register shifts
+- cashier identity
+- receipts/sales employee references
+- refunds
+- cash movements
+- inventory movements
+- manager approvals
+- audit logs
+- employee invitation/revocation
+- RLS policies
+- RPCs
+- employee management UI
+
+Determine what already exists and REUSE IT.
+
+Do NOT duplicate secure PIN logic if TINDIO already has working PIN verification.
+
+Do NOT casually change existing foreign keys.
+
+==================================================
+PART A — EMPLOYEE PIN + ATTENDANCE
+==================================================
+
+CURRENT PROBLEM
+
+Clock In / Clock Out currently proceeds too easily.
+
+On a shared POS terminal, the system should verify which employee is actually performing the attendance action.
+
+Employee PIN should now become a controlled operational identity-verification mechanism.
+
+==================================================
+A1 — CLOCK IN FLOW
+==================================================
+
+Replace direct Clock In with:
+
+Clock In
+↓
+PIN verification
+↓
+employee identity verified
+↓
+store authorization check
+↓
+attendance integrity check
+↓
+create attendance record
+↓
+Clocked In
+
+Clicking:
+
+[ Clock in ]
+
+must open a focused modal/sheet.
+
+Example:
+
+CLOCK IN
+
+Enter employee PIN
+
+[ • ][ • ][ • ][ • ]
+
+V1 · Main Branch
+
+[ Cancel ] [ Clock in ]
+
+Do NOT expose the PIN after entry.
+
+Do NOT show the actual stored PIN anywhere.
+
+==================================================
+A2 — PIN IDENTITY
+==================================================
+
+Prefer using PIN to determine/verify the actual employee on a shared POS terminal.
+
+However:
+
+DO NOT weaken PIN security merely to support employee lookup.
+
+Audit the existing PIN architecture.
+
+If existing secure architecture supports organization-scoped employee resolution by PIN:
+
+reuse it.
+
+If it does NOT safely support PIN-only employee lookup:
+
+use a secure flow such as:
+
+Select employee
+↓
+Enter PIN
+↓
+Verify server-side
+
+rather than storing plaintext or reversible employee PINs.
+
+SECURITY IS MORE IMPORTANT THAN SAVING ONE TAP.
+
+Never send all employee PIN hashes/secrets to the browser.
+
+PIN verification must happen server-side.
+
+==================================================
+A3 — CLOCK-IN VALIDATION
+==================================================
+
+Before creating attendance:
+
+verify:
+
+- employee exists
+- employee belongs to organization
+- employee is ACTIVE
+- employee has attendance/time-clock access
+- employee is authorized for current store where required
+- employee is not already clocked in
+- employee PIN is valid
+- employee is not revoked/deactivated/archived
+- request is not a duplicate/replay
+
+Double clicking Clock In must NOT create two attendance records.
+
+Use idempotent/server-controlled logic where appropriate.
+
+==================================================
+A4 — CLOCKED-IN STATE
+==================================================
+
+After successful Clock In show a compact attendance state.
+
+Example:
+
+ATTENDANCE
+
+✓ Clocked in
+
+Razzy Sphinx
+V1 · Main Branch
+
+Since 8:03 AM
+4h 27m
+
+[ Clock out ]
+
+Do not permanently repeat a long educational paragraph.
+
+If explanation is needed use a small tooltip/help icon:
+
+"Attendance tracks work hours separately from register shifts."
+
+==================================================
+A5 — CLOCK OUT FLOW
+==================================================
+
+Clock Out must also require employee verification.
+
+Flow:
+
+Clock Out
+↓
+PIN
+↓
+verify same/current attendance owner
+↓
+check open register shift
+↓
+close attendance record if valid
+
+Modal:
+
+CLOCK OUT
+
+Razzy Sphinx
+
+Clocked in
+8:03 AM
+
+Enter employee PIN
+
+[ • ][ • ][ • ][ • ]
+
+[ Cancel ] [ Clock out ]
+
+After success:
+
+✓ Clocked out
+
+Clocked in     8:03 AM
+Clocked out    5:11 PM
+Total          9h 08m
+
+Use canonical attendance calculations.
+
+==================================================
+A6 — OPEN REGISTER SHIFT ON CLOCK OUT
+==================================================
+
+CRITICAL:
+
+If the employee attempting to Clock Out owns an ACTIVE REGISTER SHIFT:
+
+NORMAL CLOCK OUT MUST BE BLOCKED.
+
+Do NOT auto-close the register.
+
+Do NOT auto-reconcile cash.
+
+Show:
+
+YOU STILL HAVE AN OPEN REGISTER SHIFT
+
+R1 · Main Branch
+Opened 8:05 AM
+
+Close the register shift before clocking out.
+
+[ Go to Shift ]
+
+Reason:
+
+Register closure requires cash reconciliation and must remain explicit.
+
+If an emergency override system already exists:
+
+allow a properly authorized manager workflow.
+
+Do NOT invent a weak client-side bypass.
+
+==================================================
+A7 — CLOCK IN DOES NOT OPEN SHIFT
+==================================================
+
+After Clock In:
+
+attendance becomes active.
+
+Register shift remains whatever its real current state is.
+
+Example:
+
+ATTENDANCE
+✓ Clocked in
+
+REGISTER SHIFT
+No active shift
+
+[ Open shift ]
+
+The employee must still explicitly:
+
+Open Shift
+↓
+Opening Cash
+↓
+Confirm
+↓
+Register Shift Opened
+
+Do not merge them.
+
+==================================================
+A8 — ATTENDANCE RECORD
+==================================================
+
+Attendance should retain appropriate canonical context such as:
+
+- attendance id
+- organization id
+- employee id
+- store id where applicable
+- clock-in timestamp
+- clock-out timestamp
+- device context if already supported
+- verification method
+- created/updated timestamps
+- approved correction context where supported
+
+Do not duplicate existing fields unnecessarily.
+
+Use actual schema after audit.
+
+==================================================
+A9 — ATTENDANCE HISTORY
+==================================================
+
+Attendance/history should remain available in Back Office according to permission.
+
+Historical attendance should NOT normally be physically editable/deletable.
+
+If corrections are supported:
+
+use controlled corrections with audit history.
+
+Prefer:
+
+Original:
+8:03 AM
+
+Corrected:
+8:13 AM
+
+Reason:
+Manager correction
+
+By:
+Maria Santos
+
+rather than silently rewriting attendance history without trace.
+
+==================================================
+A10 — PIN SECURITY
+==================================================
+
+Preserve or reinforce:
+
+- secure hashing
+- server-side verification
+- rate limiting / failed-attempt handling
+- lockout if existing architecture supports it
+- organization isolation
+- store authorization
+- active employee checks
+- audit logging for meaningful security events
+
+Employee PIN must NEVER equal full account authentication.
+
+PIN may authorize controlled POS operations such as:
+
+- attendance
+- manager approval
+- employee identity verification
+- other explicitly configured POS actions
+
+It must NOT automatically grant:
+
+- Back Office login
+- Owner permissions
+- unrestricted organization access
+
+==================================================
+PART B — EMPLOYEE LIFECYCLE / CRUD
+==================================================
+
+Implement proper employee lifecycle management.
+
+The owner/admin should be able to manage employees without allowing removal of historical business truth.
+
+Use conceptually:
+
+CREATE
+READ
+UPDATE
+DEACTIVATE
+REACTIVATE
+ARCHIVE
+CONTROLLED DELETE
+
+Do NOT implement:
+
+DELETE EMPLOYEE CASCADE EVERYTHING
+
+for employees with business activity.
+
+==================================================
+B1 — CREATE EMPLOYEE
+==================================================
+
+Existing Add Employee should support/reuse:
+
+- employee identity
+- name
+- contact information where already supported
+- role
+- store assignment
+- permissions
+- POS access
+- Back Office access where applicable
+- PIN setup
+- invitation/auth account relationship where applicable
+
+Do not force unnecessary fields.
+
+Use existing validation/schema.
+
+==================================================
+B2 — READ / EMPLOYEE DETAIL
+==================================================
+
+An employee detail page/drawer should give owners a useful overview.
+
+Example:
+
+EMPLOYEE
+
+Alex Reyes                         Active
+
+OVERVIEW
+
+Role
+Cashier
+
+Stores
+Mall Branch
+
+PIN
+Set
+
+POS access
+Allowed
+
+Back Office
+Not allowed
+
+ATTENDANCE
+
+Current status
+Clocked in / Not clocked in
+
+Last clock-in
+Sep 2 · 8:03 AM
+
+ACTIVITY
+
+Receipts
+126
+
+Register shifts
+14
+
+Refunds
+3
+
+[ Edit employee ]
+
+More actions ▾
+- Reset PIN
+- Deactivate
+- Archive
+- Delete if eligible
+
+Only show information the current management user is authorized to see.
+
+==================================================
+B3 — UPDATE EMPLOYEE
+==================================================
+
+Allow authorized management to update appropriate employee properties:
+
+- name/profile
+- role
+- store assignment
+- permissions
+- workspace access
+- PIN
+- other existing employee settings
+
+Changing role/store access must update future authorization.
+
+Do NOT rewrite historical sales/shift/store context when current employee settings change.
+
+Example:
+
+Employee worked at Main Branch last month.
+
+Today owner moves employee to Mall Branch.
+
+Historical Main Branch receipts remain Main Branch.
+
+==================================================
+B4 — DEACTIVATE
+==================================================
+
+Deactivate is a reversible access-removal state.
+
+Example:
+
+ACTIVE
+↓
+DEACTIVATED
+
+Deactivation must:
+
+- block future POS access
+- block future Back Office access where linked
+- block PIN verification
+- block Clock In
+- block opening new register shifts
+- remove/revoke current future authorization as appropriate
+- preserve historical records
+
+Do not erase business history.
+
+Allow:
+
+[ Reactivate employee ]
+
+when authorized.
+
+==================================================
+B5 — ARCHIVE
+==================================================
+
+Archive is intended for former employees who should no longer appear in normal active employee workflows.
+
+Example:
+
+ACTIVE
+↓
+DEACTIVATED
+↓
+ARCHIVED
+
+Archived employee:
+
+- cannot log in
+- cannot clock in
+- cannot open shift
+- PIN is revoked/disabled
+- removed from active employee selectors
+- historical records remain intact
+
+Back Office should provide:
+
+Active
+Inactive
+Archived
+
+views/filters where appropriate.
+
+Historical business records may display:
+
+Alex Reyes
+Former employee
+
+without losing attribution.
+
+==================================================
+B6 — CONTROLLED HARD DELETE
+==================================================
+
+Hard Delete is allowed ONLY when the employee has NO meaningful business history.
+
+Before hard delete, perform dependency checks.
+
+Check for references such as:
+
+- attendance/timecards
+- register shifts
+- sales
+- receipts
+- payments where employee-associated
+- refunds
+- cash movements
+- inventory adjustments
+- stock movements
+- transfers
+- purchase/receiving activity where applicable
+- manager approvals
+- audit events
+- device actions
+- security events
+- other business/history tables discovered during audit
+
+If NO meaningful historical references exist:
+
+allow:
+
+DELETE EMPLOYEE PERMANENTLY
+
+with clear confirmation.
+
+Example:
+
+DELETE EMPLOYEE?
+
+Jamie Cruz has no recorded business activity.
+
+This will permanently remove the employee record.
+
+[ Cancel ]
+[ Permanently delete ]
+
+==================================================
+B7 — EMPLOYEE HAS BUSINESS HISTORY
+==================================================
+
+If employee has historical activity:
+
+HARD DELETE MUST BE BLOCKED.
+
+Instead show:
+
+REMOVE EMPLOYEE
+
+Alex Reyes has recorded business activity.
+
+Historical records must remain for accountability.
+
+Removing Alex will:
+
+✓ Disable future access
+✓ Disable Employee PIN
+✓ Prevent Clock In
+✓ Prevent Shift Open
+✓ Remove from active staff
+✓ Preserve receipts
+✓ Preserve shifts
+✓ Preserve attendance
+✓ Preserve refunds
+✓ Preserve cash activity
+✓ Preserve inventory activity
+✓ Preserve approvals
+✓ Preserve audit history
+
+[ Cancel ]
+[ Archive employee ]
+
+Do NOT provide a Force Delete button that bypasses this rule.
+
+Not even Owner should be able to erase completed financial/audit history through employee deletion.
+
+==================================================
+B8 — NO DESTRUCTIVE CASCADES
+==================================================
+
+Audit foreign keys.
+
+Do NOT allow employee deletion to cascade into:
+
+sales
+receipts
+payments
+refunds
+closed shifts
+cash movements
+inventory ledger
+attendance history
+manager approvals
+audit logs
+
+Use appropriate:
+
+RESTRICT
+SET NULL only when semantically safe
+soft lifecycle
+historical identity preservation
+
+based on the actual schema.
+
+Do NOT blindly change every FK.
+
+Audit first.
+
+==================================================
+B9 — ACTIVE SHIFT PROTECTION
+==================================================
+
+If employee currently owns an active register shift:
+
+do NOT deactivate/archive/delete them immediately in a way that orphaned the shift.
+
+Show:
+
+EMPLOYEE HAS AN ACTIVE REGISTER SHIFT
+
+Mall Branch · R1
+Opened 9:14 AM
+
+Resolve the register shift before removing this employee from active operations.
+
+[ Go to Shift ]
+
+If an existing manager emergency workflow exists, preserve/use it.
+
+Do not silently close the drawer.
+
+==================================================
+B10 — ACTIVE ATTENDANCE DURING REMOVAL
+==================================================
+
+Also detect active attendance.
+
+If employee is currently clocked in but has no open register shift:
+
+management may either:
+
+A. require Clock Out first
+
+or
+
+B. allow an authorized controlled management clock-out/correction
+
+depending on existing TINDIO attendance rules.
+
+Do not simply delete the open timecard.
+
+Any management correction must be auditable.
+
+==================================================
+B11 — PIN LIFECYCLE
+==================================================
+
+Employee lifecycle automatically controls PIN validity.
+
+ACTIVE:
+PIN may work if configured.
+
+DEACTIVATED:
+PIN immediately invalid.
+
+ARCHIVED:
+PIN invalid.
+
+DELETED:
+credential removed.
+
+REACTIVATED:
+PIN does NOT automatically need to restore an old credential if doing so would be unsafe.
+
+Audit existing behavior.
+
+Prefer requiring/allowing a secure new PIN reset if appropriate.
+
+==================================================
+B12 — EMPLOYEE HISTORY IDENTITY
+==================================================
+
+Historical records must retain enough identity to understand who performed the action.
+
+If the employee record is archived:
+
+Receipt:
+Cashier: Alex Reyes
+
+Shift:
+Opened by: Alex Reyes
+
+Refund:
+Approved by: Maria Santos
+
+Inventory Adjustment:
+Performed by: Jamie Cruz
+
+Do not display:
+
+Deleted User
+Unknown
+null
+
+when identity can legitimately be preserved.
+
+==================================================
+BACK OFFICE EMPLOYEE UX
+==================================================
+
+Improve Team → Employees around lifecycle states.
+
+Concept:
+
+EMPLOYEES
+
+[ Search employees... ]
+
+[ Active ] [ Inactive ] [ Archived ]
+
+[ + Add employee ]
+
+Employee row/card:
+
+Alex Reyes
+Cashier
+Mall Branch
+
+Not clocked in
+Active
+
+[ View ]
+
+Avoid overwhelming management users with every technical permission on the listing itself.
+
+Details belong in the employee detail view.
+
+==================================================
+ATTENDANCE POS UX
+==================================================
+
+Simplify the existing Time Clock card.
+
+NOT CLOCKED IN:
+
+ATTENDANCE
+
+Time clock
+Not clocked in
+
+[ Clock in ]
+
+CLOCKED IN:
+
+ATTENDANCE
+
+✓ Clocked in
+
+Alex Reyes
+Mall Branch
+
+Since 8:03 AM
+4h 27m
+
+[ Clock out ]
+
+Do not permanently show long educational paragraphs.
+
+Use help tooltip where needed.
+
+==================================================
+ERROR MICROCOPY
+==================================================
+
+Use beginner-friendly wording.
+
+BAD:
+
+PIN_VERIFICATION_FAILED
+
+GOOD:
+
+Incorrect employee PIN.
+
+BAD:
+
+EMPLOYEE_STATUS_INVALID
+
+GOOD:
+
+This employee is no longer active.
+
+BAD:
+
+SHIFT_CONSTRAINT
+
+GOOD:
+
+Close your register shift before clocking out.
+
+BAD:
+
+FK_CONSTRAINT_DELETE_FAILED
+
+GOOD:
+
+This employee has recorded business activity and cannot be permanently deleted. Archive them instead.
+
+==================================================
+ACTION-SCOPED LOADING
+==================================================
+
+Do not let unrelated employee controls enter loading state together.
+
+Examples:
+
+Clock In loading
+must not load Clock Out elsewhere.
+
+Reset PIN
+must not load Archive.
+
+Archive
+must not load Edit.
+
+Delete
+must not load Reactivate.
+
+Use action-specific pending state.
+
+==================================================
+RLS / AUTHORIZATION
+==================================================
+
+Backend authorization must verify who can:
+
+- create employee
+- edit employee
+- change roles
+- assign stores
+- reset PIN
+- deactivate
+- reactivate
+- archive
+- permanently delete
+- correct attendance
+- override clock-out conditions
+
+Do NOT trust hidden buttons.
+
+Direct API/server-action access must enforce the same rules.
+
+Preserve tenant/organization isolation.
+
+Store-scoped managers must NOT gain organization-wide employee management unless explicitly permitted.
+
+==================================================
+AUDIT EVENTS
+==================================================
+
+Meaningful lifecycle/security actions should be auditable according to existing audit architecture.
+
+Examples:
+
+Employee created
+Employee role changed
+Store assignment changed
+PIN reset
+PIN failed/locked where appropriate
+Clock In
+Clock Out
+Attendance corrected
+Employee deactivated
+Employee reactivated
+Employee archived
+Employee permanently deleted if eligible
+
+Record useful context:
+
+organization
+store where relevant
+target employee
+acting employee/user
+action
+timestamp
+reason where required
+
+Do not expose secrets such as PIN values in audit logs.
+
+==================================================
+DATABASE / SERVICE DESIGN
+==================================================
+
+Before migrations:
+
+inspect existing schema.
+
+Reuse existing columns if possible.
+
+Do not add duplicate fields such as:
+
+employee_status_v2
+new_pin
+attendance_new
+
+if equivalents already exist.
+
+If schema changes are required:
+
+create forward-safe migrations.
+
+Do not destroy production-compatible data.
+
+Use services/RPCs/transactions for operations involving multiple integrity checks.
+
+For example:
+
+clockOutEmployee()
+
+should atomically:
+
+verify identity
+check active attendance
+check register shift restriction
+close attendance
+write audit data where appropriate
+
+Do not perform half of the workflow in the browser.
+
+==================================================
+CONCURRENCY / DOUBLE SUBMISSION
+==================================================
+
+Protect against:
+
+double Clock In
+double Clock Out
+double Delete
+double Archive
+multiple PIN submissions
+multiple shift-owner operations
+
+The backend must remain correct even if the user double-clicks.
+
+==================================================
+IMPLEMENTATION PHASES
+==================================================
+
+PHASE 0
+Audit employee/PIN/attendance/shift architecture.
+
+PHASE 1
+Employee lifecycle schema/service design.
+
+PHASE 2
+Secure PIN verification integration.
+
+PHASE 3
+Clock In verification flow.
+
+PHASE 4
+Clock Out verification flow.
+
+PHASE 5
+Open-register-shift Clock Out protection.
+
+PHASE 6
+Attendance UI simplification.
+
+PHASE 7
+Employee detail lifecycle UI.
+
+PHASE 8
+Deactivate / Reactivate.
+
+PHASE 9
+Archive.
+
+PHASE 10
+Controlled Hard Delete.
+
+PHASE 11
+Historical reference preservation.
+
+PHASE 12
+RLS / permission hardening.
+
+PHASE 13
+Audit logging.
+
+PHASE 14
+Responsive POS / Back Office polish.
+
+PHASE 15
+Regression QA.
+
+Proceed through ALL phases.
+
+Do not stop after implementing the PIN modal.
+
+==================================================
+MANDATORY QA — ATTENDANCE
+==================================================
+
+TEST 1
+Active employee + correct PIN
+→ Clock In succeeds.
+
+TEST 2
+Wrong PIN
+→ Clock In fails visibly.
+
+TEST 3
+Inactive employee PIN
+→ rejected.
+
+TEST 4
+Archived employee PIN
+→ rejected.
+
+TEST 5
+Employee Clock In twice
+→ no duplicate attendance.
+
+TEST 6
+Valid Clock Out
+→ attendance closes correctly.
+
+TEST 7
+Wrong employee/PIN attempts Clock Out
+→ rejected.
+
+TEST 8
+Employee owns active register shift
+→ Clock Out blocked.
+
+TEST 9
+Employee closes register shift
+→ Clock Out can proceed.
+
+TEST 10
+Clock In does NOT open register shift.
+
+TEST 11
+Clock Out does NOT auto-close register shift.
+
+==================================================
+MANDATORY QA — EMPLOYEE CRUD
+==================================================
+
+TEST 1
+Create employee.
+
+TEST 2
+Edit employee.
+
+TEST 3
+Change store assignment.
+
+TEST 4
+Change role.
+
+TEST 5
+Reset PIN.
+
+TEST 6
+Deactivate employee.
+
+Verify:
+PIN disabled.
+Clock In blocked.
+Shift Open blocked.
+Access revoked.
+
+TEST 7
+Reactivate employee.
+
+TEST 8
+Archive employee.
+
+Verify:
+removed from active staff.
+history still visible.
+
+TEST 9
+New employee with ZERO business history.
+
+Controlled permanent delete succeeds.
+
+TEST 10
+Employee with completed receipt.
+
+Permanent delete blocked.
+
+TEST 11
+Employee with attendance history.
+
+Permanent delete blocked.
+
+TEST 12
+Employee with closed shift.
+
+Permanent delete blocked.
+
+TEST 13
+Employee with refund/cash/inventory/audit history.
+
+Permanent delete blocked.
+
+TEST 14
+Historical records still display employee identity after archive.
+
+TEST 15
+Active register shift prevents unsafe removal.
+
+==================================================
+CROSS-SYSTEM REGRESSION
+==================================================
+
+Verify employee lifecycle changes do NOT break:
+
+- receipts
+- refunds
+- register shifts
+- cash drawer
+- reports
+- employee reports
+- timecards
+- manager approvals
+- inventory ledger
+- audit log
+- offline POS
+- store scoping
+- role permissions
+- existing auth
+
+==================================================
+RESPONSIVE QA
+==================================================
+
+Verify PIN/attendance flows on:
+
+desktop
+tablet landscape
+tablet portrait
+mobile
+
+Mobile PIN interaction must be touch-friendly.
+
+Prefer numeric keyboard/input behavior where appropriate.
+
+Clock In/Out modal must fit the viewport.
+
+Employee management remains primarily Back Office, but management modals/drawers must remain usable on tablets.
+
+==================================================
+SECURITY RULE
+==================================================
+
+NEVER store or expose plaintext Employee PIN.
+
+NEVER return PIN hashes to client UI.
+
+NEVER write PIN into logs.
+
+NEVER use PIN as unrestricted account authentication.
+
+==================================================
+FINAL VALIDATION
+==================================================
+
+Run:
+
+npm run typecheck
+npm run lint
+npm run build
+
+Run all existing relevant tests.
+
+Do not introduce new warnings/errors.
+
+==================================================
+FINAL REPORT
+==================================================
+
+Report:
+
+1. EXISTING EMPLOYEE ARCHITECTURE FOUND
+
+2. EXISTING PIN ARCHITECTURE FOUND
+
+3. EXISTING ATTENDANCE ARCHITECTURE FOUND
+
+4. EXISTING SHIFT RELATIONSHIP
+
+5. DATABASE CHANGES
+
+6. SERVICE/RPC CHANGES
+
+7. CLOCK-IN FLOW
+
+8. CLOCK-OUT FLOW
+
+9. PIN SECURITY
+
+10. ACTIVE SHIFT PROTECTION
+
+11. EMPLOYEE CREATE
+
+12. EMPLOYEE UPDATE
+
+13. DEACTIVATE / REACTIVATE
+
+14. ARCHIVE
+
+15. CONTROLLED HARD DELETE
+
+16. HISTORICAL RECORD PRESERVATION
+
+17. RLS / AUTHORIZATION
+
+18. AUDIT EVENTS
+
+19. FRONTEND CHANGES
+
+20. RESPONSIVE CHANGES
+
+21. TEST RESULTS
+
+22. TYPECHECK
+
+23. LINT
+
+24. BUILD
+
+25. CANDIDATE_FOR_REMOVAL
+
+26. REMAINING RISKS
+
+==================================================
+FINAL BUSINESS RULE
+==================================================
+
+The final employee architecture must behave like this:
+
+EMPLOYEE
+   │
+   ├── PIN
+   │     ↓
+   │   verifies operational identity
+   │
+   ├── ATTENDANCE
+   │     ↓
+   │   tracks work hours
+   │
+   └── REGISTER SHIFT
+         ↓
+       tracks register/cash accountability
+
+And employee lifecycle:
+
+CREATE
+↓
+ACTIVE
+↓
+DEACTIVATED
+↕
+REACTIVATED
+↓
+ARCHIVED
+
+HARD DELETE
+ONLY IF:
+NO meaningful historical business activity exists.
+
+Owners must be able to remove former employees from active TINDIO operation.
+
+Owners must NOT be able to erase completed business history by deleting an employee.
+
+IMPLEMENT ALL PHASES.
+VERIFY ALL RULES.
+RUN QA.
+REPORT.
+THEN STOP.

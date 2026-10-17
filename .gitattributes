@@ -5,3 +5,6 @@ archive/database/supabase-migrations.manifest.json text eol=lf
 # The canonical baseline is integrity-pinned by its manifest and must retain
 # LF bytes in every checkout so local certification is platform-independent.
 database/baseline/0001_tindio_baseline.sql text eol=lf
+
+# Preserve imported historical product-plan bytes while giving them safe names.
+docs/archive/plans/*.md -text

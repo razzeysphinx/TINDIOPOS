@@ -52,5 +52,8 @@ supabase/.branches/
 
 # Local editor settings
 .vscode/
+!apps/mobile/.vscode/
+!apps/mobile/.vscode/extensions.json
+!apps/mobile/.vscode/settings.json
 # Neon recovery audit evidence
 .audit/

@@ -1,0 +1,1637 @@
+TINDIO BACK OFFICE — OWNER DASHBOARD REDESIGN
+EXECUTIVE-FIRST INFORMATION HIERARCHY
+
+OBJECTIVE
+
+Redesign the TINDIO Back Office Dashboard so an Owner can understand the condition of the business within roughly 10 seconds.
+
+The dashboard must stop behaving like a second navigation menu.
+
+It must become an EXECUTIVE BUSINESS CONTROL CENTER.
+
+The dashboard should answer, in this order:
+
+1. How is the business performing?
+2. Is anything wrong?
+3. Which store / operation needs attention?
+4. What is selling?
+5. What should I investigate next?
+
+FINAL DASHBOARD PRINCIPLE:
+
+PERFORMANCE
+↓
+PROBLEMS
+↓
+OPERATIONS
+↓
+OPPORTUNITIES
+↓
+DETAIL
+
+NOT:
+
+NAVIGATION
+↓
+NAVIGATION
+↓
+NAVIGATION
+↓
+FINANCIAL NUMBERS
+
+==================================================
+CRITICAL IMPLEMENTATION RULES
+==================================================
+
+AUDIT FIRST.
+
+Do not blindly rewrite the current dashboard.
+
+Inspect:
+
+- current Dashboard page
+- dashboard data loaders
+- services
+- reporting queries
+- store filters
+- date filters
+- sales metrics
+- refund metrics
+- inventory metrics
+- cost / COGS calculations
+- gross profit
+- gross margin
+- cash differences
+- shifts
+- employees/time clock
+- register states
+- approval system
+- offline/sync states
+- multi-store architecture
+- RBAC
+- current dashboard components
+
+REUSE existing data and components where appropriate.
+
+DO NOT create parallel reporting logic if the metrics already exist.
+
+DO NOT remove business logic.
+
+DO NOT casually delete existing dashboard components.
+
+If an old dashboard component appears unused after this redesign:
+
+mark:
+
+CANDIDATE_FOR_REMOVAL
+
+Do not delete it without verifying references.
+
+==================================================
+CURRENT MAJOR PROBLEM
+==================================================
+
+The current Owner Dashboard places too much navigation/guidance above the actual business metrics.
+
+A large section similar to:
+
+"What would you like to do?"
+
+contains cards such as:
+
+- See how your business is doing
+- Check your stock
+- Manage your products
+- Customers
+- Manage your team
+- Review approvals & security
+- Manage stores & operations
+
+These duplicate the existing sidebar navigation.
+
+They consume the most valuable dashboard space.
+
+For an established business dashboard, REMOVE OR HEAVILY DEMOTE this section.
+
+Preferred approach:
+
+Remove the large card grid from the main Owner dashboard.
+
+If useful for beginner onboarding, retain it only as:
+
+- onboarding state
+OR
+- compact Quick Actions
+
+Example:
+
+QUICK ACTIONS
+
+[ + Product ]
+[ + Employee ]
+[ + Store ]
+[ View reports ]
+
+Do not allow navigation cards to appear before executive metrics.
+
+==================================================
+FINAL OWNER DASHBOARD ORDER
+==================================================
+
+The Owner Dashboard should follow this hierarchy:
+
+1. BUSINESS CONTEXT
+2. EXECUTIVE SNAPSHOT
+3. NEEDS ATTENTION
+4. SALES PERFORMANCE
+5. STORE PERFORMANCE
+6. TODAY'S OPERATIONS
+7. INVENTORY HEALTH
+8. TOP PRODUCTS
+9. PAYMENT MIX
+10. TEAM / CUSTOMER SNAPSHOT
+11. OPTIONAL QUICK ACTIONS
+
+This is the final preferred hierarchy.
+
+==================================================
+1. BUSINESS CONTEXT
+==================================================
+
+Keep the greeting, but reduce its visual dominance.
+
+Example:
+
+BACK OFFICE
+
+Good morning, Razzey.
+
+RAZZEY TRADING CORP.
+
+Then compact controls:
+
+[ All stores ▼ ]
+[ Today ▼ ]
+[ Compare: Yesterday ▼ ]
+
+Do NOT show giant From Date / To Date controls by default.
+
+The dashboard is not a report-builder screen.
+
+Preferred period selector:
+
+Today
+Yesterday
+Last 7 days
+Last 30 days
+This month
+Previous month
+Custom
+
+Only when the user selects:
+
+Custom
+
+show:
+
+From date
+To date
+
+The Store selector remains important.
+
+Multi-store Owner:
+
+[ All stores ▼ ]
+
+Specific store:
+
+[ V1 ▼ ]
+
+The entire dashboard should react to this scope.
+
+==================================================
+2. EXECUTIVE SNAPSHOT — MOVE TO THE TOP
+==================================================
+
+This must be the first major dashboard content.
+
+Preferred primary KPIs:
+
+NET SALES
+
+TRANSACTIONS
+
+AVERAGE ORDER
+
+REFUNDS
+
+GROSS PROFIT / PROFIT STATUS
+
+Example:
+
+┌────────────────────┐
+│ NET SALES          │
+│ ₱3,210             │
+│ ↑ 14.2%            │
+│ vs previous period │
+└────────────────────┘
+
+┌────────────────────┐
+│ TRANSACTIONS       │
+│ 5                  │
+│ +2 vs previous     │
+└────────────────────┘
+
+┌────────────────────┐
+│ AVERAGE ORDER      │
+│ ₱642               │
+│ ↑ ₱31              │
+└────────────────────┘
+
+┌────────────────────┐
+│ REFUNDS            │
+│ ₱0                 │
+│ 0% of sales        │
+└────────────────────┘
+
+==================================================
+REMOVE "COMPLETED SALES" AS A DUPLICATE KPI
+==================================================
+
+Current dashboard may contain:
+
+Net Sales
+₱3,210
+
+Completed Sales
+₱3,210
+
+This is redundant.
+
+Replace:
+
+Completed Sales
+
+with:
+
+Transactions
+
+Example:
+
+TRANSACTIONS
+5 completed sales
+
+Do not show two cards containing effectively the same amount.
+
+==================================================
+3. COMPARISON IS REQUIRED
+==================================================
+
+A raw amount alone is not enough.
+
+An owner needs context.
+
+Where data supports it, show comparisons such as:
+
+↑ 14.2% vs yesterday
+
+↓ 8.4% vs previous 7 days
+
++3 transactions
+
+Average order +₱42
+
+Use current period vs equivalent previous period.
+
+Examples:
+
+Today
+→ compare yesterday
+
+Last 7 days
+→ compare previous 7 days
+
+This month
+→ compare previous equivalent period/month where appropriate
+
+Do not fabricate comparisons if the current reporting architecture cannot provide them.
+
+If unavailable:
+
+show the value without fake comparison.
+
+==================================================
+4. FIX PROFIT / COGS MISLEADING DATA
+==================================================
+
+CRITICAL BUSINESS UX ISSUE:
+
+If product cost data is missing, DO NOT present:
+
+COGS: ₱0
+Gross Profit: ₱3,210
+Gross Margin: 100%
+
+as if these were trustworthy business results.
+
+A missing cost is NOT the same as a zero cost.
+
+Audit cost completeness.
+
+If sold products are missing recorded costs, show:
+
+GROSS PROFIT
+
+Cost data incomplete
+
+4 sold items have no recorded cost.
+
+[ Review product costs ]
+
+Similarly:
+
+INVENTORY VALUE
+
+Cost data incomplete
+
+Do NOT confidently show:
+
+₱0.00
+
+if valuation cannot actually be calculated.
+
+==================================================
+PROFIT STATE LOGIC
+==================================================
+
+Conceptually determine cost coverage.
+
+Example:
+
+12 sold product lines
+9 have valid cost
+3 missing cost
+
+Then:
+
+Gross profit:
+Incomplete
+
+Gross margin:
+Incomplete
+
+COGS:
+Partial / Incomplete
+
+If all required costs are known:
+
+then show actual:
+
+COGS
+Gross Profit
+Gross Margin
+
+Do not mislead owners.
+
+==================================================
+5. NEEDS ATTENTION
+==================================================
+
+Keep this section high on the dashboard.
+
+Move it immediately after Executive Snapshot.
+
+However, redesign it from equally weighted large cards into PRIORITIZED BUSINESS ATTENTION.
+
+Current possible alerts include:
+
+- Low stock
+- Out of stock
+- Negative stock records
+- Cash differences
+- Approval requests
+- Offline devices
+- Sync failures
+
+Rank by severity.
+
+Concept:
+
+NEEDS ATTENTION
+
+CRITICAL
+
+🔴 3 Cash differences
+Review →
+
+🔴 2 Negative-stock records
+Review →
+
+🔴 1 Sync problem
+Review →
+
+NEEDS ATTENTION
+
+🟠 64 Out-of-stock products
+Review →
+
+🟠 2 Pending approvals
+Review →
+
+WATCH
+
+🟡 1 Low-stock product
+Review →
+
+Do not rely on color alone.
+
+Each row/card needs:
+
+icon
+count
+plain-language title
+short context
+Review action
+
+==================================================
+ATTENTION PRIORITY
+==================================================
+
+Prioritize issues conceptually:
+
+HIGH:
+financial discrepancies
+failed sync affecting transactions
+security-sensitive approvals
+negative stock exceptions requiring review
+
+MEDIUM:
+out-of-stock items
+pending approvals
+offline devices
+
+LOW / WATCH:
+low stock
+other non-urgent operational notices
+
+Do not hardcode every alert permanently if data does not exist.
+
+Reuse available dashboard alert data.
+
+==================================================
+6. SALES PERFORMANCE
+==================================================
+
+Move Sales Trend directly after Needs Attention.
+
+Preferred layout:
+
+┌──────────────────────────────────┐
+│ SALES PERFORMANCE                │
+│                                  │
+│ ₱3,210                           │
+│ ↑ 14.2% vs previous period       │
+│                                  │
+│          TREND CHART             │
+│                                  │
+└──────────────────────────────────┘
+
+Allow compact metric switching if useful:
+
+[ Sales ]
+[ Transactions ]
+[ Average order ]
+
+Profit may be offered only when cost data is reliable.
+
+Do not create multiple giant charts for every metric.
+
+==================================================
+7. ADD STORE PERFORMANCE — IMPORTANT
+==================================================
+
+TINDIO is multi-store.
+
+The Owner Dashboard must show branch performance when the owner has access to multiple stores.
+
+Place this beside Sales Performance on wide screens.
+
+Example:
+
+STORE PERFORMANCE
+
+Store       Net Sales    Transactions   Avg Order
+
+V1          ₱15,200      42             ₱362
+V2          ₱12,800      36             ₱355
+V3           ₱7,400      21             ₱352
+
+Optional:
+
+Best performing
+V1 ↑ 18%
+
+Each store row should be clickable.
+
+Clicking a store may:
+
+- scope the dashboard to that store
+OR
+- open the relevant store report
+
+Choose the approach that best matches current dashboard architecture.
+
+Do not build a new reporting system.
+
+==================================================
+IF ONLY ONE STORE
+==================================================
+
+If organization has only one accessible store:
+
+Do not waste a large section showing a meaningless Store Performance ranking.
+
+Use the space for:
+
+Operations
+Inventory Health
+or other useful content.
+
+Dashboard should adapt.
+
+==================================================
+8. TODAY'S OPERATIONS
+==================================================
+
+Add an operational health summary.
+
+Owners should know whether the business is functioning right now.
+
+Possible metrics, if supported:
+
+TODAY'S OPERATIONS
+
+Registers open
+4 / 6
+
+Active shifts
+4
+
+Employees clocked in
+7
+
+Pending approvals
+2
+
+Offline devices
+1
+
+Pending sync
+5
+
+Cash differences
+3
+
+Each metric should be clickable when an appropriate detailed destination exists.
+
+==================================================
+IMPORTANT
+==================================================
+
+Do not invent metrics if the source data does not currently exist.
+
+Audit and use supported real data.
+
+If a useful metric cannot currently be supported, report it as a future opportunity rather than mocking fake values.
+
+==================================================
+9. INVENTORY HEALTH
+==================================================
+
+Replace scattered inventory information with one useful Owner summary.
+
+Example:
+
+INVENTORY HEALTH
+
+69 units on hand
+
+1 Low stock
+64 Out of stock
+2 Negative-stock records
+
+Inventory value
+Cost data incomplete
+
+[ View inventory ]
+
+If valuation data is complete:
+
+Inventory value
+₱xxx,xxx
+
+Use actual canonical inventory data.
+
+==================================================
+NEGATIVE STOCK CONTEXT
+==================================================
+
+Negative-stock records should connect with the existing negative-stock safeguard architecture.
+
+If the business allows warning/negative sales:
+
+dashboard can help owners identify resulting discrepancies.
+
+Do not imply every negative-stock quantity means theft or error.
+
+Use neutral language.
+
+Example:
+
+2 negative-stock records need review.
+
+==================================================
+10. TOP PRODUCTS
+==================================================
+
+Keep Top Products but improve readability.
+
+Current horizontal chart may truncate long item names.
+
+Prefer a ranked table or hybrid bar table.
+
+Example:
+
+TOP PRODUCTS
+
+#  Product                    Qty       Net Sales
+
+1  Deadwood Straw RY4 3MG     12        ₱2,160
+2  Geekbar 3                   4          ₱800
+3  Kaizer Battery              2          ₱500
+
+[ View product report ]
+
+Optional subtle horizontal bar may remain.
+
+Do not truncate product names so aggressively that products become indistinguishable.
+
+==================================================
+11. PAYMENT MIX — MOVE LOWER
+==================================================
+
+Payment Mix is useful but should not occupy more priority than:
+
+sales
+store performance
+cash discrepancies
+inventory
+
+Move it lower.
+
+Example:
+
+PAYMENT MIX
+
+Cash              ₱2,370      74%
+GCash               ₱600      19%
+Bank Transfer       ₱240       7%
+
+The donut/chart may remain but should be more compact.
+
+Do not let the visual chart become larger than the business information.
+
+==================================================
+12. TEAM / CUSTOMER SNAPSHOT
+==================================================
+
+Near the lower portion of the dashboard, include compact summary cards where data exists.
+
+TEAM
+
+Clocked in
+7
+
+Active shifts
+4
+
+Pending approvals
+2
+
+[ View team ]
+
+CUSTOMERS
+
+Customers served
+X
+
+New customers
+X
+
+Returning loyalty members
+X
+
+[ View customers ]
+
+Only display supported metrics.
+
+Do not invent CRM metrics.
+
+==================================================
+13. QUICK ACTIONS — OPTIONAL / LOW PRIORITY
+==================================================
+
+If useful for beginners, place Quick Actions BELOW executive information.
+
+Example:
+
+QUICK ACTIONS
+
+[ + Product ]
+[ + Employee ]
+[ + Store ]
+[ View reports ]
+
+Do NOT restore the huge:
+
+"What would you like to do?"
+
+navigation-card section.
+
+Sidebar already provides navigation.
+
+==================================================
+14. ABOVE-THE-FOLD REQUIREMENT
+==================================================
+
+On a normal desktop/laptop, BEFORE SCROLLING, the owner should see:
+
+Business / Store / Period context
+
+AND
+
+Executive Snapshot
+
+AND
+
+at least the beginning or entirety of Needs Attention.
+
+The owner should NOT need to scroll past navigation shortcuts before seeing:
+
+sales
+transactions
+refunds
+problems
+
+==================================================
+15. ROLE-AWARE DASHBOARD
+==================================================
+
+Do not assume every Back Office user should see the exact Owner dashboard.
+
+Audit existing role/permission dashboard behavior.
+
+Preferred hierarchy:
+
+OWNER
+
+Organization-wide:
+financial performance
+store comparison
+business alerts
+operations
+inventory
+profitability where authorized
+
+ADMIN
+
+Similar to Owner according to permission.
+
+MANAGER
+
+Store-scoped:
+today's sales
+transactions
+active shifts
+staff
+cash differences
+stock problems
+approvals
+open tickets where relevant
+
+INVENTORY STAFF
+
+Inventory-first:
+low stock
+out of stock
+negative
+receiving
+counts
+transfers
+replenishment
+
+CASHIER
+
+Do not force an executive Back Office dashboard.
+
+Cashier's main operational workspace remains POS.
+
+==================================================
+PERMISSION RULE
+==================================================
+
+Dashboard cards must respect permissions.
+
+Examples:
+
+If user cannot see cost:
+
+do not render COGS / Gross Profit.
+
+If user cannot see organization-wide reports:
+
+do not leak organization-wide metrics.
+
+If user has store scope:
+
+all dashboard metrics must respect that store scope.
+
+Frontend hiding is not security.
+
+Backend data access must remain permission-aware.
+
+==================================================
+16. BUSINESS-TYPE AWARENESS
+==================================================
+
+Where existing feature flags/business settings allow it, avoid showing irrelevant dashboard modules.
+
+Example:
+
+RETAIL
+
+Prioritize:
+Sales
+Inventory
+Products
+Store comparison
+Registers
+Cash differences
+
+RESTAURANT / CAFÉ
+
+May additionally prioritize:
+Orders
+Open tickets
+Dining
+Kitchen
+Modifiers
+
+MULTI-BRANCH
+
+Prioritize:
+Store performance
+Store alerts
+Transfers
+Register health
+
+Do not implement a massive new business-type engine for this task.
+
+Reuse existing feature flags/settings.
+
+==================================================
+17. SIDEBAR
+==================================================
+
+Do NOT perform a major sidebar redesign unless required.
+
+Existing high-level navigation is acceptable:
+
+Dashboard
+Reports
+Sales
+Catalog
+Inventory
+Customers
+Team
+Management
+Settings
+
+Primary task is Dashboard hierarchy.
+
+However:
+
+Collapsed icon-only sidebar MUST have:
+
+- accessible tooltips
+- clear active state
+- predictable hover/click behavior
+
+Do not rely on icon meaning alone for beginners.
+
+==================================================
+18. DASHBOARD VISUAL DENSITY
+==================================================
+
+Current dashboard uses many large cards.
+
+Improve density.
+
+Executive dashboards should use space efficiently.
+
+Do not make every metric a huge 300px-tall card.
+
+Use:
+
+- compact KPI cards
+- information rows
+- grouped panels
+- 2-column sections
+- clear hierarchy
+
+Large whitespace is fine, but avoid wasting the screen.
+
+==================================================
+19. CARD PRIORITY
+==================================================
+
+Visual weight should follow business importance.
+
+Highest:
+Executive KPIs
+Critical alerts
+
+Medium:
+Sales chart
+Store performance
+Operations
+Inventory
+
+Lower:
+Top products
+Payment mix
+Team/customer
+
+Lowest:
+Quick actions
+
+==================================================
+20. KPI TOOLTIPS
+==================================================
+
+Keep help icons where useful, but ensure they actually work.
+
+Every `?` / help icon must support:
+
+hover
+focus
+click/tap where appropriate
+
+Example:
+
+Net sales ?
+
+Tooltip:
+
+Completed sales minus recorded refunds for the selected period.
+
+Do not render dead question-mark icons.
+
+==================================================
+21. RESPONSIVE DESIGN
+==================================================
+
+Desktop, tablet, and phone must intentionally adapt.
+
+==================================================
+DESKTOP
+==================================================
+
+Use:
+
+4–5 KPI cards per row where practical.
+
+Sales Performance + Store Performance side by side.
+
+Inventory + Top Products side by side.
+
+Payment Mix + Team/Customer lower.
+
+==================================================
+TABLET LANDSCAPE
+==================================================
+
+2–3 KPI cards per row.
+
+Charts can remain side by side if comfortable.
+
+==================================================
+TABLET PORTRAIT
+==================================================
+
+2 KPI cards per row.
+
+Major panels stack.
+
+Do not compress complex tables into unreadable widths.
+
+Store performance may become a horizontally safe table/card list.
+
+==================================================
+MOBILE
+==================================================
+
+Single-column dashboard.
+
+Order must remain:
+
+Context
+Executive KPIs
+Needs Attention
+Sales Performance
+Store Performance
+Operations
+Inventory
+Products
+Payments
+Team/Customer
+
+Do NOT hide critical information just because mobile is narrow.
+
+Use horizontal KPI carousels ONLY if absolutely necessary.
+
+Prefer clear vertical cards.
+
+==================================================
+22. STICKY BACK OFFICE HEADER
+==================================================
+
+Preserve the persistent Back Office top navigation.
+
+Dashboard content scrolls beneath it.
+
+Do not let the main header disappear during long dashboard scrolling.
+
+==================================================
+23. LOADING STATES
+==================================================
+
+Use section-specific loading.
+
+Example:
+
+Sales Performance loading
+
+must not make:
+
+Inventory
+Needs Attention
+Sidebar
+Open POS
+
+appear loading.
+
+Avoid entire dashboard flashing when one filter changes if existing architecture can update sections gracefully.
+
+==================================================
+24. FILTER APPLICATION
+==================================================
+
+Changing:
+
+Store
+Period
+Comparison
+
+should update all applicable dashboard metrics consistently.
+
+Do not allow:
+
+KPI = V1
+Chart = All stores
+Inventory = V2
+
+All sections must use the same resolved dashboard context unless explicitly labeled otherwise.
+
+==================================================
+25. EMPTY STATES
+==================================================
+
+Handle new businesses gracefully.
+
+Examples:
+
+NO SALES YET
+
+No completed sales in this period.
+
+[ Open POS ]
+
+NO INVENTORY
+
+No tracked inventory yet.
+
+[ Manage products ]
+
+NO MULTI-STORE COMPARISON
+
+Only one store is available.
+
+Do not show broken empty graphs.
+
+==================================================
+26. ZERO VS MISSING DATA
+==================================================
+
+Very important:
+
+₱0
+
+and:
+
+Unavailable / incomplete
+
+are different.
+
+Use ₱0 only when actual data is known to equal zero.
+
+Use:
+
+Cost data incomplete
+
+when missing data prevents calculation.
+
+Use:
+
+No transactions
+
+when there is no source activity.
+
+Do not convert unknown data into zero.
+
+==================================================
+27. CLICKABLE DASHBOARD INTELLIGENCE
+==================================================
+
+Summary cards should lead to relevant detail.
+
+Examples:
+
+Cash differences
+→ Shift Reports filtered to discrepancies
+
+Out of stock
+→ Inventory filtered to out-of-stock
+
+Negative stock
+→ Inventory Activity / relevant negative-stock view
+
+Pending approvals
+→ Approvals
+
+Store row
+→ Store-specific report/dashboard
+
+Top product
+→ Product/report where supported
+
+Do not use dead "Review" actions.
+
+==================================================
+28. NO DUPLICATE INFORMATION
+==================================================
+
+Avoid showing the same concept in multiple large sections.
+
+Examples:
+
+If Needs Attention already says:
+
+64 Out of stock
+
+Inventory Health can still include:
+
+64 out of stock
+
+but in a compact summary rather than another giant red card.
+
+Do not duplicate:
+
+Net Sales
+Completed Sales
+
+as identical amounts.
+
+==================================================
+29. CURRENT PROFIT & STOCK SNAPSHOT
+==================================================
+
+The existing combined:
+
+Profit & stock snapshot
+
+should likely be broken apart.
+
+Profit belongs with Executive Financial Performance.
+
+Stock belongs with Inventory Health.
+
+Do not mix unrelated concepts merely because they fit inside one card.
+
+==================================================
+30. OWNER DECISION SUPPORT
+==================================================
+
+At any point the Owner dashboard should help answer:
+
+How much did we sell?
+
+How many transactions?
+
+Are we doing better or worse?
+
+Which store is performing best?
+
+Are there cash problems?
+
+Are products unavailable?
+
+Is inventory becoming negative?
+
+Are registers/shifts healthy?
+
+Are any approvals waiting?
+
+What products are driving sales?
+
+==================================================
+FINAL DESKTOP INFORMATION ARCHITECTURE
+==================================================
+
+Target:
+
+BACK OFFICE
+
+Good morning, Razzey.
+
+RAZZEY TRADING CORP.
+
+[ All stores ▼ ] [ Today ▼ ] [ Compare: Yesterday ▼ ]
+
+
+EXECUTIVE SNAPSHOT
+
+┌──────────────┐
+│ NET SALES    │
+│ ₱3,210       │
+│ ↑ 14.2%      │
+└──────────────┘
+
+┌──────────────┐
+│ TRANSACTIONS │
+│ 5            │
+│ +2           │
+└──────────────┘
+
+┌──────────────┐
+│ AVG ORDER    │
+│ ₱642         │
+│ ↑ ₱31        │
+└──────────────┘
+
+┌──────────────┐
+│ REFUNDS      │
+│ ₱0           │
+│ 0%           │
+└──────────────┘
+
+┌──────────────────────────────────────────┐
+│ GROSS PROFIT                             │
+│ Cost data incomplete                     │
+│ 4 sold products need cost information → │
+└──────────────────────────────────────────┘
+
+
+NEEDS ATTENTION
+
+🔴 3 Cash differences                    Review →
+🔴 2 Negative-stock records              Review →
+🟠 64 Out-of-stock products              Review →
+🟡 1 Low-stock item                      Review →
+
+
+┌─────────────────────────────┬─────────────────────────────┐
+│ SALES PERFORMANCE           │ STORE PERFORMANCE           │
+│                             │                             │
+│ Trend chart                 │ V1  ₱15,200                │
+│                             │ V2  ₱12,800                │
+│ ↑ 14%                       │ V3   ₱7,400                │
+└─────────────────────────────┴─────────────────────────────┘
+
+
+TODAY'S OPERATIONS
+
+Registers open
+Active shifts
+Employees clocked in
+Pending approvals
+Offline devices
+Pending sync
+Cash differences
+
+
+┌─────────────────────────────┬─────────────────────────────┐
+│ INVENTORY HEALTH            │ TOP PRODUCTS                │
+│                             │                             │
+│ Low                         │ #1 Product                  │
+│ Out                         │ #2 Product                  │
+│ Negative                    │ #3 Product                  │
+│ Units                       │                             │
+│ Value / incomplete          │                             │
+└─────────────────────────────┴─────────────────────────────┘
+
+
+┌─────────────────────────────┬─────────────────────────────┐
+│ PAYMENT MIX                 │ TEAM / CUSTOMER             │
+└─────────────────────────────┴─────────────────────────────┘
+
+
+OPTIONAL:
+
+QUICK ACTIONS
+
+[ + Product ]
+[ + Employee ]
+[ + Store ]
+[ View Reports ]
+
+==================================================
+IMPLEMENTATION PHASES
+==================================================
+
+PHASE 0
+Audit dashboard architecture and available metrics.
+
+PHASE 1
+Create/refine shared dashboard context:
+
+Store
+Period
+Comparison
+
+PHASE 2
+Move Executive Snapshot to top.
+
+PHASE 3
+Replace Completed Sales duplicate with Transactions.
+
+PHASE 4
+Implement comparison metrics where supported.
+
+PHASE 5
+Fix COGS/Gross Profit/Gross Margin incomplete-cost logic.
+
+PHASE 6
+Redesign Needs Attention by severity.
+
+PHASE 7
+Remove/demote "What would you like to do?" navigation cards.
+
+PHASE 8
+Move Sales Performance higher.
+
+PHASE 9
+Add Store Performance using existing multi-store reporting.
+
+PHASE 10
+Add Today's Operations using supported operational data.
+
+PHASE 11
+Create Inventory Health.
+
+PHASE 12
+Improve Top Products.
+
+PHASE 13
+Move/compact Payment Mix.
+
+PHASE 14
+Add supported Team/Customer snapshot.
+
+PHASE 15
+Apply role/permission awareness.
+
+PHASE 16
+Apply feature/business-type awareness where existing settings support it.
+
+PHASE 17
+Responsive desktop/tablet/mobile implementation.
+
+PHASE 18
+Accessibility and tooltip audit.
+
+PHASE 19
+Performance/query audit.
+
+PHASE 20
+Full regression QA.
+
+Proceed through all phases.
+
+Do not stop after rearranging cards.
+
+==================================================
+PERFORMANCE / QUERY RULES
+==================================================
+
+Dashboard must not become slow because more sections were added.
+
+Audit:
+
+- duplicate database queries
+- N+1 store queries
+- repeated sales aggregation
+- repeated inventory aggregation
+- repeated employee/shift queries
+
+Reuse consolidated server data where practical.
+
+Do not fetch the same metric separately for five cards if one aggregate query/service can safely provide it.
+
+Keep tenant/store scoping.
+
+==================================================
+ACCESSIBILITY
+==================================================
+
+Ensure:
+
+- KPI help icons work
+- cards have clear labels
+- charts have textual context
+- color is not the only severity indicator
+- tables are keyboard accessible
+- mobile stacking remains readable
+- buttons have descriptive accessible names
+
+==================================================
+MANDATORY QA — OWNER
+==================================================
+
+Verify:
+
+1. Executive KPIs visible before scrolling significantly.
+2. Net Sales correct.
+3. Transactions correct.
+4. Average Order correct.
+5. Refunds correct.
+6. Cost-incomplete state correct.
+7. No fake 100% margin from missing costs.
+8. Needs Attention correct.
+9. Sales trend correct.
+10. Store Performance correct.
+11. Operations correct.
+12. Inventory Health correct.
+13. Top Products correct.
+14. Payment Mix correct.
+15. Date/store filters affect all appropriate sections.
+16. All Review actions work.
+
+==================================================
+MANDATORY QA — MULTI-STORE
+==================================================
+
+All Stores:
+
+organization-level metrics.
+
+Specific Store:
+
+only authorized store data.
+
+Direct store URL/manipulation:
+
+must still obey backend permissions.
+
+Store Performance hidden/reduced if comparison is meaningless.
+
+==================================================
+MANDATORY QA — ROLES
+==================================================
+
+Owner:
+full authorized executive view.
+
+Admin:
+according to permissions.
+
+Manager:
+store-scoped.
+
+Inventory Staff:
+no sensitive financial leakage.
+
+Cashier:
+no inappropriate executive access.
+
+==================================================
+MANDATORY QA — RESPONSIVE
+==================================================
+
+Test:
+
+1920 desktop
+1440 desktop
+1280 laptop
+tablet landscape
+tablet portrait
+430px phone
+375px phone
+320–360px small phone
+
+Verify:
+
+no horizontal overflow
+no unusable charts
+no clipped metrics
+no gigantic whitespace
+no lost Needs Attention
+no overlapping sticky header
+
+==================================================
+VALIDATION
+==================================================
+
+Run:
+
+npm run typecheck
+npm run lint
+npm run build
+
+Run existing relevant tests.
+
+Do not introduce new warnings beyond known baseline.
+
+==================================================
+FINAL REPORT
+==================================================
+
+Report:
+
+1. Existing dashboard architecture found
+2. Metrics/data sources reused
+3. New dashboard information hierarchy
+4. Executive Snapshot changes
+5. Comparison logic
+6. Cost completeness fix
+7. Needs Attention redesign
+8. Removed/demoted navigation cards
+9. Sales Performance changes
+10. Store Performance
+11. Today's Operations
+12. Inventory Health
+13. Top Products
+14. Payment Mix
+15. Team/Customer summary
+16. Role-aware behavior
+17. Business/feature-aware behavior
+18. Responsive changes
+19. Accessibility
+20. Query/performance changes
+21. Desktop QA
+22. Tablet QA
+23. Mobile QA
+24. Typecheck
+25. Lint
+26. Build
+27. CANDIDATE_FOR_REMOVAL
+28. Remaining risks / unsupported metrics
+
+==================================================
+FINAL DASHBOARD RULE
+==================================================
+
+The Owner Dashboard must prioritize:
+
+1. MONEY
+2. PROBLEMS
+3. STORES
+4. OPERATIONS
+5. INVENTORY
+6. PRODUCTS
+7. PAYMENTS
+8. PEOPLE
+9. NAVIGATION SHORTCUTS
+
+An owner should open TINDIO and understand the condition of the business without hunting through the dashboard.
+
+Do not make the Owner dashboard merely attractive.
+
+Make it useful for making decisions.
+
+AUDIT
+→ IMPLEMENT
+→ QA
+→ RE-AUDIT
+→ REPORT
+→ STOP.

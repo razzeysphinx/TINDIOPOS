@@ -1,56 +1,93 @@
-# Welcome to your Expo app 👋
+# TINDIO Mobile POS
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+`apps/mobile` is the native Android cashier client for TINDIO. It uses Expo SDK
+57, React Native 0.86, Expo Router, TypeScript, SecureStore, and SQLite. The
+Android package ID is locked as `com.tindio.pos`.
 
-## Get started
+## Authority boundaries
 
-1. Install dependencies
+- Supabase Auth authenticates the employee and issues the session.
+- The TINDIO API enforces tenant, store, employee, register, and device scope.
+- Neon is authoritative for business data and accepted cloud transactions.
+- SQLite holds local catalogue/reference snapshots, receipts, sync metadata,
+  durable checkout intents, and the offline outbox.
+- The device does not implement a second pricing, authorization, inventory, or
+  receipt authority.
 
-   ```bash
-   npm install
-   ```
+Prepared terminals may accept supported cash sales while isolated. Card and
+electronic payments, unsupported customer/ticket/dining carts, expired offline
+authorization, or unresolved online checkout outcomes fail closed. Store Hub is
+retained in `apps/store-hub` but deferred from v1.
 
-2. Start the app
+## Environment
 
-   ```bash
-   npx expo start
-   ```
+Copy `.env.example` to `.env.local` and provide only the approved public origins
+and Supabase publishable key:
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```text
+EXPO_PUBLIC_TINDIO_API_URL=https://your-tindio-api.example.com
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Never commit `.env.local`, service-role keys, database credentials, device
+secrets, signing files, EAS credentials, or production account credentials.
 
-### Other setup steps
+## Development commands
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+Run from the repository root:
 
-## Learn more
+```powershell
+pnpm install --frozen-lockfile
+pnpm mobile:start
+pnpm mobile:android
+pnpm mobile:typecheck
+pnpm --dir apps/mobile lint
+pnpm mobile:export:android
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+`pnpm mobile:start` can provide a browser preview, but browser/Expo Go rendering
+is not certification evidence for the native Android runtime. Camera,
+SecureStore, SQLite durability, Android lifecycle behavior, upgrades, and
+physical accessibility/hardware gates require a development/preview APK or the
+appropriate release candidate on physical devices.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Builds and release inputs
 
-## Join the community
+EAS profiles in `eas.json`:
 
-Join our community of developers creating universal apps.
+- `development` — internal APK for development.
+- `preview` — internal APK for controlled review and physical testing.
+- `production` — remotely signed Android App Bundle; production submission is
+  kept as a draft unless the protected release gate passes.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+`production-release.json` is the fail-closed release-input manifest. It records
+approved EAS ownership/project identity, API/Auth origins, signing verification,
+branding, listing assets, screenshots, support contact, and public-policy
+evidence. Do not change its blocked outcomes merely to make a build pass.
+
+Useful root checks include:
+
+```powershell
+pnpm test:mobile-source-of-truth
+pnpm test:phase-23-android-hardening
+pnpm test:phase-24-google-play
+pnpm gate:phase-24:production
+pnpm certify:static
+```
+
+The full mobile test catalogue is intentionally exposed through root
+`test:mobile-*` scripts and discovered by static certification. Physical-device
+evidence remains separate from deterministic source checks.
+
+## Source of truth
+
+- [Mobile + Neon program](../../docs/TINDIO_MOBILE_NEON_SOURCE_OF_TRUTH.md)
+- [Mobile program index](../../docs/mobile-program/README.md)
+- [Android production hardening](../../docs/mobile-program/PHASE_23_ANDROID_PRODUCTION_HARDENING.md)
+- [Google Play testing and release](../../docs/mobile-program/PHASE_24_GOOGLE_PLAY_TESTING_RELEASE.md)
+- [Web/mobile UI source of truth](../../docs/mobile-program/TINDIO_POS_WEB_MOBILE_UI_SOURCE_OF_TRUTH.md)
+- [Hardware support scope](../../docs/mobile-program/ANDROID_V1_HARDWARE_SUPPORT.md)
+
+The Expo-generated `LICENSE` is retained pending owner licensing review. It is
+not interpreted here as the repository-wide TINDIO license.

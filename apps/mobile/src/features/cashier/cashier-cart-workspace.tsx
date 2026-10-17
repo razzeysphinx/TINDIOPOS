@@ -79,8 +79,7 @@ export function CashierCartWorkspace(props: CashierCartWorkspaceProps) {
     <View style={styles.panel} testID="cashier-cart-workspace">
       <View style={[styles.header, stacked ? styles.stacked : null]}>
         <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>CURRENT SALE</Text>
-          <Text accessibilityRole="header" style={styles.title}>Cart</Text>
+          <Text accessibilityRole="header" style={styles.title}>Current cart</Text>
           <Text style={styles.itemCount}>
             {cart.length === 0 ? "No items yet" : `${formatQuantity(itemCount)} item${itemCount === 1 ? "" : "s"}`}
           </Text>
@@ -146,11 +145,11 @@ function CartContents({
   return (
     <View style={styles.contents}>
       {cart.length === 0 ? (
-        <TindioFeedback
-          description="Choose a product to begin this sale."
-          kind="empty"
-          title="Your cart is empty"
-        />
+        <View style={styles.emptyCart}>
+          <View accessibilityElementsHidden style={styles.emptyCartMark}><Text style={styles.emptyCartGlyph}>□</Text></View>
+          <Text style={styles.emptyCartTitle}>Cart is ready</Text>
+          <Text style={styles.emptyCartDescription}>Add products from the catalogue or use a barcode scanner.</Text>
+        </View>
       ) : (
         <View style={styles.lines}>
           {cart.map((line) => (
@@ -449,23 +448,26 @@ function formatQuantity(value: number) {
 
 const styles = StyleSheet.create({
   panel: {
-    ...tindioTheme.shadow.card,
     backgroundColor: tindioTheme.color.surface.elevated,
     borderColor: tindioTheme.color.border.default,
-    borderRadius: tindioTheme.radius.lg,
+    borderRadius: tindioTheme.radius.md,
     borderWidth: 1,
     gap: tindioTheme.space.md,
     padding: tindioTheme.space.md,
   },
   header: { alignItems: "flex-start", flexDirection: "row", gap: tindioTheme.space.sm, justifyContent: "space-between" },
   headerCopy: { flex: 1 },
-  eyebrow: { ...tindioTheme.typography.role.caption, color: tindioTheme.color.brand.primary, letterSpacing: 1.2 },
-  title: { ...tindioTheme.typography.role.title, color: tindioTheme.color.content.primary },
+  title: { ...tindioTheme.typography.role.section, color: tindioTheme.color.content.primary },
   itemCount: { ...tindioTheme.typography.role.caption, color: tindioTheme.color.content.secondary },
   headerTotal: { alignItems: "flex-end" },
   totalLabel: { ...tindioTheme.typography.role.caption, color: tindioTheme.color.content.secondary },
   totalValue: { ...tindioTheme.typography.role.numeric, color: tindioTheme.color.brand.ink },
   contents: { gap: tindioTheme.space.lg },
+  emptyCart: { alignItems: "center", justifyContent: "center", minHeight: 190, padding: tindioTheme.space.lg },
+  emptyCartMark: { alignItems: "center", backgroundColor: tindioTheme.color.surface.app, borderRadius: tindioTheme.radius.pill, height: 48, justifyContent: "center", width: 48 },
+  emptyCartGlyph: { color: tindioTheme.color.content.secondary, fontSize: 28, lineHeight: 30 },
+  emptyCartTitle: { ...tindioTheme.typography.role.label, color: tindioTheme.color.content.primary, marginTop: tindioTheme.space.sm },
+  emptyCartDescription: { ...tindioTheme.typography.role.caption, color: tindioTheme.color.content.secondary, marginTop: tindioTheme.space.xxs, textAlign: "center" },
   lines: { gap: tindioTheme.space.sm },
   moneySummary: { backgroundColor: tindioTheme.color.brand.cream, borderRadius: tindioTheme.radius.md, gap: tindioTheme.space.xs, padding: tindioTheme.space.md },
   moneyRow: { flexDirection: "row", gap: tindioTheme.space.sm, justifyContent: "space-between" },

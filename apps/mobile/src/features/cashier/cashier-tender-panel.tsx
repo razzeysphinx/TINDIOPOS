@@ -235,7 +235,7 @@ function SaleResult({
 }
 
 const styles = StyleSheet.create({
-  panel: { ...tindioTheme.shadow.overlay, backgroundColor: tindioTheme.color.surface.elevated, borderColor: tindioTheme.color.border.default, borderRadius: tindioTheme.radius.lg, borderWidth: 1, gap: tindioTheme.space.md, padding: tindioTheme.space.lg },
+  panel: { backgroundColor: tindioTheme.color.surface.elevated, borderColor: tindioTheme.color.border.default, borderRadius: tindioTheme.radius.md, borderWidth: 1, gap: tindioTheme.space.md, padding: tindioTheme.space.md },
   heading: { alignItems: "flex-start", flexDirection: "row", flexWrap: "wrap", gap: tindioTheme.space.md, justifyContent: "space-between" },
   headingCopy: { flex: 1, minWidth: 210 },
   eyebrow: { ...tindioTheme.typography.role.caption, color: tindioTheme.color.brand.primary, letterSpacing: 1.2 },

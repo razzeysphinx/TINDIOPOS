@@ -1,4 +1,5 @@
 import * as Crypto from "expo-crypto";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -34,6 +35,10 @@ import { CashierCatalogue } from "../../src/features/cashier/cashier-catalogue";
 import { CashierCartWorkspace } from "../../src/features/cashier/cashier-cart-workspace";
 import { ModifierPicker, VariablePriceEditor } from "../../src/features/cashier/cashier-editors";
 import { cashierFeatureGates } from "../../src/features/cashier/cashier-feature-gates";
+import {
+  CashierRegisterHeader,
+  CashierShiftGate,
+} from "../../src/features/cashier/cashier-pos-frame";
 import {
   CashierTenderPanel,
   type CashierSaleResult,
@@ -114,6 +119,7 @@ function baseCartLine(item: PosCatalogItem): PosCartLine {
 
 export default function PosScreen() {
   const { allowsColumns, viewportClass } = useTindioResponsiveLayout();
+  const router = useRouter();
   const { data, mode, cashierReadinessState } = useBusinessContext();
   const core = data?.core;
   const terminal =
@@ -1051,14 +1057,74 @@ export default function PosScreen() {
     );
   }
 
+  const assignedStore = core.stores.find((store) => store.id === binding.storeId);
+  const assignedRegister = core.registers.find((register) => register.id === binding.registerId);
+  const cartItemCount = cart.reduce((sum, line) => sum + line.quantity, 0);
+  const registerHeader = (
+    <CashierRegisterHeader
+      employeeName={core.employee.name}
+      itemCount={cartItemCount}
+      mode={mode}
+      onMenu={() => router.push("/(app)")}
+      organizationName={core.organization.name}
+      shiftOpen={shiftMatches}
+    />
+  );
+
+  if (!shiftMatches) {
+    return (
+      <View style={styles.screen}>
+        {registerHeader}
+        <ScrollView contentContainerStyle={styles.gateScroll} testID="pos-scroll">
+          <CashierShiftGate
+            canOpenShift={core.permissions.includes("shifts.open")}
+            conflict={Boolean(core.activeShift)}
+            mode={mode}
+            onOpenShift={() => router.push("/(app)/shift")}
+            registerName={assignedRegister?.name ?? "Assigned register"}
+            storeName={assignedStore?.name ?? "Assigned store"}
+          />
+        </ScrollView>
+      </View>
+    );
+  }
+
+  const renderTenderPanel = () => (
+    <CashierTenderPanel
+      cashMethodAvailable={Boolean(cashMethod)}
+      cashTender={cashTender}
+      changeMinor={changeMinor}
+      currencyCode={core.organization.currencyCode}
+      hasCart={cart.length > 0}
+      offlineDisabled={offlinePaymentDisabled}
+      offlineReadinessLabel={cashierReadinessLabel(cashierReadinessState)}
+      offlineSaleReady={offlineSaleReady}
+      onCashTender={setCashTender}
+      onCompleteOnline={() => void completeOnlineCashSale()}
+      onDismissResult={() => setSaleResult(null)}
+      online={mode === "online"}
+      onlineCheckoutPending={onlineCheckoutPending}
+      onlineDisabled={onlinePaymentDisabled}
+      onlineIntent={Boolean(onlineIntent)}
+      onlineIntentMatchesCurrentContext={onlineIntentMatchesCurrentContext}
+      onSaveOffline={() => void saveOfflineCashSale()}
+      saleMessage={saleMessage}
+      saleResult={saleResult}
+      savingOffline={savingOffline}
+      tenderedMinor={tenderedMinor}
+      totalMinor={totals.totalMinor}
+    />
+  );
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1 }}
     >
+      {registerHeader}
       <ScrollView
         automaticallyAdjustKeyboardInsets
-        contentContainerStyle={{ padding: 20, paddingBottom: 64, gap: 12 }}
+        contentContainerStyle={styles.scrollContent}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         testID="pos-scroll"
@@ -1080,9 +1146,7 @@ export default function PosScreen() {
         onProduct={(item) => void add(item)}
         onQueryChange={setQuery}
         query={query}
-        terminalLabel={shiftMatches
-          ? `${core.organization.name} · Register ready`
-          : `${core.organization.name} · Shift required before checkout`}
+        storeName={assignedStore?.name ?? core.organization.name}
       />
       </View>
 
@@ -1131,6 +1195,7 @@ export default function PosScreen() {
         taxes={taxes}
         totals={totals}
       />
+      {usesTabletCartPane ? renderTenderPanel() : null}
       </View>
       </View>
 
@@ -1188,36 +1253,16 @@ export default function PosScreen() {
         </TindioWorkspaceSection>
       ) : null}
 
-      <CashierTenderPanel
-        cashMethodAvailable={Boolean(cashMethod)}
-        cashTender={cashTender}
-        changeMinor={changeMinor}
-        currencyCode={core.organization.currencyCode}
-        hasCart={cart.length > 0}
-        offlineDisabled={offlinePaymentDisabled}
-        offlineReadinessLabel={cashierReadinessLabel(cashierReadinessState)}
-        offlineSaleReady={offlineSaleReady}
-        onCashTender={setCashTender}
-        onCompleteOnline={() => void completeOnlineCashSale()}
-        onDismissResult={() => setSaleResult(null)}
-        online={mode === "online"}
-        onlineCheckoutPending={onlineCheckoutPending}
-        onlineDisabled={onlinePaymentDisabled}
-        onlineIntent={Boolean(onlineIntent)}
-        onlineIntentMatchesCurrentContext={onlineIntentMatchesCurrentContext}
-        onSaveOffline={() => void saveOfflineCashSale()}
-        saleMessage={saleMessage}
-        saleResult={saleResult}
-        savingOffline={savingOffline}
-        tenderedMinor={tenderedMinor}
-        totalMinor={totals.totalMinor}
-      />
+      {!usesTabletCartPane ? renderTenderPanel() : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { backgroundColor: tindioTheme.color.surface.app, flex: 1 },
+  gateScroll: { flexGrow: 1 },
+  scrollContent: { gap: tindioTheme.space.sm, padding: tindioTheme.space.md, paddingBottom: 64 },
   saleWorkspace: { gap: tindioTheme.space.md },
   saleWorkspaceTablet: { alignItems: "flex-start", flexDirection: "row" },
   cataloguePane: { flex: 3, minWidth: 0 },

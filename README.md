@@ -11,17 +11,17 @@ Next.js Web Back Office/POS and a native Expo/React Native Android POS.
   SQLite, durable transaction custody, offline cash sales, and synchronization.
 - `apps/store-hub/` — retained Store Hub transport. It is deliberately deferred
   from the v1 release and is not a certified merchant feature.
-- `database/` — canonical business schema: immutable baseline, ordered forward
-  migrations, and provider adapters.
+- `database/` — canonical business schema. `database/baseline/` holds the immutable
+  baseline, followed by ordered forward migrations and provider adapters.
 - `supabase/` — Supabase Auth/local test infrastructure. It is not the canonical
   location for TINDIO business migrations.
 - `archive/database/` — historical Supabase migration chain retained for audit
   and recovery integrity; never use it as the normal production install path.
 
-Supabase provides authentication. Neon `tindio_r6_recovery` is the authoritative
-business database. Historical `neondb` is reference-only. Browser and mobile
-clients reach business data through authenticated application/API boundaries;
-they do not replace server-side authorization or database rules.
+Supabase provides authentication. Neon PostgreSQL database `tindio_r6_recovery`
+is the authoritative business database. Historical `neondb` is reference-only.
+Browser and mobile clients reach business data through authenticated application/API
+boundaries; they do not replace server-side authorization or database rules.
 
 ## Mobile operating model
 
@@ -38,6 +38,10 @@ completed.
 
 Requirements: Node.js 22, pnpm 10, Docker Desktop for local database checks, and
 Android tooling only when building or running the native app.
+
+The commands below install the canonical schema into the prepared local database;
+the Neon installer applies the same manifest-backed schema through its provider
+adapter.
 
 ```powershell
 pnpm install --frozen-lockfile

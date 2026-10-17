@@ -38,8 +38,8 @@ const readyManifest = {
   },
   storeListing: {
     status: "READY",
-    featureGraphic: "assets/images/icon.png",
-    phoneScreenshots: ["assets/images/icon.png"],
+    featureGraphic: "assets/play/feature-graphic-candidate-1024x500.png",
+    phoneScreenshots: ["assets/branding/tindio-icon-candidate-1024.png"],
     sevenInchTabletScreenshots: [],
     tenInchTabletScreenshots: [],
     shortDescription: "Approved description",

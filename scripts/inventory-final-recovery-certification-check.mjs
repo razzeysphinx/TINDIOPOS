@@ -183,8 +183,8 @@ test("the final certification still covers the handover's unresolved recovery ev
 test("backup and recovery procedure remains isolated and non-destructive", () => {
   assert.match(recoveryProcedure, /isolated environment/i);
   assert.match(recoveryProcedure, /Never test a restore over the production project/i);
-  assert.match(recoveryProcedure, /does not automatically restore a Supabase project/i);
-  assert.match(recoveryProcedure, /Storage objects separately/i);
+  assert.match(recoveryProcedure, /does not automatically restore its authoritative Neon database/i);
+  assert.match(recoveryProcedure, /Supabase remains the authentication provider/i);
 });
 
 test("manual Phase 14 browser and integration evidence is explicitly complete", () => {

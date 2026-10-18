@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 2,
+  "phase": "MOB-13",
+  "slice": 17,
+  "status": "BLOCKED",
+  "certificationEvidence": false,
+  "baseSourceCommit": "e46f5f7ee6ca1b1e1c21093502c2c34142045f9e",
+  "observedAt": "2026-10-18T21:41:00+08:00",
+  "packageId": "com.tindio.pos",
+  "appVersion": "1.0.0",
+  "versionCode": 2,
+  "device": {
+    "manufacturer": "realme",
+    "model": "RMX2189",
+    "androidVersion": "11",
+    "apiLevel": 30,
+    "abi": "arm64-v8a",
+    "serial": "TWIJVGS869RWBUGU",
+    "resolution": "720x1600",
+    "physicalDensityDpi": 320,
+    "fontScale": 1.0
+  },
+  "build": {
+    "baseSourceCommit": "e46f5f7ee6ca1b1e1c21093502c2c34142045f9e",
+    "sourceTreeChange": "Replace the POS raw local-catalog fallback with the shared TINDIO setup-state UI.",
+    "validationApk": "C:\\tmp\\TINDIOPOS-MOB13-S17-register-setup-validation.apk",
+    "artifactSha256": "98137C48EB7C1600FEF2E9FBACF73EA4D8D2A1C7D8C32E9C6285CB15468013D0",
+    "signerCertificateSha256": "FAC61745DC0903786FB9EDE62A962B399F7348F0BB6F899B8332667591033B9C",
+    "apkSignatureV2": "PASS",
+    "zipalign16KiB": "PASS",
+    "installMode": "ADB_INSTALL_R_IN_PLACE",
+    "firstInstallTimePreserved": "2026-10-17 11:41:08",
+    "validationTransport": "ADB_REVERSE_LOCALHOST_HTTP_WITH_DISPOSABLE_CLEAR_TEXT_MANIFEST",
+    "productionSourceCleartextChanged": false,
+    "productionReleaseCandidate": "NOT_AVAILABLE"
+  },
+  "deviceClasses": {
+    "phone": "PARTIAL_PASS",
+    "tablet": "NOT_RUN",
+    "physicalKeyboardOrHid": "NOT_RUN"
+  },
+  "campaign": [
+    {
+      "id": "cashier-home",
+      "result": "PASS",
+      "notes": "Preserved Phase 04 certification identity, sync-review warning, navigation hierarchy, and full-width phone cards rendered correctly."
+    },
+    {
+      "id": "compact-phone-pos-catalogue",
+      "result": "PASS",
+      "notes": "Header, offline state, search, quick barcode entry, camera action, category chip, and product card remained readable at 720x1600."
+    },
+    {
+      "id": "compact-phone-cart-payment",
+      "result": "PASS",
+      "notes": "Empty cart, total, cash-tender input, change state, and readiness content remained aligned and scroll-reachable."
+    },
+    {
+      "id": "software-keyboard",
+      "result": "PASS",
+      "notes": "Search retained focus and stayed visible above the resized software keyboard."
+    },
+    {
+      "id": "register-setup-fallback",
+      "result": "SOURCE_PASS",
+      "notes": "The raw text fallback was replaced with shared TINDIO screen, card, feedback, retry, and safe return actions."
+    },
+    {
+      "id": "closed-shift-gate",
+      "result": "NOT_RUN",
+      "notes": "The active shift and unresolved transaction custody were preserved; no shift close was attempted."
+    },
+    {
+      "id": "maximum-font",
+      "result": "NOT_RUN",
+      "notes": "The phone remained at its original font scale 1.0."
+    },
+    {
+      "id": "talkback",
+      "result": "NOT_RUN",
+      "notes": "TalkBack was not enabled on the available phone."
+    },
+    {
+      "id": "tablet-responsive-layout",
+      "result": "NOT_RUN",
+      "notes": "No supported physical tablet was attached."
+    }
+  ],
+  "evidenceFiles": [
+    { "path": "mob-13-slice-17/phone-home.png", "sha256": "89B6297200CF86060F68C95563C91C84BB3ABAC8F9EC39F6FF8090A8E3F31CD1", "proves": "preserved compact-phone cashier home and sync-review presentation" },
+    { "path": "mob-13-slice-17/phone-pos-top.png", "sha256": "8AE90265DEA0D0AA82E45001B9ACC976D337E330AEC46EA1596CBD3A84189658", "proves": "compact-phone POS header, catalogue controls, category, and product card" },
+    { "path": "mob-13-slice-17/phone-pos-lower.png", "sha256": "94312C07B6D59845D0DE0EF550D5F5A44527E89333E16B1C9EEA02CEF3272CF8", "proves": "scroll-reachable cart and cash-tender layout" },
+    { "path": "mob-13-slice-17/phone-pos-keyboard.png", "sha256": "BE1EC5892FE0D16E8588CA568D341B670854376CBB0623411D19F94AFAD65FBC", "proves": "search focus and software-keyboard resize behavior" },
+    { "path": "mob-13-slice-17/phone-home.xml", "sha256": "65473099BC7F3DCF608221F740454DE5130F0D5AD96304A83129863F55AAACF1", "proves": "cashier home accessibility hierarchy" },
+    { "path": "mob-13-slice-17/phone-pos-top.xml", "sha256": "9847C0BC061944C7D094D4B03D777E27BF980AA58C7CEFF8C89F760F1D40585F", "proves": "POS catalogue accessibility hierarchy" },
+    { "path": "mob-13-slice-17/phone-pos-lower.xml", "sha256": "2A172CD071B33847572A4E724AC519A603EBDCF7214E1689E469B4A48AA0EAF7", "proves": "cart and payment accessibility hierarchy" },
+    { "path": "mob-13-slice-17/phone-pos-keyboard.xml", "sha256": "467530D93D258594E149038D1EE91AFD7299FEFC127BD3A72CB020487011790E", "proves": "focused search field hierarchy with keyboard visible" }
+  ],
+  "blockers": [
+    "PHYSICAL_TABLET_CAMPAIGN_NOT_RUN",
+    "PHYSICAL_KEYBOARD_OR_HID_CAMPAIGN_NOT_RUN",
+    "COMPLETE_LARGE_TEXT_CAMPAIGN_NOT_RUN",
+    "TALKBACK_CAMPAIGN_NOT_RUN",
+    "CLOSED_SHIFT_CAPTURE_NOT_RUN_WITH_SAFE_SYNTHETIC_CONTEXT",
+    "BOUND_PRODUCTION_RELEASE_CANDIDATE_NOT_AVAILABLE"
+  ],
+  "notes": "Phone UI evidence is valid for the localhost-only validation artifact and current source change. It is not promoted to full physical or production certification."
+}

@@ -85,7 +85,10 @@ import { syncOutboxEvents } from "../../src/features/outbox/outbox-sync";
 import { tindioTheme } from "../../src/ui/theme";
 import { useTindioResponsiveLayout } from "../../src/ui/tindio-responsive";
 import { TindioButton } from "../../src/ui/tindio-button";
+import { TindioCard } from "../../src/ui/tindio-card";
+import { TindioFeedback } from "../../src/ui/tindio-feedback";
 import { TindioInput } from "../../src/ui/tindio-input";
+import { TindioScreen } from "../../src/ui/tindio-screen";
 import { TindioListItem, TindioWorkspaceSection } from "../../src/ui/tindio-workspace";
 import {
   checkoutPosV2,
@@ -120,7 +123,7 @@ function baseCartLine(item: PosCatalogItem): PosCartLine {
 export default function PosScreen() {
   const { allowsColumns, viewportClass } = useTindioResponsiveLayout();
   const router = useRouter();
-  const { data, mode, cashierReadinessState } = useBusinessContext();
+  const { data, mode, cashierReadinessState, reload } = useBusinessContext();
   const core = data?.core;
   const terminal =
     useTerminalDevice(
@@ -411,13 +414,55 @@ export default function PosScreen() {
 
   if (
     !core
+    || terminal.loading
     || !binding
     || !identity
   ) {
+    const preparing = Boolean(core) && terminal.loading;
+    const retrySetup = async () => {
+      await reload();
+      await terminal.reload();
+    };
+
     return (
-      <Text>
-        Local catalog is not prepared.
-      </Text>
+      <TindioScreen
+        contentContainerStyle={styles.unavailableScreen}
+        edges={[]}
+        testID="pos-setup-state"
+      >
+        <TindioCard style={styles.unavailableCard}>
+          <Text style={styles.eyebrow}>TINDIO POS</Text>
+          <Text accessibilityRole="header" style={styles.stateTitle}>
+            {preparing ? "Preparing this register" : "Finish register setup"}
+          </Text>
+          <TindioFeedback
+            description={
+              preparing
+                ? "TINDIO is checking this device assignment and saved catalog."
+                : terminal.error
+                  ?? "This device needs its terminal assignment and saved catalog before selling can begin. Return to the register home to review sync and setup. Saved work remains on this device."
+            }
+            kind={preparing ? "loading" : "restriction"}
+            title={preparing ? "Checking register" : "Catalog unavailable"}
+          />
+          {!preparing ? (
+            <View style={styles.unavailableActions}>
+              <TindioButton
+                accessibilityLabel="Try preparing the register again"
+                onPress={() => void retrySetup()}
+              >
+                Try again
+              </TindioButton>
+              <TindioButton
+                onPress={() => router.replace("/(app)")}
+                variant="secondary"
+              >
+                Back to register
+              </TindioButton>
+            </View>
+          ) : null}
+        </TindioCard>
+      </TindioScreen>
     );
   }
 
@@ -1265,6 +1310,11 @@ export default function PosScreen() {
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: tindioTheme.color.surface.app, flex: 1 },
+  unavailableScreen: { alignItems: "center", justifyContent: "center" },
+  unavailableCard: { maxWidth: 520, width: "100%" },
+  unavailableActions: { gap: tindioTheme.space.sm },
+  eyebrow: { ...tindioTheme.typography.role.caption, color: tindioTheme.color.brand.primary, letterSpacing: 1.2 },
+  stateTitle: { ...tindioTheme.typography.role.title, color: tindioTheme.color.content.primary },
   gateScroll: { flexGrow: 1 },
   scrollContent: { gap: tindioTheme.space.sm, padding: tindioTheme.space.md, paddingBottom: 64 },
   scrollContentCompact: { padding: tindioTheme.space.sm, paddingBottom: 48 },

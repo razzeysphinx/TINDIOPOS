@@ -195,7 +195,8 @@ export default function PosScreen() {
   const canApplyDiscounts = Boolean(core?.permissions.includes("discounts.apply"));
   const canCreateCustomers = Boolean(core?.permissions.includes("customers.manage"));
   const canUseTickets = Boolean(gates?.tickets);
-  const usesTabletCartPane = allowsColumns && viewportClass === "tablet";
+  const usesTabletCartPane = allowsColumns;
+  const usesCompactPhoneSpacing = viewportClass === "compact-phone";
 
   const shiftMatches = Boolean(
     core?.activeShift
@@ -1124,7 +1125,10 @@ export default function PosScreen() {
       {registerHeader}
       <ScrollView
         automaticallyAdjustKeyboardInsets
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          usesCompactPhoneSpacing ? styles.scrollContentCompact : null,
+        ]}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         testID="pos-scroll"
@@ -1263,6 +1267,7 @@ const styles = StyleSheet.create({
   screen: { backgroundColor: tindioTheme.color.surface.app, flex: 1 },
   gateScroll: { flexGrow: 1 },
   scrollContent: { gap: tindioTheme.space.sm, padding: tindioTheme.space.md, paddingBottom: 64 },
+  scrollContentCompact: { padding: tindioTheme.space.sm, paddingBottom: 48 },
   saleWorkspace: { gap: tindioTheme.space.md },
   saleWorkspaceTablet: { alignItems: "flex-start", flexDirection: "row" },
   cataloguePane: { flex: 3, minWidth: 0 },

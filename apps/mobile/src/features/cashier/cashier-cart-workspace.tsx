@@ -76,7 +76,10 @@ export function CashierCartWorkspace(props: CashierCartWorkspaceProps) {
   const stacked = isLargeText || viewportClass === "compact-phone";
 
   return (
-    <View style={styles.panel} testID="cashier-cart-workspace">
+    <View
+      style={[styles.panel, viewportClass === "compact-phone" ? styles.panelCompact : null]}
+      testID="cashier-cart-workspace"
+    >
       <View style={[styles.header, stacked ? styles.stacked : null]}>
         <View style={styles.headerCopy}>
           <Text accessibilityRole="header" style={styles.title}>Current cart</Text>
@@ -455,6 +458,7 @@ const styles = StyleSheet.create({
     gap: tindioTheme.space.md,
     padding: tindioTheme.space.md,
   },
+  panelCompact: { gap: tindioTheme.space.sm, padding: tindioTheme.space.sm },
   header: { alignItems: "flex-start", flexDirection: "row", gap: tindioTheme.space.sm, justifyContent: "space-between" },
   headerCopy: { flex: 1 },
   title: { ...tindioTheme.typography.role.section, color: tindioTheme.color.content.primary },

@@ -8,7 +8,7 @@ test("Slice 10 provides a phone cart summary and persistent tablet cart pane", (
   const pos = read("apps/mobile/app/(app)/pos.tsx");
   const workspace = read("apps/mobile/src/features/cashier/cashier-cart-workspace.tsx");
   const responsive = read("apps/mobile/src/ui/tindio-responsive.ts");
-  assert.match(pos, /usesTabletCartPane = allowsColumns && viewportClass === "tablet"/);
+  assert.match(pos, /usesTabletCartPane = allowsColumns/);
   assert.match(responsive, /compactTabletMax: 899/);
   assert.match(pos, /compact=\{!usesTabletCartPane\}/);
   assert.match(pos, /expanded=\{usesTabletCartPane \|\| cartExpanded\}/);

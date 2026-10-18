@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Deterministic layout decisions for MOB-13 Slice 16 visual density closure",
+  "certificationEvidence": false,
+  "sourceReview": {
+    "closedShift": "cashier-shift-gate",
+    "openWorkspace": "cashier-catalogue + cashier-cart-workspace",
+    "webReferences": [
+      "closed-shift desktop reference supplied by the product owner",
+      "open-workspace desktop reference supplied by the product owner"
+    ]
+  },
+  "states": [
+    { "id": "compact-phone-portrait", "width": 320, "height": 568, "fontScale": 1, "workspace": "stacked", "pagePadding": 8 },
+    { "id": "standard-phone-portrait", "width": 390, "height": 844, "fontScale": 1, "workspace": "stacked", "pagePadding": 16 },
+    { "id": "compact-tablet-portrait", "width": 800, "height": 1280, "fontScale": 1, "workspace": "split", "pagePadding": 16 },
+    { "id": "tablet-landscape", "width": 1280, "height": 800, "fontScale": 1, "workspace": "split", "pagePadding": 16 },
+    { "id": "tablet-large-text", "width": 800, "height": 1280, "fontScale": 2, "workspace": "stacked", "pagePadding": 16 }
+  ],
+  "physicalCaptureStatus": "NOT_RUN",
+  "browserCaptureStatus": "BLOCKED",
+  "browserCaptureBlocker": "The retained Expo web baseline cannot load expo-sqlite/web/worker.ts before an authorized cashier state renders.",
+  "notes": "This matrix verifies source-level responsive decisions only. New phone/tablet screenshots and accessibility evidence require a prepared synthetic Android runtime and remain part of Phase 13 physical closure."
+}

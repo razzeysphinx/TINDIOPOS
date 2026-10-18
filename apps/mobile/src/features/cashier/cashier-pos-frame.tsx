@@ -23,9 +23,10 @@ export function CashierRegisterHeader({
 }: CashierRegisterHeaderProps) {
   const { viewportClass } = useTindioResponsiveLayout();
   const phone = viewportClass === "compact-phone" || viewportClass === "standard-phone";
+  const compactPhone = viewportClass === "compact-phone";
 
   return (
-    <View style={styles.header} testID="cashier-register-header">
+    <View style={[styles.header, compactPhone ? styles.headerCompact : null]} testID="cashier-register-header">
       <Pressable
         accessibilityLabel="Open POS menu"
         accessibilityRole="button"
@@ -52,7 +53,7 @@ export function CashierRegisterHeader({
           <Text numberOfLines={1} style={styles.identityTitle}>
             {phone && shiftOpen ? (mode === "online" ? "Online" : "Offline") : "TINDIO POS"}
           </Text>
-          {!phone || !shiftOpen ? (
+          {(!phone || !shiftOpen) && !compactPhone ? (
             <Text numberOfLines={1} style={styles.headerMeta}>
               {shiftOpen ? `${mode === "online" ? "Online" : "Offline"} · ${employeeName}` : `${organizationName} · Register entry`}
             </Text>
@@ -80,6 +81,8 @@ export function CashierShiftGate({
   storeName,
   onOpenShift,
 }: CashierShiftGateProps) {
+  const { viewportClass } = useTindioResponsiveLayout();
+  const phone = viewportClass === "compact-phone" || viewportClass === "standard-phone";
   const available = canOpenShift && mode === "online";
   const restriction = conflict
     ? "An open shift belongs to another register. Return to shift controls to restore the assigned register."
@@ -88,7 +91,7 @@ export function CashierShiftGate({
       : "Your role needs shift-opening permission before this POS can be used.";
 
   return (
-    <View style={styles.gate} testID="cashier-shift-gate">
+    <View style={[styles.gate, phone ? styles.gatePhone : null]} testID="cashier-shift-gate">
       <View accessibilityElementsHidden style={styles.lockTile}>
         <View style={styles.lockShackle} />
         <View style={styles.lockBody}><View style={styles.lockKeyhole} /></View>
@@ -126,6 +129,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: tindioTheme.space.md,
     paddingVertical: tindioTheme.space.xs,
   },
+  headerCompact: { gap: tindioTheme.space.xs, paddingHorizontal: tindioTheme.space.sm },
   menuButton: {
     alignItems: "center",
     backgroundColor: tindioTheme.color.surface.app,
@@ -162,6 +166,7 @@ const styles = StyleSheet.create({
     paddingVertical: tindioTheme.space.xxl,
     width: "100%",
   },
+  gatePhone: { minHeight: 0, paddingVertical: tindioTheme.space.xl },
   lockTile: {
     alignItems: "center",
     backgroundColor: tindioTheme.color.status.danger.surface,

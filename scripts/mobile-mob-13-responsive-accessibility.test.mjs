@@ -18,7 +18,7 @@ test("Slice 13 defines four responsive classes and large-text-safe layout decisi
   assert.match(responsive, /allowsColumns: width >= 720 && !isLargeText/);
   assert.match(responsive, /allowsDenseGrid: width >= 600 && !isLargeText/);
   assert.match(home, /useTindioResponsiveLayout/);
-  assert.match(pos, /usesTabletCartPane = allowsColumns && viewportClass === "tablet"/);
+  assert.match(pos, /usesTabletCartPane = allowsColumns/);
   assert.match(catalogue, /numberOfLines=\{largeText \? undefined : 2\}/);
   assert.equal(config.expo.orientation, "default");
 });

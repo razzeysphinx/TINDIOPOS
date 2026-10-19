@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "test": "pnpm run build && node --test test/health.test.mjs",
+    "test": "pnpm run build && node --test test/health.test.mjs test/bootstrap-proxy.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }
 }

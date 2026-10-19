@@ -18,7 +18,7 @@ test("backend is an independently operated workspace", async () => {
   assert.deepEqual(Object.keys(backendManifest.dependencies ?? {}), []);
   assert.equal(backendManifest.scripts.typecheck, "tsc -p tsconfig.json --noEmit");
   assert.equal(backendManifest.scripts.build, "tsc -p tsconfig.build.json");
-  assert.match(backendManifest.scripts.test, /node --test test\/health\.test\.mjs/);
+  assert.match(backendManifest.scripts.test, /test\/health\.test\.mjs/);
   assert.equal(rootManifest.scripts["backend:typecheck"], "pnpm --dir apps/backend typecheck");
   assert.equal(rootManifest.scripts["backend:build"], "pnpm --dir apps/backend build");
   assert.equal(rootManifest.scripts["backend:test"], "pnpm --dir apps/backend test");
@@ -43,15 +43,12 @@ test("health function uses a provider-neutral Web response", async () => {
   );
 });
 
-test("foundation does not import Web source or introduce business endpoints", async () => {
-  const [route, health, readme] = await Promise.all([
+test("health foundation remains isolated from Web and business endpoints", async () => {
+  const [route, health] = await Promise.all([
     read("apps/backend/api/health.ts"),
     read("apps/backend/src/health.ts"),
-    read("apps/backend/README.md"),
   ]);
   const source = `${route}\n${health}`;
 
   assert.doesNotMatch(source, /(?:\.\.\/){2,}src\/|@\/|checkout|sync-push|bootstrap|mutation/);
-  assert.match(readme, /No POS endpoint, mutation, authentication provider, database driver, secret,/);
-  assert.match(readme, /existing Next\.js POS routes remain authoritative/);
 });

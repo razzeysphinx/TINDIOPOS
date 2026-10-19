@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE C FOUNDATION COMPLETE; INDEPENDENT BACKEND BOUNDARY CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE C COMPLETE; FIRST BACKEND READ ADAPTER CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0, Slices B1–B2, and the Slice C independent Backend foundation
+Certified scope: Phase 0, Slices B1–B2, and completed Slice C Backend foundation/bootstrap compatibility route
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -103,6 +103,16 @@ Database: **CANONICAL NEON UNCHANGED**
   environment-secret access, Web-source import, or business endpoint.
 - Root workspace typechecking now certifies Web, contracts, Backend, and Mobile
   as separate boundaries.
+- Backend `GET /api/pos/v2/bootstrap` now provides the first read-only dual-route
+  compatibility seam while the existing Next.js handler remains authoritative.
+- The adapter forwards only JSON acceptance, bearer authorization, and explicit
+  organization scope; cookies and unrelated request headers cannot cross.
+- Upstream status, JSON bytes, cache/content metadata, retry timing, and request
+  ID are preserved for 200, 401, 403, and 503 responses.
+- Missing, malformed, credential-bearing, path-bearing, non-HTTP, and
+  self-referential upstream origins fail closed with a bounded 503 response.
+- Web and Mobile continue using `/api/pos/v2/bootstrap` on their existing API
+  origin; no deployed routing or environment was changed.
 
 ## Results
 
@@ -111,8 +121,9 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend health behavior | **PASS (1/1)** |
+| Backend health/bootstrap behavior | **PASS (6/6)** |
 | Backend foundation boundary | **PASS (3/3)** |
+| Backend bootstrap compatibility boundary | **PASS (4/4)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -136,27 +147,28 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **188/189 automated commands pass** |
+| Static catalogue | **189/190 automated commands pass** |
 | Local Supabase/Docker source connectivity | **BLOCKED** — local source unavailable |
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
 
 The failed environment gate existed before these architecture slices. The
-Backend foundation added one passing automated command and introduced no new
-failure.
+bootstrap compatibility slice added one passing automated command and
+introduced no new failure.
 
 ## Safety statement
 
 No production Auth service was provisioned. No database schema or merchant data
 changed. No account was exported/imported. No session format, existing JSON wire
 field, POS API route, checkout behavior, SQLite database, outbox record,
-deployment, client API origin, or provider project changed. The new health route
-exists only inside the undeployed Backend workspace.
+deployment, client API origin, or provider project changed. The Backend routes
+exist only inside the undeployed Backend workspace; the added environment file
+is an inert example containing no credential.
 
 ## Next gate
 
-Continue Slice C with one read-only POS v2 endpoint behind a dual-route
-compatibility adapter, recommended: bootstrap core. Keep the current Next.js
-route active and prove identical authentication, authorization, status, headers,
-and JSON behavior. Do not move financial mutations or change deployed client
-origins. Neon Auth proof remains a later slice.
+Begin Slice D by moving bootstrap authentication, authorization, and core loading
+behind a Backend-owned server boundary while retaining the proxy as a rollback
+path. Prove the same 200/401/403/503 behavior before another read extraction.
+Do not move financial mutations or change deployed client origins. Neon Auth
+proof remains a later slice.

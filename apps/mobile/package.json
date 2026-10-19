@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@tindio/contracts": "workspace:*",
     "@expo/ui": "~57.0.22",
     "@supabase/supabase-js": "2.112.3",
     "expo": "~57.0.27",

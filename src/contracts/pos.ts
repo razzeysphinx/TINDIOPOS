@@ -434,48 +434,6 @@ export type PosReceiptListResponse = {
   hasMore: boolean;
 };
 
-export type PosDeviceBinding = {
-  deviceId: string;
-  storeId: string;
-  registerId: string;
-  deviceName: string;
-  appVersion: string;
-  lastSeenAt: string;
-};
-
-export type PosDeviceValidationResponse =
-  | {
-      ok: true;
-      device:
-        PosDeviceBinding;
-    }
-  | {
-      ok: false;
-      message: string;
-    };
-
-export type PosDeviceSequenceStatus =
-  | "ACCEPTED"
-  | "REPLAY"
-  | "GAP"
-  | "DUPLICATE_SEQUENCE"
-  | "OUT_OF_ORDER"
-  | "IDEMPOTENCY_SEQUENCE_MISMATCH";
-
-export type PosDeviceSyncCheckpoint = {
-  deviceId: string;
-  serverCheckpoint: number;
-  nextExpectedSequence: number;
-  updatedAt: string | null;
-};
-
-export type PosOfflineSequenceInfo = {
-  deviceSequence: number;
-  serverCheckpoint: number;
-  expectedSequence: number;
-  status: PosDeviceSequenceStatus;
-};
-
 export type PosSyncDomain = "CATALOG" | "REFERENCE" | "CUSTOMER" | "DEVICE" | "MODIFIERS";
 export type PosCatalogDelta = { revision: number; productId: string; storeId: string; items: PosCatalogItem[] };
 export type PosCustomerDelta = { revision: number; customerId: string; customer: PosCustomer | null };
@@ -516,14 +474,22 @@ export type {
 } from "@/features/pos/pos-types";
 
 export {
+  changePosDeviceRegisterSchema,
   posDeviceCredentialSchema,
+  posDeviceRequestHeaders,
   posDeviceValidationSchema,
   registerPosDeviceSchema,
-} from "@/features/devices/device-schema";
+  retirePosDeviceSchema,
+} from "@tindio/contracts";
 
 export type {
+  PosDeviceBinding,
   PosDeviceCredential,
-} from "@/features/devices/device-schema";
+  PosDeviceSequenceStatus,
+  PosDeviceSyncCheckpoint,
+  PosDeviceValidationResponse,
+  PosOfflineSequenceInfo,
+} from "@tindio/contracts";
 
 export {
   favoriteTileSchema,

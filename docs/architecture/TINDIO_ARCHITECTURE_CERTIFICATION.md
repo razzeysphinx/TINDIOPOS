@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **READY FOR NEXT SLICE WITH ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE B2 DEVICE DOMAIN CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0 and Slice B1 only
+Certified scope: Phase 0, Slice B1, and the Slice B2 device-contract domain
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -17,6 +17,11 @@ Database: **CANONICAL NEON UNCHANGED**
 - Compatibility re-export of the existing POS v2 version identifier.
 - Explicit Web, Mobile, contracts, and combined workspace commands.
 - Unchanged Web route output and Android export.
+- Provider-neutral device schemas, headers, bindings, and sequence/checkpoint
+  metadata extracted into `@tindio/contracts`.
+- Existing Web device and POS contract paths retained as compatibility facades.
+- Device-only Mobile consumers switched from root-relative Web imports to the
+  workspace package, reducing that coupling from 37 files to 34.
 
 ## Results
 
@@ -30,22 +35,27 @@ Database: **CANONICAL NEON UNCHANGED**
 | ESLint | **PASS WITH 3 PRE-EXISTING WARNINGS** |
 | Next.js production build | **PASS (90 routes)** |
 | Android export | **PASS** |
-| Static catalogue | **175/176 commands pass** |
+| Device contract compatibility | **PASS (3/3)** |
+| Device retirement custody | **PASS (4/4)** |
+| Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
+| Static catalogue | **176/177 automated commands pass** |
 | Local Supabase/Docker source connectivity | **BLOCKED** — local source unavailable |
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
 
-The failed environment gate existed in the pre-change baseline (174/175). This
-slice added one passing automated command and introduced no new failure.
+The failed environment gate existed before both architecture slices. Slice B2
+added one passing automated command and introduced no new failure.
 
 ## Safety statement
 
 No production Auth service was provisioned. No database schema or merchant data
-changed. No account was exported/imported. No session format, API route, checkout
-behavior, SQLite database, outbox record, deployment, or provider project changed.
+changed. No account was exported/imported. No session format, JSON wire field,
+API route, checkout behavior, SQLite database, outbox record, deployment, or
+provider project changed.
 
 ## Next gate
 
-Slice B2 may extract one coherent set of platform-neutral POS contract leaves.
-It must preserve the root compatibility facade and prove unchanged Web/Mobile
-wire behavior. Backend creation and Neon Auth proof remain later slices.
+Continue Slice B2 with one coherent set of platform-neutral sync envelope leaves.
+It must preserve the root compatibility facade and prove replay, checkpoint,
+resnapshot, and custody behavior. Backend creation and Neon Auth proof remain
+later slices.

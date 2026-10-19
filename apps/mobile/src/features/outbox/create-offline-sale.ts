@@ -1,5 +1,6 @@
 import * as Crypto from "expo-crypto";
-import type { PosCartLine, PosDeviceBinding } from "../../../../../src/contracts/pos";
+import type { PosDeviceBinding } from "@tindio/contracts";
+import type { PosCartLine } from "../../../../../src/contracts/pos";
 import { enqueueSaleCompletedEvent } from "../../db/outbox";
 import { getBusinessContextSnapshot } from "../../db/business-context-cache";
 import { getActiveShiftSnapshot } from "../../db/shift-cache";

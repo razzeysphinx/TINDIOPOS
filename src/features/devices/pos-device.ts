@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import {
   TINDIO_POS_APP_VERSION,
+  type PosDeviceBinding,
   type PosDeviceCredential,
 } from "@/features/devices/device-schema";
 import {
@@ -13,14 +14,7 @@ import {
 } from "@/features/offline/offline-store";
 import { fetchPosV2Command } from "@/features/pos/pos-v2-browser-api";
 
-export type PosDeviceBinding = {
-  deviceId: string;
-  storeId: string;
-  registerId: string;
-  deviceName: string;
-  appVersion: string;
-  lastSeenAt: string;
-};
+export type { PosDeviceBinding };
 
 export type PosDeviceState =
   | { state: "optional" }

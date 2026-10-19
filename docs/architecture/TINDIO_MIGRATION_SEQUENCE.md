@@ -6,7 +6,7 @@ Status: **IN PROGRESS**
 |---|---|---|---|
 | A | Audit, target architecture, ADR, dependency map, baseline | **IMPLEMENTED** | Clean/synchronized Git; evidence recorded; no production mutation |
 | B1 | Add `packages/*`, contracts foundation, independent commands | **IMPLEMENTED** | Typecheck/build/compatibility checks pass |
-| B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **NEXT** | Backend/Web/Mobile contract tests; unchanged wire format |
+| B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IN PROGRESS: DEVICE DOMAIN IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **PLANNED** | Independent health/build/test plus dual-route compatibility |
 | D | Progressive Backend extraction, mutations last | **PLANNED** | Financial/idempotency/offline replay equivalence |
@@ -17,16 +17,15 @@ Status: **IN PROGRESS**
 | I | Remove active Supabase runtime dependencies | **PLANNED** | Zero supported-client dependency; separate decommission approval |
 | J | Performance measurement, cleanup, independent CI/CD | **PLANNED** | Evidence-based optimization and final certification |
 
-## Next smallest safe slice: B2
+## Next smallest safe slice: B2 continuation
 
-- Identify leaf types/schemas in `src/contracts/pos.ts` with no server, React,
-  generated database, or feature-module dependency.
-- Move one coherent domain (recommended: device/sync envelope primitives) into
-  `@tindio/contracts`.
-- Preserve `src/contracts/pos.ts` re-exports for compatibility.
-- Replace only the matching Mobile relative imports.
-- Add schema/serialization compatibility tests and run Web build, Mobile
-  typecheck/export, POS contract tests, and custody tests.
+- Extract the next coherent leaf domain from `src/contracts/pos.ts`; the
+  recommended target is sync envelope types that do not depend on checkout,
+  generated database JSON, or Web feature modules.
+- Preserve `src/contracts/pos.ts` re-exports and the existing JSON wire shape.
+- Replace only matching Mobile relative imports and recount the dependency edge.
+- Run contract, Web build, Mobile typecheck/export, sync, replay, and custody
+  regression gates.
 
 Do not create the Backend app in B2; contract independence is the prerequisite
 that keeps the Backend from importing the Web application.

@@ -3,7 +3,7 @@ import { getOutboxSummary } from "../../db/outbox";
 import { searchLocalCatalog } from "../local-first/local-catalog";
 import { calculateLocalCartTotals } from "../local-first/local-cart";
 import { createOfflineCashSale } from "../outbox/create-offline-sale";
-import type { PosDeviceBinding } from "../../../../../src/contracts/pos";
+import type { PosDeviceBinding } from "@tindio/contracts";
 import {
   isMob10A30CertificationBuild,
   runMob10A30AcceptanceLoop,

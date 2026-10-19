@@ -5,7 +5,7 @@ import test from "node:test";
 const read = (path) => fs.readFileSync(path, "utf8");
 const migration = read("database/migrations/0018_mobile_device_retirement_custody.sql");
 const custodyMigration = read("database/migrations/0013_mobile_shift_custody_leases.sql");
-const schema = read("src/features/devices/device-schema.ts");
+const schema = read("packages/contracts/src/device.ts");
 const actions = read("src/features/devices/actions.ts");
 const manager = read("src/features/devices/device-manager.tsx");
 

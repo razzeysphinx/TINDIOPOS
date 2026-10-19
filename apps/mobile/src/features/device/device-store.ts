@@ -1,6 +1,6 @@
 import * as Crypto from "expo-crypto";
 import Constants from "expo-constants";
-import type { PosDeviceBinding, PosDeviceCredential } from "../../../../../src/contracts/pos";
+import type { PosDeviceBinding, PosDeviceCredential } from "@tindio/contracts";
 import { secureStorage } from "../../lib/secure-storage";
 export type MobileDeviceIdentity = { organizationId: string; credential: PosDeviceCredential; binding: PosDeviceBinding | null; createdAt: string; lastVerifiedAt: string | null };
 const key = (organizationId: string) => `tindio.pos.device.${organizationId}`;

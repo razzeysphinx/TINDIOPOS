@@ -1,16 +1,18 @@
 import "react-native-url-polyfill/auto";
 
 import type {
+  PosDeviceBinding,
+  PosDeviceCredential,
+  PosDeviceSyncCheckpoint,
+  PosDeviceValidationResponse,
+} from "@tindio/contracts";
+import type {
   AttendanceEmployeesResult,
   PosBootstrapV2CoreResponse,
   PosCatalogV2Response,
   PosCloseShiftV2Response,
   PosCustomer,
   PosCustomerSearchResponse,
-  PosDeviceBinding,
-  PosDeviceCredential,
-  PosDeviceSyncCheckpoint,
-  PosDeviceValidationResponse,
   PosLiveV2Response,
   PosModifiersV2Response,
   PosOpenShiftV2Response,

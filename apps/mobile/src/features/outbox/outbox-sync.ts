@@ -1,7 +1,5 @@
-import type {
-  PosDeviceCredential,
-  PosSyncPushAck,
-} from "../../../../../src/contracts/pos";
+import type { PosDeviceCredential } from "@tindio/contracts";
+import type { PosSyncPushAck } from "../../../../../src/contracts/pos";
 import {
   getOutboxSummary,
   listUnresolvedOutboxEvents,

@@ -5,29 +5,14 @@ import type {
 } from "@/features/business-profile/business-features";
 import type {
   PosActiveShift,
-  PosCustomerDisplaySession,
-  PosIncomingTransfer,
-  PosOpenTicket,
   PosRegister,
   PosStore,
-  PosTicketAssignee,
-  TimeClockEntry,
 } from "@tindio/contracts";
 import type {
   CheckoutSaleActionResult,
   ValidateCartStockActionResult,
 } from "@/features/checkout/checkout-types";
 import type { CheckoutSaleValues } from "@/features/checkout/checkout-schema";
-import type {
-  PosCatalogItem,
-  PosCategory,
-  PosDiningOption,
-  PosDiscount,
-  PosLoyaltyProgram,
-  PosPaymentMethod,
-  PosTaxRate,
-  PosTicketTemplate,
-} from "@/features/pos/pos-types";
 export {
   TINDIO_POS_API_VERSION,
 } from "@tindio/contracts";
@@ -42,11 +27,13 @@ export type {
   PosOpenTicket,
   PosCustomerDisplaySession,
   PosIncomingTransfer,
+  PosLiveV2Response,
   PosReceiptDetail,
   PosReceiptListResponse,
   PosReceiptSummary,
   PosRegister,
   PosStore,
+  PosSupportWorkspace,
   PosTicketAssignee,
   TimeClockEntry,
 } from "@tindio/contracts";
@@ -146,42 +133,6 @@ export type PosReceiptSearchQuery =
     typeof posReceiptSearchQuerySchema
   >;
 
-export type PosSupportWorkspace = {
-  stores: PosStore[];
-  categories: PosCategory[];
-  registers: PosRegister[];
-  paymentMethods:
-    PosPaymentMethod[];
-  loyaltyProgram:
-    PosLoyaltyProgram | null;
-  discounts: PosDiscount[];
-  taxRates: PosTaxRate[];
-  diningOptions:
-    PosDiningOption[];
-  ticketTemplates:
-    PosTicketTemplate[];
-  customerDisplaySessions:
-    PosCustomerDisplaySession[];
-  timeClockEntry:
-    TimeClockEntry | null;
-  activeShift:
-    PosActiveShift | null;
-  initialItems:
-    PosCatalogItem[];
-  initialFavoriteItems:
-    PosCatalogItem[];
-  initialRecentItems:
-    PosCatalogItem[];
-  openTickets:
-    PosOpenTicket[];
-  ticketAssignees:
-    PosTicketAssignee[];
-  canReceiveIncomingTransfers:
-    boolean;
-  incomingTransfers:
-    PosIncomingTransfer[];
-};
-
 export type PosBootstrapV2CoreResponse = {
   ok: true;
   version: 2;
@@ -232,28 +183,6 @@ export type PosBootstrapV2CoreResponse = {
 
     activeShift:
       PosActiveShift | null;
-  };
-};
-
-export type PosLiveV2Response = {
-  ok: true;
-  version: 2;
-  requestId: string;
-  organizationId: string;
-  storeId: string | null;
-  registerId: string | null;
-  live: {
-    timeClockEntry:
-      TimeClockEntry | null;
-    customerDisplaySessions:
-      PosCustomerDisplaySession[];
-    canReceiveIncomingTransfers:
-      boolean;
-    incomingTransfers:
-      PosIncomingTransfer[];
-    openTickets: PosOpenTicket[];
-    ticketAssignees:
-      PosTicketAssignee[];
   };
 };
 

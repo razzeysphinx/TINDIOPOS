@@ -10,6 +10,7 @@ export * from "./cart";
 export * from "./customer-display";
 export * from "./pos-data";
 export * from "./pos-operations";
+export * from "./pos-runtime";
 export * from "./receipts";
 export * from "./sync-control";
 export * from "./transfers";

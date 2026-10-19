@@ -10,6 +10,7 @@ import type {
   PosCloseShiftV2Response,
   PosCustomer,
   PosCustomerSearchResponse,
+  PosLiveV2Response,
   PosModifiersV2Response,
   PosOpenShiftV2Response,
   PosReceiptDetail,
@@ -22,7 +23,6 @@ import type {
 } from "@tindio/contracts";
 import type {
   PosBootstrapV2CoreResponse,
-  PosLiveV2Response,
   PosSyncPushEvent,
   PosSyncPushResponse,
   TicketActionResult,

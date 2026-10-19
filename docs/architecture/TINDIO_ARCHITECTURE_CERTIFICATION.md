@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE B2 DISPLAY AND TRANSFER READ MODELS CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE B2 SUPPORT AND LIVE AGGREGATES CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0, Slice B1, and the Slice B2 platform-neutral leaf read-model domains through display/transfer
+Certified scope: Phase 0, Slice B1, and the Slice B2 platform-neutral leaf plus support/live aggregate read domains
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -54,6 +54,11 @@ Database: **CANONICAL NEON UNCHANGED**
   remain compatibility facades.
 - The Mobile transfer screen now uses the package, reducing root-relative
   POS-contract imports from 11 to 10.
+- POS support-workspace and V2 live-response aggregates extracted after all of
+  their leaf dependencies became package-owned.
+- Mobile now imports the live-response envelope from the package. The total
+  root-relative file count remains 10 because its API transport still consumes
+  mutation and bootstrap contracts from the root facade.
 
 ## Results
 
@@ -74,12 +79,13 @@ Database: **CANONICAL NEON UNCHANGED**
 | Operational read-model compatibility | **PASS (3/3)** |
 | Receipt/attendance read-model compatibility | **PASS (3/3)** |
 | Display/transfer read-model compatibility | **PASS (3/3)** |
+| POS runtime aggregate compatibility | **PASS (3/3)** |
 | Device sequence and delta reconciliation | **PASS (2/2)** |
 | Catalogue/cache/local-first/resnapshot behavior | **PASS (11/11)** |
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **182/183 automated commands pass** |
+| Static catalogue | **183/184 automated commands pass** |
 | Local Supabase/Docker source connectivity | **BLOCKED** — local source unavailable |
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -98,6 +104,6 @@ provider project changed.
 ## Next gate
 
 Continue Slice B2 with the next coherent platform-neutral group, recommended:
-the POS support workspace and live-response aggregate read envelopes. The root
-compatibility facade and exact serialized fields must remain stable. Backend
-creation and Neon Auth proof remain later slices.
+the POS bootstrap core response and its business-type value dependency. The
+root compatibility facade and exact serialized fields must remain stable.
+Backend creation and Neon Auth proof remain later slices.

@@ -1,7 +1,5 @@
 import type {
-  PosCartLine,
   PosCatalogItem,
-  PosCustomer,
 } from "@tindio/contracts";
 
 export type {
@@ -13,50 +11,19 @@ export type {
   PosDiningOption,
   PosDiscount,
   PosLoyaltyProgram,
+  PosActiveShift,
+  PosOpenTicket,
   PosPaymentMethod,
+  PosRegister,
+  PosStore,
   PosTaxRate,
+  PosTicketAssignee,
   PosTicketTemplate,
 } from "@tindio/contracts";
 
 export type PosFavoriteTileActionResult =
   | { ok: true; isFavorite: boolean; message: string }
   | { ok: false; message: string };
-
-export type PosStore = {
-  id: string;
-  name: string;
-};
-
-export type PosRegister = {
-  id: string;
-  storeId: string;
-  name: string;
-  code: string;
-};
-
-export type PosActiveShift = {
-  id: string;
-  storeId: string;
-  registerId: string;
-  openingCashMinor: number;
-  openedAt: string;
-};
-
-export type PosOpenTicket = {
-  id: string;
-  label: string;
-  note: string | null;
-  customer: PosCustomer | null;
-  diningOptionId: string | null;
-  assignedEmployeeId: string | null;
-  cart: PosCartLine[];
-  updatedAt: string;
-};
-
-export type PosTicketAssignee = {
-  id: string;
-  fullName: string;
-};
 
 /**
  * A read-only projection of a canonical transfer document for the receiving

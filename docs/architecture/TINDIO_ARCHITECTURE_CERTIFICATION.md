@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE B2 DEVICE, DATA SYNC, AND CART VALUES CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE B2 OPERATIONAL READ MODELS CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0, Slice B1, and the Slice B2 device/data-sync/cart-value domains
+Certified scope: Phase 0, Slice B1, and the Slice B2 device/data-sync/cart/operational-read domains
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -34,6 +34,12 @@ Database: **CANONICAL NEON UNCHANGED**
   pricing functions, checkout schemas, checkout results, or transaction actions.
 - Matching Mobile pricing, modifier-cache, cashier, inventory, and outbox
   consumers now use the package, reducing root-relative imports from 23 to 16.
+- Store, register, active-shift, open-ticket, ticket-assignee, and shift-response
+  DTOs extracted without moving shift/ticket schemas, server actions, custody
+  policy, or mutation results.
+- Matching Mobile ticket and shift-cache consumers now use the package, reducing
+  root-relative POS-contract imports from 16 to 15 and direct `pos-types` imports
+  from 3 to 2.
 
 ## Results
 
@@ -51,12 +57,13 @@ Database: **CANONICAL NEON UNCHANGED**
 | Sync-control contract compatibility | **PASS (3/3)** |
 | POS data-contract compatibility | **PASS (3/3)** |
 | Cart/modifier contract compatibility | **PASS (3/3)** |
+| Operational read-model compatibility | **PASS (3/3)** |
 | Device sequence and delta reconciliation | **PASS (2/2)** |
 | Catalogue/cache/local-first/resnapshot behavior | **PASS (11/11)** |
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **179/180 automated commands pass** |
+| Static catalogue | **180/181 automated commands pass** |
 | Local Supabase/Docker source connectivity | **BLOCKED** — local source unavailable |
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -74,7 +81,7 @@ provider project changed.
 
 ## Next gate
 
-Continue Slice B2 with the next coherent platform-neutral read-model group,
-recommended: store/register/shift and open-ticket DTOs that do not depend on
+Continue Slice B2 with the next coherent platform-neutral leaf group,
+recommended: receipt and time-clock read DTOs that do not depend on schemas or
 server actions. The root compatibility facade and exact serialized fields must
 remain stable. Backend creation and Neon Auth proof remain later slices.

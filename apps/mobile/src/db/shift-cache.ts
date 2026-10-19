@@ -1,4 +1,4 @@
-import type { PosActiveShift } from "../../../../src/features/pos/pos-types";
+import type { PosActiveShift } from "@tindio/contracts";
 import { saveLocalCacheState } from "./cache-state";
 import { getTindioDatabase } from "./database";
 

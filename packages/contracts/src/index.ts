@@ -7,4 +7,5 @@ export type TindioPosApiVersion =
 export * from "./device";
 export * from "./cart";
 export * from "./pos-data";
+export * from "./pos-operations";
 export * from "./sync-control";

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { PosOpenTicket } from "../../../../src/contracts/pos";
+import type { PosOpenTicket } from "@tindio/contracts";
 import { useBusinessContext } from "../../src/features/business/use-business-context";
 import { cashierFeatureGates } from "../../src/features/cashier/cashier-feature-gates";
 import { useTerminalDevice } from "../../src/features/device/use-terminal-device";

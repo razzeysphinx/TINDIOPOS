@@ -16,10 +16,10 @@ import type {
   PosCustomer,
   PosModifierGroup,
   PosModifierOption,
+  PosOpenTicket,
 } from "@tindio/contracts";
 import type {
   CheckoutSaleValues,
-  PosOpenTicket,
 } from "../../../../src/contracts/pos";
 import { posItemKey } from "../../../../src/features/pos/pos-types";
 import {

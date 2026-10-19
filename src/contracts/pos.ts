@@ -4,6 +4,13 @@ import type {
   BusinessType,
 } from "@/features/business-profile/business-features";
 import type {
+  PosActiveShift,
+  PosOpenTicket,
+  PosRegister,
+  PosStore,
+  PosTicketAssignee,
+} from "@tindio/contracts";
+import type {
   CheckoutSaleActionResult,
   ValidateCartStockActionResult,
 } from "@/features/checkout/checkout-types";
@@ -12,19 +19,14 @@ import type {
   PosCustomerDisplaySession,
 } from "@/features/customer-display/customer-display-types";
 import type {
-  PosActiveShift,
   PosCatalogItem,
   PosCategory,
   PosDiningOption,
   PosDiscount,
   PosIncomingTransfer,
   PosLoyaltyProgram,
-  PosOpenTicket,
   PosPaymentMethod,
-  PosRegister,
-  PosStore,
   PosTaxRate,
-  PosTicketAssignee,
   PosTicketTemplate,
 } from "@/features/pos/pos-types";
 import type {
@@ -36,6 +38,17 @@ import type {
 
 export {
   TINDIO_POS_API_VERSION,
+} from "@tindio/contracts";
+
+export type {
+  PosActiveShift,
+  PosClientUpgradeRequiredResponse,
+  PosCloseShiftV2Response,
+  PosOpenShiftV2Response,
+  PosOpenTicket,
+  PosRegister,
+  PosStore,
+  PosTicketAssignee,
 } from "@tindio/contracts";
 
 export const posUuidSchema =
@@ -487,20 +500,11 @@ export type {
 } from "@/features/advanced-sales/ticket-schema";
 
 export type {
-  PosActiveShift,
   PosDiningOption,
   PosDiscount,
   PosIncomingTransfer,
   PosLoyaltyProgram,
-  PosOpenTicket,
   PosPaymentMethod,
-  PosRegister,
-  PosStore,
   PosTaxRate,
-  PosTicketAssignee,
   PosTicketTemplate,
 } from "@/features/pos/pos-types";
-
-export type PosOpenShiftV2Response = { ok: true; message: string; shift: PosActiveShift } | { ok: false; message: string };
-export type PosClientUpgradeRequiredResponse = { ok: false; code: "POS_CLIENT_UPGRADE_REQUIRED"; requiredCapability: "SHIFT_CUSTODY_FINALIZATION_V1"; retryable: false; preservesRecovery: true; message: string };
-export type PosCloseShiftV2Response = { ok: true; message: string; closeSummary?: { expectedCashMinor: number; countedCashMinor: number; differenceMinor: number } } | { ok: false; message: string } | PosClientUpgradeRequiredResponse;

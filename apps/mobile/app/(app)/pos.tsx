@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import type {
+  CheckoutSaleValues,
   PosCartLine,
   PosCatalogItem,
   PosCategory,
@@ -18,9 +19,6 @@ import type {
   PosModifierOption,
   PosOpenTicket,
 } from "@tindio/contracts";
-import type {
-  CheckoutSaleValues,
-} from "../../../../src/contracts/pos";
 import { posItemKey } from "../../../../src/features/pos/pos-types";
 import {
   getUnresolvedOnlineCheckoutIntent,

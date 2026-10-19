@@ -1,4 +1,4 @@
-import type { CheckoutSaleValues } from "../../../../src/features/checkout/checkout-schema";
+import type { CheckoutSaleValues } from "@tindio/contracts";
 import { getTindioDatabase } from "./database";
 
 export type OnlineCheckoutIntentState =

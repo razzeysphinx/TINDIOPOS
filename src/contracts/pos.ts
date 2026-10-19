@@ -1,10 +1,9 @@
 import { z } from "zod";
 
 import type {
-  CheckoutSaleActionResult,
   ValidateCartStockActionResult,
 } from "@/features/checkout/checkout-types";
-import type { CheckoutSaleValues } from "@/features/checkout/checkout-schema";
+import type { CheckoutSaleActionResult } from "@tindio/contracts";
 export {
   TINDIO_POS_API_VERSION,
 } from "@tindio/contracts";
@@ -12,6 +11,8 @@ export {
 export type {
   AttendanceEmployee,
   AttendanceEmployeesResult,
+  CheckoutSaleActionResult,
+  CheckoutSaleValues,
   PosActiveShift,
   PosClientUpgradeRequiredResponse,
   PosCloseShiftV2Response,
@@ -19,6 +20,9 @@ export type {
   PosOpenTicket,
   PosCustomerDisplaySession,
   PosIncomingTransfer,
+  PosSyncPushAck,
+  PosSyncPushEvent,
+  PosSyncPushResponse,
   PosBootstrapV2CoreResponse,
   PosLiveV2Response,
   PosReceiptDetail,
@@ -126,10 +130,6 @@ export type PosReceiptSearchQuery =
     typeof posReceiptSearchQuerySchema
   >;
 
-export type PosSyncPushEvent = { eventId: string; operationType: "SALE_COMPLETED"; checkout: CheckoutSaleValues; offline: { localReceiptReference: string; createdAt: string; shiftId: string; deviceId: string; deviceSequence: number } };
-export type PosSyncPushAck = { eventId: string; deviceSequence: number; status: "SYNCED" | "RETRY" | "CONFLICT" | "FAILED"; httpStatus: number; result: CheckoutSaleActionResult };
-export type PosSyncPushResponse = { ok: true; version: 1; organizationId: string; deviceId: string; acks: PosSyncPushAck[]; stoppedEarly: boolean };
-
 export type PosCheckoutResponse =
   CheckoutSaleActionResult;
 
@@ -144,7 +144,6 @@ export {
 } from "@/features/checkout/checkout-schema";
 
 export type {
-  CheckoutSaleValues,
   CheckoutSubmission,
   ValidateCartStockValues,
 } from "@/features/checkout/checkout-schema";

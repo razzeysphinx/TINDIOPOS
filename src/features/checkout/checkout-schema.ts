@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { posDeviceCredentialSchema } from "@/features/devices/device-schema";
+import type { CheckoutSaleValues } from "@tindio/contracts";
 
 const moneyAmount = z
   .string()
@@ -85,9 +86,9 @@ export const checkoutSaleSchema = z
         message: "Each item can only appear once in a checkout.",
       });
     }
-  });
+  }) satisfies z.ZodType<CheckoutSaleValues>;
 
-export type CheckoutSaleValues = z.infer<typeof checkoutSaleSchema>;
+export type { CheckoutSaleValues } from "@tindio/contracts";
 
 export const offlineCheckoutMetadataSchema = z.object({
   localReceiptReference: z.string().trim().regex(/^OFF-[A-Z0-9]{6,32}$/),

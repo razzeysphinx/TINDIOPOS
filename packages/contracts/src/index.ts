@@ -5,6 +5,7 @@ export type TindioPosApiVersion =
   typeof TINDIO_POS_API_VERSION;
 
 export * from "./business";
+export * from "./checkout";
 export * from "./device";
 export * from "./attendance";
 export * from "./cart";
@@ -14,4 +15,5 @@ export * from "./pos-operations";
 export * from "./pos-runtime";
 export * from "./receipts";
 export * from "./sync-control";
+export * from "./sync-push";
 export * from "./transfers";

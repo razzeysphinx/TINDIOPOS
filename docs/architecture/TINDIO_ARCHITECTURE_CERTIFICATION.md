@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE B2 BOOTSTRAP CORE CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE B2 CHECKOUT AND SYNC-PUSH CONTRACTS CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0, Slice B1, and the Slice B2 platform-neutral leaf, support/live aggregate, and bootstrap-core read domains
+Certified scope: Phase 0, Slice B1, and the Slice B2 platform-neutral read, bootstrap, checkout-sale, and sync-push domains
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -68,6 +68,15 @@ Database: **CANONICAL NEON UNCHANGED**
 - Mobile bootstrap, cache, device setup, offline-authorization, and outbox
   recovery consumers now use the package, reducing direct root-relative POS
   contract imports from 10 files to 4.
+- Checkout sale input values and discriminated checkout results moved into the
+  shared package while the Web Zod schema remains the validating compatibility
+  facade and is statically constrained to the shared output contract.
+- Ordered sync-push event, acknowledgement, and response envelopes moved into
+  the shared package without changing idempotency, device-sequence, retry,
+  conflict, or financial result fields.
+- Mobile checkout-intent, cashier, outbox, sync-policy, and API transport
+  consumers now use the package, reducing direct root-relative POS contract
+  imports from 4 files to 1.
 
 ## Results
 
@@ -90,12 +99,13 @@ Database: **CANONICAL NEON UNCHANGED**
 | Display/transfer read-model compatibility | **PASS (3/3)** |
 | POS runtime aggregate compatibility | **PASS (3/3)** |
 | POS bootstrap/business compatibility | **PASS (4/4)** |
+| Checkout/sync-push compatibility | **PASS (4/4)** |
 | Device sequence and delta reconciliation | **PASS (2/2)** |
 | Catalogue/cache/local-first/resnapshot behavior | **PASS (11/11)** |
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **184/185 automated commands pass** |
+| Static catalogue | **185/186 automated commands pass** |
 | Local Supabase/Docker source connectivity | **BLOCKED** — local source unavailable |
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -114,7 +124,7 @@ provider project changed.
 ## Next gate
 
 Continue Slice B2 with the next coherent platform-neutral group, recommended:
-the POS sync-push event/ack/response envelopes together with the minimum
-checkout value and result dependencies they require. The root compatibility
-facade, financial behavior, and exact serialized fields must remain stable.
-Backend creation and Neon Auth proof remain later slices.
+the remaining Mobile API action payloads: stock-validation values/results plus
+ticket and time-clock mutation results. The root compatibility facade,
+financial behavior, and exact serialized fields must remain stable. Backend
+creation and Neon Auth proof remain later slices.

@@ -1,4 +1,4 @@
-import type { CheckoutSaleValues } from "../../../../../src/features/checkout/checkout-schema";
+import type { CheckoutSaleValues } from "@tindio/contracts";
 
 export type OutboxOperationType = "SALE_COMPLETED";
 export type OutboxState = "LOCAL_PENDING" | "SYNCING" | "SYNCED" | "CONFLICT" | "FAILED";

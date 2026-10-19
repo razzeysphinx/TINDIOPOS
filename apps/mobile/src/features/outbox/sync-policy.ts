@@ -1,5 +1,7 @@
-import type { PosSyncPushResponse } from "../../../../../src/contracts/pos";
-import type { CheckoutSaleActionResult } from "../../../../../src/features/checkout/checkout-types";
+import type {
+  CheckoutSaleActionResult,
+  PosSyncPushResponse,
+} from "@tindio/contracts";
 import type { DurableOutboxEvent } from "./outbox-types";
 
 type ExpectedAck = Pick<DurableOutboxEvent, "eventId" | "deviceSequence">;

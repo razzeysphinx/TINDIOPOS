@@ -11,8 +11,9 @@ delta-pull, controlled-resnapshot, modifier, cart-line, store, register,
 active-shift, open-ticket, ticket-assignee, shift-response, receipt
 summary/detail/list, attendance entry/employee/list, customer-display session,
 incoming-transfer projection, POS support-workspace, and POS live-response
-contracts. It also owns the supported business-type values and guard plus the
-client-safe POS bootstrap V2 core response. The existing
+contracts. It also owns the supported business-type values and guard, the
+client-safe POS bootstrap V2 core response, checkout sale values/results, and
+ordered sync-push event/acknowledgement envelopes. The existing
 `src/contracts/pos.ts` and `src/features/devices/device-schema.ts` modules remain
 compatibility facades while the remaining Web-feature and generated-database
 dependencies are separated in focused, compatibility-tested slices.

@@ -2,6 +2,7 @@ import "react-native-url-polyfill/auto";
 
 import type {
   AttendanceEmployeesResult,
+  CheckoutSaleActionResult,
   PosDeviceBinding,
   PosDeviceCredential,
   PosDeviceSyncCheckpoint,
@@ -21,17 +22,16 @@ import type {
   PosSyncCursorExpiredResponse,
   PosSyncPullResponse,
   PosSyncResnapshotResponse,
-} from "@tindio/contracts";
-import type {
   PosSyncPushEvent,
   PosSyncPushResponse,
+} from "@tindio/contracts";
+import type {
   TicketActionResult,
   TicketMutationResult,
   TimeClockActionResult,
   ValidateCartStockActionResult,
   ValidateCartStockValues,
 } from "../../../../src/contracts/pos";
-import type { CheckoutSaleActionResult } from "../../../../src/features/checkout/checkout-types";
 import { mobileEnvironment } from "./env";
 import {
   observeApiResponseBytes,

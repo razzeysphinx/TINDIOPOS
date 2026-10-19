@@ -103,6 +103,8 @@ importers:
         specifier: ^5
         version: 5.9.3
 
+  apps/backend: {}
+
   apps/mobile:
     dependencies:
       '@expo/ui':

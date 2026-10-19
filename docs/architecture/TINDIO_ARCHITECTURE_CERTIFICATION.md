@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE B2 COMPLETE; MOBILE-TO-WEB SOURCE DECOUPLING CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE C FOUNDATION COMPLETE; INDEPENDENT BACKEND BOUNDARY CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0, Slice B1, and completed Slice B2 platform-neutral Mobile POS contracts/helpers/tokens
+Certified scope: Phase 0, Slices B1–B2, and the Slice C independent Backend foundation
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -95,6 +95,14 @@ Database: **CANONICAL NEON UNCHANGED**
 - All five final helper/token consumers now use package subpaths. Mobile has no
   remaining relative imports into the root Web source tree, completing Slice
   B2 without changing component logic or visual behavior.
+- `apps/backend/` is now a real pnpm workspace with independent typecheck,
+  build, and test commands.
+- `GET /api/health` uses a stateless Web `Response`, the default Node.js
+  runtime, a stable JSON payload, and `cache-control: no-store`.
+- The Backend foundation has no framework, provider client, database driver,
+  environment-secret access, Web-source import, or business endpoint.
+- Root workspace typechecking now certifies Web, contracts, Backend, and Mobile
+  as separate boundaries.
 
 ## Results
 
@@ -103,7 +111,9 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Workspace typecheck | **PASS** (Web + contracts + Mobile) |
+| Backend health behavior | **PASS (1/1)** |
+| Backend foundation boundary | **PASS (3/3)** |
+| Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
 | Next.js production build | **PASS (90 routes)** |
@@ -126,26 +136,27 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **187/188 automated commands pass** |
+| Static catalogue | **188/189 automated commands pass** |
 | Local Supabase/Docker source connectivity | **BLOCKED** — local source unavailable |
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
 
-The failed environment gate existed before both architecture slices. Each B2
-contract checkpoint added one passing automated command and introduced no new
+The failed environment gate existed before these architecture slices. The
+Backend foundation added one passing automated command and introduced no new
 failure.
 
 ## Safety statement
 
 No production Auth service was provisioned. No database schema or merchant data
-changed. No account was exported/imported. No session format, JSON wire field,
-API route, checkout behavior, SQLite database, outbox record, deployment, or
-provider project changed.
+changed. No account was exported/imported. No session format, existing JSON wire
+field, POS API route, checkout behavior, SQLite database, outbox record,
+deployment, client API origin, or provider project changed. The new health route
+exists only inside the undeployed Backend workspace.
 
 ## Next gate
 
-Begin Slice C with an independently buildable `apps/backend/` foundation and
-one read-only POS v2 endpoint behind a dual-route compatibility adapter,
-recommended: bootstrap core. Keep the current Next.js route active and do not
-move financial mutations or change deployed client origins in the foundation
-slice. Neon Auth proof remains a later slice.
+Continue Slice C with one read-only POS v2 endpoint behind a dual-route
+compatibility adapter, recommended: bootstrap core. Keep the current Next.js
+route active and prove identical authentication, authorization, status, headers,
+and JSON behavior. Do not move financial mutations or change deployed client
+origins. Neon Auth proof remains a later slice.

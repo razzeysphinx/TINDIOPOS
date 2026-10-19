@@ -38,7 +38,7 @@ Remote reconciliation: local and `origin/TINDIO-PREPRODUCTION` were `0/0` ahead/
 | Mobile SQLite/outbox | **KEEP** | Financial custody and offline reliability boundary; never reset for Auth migration |
 | Store Hub | **KEEP / DEFERRED** | Existing implementation and evidence remain, but v1 release status is deferred |
 | Historical Supabase migrations | **KEEP_HISTORICAL** | Recovery/audit evidence, not an active installation path |
-| Empty `apps/web`, `apps/backend`, `packages/shared` trees | **DO_NOT_CREATE YET** | No cosmetic directory scaffolding without working implementations |
+| Empty `apps/web` and `packages/shared` trees | **DO_NOT_CREATE YET** | No cosmetic directory scaffolding without working implementations; `apps/backend` is now a working independent health/build/test foundation |
 
 ## Authentication and provider state
 

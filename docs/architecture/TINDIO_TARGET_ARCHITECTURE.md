@@ -29,7 +29,7 @@ deployment boundaries.
 |---|---|---|
 | Web | `apps/web/` eventually; Back Office, Web POS, and public routes remain one Next.js app | **DEFERRED MOVE**; root `src/` remains active to avoid premature path/deployment churn |
 | Mobile | `apps/mobile/` Expo/React Native app, package `com.tindio.pos` | **ALREADY IMPLEMENTED** |
-| Backend | `apps/backend/` independently built API owning auth, authorization, orchestration, and DB access | **PLANNED**; current boundary is Next.js route handlers/services |
+| Backend | `apps/backend/` independently built API owning auth, authorization, orchestration, and DB access | **FOUNDATION IMPLEMENTED**; health/build/test are independent, while POS routes remain in Next.js |
 | Contracts | `packages/contracts/` platform-neutral versioned API contracts | **FOUNDATION IMPLEMENTED**; full POS contract separation remains planned |
 | Shared | `packages/shared/` only for proven platform-neutral reuse | **DEFERRED**; no empty package created |
 | Database | `database/` immutable baseline, ordered migrations, provider adapters | **ALREADY IMPLEMENTED** |
@@ -58,7 +58,9 @@ not require Web deployment. Store Hub remains outside certified v1 scope.
 
 ## Deferred choices
 
-The Backend framework and database driver are deliberately undecided until a
-first endpoint extraction measures the existing service/runtime requirements.
+The Backend foundation uses the standard Web `Request`/`Response` API on the
+default Node.js runtime. A higher-level framework and database driver remain
+deliberately undecided until a first endpoint extraction measures the existing
+service/runtime requirements.
 The physical Web move is also deferred until aliases, public assets, Playwright,
 Vercel root settings, scripts, and filesystem paths have dedicated proof.

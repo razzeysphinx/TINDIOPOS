@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import type { PosCatalogItem, PosCategory } from "../../../../../src/contracts/pos";
+import type { PosCatalogItem, PosCategory } from "@tindio/contracts";
 
 import { TindioButton } from "../../ui/tindio-button";
 import { TindioFeedback } from "../../ui/tindio-feedback";

@@ -1,4 +1,4 @@
-import type { PosSyncPullResponse } from "../../../../../src/contracts/pos";
+import type { PosSyncPullResponse } from "@tindio/contracts";
 import { applyDeltaSqliteTransaction } from "../../db/delta-apply";
 import { saveReferenceSnapshot } from "../../db/reference-cache";
 import { advanceSyncCursor } from "../../db/sync-cursor";

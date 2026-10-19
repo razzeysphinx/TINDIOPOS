@@ -1,6 +1,6 @@
 import type {
   PosCatalogItem,
-} from "../../../../../src/contracts/pos";
+} from "@tindio/contracts";
 import {
   getTindioDatabase,
 } from "../../db/database";

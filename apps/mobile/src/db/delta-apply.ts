@@ -1,4 +1,4 @@
-import type { PosCatalogDelta, PosCustomerDelta } from "../../../../src/contracts/pos";
+import type { PosCatalogDelta, PosCustomerDelta } from "@tindio/contracts";
 import { getTindioDatabase } from "./database";
 import {
   assertStoreScope,

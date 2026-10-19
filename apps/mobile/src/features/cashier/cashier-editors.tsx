@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import type {
   PosCatalogItem,
+} from "@tindio/contracts";
+import type {
   PosModifierGroup,
   PosModifierOption,
 } from "../../../../../src/contracts/pos";

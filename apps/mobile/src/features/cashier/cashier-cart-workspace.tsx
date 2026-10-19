@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type {
-  PosCartLine,
   PosCustomer,
   PosDiningOption,
   PosDiscount,
   PosTaxRate,
+} from "@tindio/contracts";
+import type {
+  PosCartLine,
 } from "../../../../../src/contracts/pos";
 import { posItemKey } from "../../../../../src/features/pos/pos-types";
 

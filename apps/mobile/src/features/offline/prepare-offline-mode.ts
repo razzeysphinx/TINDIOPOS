@@ -1,4 +1,4 @@
-import type { PosCatalogItem } from "../../../../../src/features/pos/pos-types";
+import type { PosCatalogItem } from "@tindio/contracts";
 import { replaceCompleteCatalogSnapshot } from "../../db/catalog-cache";
 import { saveBusinessContextSnapshot } from "../../db/business-context-cache";
 import { saveReferenceSnapshot } from "../../db/reference-cache";

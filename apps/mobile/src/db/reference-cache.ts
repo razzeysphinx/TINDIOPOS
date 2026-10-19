@@ -1,6 +1,6 @@
 import type {
   PosReferenceV2Response,
-} from "../../../../src/contracts/pos";
+} from "@tindio/contracts";
 import {
   saveLocalCacheState,
 } from "./cache-state";

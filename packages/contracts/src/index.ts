@@ -5,4 +5,5 @@ export type TindioPosApiVersion =
   typeof TINDIO_POS_API_VERSION;
 
 export * from "./device";
+export * from "./pos-data";
 export * from "./sync-control";

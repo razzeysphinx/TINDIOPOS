@@ -6,7 +6,8 @@ future dedicated Backend application.
 The package currently owns the stable POS API version identifier plus the
 provider-neutral device credential, enrollment, validation, request-header,
 binding, and sequence/checkpoint contracts. It also owns the independent sync
-domain, baseline, cursor-expiry, and device-delta control envelopes. The existing
+domain, baseline, cursor-expiry, device-delta, catalogue/customer/reference-data,
+delta-pull, and controlled-resnapshot envelopes. The existing
 `src/contracts/pos.ts` and `src/features/devices/device-schema.ts` modules remain
 compatibility facades while the remaining Web-feature and generated-database
 dependencies are separated in focused, compatibility-tested slices.

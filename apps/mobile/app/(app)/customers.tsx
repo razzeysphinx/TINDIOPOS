@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import type { PosCustomer } from "../../../../src/contracts/pos";
+import type { PosCustomer } from "@tindio/contracts";
 import { saveCustomerSearchResults, searchCachedCustomers } from "../../src/db/customer-cache";
 import { useBusinessContext } from "../../src/features/business/use-business-context";
 import { useTerminalDevice } from "../../src/features/device/use-terminal-device";

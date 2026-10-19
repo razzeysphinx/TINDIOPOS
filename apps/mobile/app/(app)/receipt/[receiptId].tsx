@@ -4,6 +4,8 @@ import { Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import type {
   PosPaymentMethod,
+} from "@tindio/contracts";
+import type {
   PosReceiptDetail,
 } from "../../../../../src/contracts/pos";
 import { CashierReceiptSummary } from "../../../src/features/cashier/cashier-receipt-summary";

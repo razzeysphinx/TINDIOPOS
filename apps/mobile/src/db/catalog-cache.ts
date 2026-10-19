@@ -1,4 +1,4 @@
-import type { PosCatalogItem, PosCatalogV2Response } from "../../../../src/contracts/pos";
+import type { PosCatalogItem, PosCatalogV2Response } from "@tindio/contracts";
 import { saveLocalCacheState } from "./cache-state";
 import { getTindioDatabase } from "./database";
 

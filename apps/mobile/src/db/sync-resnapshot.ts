@@ -1,4 +1,4 @@
-import type { PosSyncResnapshotResponse } from "../../../../src/contracts/pos";
+import type { PosSyncResnapshotResponse } from "@tindio/contracts";
 import { writeCatalogItem } from "./catalog-cache";
 import { getTindioDatabase } from "./database";
 

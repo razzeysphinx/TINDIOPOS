@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE B2 DEVICE AND SYNC CONTROL CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE B2 DEVICE AND DATA SYNC CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0, Slice B1, and the Slice B2 device/sync-control domains
+Certified scope: Phase 0, Slice B1, and the Slice B2 device/data-sync domains
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -26,6 +26,10 @@ Database: **CANONICAL NEON UNCHANGED**
   extracted without moving checkout- or Web-DTO-dependent payloads.
 - Matching Mobile sync consumers now use the workspace package, reducing
   root-relative Web contract imports from 34 files to 33.
+- Catalogue, customer, payment/reference, and concrete delta-pull/resnapshot
+  DTOs extracted with their existing serialized fields unchanged.
+- Matching Mobile cache, local-first, cashier, and sync consumers now use the
+  workspace package, reducing root-relative POS-contract imports from 33 to 23.
 
 ## Results
 
@@ -41,10 +45,12 @@ Database: **CANONICAL NEON UNCHANGED**
 | Android export | **PASS** |
 | Device contract compatibility | **PASS (3/3)** |
 | Sync-control contract compatibility | **PASS (3/3)** |
+| POS data-contract compatibility | **PASS (3/3)** |
 | Device sequence and delta reconciliation | **PASS (2/2)** |
+| Catalogue/cache/local-first/resnapshot behavior | **PASS (11/11)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **177/178 automated commands pass** |
+| Static catalogue | **178/179 automated commands pass** |
 | Local Supabase/Docker source connectivity | **BLOCKED** — local source unavailable |
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -62,7 +68,7 @@ provider project changed.
 
 ## Next gate
 
-Continue Slice B2 by extracting the platform-neutral catalog/customer DTO
-prerequisites for the remaining delta-pull and controlled-resnapshot envelopes.
-The root compatibility facade and exact serialized fields must remain stable.
-Backend creation and Neon Auth proof remain later slices.
+Continue Slice B2 with the next coherent platform-neutral operational DTO group,
+recommended: modifier and cart-line value types that do not depend on checkout
+actions. The root compatibility facade and exact serialized fields must remain
+stable. Backend creation and Neon Auth proof remain later slices.

@@ -4,7 +4,7 @@ import type {
   PosDiscount,
   PosPaymentMethod,
   PosTaxRate,
-} from "../../../../../src/contracts/pos";
+} from "@tindio/contracts";
 import {
   getReferenceSnapshot,
   type LocalReferenceSnapshot,

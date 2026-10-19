@@ -6,7 +6,7 @@ Status: **IN PROGRESS**
 |---|---|---|---|
 | A | Audit, target architecture, ADR, dependency map, baseline | **IMPLEMENTED** | Clean/synchronized Git; evidence recorded; no production mutation |
 | B1 | Add `packages/*`, contracts foundation, independent commands | **IMPLEMENTED** | Typecheck/build/compatibility checks pass |
-| B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IN PROGRESS: DEVICE + SYNC CONTROL IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
+| B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IN PROGRESS: DEVICE + DATA SYNC IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **PLANNED** | Independent health/build/test plus dual-route compatibility |
 | D | Progressive Backend extraction, mutations last | **PLANNED** | Financial/idempotency/offline replay equivalence |
@@ -19,8 +19,8 @@ Status: **IN PROGRESS**
 
 ## Next smallest safe slice: B2 continuation
 
-- Extract the platform-neutral catalog/customer DTO prerequisites needed by the
-  remaining delta-pull and controlled-resnapshot envelopes.
+- Extract the next coherent platform-neutral operational DTO group, recommended:
+  modifier and cart-line value types that do not depend on checkout actions.
 - Preserve `src/contracts/pos.ts` re-exports and the existing JSON wire shape.
 - Replace only matching Mobile relative imports and recount the dependency edge.
 - Run contract, Web build, Mobile typecheck/export, sync, replay, and custody

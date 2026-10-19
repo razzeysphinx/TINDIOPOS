@@ -1,14 +1,6 @@
 import { z } from "zod";
 
 import type {
-  BusinessType,
-} from "@/features/business-profile/business-features";
-import type {
-  PosActiveShift,
-  PosRegister,
-  PosStore,
-} from "@tindio/contracts";
-import type {
   CheckoutSaleActionResult,
   ValidateCartStockActionResult,
 } from "@/features/checkout/checkout-types";
@@ -27,6 +19,7 @@ export type {
   PosOpenTicket,
   PosCustomerDisplaySession,
   PosIncomingTransfer,
+  PosBootstrapV2CoreResponse,
   PosLiveV2Response,
   PosReceiptDetail,
   PosReceiptListResponse,
@@ -132,59 +125,6 @@ export type PosReceiptSearchQuery =
   z.infer<
     typeof posReceiptSearchQuerySchema
   >;
-
-export type PosBootstrapV2CoreResponse = {
-  ok: true;
-  version: 2;
-  requestId: string;
-
-  core: {
-    profileId: string;
-
-    organization: {
-      id: string;
-      name: string;
-      currencyCode: string;
-      timezone: string;
-      status:
-        | "active"
-        | "suspended"
-        | "archived";
-      businessType:
-        BusinessType;
-      deviceManagementEnabled:
-        boolean;
-    };
-
-    employee: {
-      id: string;
-      employeeNumber: string;
-      jobTitle: string | null;
-      name: string;
-    };
-
-    availableOrganizations:
-      Array<{
-        id: string;
-        name: string;
-        status:
-          | "active"
-          | "suspended"
-          | "archived";
-      }>;
-
-    roleNames: string[];
-    permissions: string[];
-    storeIds: string[];
-    stores: PosStore[];
-    registers: PosRegister[];
-    features:
-      Record<string, boolean>;
-
-    activeShift:
-      PosActiveShift | null;
-  };
-};
 
 export type PosSyncPushEvent = { eventId: string; operationType: "SALE_COMPLETED"; checkout: CheckoutSaleValues; offline: { localReceiptReference: string; createdAt: string; shiftId: string; deviceId: string; deviceSequence: number } };
 export type PosSyncPushAck = { eventId: string; deviceSequence: number; status: "SYNCED" | "RETRY" | "CONFLICT" | "FAILED"; httpStatus: number; result: CheckoutSaleActionResult };

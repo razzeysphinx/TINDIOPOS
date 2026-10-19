@@ -4,6 +4,7 @@ export const TINDIO_POS_API_VERSION = "v2" as const;
 export type TindioPosApiVersion =
   typeof TINDIO_POS_API_VERSION;
 
+export * from "./business";
 export * from "./device";
 export * from "./attendance";
 export * from "./cart";

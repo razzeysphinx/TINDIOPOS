@@ -1,4 +1,4 @@
-import type { PosBootstrapV2CoreResponse } from "../../../../../src/contracts/pos";
+import type { PosBootstrapV2CoreResponse } from "@tindio/contracts";
 import { saveBusinessContextSnapshot } from "../../db/business-context-cache";
 import { saveActiveShiftSnapshot } from "../../db/shift-cache";
 import { isShiftFinalizationInProgress } from "../../db/shift-custody";

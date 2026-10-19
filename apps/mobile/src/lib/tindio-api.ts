@@ -6,6 +6,7 @@ import type {
   PosDeviceCredential,
   PosDeviceSyncCheckpoint,
   PosDeviceValidationResponse,
+  PosBootstrapV2CoreResponse,
   PosCatalogV2Response,
   PosCloseShiftV2Response,
   PosCustomer,
@@ -22,7 +23,6 @@ import type {
   PosSyncResnapshotResponse,
 } from "@tindio/contracts";
 import type {
-  PosBootstrapV2CoreResponse,
   PosSyncPushEvent,
   PosSyncPushResponse,
   TicketActionResult,

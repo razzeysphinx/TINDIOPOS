@@ -1,15 +1,7 @@
-export const businessTypes = [
-  "retail",
-  "grocery",
-  "convenience_store",
-  "restaurant_cafe",
-  "bar",
-  "wholesale",
-  "service",
-  "other",
-] as const;
+import type { BusinessType } from "@tindio/contracts";
 
-export type BusinessType = (typeof businessTypes)[number];
+export { businessTypes, isBusinessType } from "@tindio/contracts";
+export type { BusinessType } from "@tindio/contracts";
 
 export const businessTypeLabels: Record<BusinessType, string> = {
   retail: "Retail",
@@ -44,10 +36,6 @@ export type FeatureKey = (typeof featureDefinitions)[number]["key"];
 export type OrganizationFeatureSettings = Record<FeatureKey, boolean>;
 
 export const featureKeys = featureDefinitions.map((feature) => feature.key) as FeatureKey[];
-
-export function isBusinessType(value: string): value is BusinessType {
-  return businessTypes.includes(value as BusinessType);
-}
 
 export function createFeatureSettings(
   values: Array<{ featureKey: string; isEnabled: boolean }> = [],

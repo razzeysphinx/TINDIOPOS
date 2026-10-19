@@ -1,6 +1,6 @@
 import type {
   PosBootstrapV2CoreResponse,
-} from "../../../../../src/contracts/pos";
+} from "@tindio/contracts";
 import {
   createContext,
   useCallback,

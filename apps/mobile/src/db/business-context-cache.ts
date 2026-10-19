@@ -1,4 +1,4 @@
-import type { PosBootstrapV2CoreResponse } from "../../../../src/contracts/pos";
+import type { PosBootstrapV2CoreResponse } from "@tindio/contracts";
 import { getTindioDatabase } from "./database";
 
 export async function saveBusinessContextSnapshot(core: PosBootstrapV2CoreResponse["core"]) {

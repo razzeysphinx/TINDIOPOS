@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE B2 SUPPORT AND LIVE AGGREGATES CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE B2 BOOTSTRAP CORE CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0, Slice B1, and the Slice B2 platform-neutral leaf plus support/live aggregate read domains
+Certified scope: Phase 0, Slice B1, and the Slice B2 platform-neutral leaf, support/live aggregate, and bootstrap-core read domains
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -59,6 +59,15 @@ Database: **CANONICAL NEON UNCHANGED**
 - Mobile now imports the live-response envelope from the package. The total
   root-relative file count remains 10 because its API transport still consumes
   mutation and bootstrap contracts from the root facade.
+- Supported business-type values and their type guard moved into the shared
+  package while the Web business-feature module remains a compatibility facade
+  for labels and feature recommendations.
+- The client-safe POS bootstrap V2 core response moved into the shared package
+  with its exact envelope, organization, employee, scope, store/register,
+  feature, and active-shift fields unchanged.
+- Mobile bootstrap, cache, device setup, offline-authorization, and outbox
+  recovery consumers now use the package, reducing direct root-relative POS
+  contract imports from 10 files to 4.
 
 ## Results
 
@@ -80,12 +89,13 @@ Database: **CANONICAL NEON UNCHANGED**
 | Receipt/attendance read-model compatibility | **PASS (3/3)** |
 | Display/transfer read-model compatibility | **PASS (3/3)** |
 | POS runtime aggregate compatibility | **PASS (3/3)** |
+| POS bootstrap/business compatibility | **PASS (4/4)** |
 | Device sequence and delta reconciliation | **PASS (2/2)** |
 | Catalogue/cache/local-first/resnapshot behavior | **PASS (11/11)** |
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **183/184 automated commands pass** |
+| Static catalogue | **184/185 automated commands pass** |
 | Local Supabase/Docker source connectivity | **BLOCKED** — local source unavailable |
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -104,6 +114,7 @@ provider project changed.
 ## Next gate
 
 Continue Slice B2 with the next coherent platform-neutral group, recommended:
-the POS bootstrap core response and its business-type value dependency. The
-root compatibility facade and exact serialized fields must remain stable.
+the POS sync-push event/ack/response envelopes together with the minimum
+checkout value and result dependencies they require. The root compatibility
+facade, financial behavior, and exact serialized fields must remain stable.
 Backend creation and Neon Auth proof remain later slices.

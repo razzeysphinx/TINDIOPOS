@@ -1,4 +1,4 @@
-import type { PosBootstrapV2CoreResponse } from "../../../../../src/contracts/pos";
+import type { PosBootstrapV2CoreResponse } from "@tindio/contracts";
 import { useEffect, useMemo, useState } from "react";
 import {
   Pressable,

@@ -1,4 +1,5 @@
 import type { TimeClockEntry } from "./attendance";
+import type { BusinessType } from "./business";
 import type { PosCustomerDisplaySession } from "./customer-display";
 import type {
   PosCatalogItem,
@@ -18,6 +19,42 @@ import type {
   PosTicketAssignee,
 } from "./pos-operations";
 import type { PosIncomingTransfer } from "./transfers";
+
+export type PosBootstrapV2CoreResponse = {
+  ok: true;
+  version: 2;
+  requestId: string;
+  core: {
+    profileId: string;
+    organization: {
+      id: string;
+      name: string;
+      currencyCode: string;
+      timezone: string;
+      status: "active" | "suspended" | "archived";
+      businessType: BusinessType;
+      deviceManagementEnabled: boolean;
+    };
+    employee: {
+      id: string;
+      employeeNumber: string;
+      jobTitle: string | null;
+      name: string;
+    };
+    availableOrganizations: Array<{
+      id: string;
+      name: string;
+      status: "active" | "suspended" | "archived";
+    }>;
+    roleNames: string[];
+    permissions: string[];
+    storeIds: string[];
+    stores: PosStore[];
+    registers: PosRegister[];
+    features: Record<string, boolean>;
+    activeShift: PosActiveShift | null;
+  };
+};
 
 export type PosSupportWorkspace = {
   stores: PosStore[];

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import type { PosCartLine } from "../../../../../src/contracts/pos";
+import type { PosCartLine } from "@tindio/contracts";
 
 import { TindioButton } from "../../ui/tindio-button";
 import { TindioInput } from "../../ui/tindio-input";

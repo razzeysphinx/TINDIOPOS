@@ -1,10 +1,8 @@
 import type {
+  PosCartLine,
   PosDiscount,
   PosTaxRate,
 } from "@tindio/contracts";
-import type {
-  PosCartLine,
-} from "../../../../../src/features/pos/pos-types";
 
 export type LocalCartTotals = {
   subtotalMinor: number;

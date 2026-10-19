@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE B2 DEVICE AND DATA SYNC CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE B2 DEVICE, DATA SYNC, AND CART VALUES CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0, Slice B1, and the Slice B2 device/data-sync domains
+Certified scope: Phase 0, Slice B1, and the Slice B2 device/data-sync/cart-value domains
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -30,6 +30,10 @@ Database: **CANONICAL NEON UNCHANGED**
   DTOs extracted with their existing serialized fields unchanged.
 - Matching Mobile cache, local-first, cashier, and sync consumers now use the
   workspace package, reducing root-relative POS-contract imports from 33 to 23.
+- Modifier option/group responses and cart-line values extracted without moving
+  pricing functions, checkout schemas, checkout results, or transaction actions.
+- Matching Mobile pricing, modifier-cache, cashier, inventory, and outbox
+  consumers now use the package, reducing root-relative imports from 23 to 16.
 
 ## Results
 
@@ -40,17 +44,19 @@ Database: **CANONICAL NEON UNCHANGED**
 | POS v1 retirement compatibility | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
-| ESLint | **PASS WITH 3 PRE-EXISTING WARNINGS** |
+| ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
 | Next.js production build | **PASS (90 routes)** |
 | Android export | **PASS** |
 | Device contract compatibility | **PASS (3/3)** |
 | Sync-control contract compatibility | **PASS (3/3)** |
 | POS data-contract compatibility | **PASS (3/3)** |
+| Cart/modifier contract compatibility | **PASS (3/3)** |
 | Device sequence and delta reconciliation | **PASS (2/2)** |
 | Catalogue/cache/local-first/resnapshot behavior | **PASS (11/11)** |
+| Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **178/179 automated commands pass** |
+| Static catalogue | **179/180 automated commands pass** |
 | Local Supabase/Docker source connectivity | **BLOCKED** — local source unavailable |
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -68,7 +74,7 @@ provider project changed.
 
 ## Next gate
 
-Continue Slice B2 with the next coherent platform-neutral operational DTO group,
-recommended: modifier and cart-line value types that do not depend on checkout
-actions. The root compatibility facade and exact serialized fields must remain
-stable. Backend creation and Neon Auth proof remain later slices.
+Continue Slice B2 with the next coherent platform-neutral read-model group,
+recommended: store/register/shift and open-ticket DTOs that do not depend on
+server actions. The root compatibility facade and exact serialized fields must
+remain stable. Backend creation and Neon Auth proof remain later slices.

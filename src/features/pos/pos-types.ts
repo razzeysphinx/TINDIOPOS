@@ -1,9 +1,11 @@
 import type {
+  PosCartLine,
   PosCatalogItem,
   PosCustomer,
 } from "@tindio/contracts";
 
 export type {
+  PosCartLine,
   PosCatalogItem,
   PosCatalogResponse,
   PosCategory,
@@ -78,17 +80,6 @@ export type PosIncomingTransfer = {
     receivedQuantity: number;
     shortQuantity: number;
   }>;
-};
-
-export type PosCartLine = PosCatalogItem & {
-  quantity: number;
-  manualPriceMinor: number | null;
-  modifierOptionIds: string[];
-  /** Stable only after a line is saved to an open ticket. */
-  ticketLineId?: string;
-  /** A line-specific instruction, distinct from the ticket-wide order note. */
-  itemNote?: string | null;
-  modifiers?: Array<{ id: string; name: string; priceMinor: number }>;
 };
 
 export function posItemKey(item: Pick<PosCatalogItem, "productId" | "variantId"> & { modifierOptionIds?: string[]; manualPriceMinor?: number | null; ticketLineId?: string; itemNote?: string | null }) {

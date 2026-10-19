@@ -1,4 +1,4 @@
-import type { PosCartLine } from "../../../../../src/contracts/pos";
+import type { PosCartLine } from "@tindio/contracts";
 import { getTindioDatabase } from "../../db/database";
 import { getCachedStockEstimate } from "../../db/stock-estimate-cache";
 import {

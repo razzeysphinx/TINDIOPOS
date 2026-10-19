@@ -10,11 +10,9 @@ import {
 } from "react-native";
 import type {
   PosCatalogItem,
-} from "@tindio/contracts";
-import type {
   PosModifierGroup,
   PosModifierOption,
-} from "../../../../../src/contracts/pos";
+} from "@tindio/contracts";
 
 import { TindioButton } from "../../ui/tindio-button";
 import { TindioInput } from "../../ui/tindio-input";

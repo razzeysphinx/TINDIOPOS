@@ -1,4 +1,4 @@
-import type { PosCartLine } from "../../../../../src/contracts/pos";
+import type { PosCartLine } from "@tindio/contracts";
 
 export function parseMoneyToMinor(value: string) {
   const match = value.trim().match(/^(\d{1,10})(?:\.(\d{1,2}))?$/);

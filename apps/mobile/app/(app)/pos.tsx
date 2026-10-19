@@ -10,15 +10,15 @@ import {
   View,
 } from "react-native";
 import type {
+  PosCartLine,
   PosCatalogItem,
   PosCategory,
   PosCustomer,
+  PosModifierGroup,
+  PosModifierOption,
 } from "@tindio/contracts";
 import type {
   CheckoutSaleValues,
-  PosCartLine,
-  PosModifierGroup,
-  PosModifierOption,
   PosOpenTicket,
 } from "../../../../src/contracts/pos";
 import { posItemKey } from "../../../../src/features/pos/pos-types";

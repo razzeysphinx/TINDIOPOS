@@ -13,7 +13,6 @@ import type {
 } from "@/features/customer-display/customer-display-types";
 import type {
   PosActiveShift,
-  PosCartLine,
   PosCatalogItem,
   PosCategory,
   PosDiningOption,
@@ -350,36 +349,6 @@ export type PosLiveV2Response = {
   };
 };
 
-export type PosModifiersV2Response = {
-  ok: true;
-  version: 2;
-  requestId: string;
-  organizationId: string;
-  storeId: string;
-  productId: string;
-  groups: PosModifierGroup[];
-};
-
-export type PosModifierOption = {
-  id: string;
-  name: string;
-  priceMinor: number;
-};
-
-export type PosModifierGroup = {
-  id: string;
-  name: string;
-  minSelections: number;
-  maxSelections: number;
-  options:
-    PosModifierOption[];
-};
-
-export type PosModifierResponse = {
-  groups:
-    PosModifierGroup[];
-};
-
 export type PosReceiptListResponse = {
   receipts:
     PosReceiptSummary[];
@@ -413,10 +382,6 @@ export type {
   ValidateCartStockActionResult,
 } from "@/features/checkout/checkout-types";
 
-export type {
-  PosCartLine,
-} from "@/features/pos/pos-types";
-
 export {
   changePosDeviceRegisterSchema,
   posDeviceCredentialSchema,
@@ -427,6 +392,7 @@ export {
 } from "@tindio/contracts";
 
 export type {
+  PosCartLine,
   PosCatalogDelta,
   PosCatalogItem,
   PosCatalogResponse,
@@ -441,6 +407,10 @@ export type {
   PosDeviceSequenceStatus,
   PosDeviceSyncCheckpoint,
   PosDeviceValidationResponse,
+  PosModifierGroup,
+  PosModifierOption,
+  PosModifierResponse,
+  PosModifiersV2Response,
   PosOfflineSequenceInfo,
   PosReferenceV2Response,
   PosSyncBaselineResponse,

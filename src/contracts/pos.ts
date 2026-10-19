@@ -5,6 +5,8 @@ import type {
 } from "@/features/business-profile/business-features";
 import type {
   PosActiveShift,
+  PosCustomerDisplaySession,
+  PosIncomingTransfer,
   PosOpenTicket,
   PosRegister,
   PosStore,
@@ -17,14 +19,10 @@ import type {
 } from "@/features/checkout/checkout-types";
 import type { CheckoutSaleValues } from "@/features/checkout/checkout-schema";
 import type {
-  PosCustomerDisplaySession,
-} from "@/features/customer-display/customer-display-types";
-import type {
   PosCatalogItem,
   PosCategory,
   PosDiningOption,
   PosDiscount,
-  PosIncomingTransfer,
   PosLoyaltyProgram,
   PosPaymentMethod,
   PosTaxRate,
@@ -42,6 +40,8 @@ export type {
   PosCloseShiftV2Response,
   PosOpenShiftV2Response,
   PosOpenTicket,
+  PosCustomerDisplaySession,
+  PosIncomingTransfer,
   PosReceiptDetail,
   PosReceiptListResponse,
   PosReceiptSummary,
@@ -389,7 +389,6 @@ export type {
 export type {
   PosDiningOption,
   PosDiscount,
-  PosIncomingTransfer,
   PosLoyaltyProgram,
   PosPaymentMethod,
   PosTaxRate,

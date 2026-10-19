@@ -39,14 +39,18 @@ test("POS inbox reuses canonical receipt actions and never queues inventory rece
 });
 
 test("POS incoming transfers use the shared canonical status contract", async () => {
-  const [contract, data, types] = await Promise.all([
+  const [contractFacade, contract, data, types] = await Promise.all([
     source("../src/features/inventory/inventory-transfer-reader-contract.ts"),
+    source("../packages/contracts/src/transfers.ts"),
     source("../src/features/pos/data.ts"),
     source("../src/features/pos/pos-types.ts"),
   ]);
+  assert.match(contractFacade, /from "@tindio\/contracts"/);
   assert.match(contract, /isReceivableTransferState/);
+  assert.match(contract, /ReceivableTransferStatus/);
   assert.match(data, /isReceivableTransferState/);
-  assert.match(types, /ReceivableTransferStatus/);
+  assert.match(types, /PosIncomingTransfer/);
+  assert.match(types, /from "@tindio\/contracts"/);
 });
 
 test("shared POS header exposes incoming transfers without adding a duplicate POS navigation route", async () => {

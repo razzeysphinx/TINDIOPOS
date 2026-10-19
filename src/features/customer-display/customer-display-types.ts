@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export type { PosCustomerDisplaySession } from "@tindio/contracts";
+
 const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/);
 
 export const customerDisplayStateSchema = z.object({
@@ -37,12 +39,6 @@ export const customerDisplayStateSchema = z.object({
 });
 
 export type CustomerDisplayState = z.infer<typeof customerDisplayStateSchema>;
-
-export type PosCustomerDisplaySession = {
-  sessionId: string;
-  registerId: string;
-  realtimeTopic: string;
-};
 
 export type CustomerDisplayBootstrap = {
   businessName: string;

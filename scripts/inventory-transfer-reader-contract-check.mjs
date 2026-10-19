@@ -4,8 +4,9 @@ import test from "node:test";
 
 const source = (relativePath) => readFile(new URL(relativePath, import.meta.url), "utf8");
 
-const [contract, posData, posTypes, posInbox, inventoryPage, inventoryCoreLoader, workflows] = await Promise.all([
+const [contractFacade, contract, posData, posTypes, posInbox, inventoryPage, inventoryCoreLoader, workflows] = await Promise.all([
   source("../src/features/inventory/inventory-transfer-reader-contract.ts"),
+  source("../packages/contracts/src/transfers.ts"),
   source("../src/features/pos/data.ts"),
   source("../src/features/pos/pos-types.ts"),
   source("../src/features/pos/pos-incoming-transfer-inbox.tsx"),
@@ -15,6 +16,7 @@ const [contract, posData, posTypes, posInbox, inventoryPage, inventoryCoreLoader
 ]);
 
 test("shared canonical reader contract accepts dispatched and partial transfers", () => {
+  assert.match(contractFacade, /from "@tindio\/contracts"/);
   assert.match(contract, /RECEIVABLE_TRANSFER_QUERY_STATUSES[\s\S]*"dispatched"[\s\S]*"partially_received"/);
   assert.match(contract, /return status === "dispatched"[\s\S]*status === "partially_received"/);
   for (const terminal of ["draft", "submitted", "approved", "in_transit", "received", "cancelled", "completed"]) {
@@ -25,8 +27,9 @@ test("shared canonical reader contract accepts dispatched and partial transfers"
 test("POS uses the shared guard and type while preserving request routing", () => {
   assert.match(posData, /import \{ isReceivableTransferState \}/);
   assert.match(posData, /isReceivableTransferState\(transfer\.status, transfer\.stock_request_id\)/);
-  assert.match(posTypes, /import type \{ ReceivableTransferStatus \}/);
-  assert.match(posTypes, /status: ReceivableTransferStatus/);
+  assert.match(posTypes, /PosIncomingTransfer/);
+  assert.match(posTypes, /from "@tindio\/contracts"/);
+  assert.match(contract, /status: ReceivableTransferStatus/);
   assert.match(posInbox, /stockRequestId[\s\S]*receiveStockRequestAction[\s\S]*receiveStockTransferAction/);
 });
 

@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE B2 RECEIPT AND ATTENDANCE READ MODELS CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE B2 DISPLAY AND TRANSFER READ MODELS CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0, Slice B1, and the Slice B2 device/data-sync/cart/operational/receipt/attendance-read domains
+Certified scope: Phase 0, Slice B1, and the Slice B2 platform-neutral leaf read-model domains through display/transfer
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -47,6 +47,13 @@ Database: **CANONICAL NEON UNCHANGED**
   value contract instead of the generated database type.
 - Matching Mobile receipt, receipt-cache, and time-clock consumers now use the
   package, reducing root-relative POS-contract imports from 15 to 11.
+- Customer-display session and incoming-transfer projection/status contracts
+  extracted without moving customer-display validation/actions or transfer
+  receipt mutations.
+- Existing customer-display, inventory-transfer, POS-type, and root POS paths
+  remain compatibility facades.
+- The Mobile transfer screen now uses the package, reducing root-relative
+  POS-contract imports from 11 to 10.
 
 ## Results
 
@@ -66,12 +73,13 @@ Database: **CANONICAL NEON UNCHANGED**
 | Cart/modifier contract compatibility | **PASS (3/3)** |
 | Operational read-model compatibility | **PASS (3/3)** |
 | Receipt/attendance read-model compatibility | **PASS (3/3)** |
+| Display/transfer read-model compatibility | **PASS (3/3)** |
 | Device sequence and delta reconciliation | **PASS (2/2)** |
 | Catalogue/cache/local-first/resnapshot behavior | **PASS (11/11)** |
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **181/182 automated commands pass** |
+| Static catalogue | **182/183 automated commands pass** |
 | Local Supabase/Docker source connectivity | **BLOCKED** — local source unavailable |
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -89,7 +97,7 @@ provider project changed.
 
 ## Next gate
 
-Continue Slice B2 with the next coherent platform-neutral leaf group,
-recommended: customer-display and incoming-transfer read DTOs that do not
-depend on actions. The root compatibility facade and exact serialized fields
-must remain stable. Backend creation and Neon Auth proof remain later slices.
+Continue Slice B2 with the next coherent platform-neutral group, recommended:
+the POS support workspace and live-response aggregate read envelopes. The root
+compatibility facade and exact serialized fields must remain stable. Backend
+creation and Neon Auth proof remain later slices.

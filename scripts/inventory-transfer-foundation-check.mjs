@@ -19,6 +19,7 @@ const [
   integrityWorkflows,
   sqlTest,
   readerContract,
+  sharedTransferContract,
 ] = await Promise.all([
   source("../archive/database/supabase-migrations/20260917033614_canonical_inventory_transfer_foundation.sql"),
   source("../archive/database/supabase-migrations/20260917070409_phase_05_direct_transfer_contract_repair.sql"),
@@ -40,6 +41,7 @@ const [
   source("../src/features/inventory/inventory-integrity-workflows.tsx"),
   source("../supabase/tests/database/canonical_inventory_transfer_foundation.test.sql"),
   source("../src/features/inventory/inventory-transfer-reader-contract.ts"),
+  source("../packages/contracts/src/transfers.ts"),
 ]);
 
 const canonicalPrivateBody = (command) => {
@@ -133,8 +135,11 @@ test("application command callers retain the direct RPC signatures", () => {
 test("all active receiving readers accept only canonical receivable states", () => {
   assert.match(requestMigration, /transfer\.status in \('dispatched', 'partially_received'\)/);
   assert.match(readerContract, /RECEIVABLE_TRANSFER_QUERY_STATUSES/);
+  assert.match(readerContract, /from "@tindio\/contracts"/);
+  assert.match(sharedTransferContract, /ReceivableTransferStatus/);
   assert.match(posData, /isReceivableTransferState/);
-  assert.match(posTypes, /ReceivableTransferStatus/);
+  assert.match(posTypes, /PosIncomingTransfer/);
+  assert.match(posTypes, /from "@tindio\/contracts"/);
   assert.match(posInbox, /transferStatusLabels[\s\S]*dispatched: "Dispatched"/);
   assert.match(inventoryCoreLoader, /\["receivableStockTransfers", "stockTransferLines"\]/);
   assert.match(inventoryPage, /transferBundle\.receivableStockTransfers/);

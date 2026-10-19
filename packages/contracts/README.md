@@ -9,7 +9,8 @@ binding, and sequence/checkpoint contracts. It also owns the independent sync
 domain, baseline, cursor-expiry, device-delta, catalogue/customer/reference-data,
 delta-pull, controlled-resnapshot, modifier, cart-line, store, register,
 active-shift, open-ticket, ticket-assignee, shift-response, receipt
-summary/detail/list, and attendance entry/employee/list contracts. The existing
+summary/detail/list, attendance entry/employee/list, customer-display session,
+and incoming-transfer projection contracts. The existing
 `src/contracts/pos.ts` and `src/features/devices/device-schema.ts` modules remain
 compatibility facades while the remaining Web-feature and generated-database
 dependencies are separated in focused, compatibility-tested slices.

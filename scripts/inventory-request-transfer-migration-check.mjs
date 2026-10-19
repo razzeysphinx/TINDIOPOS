@@ -4,9 +4,10 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 const migrationPath = "../archive/database/supabase-migrations/20260917073801_canonical_request_transfer_migration.sql";
-const [migration, reader, replenishmentLoader, readModelMigration, posInbox, foundationTest] = await Promise.all([
+const [migration, readerFacade, reader, replenishmentLoader, readModelMigration, posInbox, foundationTest] = await Promise.all([
   read(migrationPath),
   read("../src/features/inventory/inventory-transfer-reader-contract.ts"),
+  read("../packages/contracts/src/transfers.ts"),
   read("../src/features/inventory/replenishment-data.ts"),
   read("../database/migrations/0004_inventory_replenishment_read_models.sql"),
   read("../src/features/pos/pos-incoming-transfer-inbox.tsx"),
@@ -43,6 +44,7 @@ test("physical lifecycle is canonical and discrepancy remains request-only", () 
 });
 
 test("all incoming readers use dispatched and partially received", () => {
+  assert.match(readerFacade, /from "@tindio\/contracts"/);
   assert.match(reader, /"dispatched"[\s\S]*"partially_received"/);
   assert.doesNotMatch(reader, /"in_transit"|"completed"/);
   assert.match(replenishmentLoader, /receivableStockTransfers/);

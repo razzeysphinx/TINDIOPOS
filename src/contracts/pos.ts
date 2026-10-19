@@ -9,6 +9,7 @@ import type {
   PosRegister,
   PosStore,
   PosTicketAssignee,
+  TimeClockEntry,
 } from "@tindio/contracts";
 import type {
   CheckoutSaleActionResult,
@@ -29,26 +30,25 @@ import type {
   PosTaxRate,
   PosTicketTemplate,
 } from "@/features/pos/pos-types";
-import type {
-  TimeClockEntry,
-} from "@/features/time-clock/time-clock-types";
-import type {
-  Json,
-} from "@/lib/supabase/database.types";
-
 export {
   TINDIO_POS_API_VERSION,
 } from "@tindio/contracts";
 
 export type {
+  AttendanceEmployee,
+  AttendanceEmployeesResult,
   PosActiveShift,
   PosClientUpgradeRequiredResponse,
   PosCloseShiftV2Response,
   PosOpenShiftV2Response,
   PosOpenTicket,
+  PosReceiptDetail,
+  PosReceiptListResponse,
+  PosReceiptSummary,
   PosRegister,
   PosStore,
   PosTicketAssignee,
+  TimeClockEntry,
 } from "@tindio/contracts";
 
 export const posUuidSchema =
@@ -182,111 +182,6 @@ export type PosSupportWorkspace = {
     PosIncomingTransfer[];
 };
 
-export type PosReceiptSummary = {
-  receipt_id: string;
-  sale_id: string;
-  receipt_number: number;
-  issued_at: string;
-  store_id: string;
-  register_id: string;
-  store_name: string;
-  register_name: string;
-  cashier_name: string;
-  total_minor: number;
-  currency_code: string;
-  refund_total_minor: number;
-  refund_count: number;
-  has_refundable_quantity:
-    boolean;
-  payment_methods:
-    Array<{
-      name: string;
-      type:
-        | "CASH"
-        | "CARD"
-        | "E_WALLET"
-        | "BANK_TRANSFER"
-        | "VOUCHER"
-        | "OTHER";
-    }>;
-};
-
-export type PosReceiptDetail = {
-  receipt: {
-    id: string;
-    number: number;
-    issuedAt: string;
-    layout: Json | null;
-  };
-  customerEmail:
-    string | null;
-  sale: {
-    id: string;
-    storeId: string;
-    registerId: string;
-    currencyCode: string;
-    organizationName: string;
-    storeName: string;
-    registerName: string;
-    cashierName: string;
-    subtotalMinor: number;
-    discountMinor: number;
-    taxMinor: number;
-    totalMinor: number;
-  };
-  items:
-    Array<{
-      id: string;
-      name: string;
-      sku: string | null;
-      quantity: number;
-      unit: string;
-      unitPriceMinor: number;
-      lineTotalMinor: number;
-    }>;
-  payments:
-    Array<{
-      id: string;
-      name: string;
-      type:
-        | "CASH"
-        | "CARD"
-        | "E_WALLET"
-        | "BANK_TRANSFER"
-        | "VOUCHER"
-        | "OTHER";
-      amountMinor: number;
-      tenderedMinor:
-        number | null;
-      changeMinor:
-        number | null;
-      referenceNumber:
-        string | null;
-    }>;
-  refunds:
-    Array<{
-      id: string;
-      number: number;
-      totalMinor: number;
-      completedAt: string;
-      reason: string;
-      paymentName:
-        string | null;
-      paymentReference:
-        string | null;
-      items:
-        Array<{
-          id: string;
-          saleItemId: string;
-          name: string;
-          quantity: number;
-          unit: string;
-          lineTotalMinor:
-            number;
-        }>;
-    }>;
-};
-
 export type PosBootstrapV2CoreResponse = {
   ok: true;
   version: 2;
@@ -360,12 +255,6 @@ export type PosLiveV2Response = {
     ticketAssignees:
       PosTicketAssignee[];
   };
-};
-
-export type PosReceiptListResponse = {
-  receipts:
-    PosReceiptSummary[];
-  hasMore: boolean;
 };
 
 export type PosSyncPushEvent = { eventId: string; operationType: "SALE_COMPLETED"; checkout: CheckoutSaleValues; offline: { localReceiptReference: string; createdAt: string; shiftId: string; deviceId: string; deviceSequence: number } };
@@ -458,8 +347,6 @@ export {
 } from "@/features/time-clock/time-clock-schema";
 
 export type {
-  AttendanceEmployee,
-  AttendanceEmployeesResult,
   TimeClockActionResult,
 } from "@/features/time-clock/time-clock-types";
 

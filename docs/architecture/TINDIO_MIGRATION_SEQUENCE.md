@@ -6,7 +6,7 @@ Status: **IN PROGRESS**
 |---|---|---|---|
 | A | Audit, target architecture, ADR, dependency map, baseline | **IMPLEMENTED** | Clean/synchronized Git; evidence recorded; no production mutation |
 | B1 | Add `packages/*`, contracts foundation, independent commands | **IMPLEMENTED** | Typecheck/build/compatibility checks pass |
-| B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IN PROGRESS: DEVICE + DATA SYNC + CART + OPERATIONAL READ MODELS IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
+| B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IN PROGRESS: DEVICE + DATA SYNC + CART + OPERATIONAL + RECEIPT/ATTENDANCE READ MODELS IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **PLANNED** | Independent health/build/test plus dual-route compatibility |
 | D | Progressive Backend extraction, mutations last | **PLANNED** | Financial/idempotency/offline replay equivalence |
@@ -19,8 +19,8 @@ Status: **IN PROGRESS**
 
 ## Next smallest safe slice: B2 continuation
 
-- Extract the next coherent platform-neutral leaf group, recommended: receipt
-  and time-clock read DTOs that do not depend on schemas or server actions.
+- Extract the next coherent platform-neutral leaf group, recommended: customer
+  display and incoming-transfer read DTOs that do not depend on actions.
 - Preserve `src/contracts/pos.ts` re-exports and the existing JSON wire shape.
 - Replace only matching Mobile relative imports and recount the dependency edge.
 - Run contract, Web build, Mobile typecheck/export, sync, replay, and custody

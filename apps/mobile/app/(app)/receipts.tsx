@@ -1,7 +1,7 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 
-import type { PosReceiptSummary } from "../../../../src/contracts/pos";
+import type { PosReceiptSummary } from "@tindio/contracts";
 import { saveReceiptSummaries, searchCachedReceiptSummaries } from "../../src/db/receipt-cache";
 import { searchLocalReceipts, type LocalReceipt } from "../../src/db/local-receipts";
 import { useBusinessContext } from "../../src/features/business/use-business-context";

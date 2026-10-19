@@ -1,7 +1,7 @@
 import type {
   PosReceiptListResponse,
   PosReceiptSummary,
-} from "../../../../src/contracts/pos";
+} from "@tindio/contracts";
 import { saveLocalCacheState } from "./cache-state";
 import { getTindioDatabase } from "./database";
 

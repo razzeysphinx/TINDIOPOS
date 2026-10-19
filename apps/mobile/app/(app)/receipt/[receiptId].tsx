@@ -4,10 +4,8 @@ import { Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import type {
   PosPaymentMethod,
-} from "@tindio/contracts";
-import type {
   PosReceiptDetail,
-} from "../../../../../src/contracts/pos";
+} from "@tindio/contracts";
 import { CashierReceiptSummary } from "../../../src/features/cashier/cashier-receipt-summary";
 import { formatMoney } from "../../../src/features/cashier/cashier-format";
 import { useBusinessContext } from "../../../src/features/business/use-business-context";

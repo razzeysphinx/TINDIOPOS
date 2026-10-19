@@ -1,7 +1,7 @@
 import * as Crypto from "expo-crypto";
 import { useCallback, useEffect, useState } from "react";
 
-import type { AttendanceEmployee } from "../../../../src/contracts/pos";
+import type { AttendanceEmployee } from "@tindio/contracts";
 import { useBusinessContext } from "../../src/features/business/use-business-context";
 import { cashierFeatureGates } from "../../src/features/cashier/cashier-feature-gates";
 import { useTerminalDevice } from "../../src/features/device/use-terminal-device";

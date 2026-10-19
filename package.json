@@ -25,6 +25,7 @@
     "test:architecture-pos-data-contracts": "node --test scripts/architecture-pos-data-contract-extraction-check.mjs",
     "test:architecture-cart-contracts": "node --test scripts/architecture-cart-contract-extraction-check.mjs",
     "test:architecture-pos-operations-contracts": "node --test scripts/architecture-pos-operations-contract-extraction-check.mjs",
+    "test:architecture-receipt-attendance-contracts": "node --test scripts/architecture-receipt-attendance-contract-extraction-check.mjs",
     "test:phase-06-native-foundation": "node --test scripts/phase-06-native-foundation-check.mjs",
     "test:phase-06-provider-neutral-device-runtime": "node --test scripts/phase-06-provider-neutral-device-runtime-check.mjs",
     "test:phase-06-device-enrollment": "node --test scripts/phase-06-device-enrollment-check.mjs",

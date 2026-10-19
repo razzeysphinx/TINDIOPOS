@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE B2 OPERATIONAL READ MODELS CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE B2 RECEIPT AND ATTENDANCE READ MODELS CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0, Slice B1, and the Slice B2 device/data-sync/cart/operational-read domains
+Certified scope: Phase 0, Slice B1, and the Slice B2 device/data-sync/cart/operational/receipt/attendance-read domains
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -40,6 +40,13 @@ Database: **CANONICAL NEON UNCHANGED**
 - Matching Mobile ticket and shift-cache consumers now use the package, reducing
   root-relative POS-contract imports from 16 to 15 and direct `pos-types` imports
   from 3 to 2.
+- Receipt summary/detail/list and attendance entry/employee/list DTOs extracted
+  without moving receipt search, refund/delivery schemas, clock-in/out mutation
+  results, workspaces, or server actions.
+- The receipt layout now uses an equivalent provider-neutral recursive JSON
+  value contract instead of the generated database type.
+- Matching Mobile receipt, receipt-cache, and time-clock consumers now use the
+  package, reducing root-relative POS-contract imports from 15 to 11.
 
 ## Results
 
@@ -58,12 +65,13 @@ Database: **CANONICAL NEON UNCHANGED**
 | POS data-contract compatibility | **PASS (3/3)** |
 | Cart/modifier contract compatibility | **PASS (3/3)** |
 | Operational read-model compatibility | **PASS (3/3)** |
+| Receipt/attendance read-model compatibility | **PASS (3/3)** |
 | Device sequence and delta reconciliation | **PASS (2/2)** |
 | Catalogue/cache/local-first/resnapshot behavior | **PASS (11/11)** |
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **180/181 automated commands pass** |
+| Static catalogue | **181/182 automated commands pass** |
 | Local Supabase/Docker source connectivity | **BLOCKED** — local source unavailable |
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -82,6 +90,6 @@ provider project changed.
 ## Next gate
 
 Continue Slice B2 with the next coherent platform-neutral leaf group,
-recommended: receipt and time-clock read DTOs that do not depend on schemas or
-server actions. The root compatibility facade and exact serialized fields must
-remain stable. Backend creation and Neon Auth proof remain later slices.
+recommended: customer-display and incoming-transfer read DTOs that do not
+depend on actions. The root compatibility facade and exact serialized fields
+must remain stable. Backend creation and Neon Auth proof remain later slices.

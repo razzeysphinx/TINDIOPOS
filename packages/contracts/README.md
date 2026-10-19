@@ -8,7 +8,8 @@ provider-neutral device credential, enrollment, validation, request-header,
 binding, and sequence/checkpoint contracts. It also owns the independent sync
 domain, baseline, cursor-expiry, device-delta, catalogue/customer/reference-data,
 delta-pull, controlled-resnapshot, modifier, cart-line, store, register,
-active-shift, open-ticket, ticket-assignee, and shift-response contracts. The existing
+active-shift, open-ticket, ticket-assignee, shift-response, receipt
+summary/detail/list, and attendance entry/employee/list contracts. The existing
 `src/contracts/pos.ts` and `src/features/devices/device-schema.ts` modules remain
 compatibility facades while the remaining Web-feature and generated-database
 dependencies are separated in focused, compatibility-tested slices.

@@ -1,20 +1,13 @@
-export type TimeClockEntry = {
-  id: string;
-  employeeId: string;
-  employeeName: string;
-  storeId: string;
-  storeName: string;
-  clockedInAt: string;
-  clockedOutAt?: string | null;
-};
+import type {
+  AttendanceEmployee,
+  TimeClockEntry,
+} from "@tindio/contracts";
 
-export type AttendanceEmployee = {
-  id: string;
-  employeeNumber: string;
-  name: string;
-  pinIsSet: boolean;
-  entry: TimeClockEntry | null;
-};
+export type {
+  AttendanceEmployee,
+  AttendanceEmployeesResult,
+  TimeClockEntry,
+} from "@tindio/contracts";
 
 export type TimeClockStoreOption = {
   id: string;
@@ -34,10 +27,6 @@ export type TimeClockActionResult =
         openedAt: string;
       };
     };
-
-export type AttendanceEmployeesResult =
-  | { ok: true; employees: AttendanceEmployee[] }
-  | { ok: false; message: string; employees: [] };
 
 export type TimeClockWorkspace = {
   stores: TimeClockStoreOption[];

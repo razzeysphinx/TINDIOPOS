@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { PosDeviceDelta } from "@tindio/contracts";
+
 import type {
   BusinessType,
 } from "@/features/business-profile/business-features";
@@ -434,13 +436,9 @@ export type PosReceiptListResponse = {
   hasMore: boolean;
 };
 
-export type PosSyncDomain = "CATALOG" | "REFERENCE" | "CUSTOMER" | "DEVICE" | "MODIFIERS";
 export type PosCatalogDelta = { revision: number; productId: string; storeId: string; items: PosCatalogItem[] };
 export type PosCustomerDelta = { revision: number; customerId: string; customer: PosCustomer | null };
-export type PosDeviceDelta = { revision: number; deviceId: string; status: string; storeId: string; registerId: string; deviceName: string; appVersion: string; lastSeenAt: string | null };
-export type PosSyncBaselineResponse = { ok: true; serverRevision: number; organizationId: string; deviceId: string; storeId: string };
 export type PosSyncPullResponse = { ok: true; version: 1; organizationId: string; deviceId: string; storeId: string; fromCursor: number; nextCursor: number; serverRevision: number; hasMore: boolean; catalog: PosCatalogDelta[]; reference: { revision: number; snapshot: PosReferenceV2Response } | null; customers: PosCustomerDelta[]; device: PosDeviceDelta | null; invalidateModifiers: boolean };
-export type PosSyncCursorExpiredResponse = { ok: false; version: 1; code: "SYNC_CURSOR_EXPIRED"; organizationId: string; deviceId: string; storeId: string; fromCursor: number; retainedAfterRevision: number; serverRevision: number };
 export type PosSyncResnapshotResponse = { ok: true; version: 1; organizationId: string; deviceId: string; storeId: string; serverRevision: number; retainedAfterRevision: number; catalog: PosCatalogItem[]; reference: PosReferenceV2Response; clearObservedCustomers: true; invalidateModifiers: true };
 export type PosSyncPushEvent = { eventId: string; operationType: "SALE_COMPLETED"; checkout: CheckoutSaleValues; offline: { localReceiptReference: string; createdAt: string; shiftId: string; deviceId: string; deviceSequence: number } };
 export type PosSyncPushAck = { eventId: string; deviceSequence: number; status: "SYNCED" | "RETRY" | "CONFLICT" | "FAILED"; httpStatus: number; result: CheckoutSaleActionResult };
@@ -485,10 +483,14 @@ export {
 export type {
   PosDeviceBinding,
   PosDeviceCredential,
+  PosDeviceDelta,
   PosDeviceSequenceStatus,
   PosDeviceSyncCheckpoint,
   PosDeviceValidationResponse,
   PosOfflineSequenceInfo,
+  PosSyncBaselineResponse,
+  PosSyncCursorExpiredResponse,
+  PosSyncDomain,
 } from "@tindio/contracts";
 
 export {

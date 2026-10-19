@@ -5,6 +5,8 @@ import type {
   PosDeviceCredential,
   PosDeviceSyncCheckpoint,
   PosDeviceValidationResponse,
+  PosSyncBaselineResponse,
+  PosSyncCursorExpiredResponse,
 } from "@tindio/contracts";
 import type {
   AttendanceEmployeesResult,
@@ -19,8 +21,6 @@ import type {
   PosReceiptDetail,
   PosReceiptListResponse,
   PosReferenceV2Response,
-  PosSyncBaselineResponse,
-  PosSyncCursorExpiredResponse,
   PosSyncPullResponse,
   PosSyncResnapshotResponse,
   PosSyncPushEvent,

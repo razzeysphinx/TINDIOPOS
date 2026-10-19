@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE B2 DEVICE DOMAIN CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE B2 DEVICE AND SYNC CONTROL CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0, Slice B1, and the Slice B2 device-contract domain
+Certified scope: Phase 0, Slice B1, and the Slice B2 device/sync-control domains
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -22,6 +22,10 @@ Database: **CANONICAL NEON UNCHANGED**
 - Existing Web device and POS contract paths retained as compatibility facades.
 - Device-only Mobile consumers switched from root-relative Web imports to the
   workspace package, reducing that coupling from 37 files to 34.
+- Independent sync domain, baseline, cursor-expiry, and device-delta contracts
+  extracted without moving checkout- or Web-DTO-dependent payloads.
+- Matching Mobile sync consumers now use the workspace package, reducing
+  root-relative Web contract imports from 34 files to 33.
 
 ## Results
 
@@ -36,15 +40,18 @@ Database: **CANONICAL NEON UNCHANGED**
 | Next.js production build | **PASS (90 routes)** |
 | Android export | **PASS** |
 | Device contract compatibility | **PASS (3/3)** |
+| Sync-control contract compatibility | **PASS (3/3)** |
+| Device sequence and delta reconciliation | **PASS (2/2)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **176/177 automated commands pass** |
+| Static catalogue | **177/178 automated commands pass** |
 | Local Supabase/Docker source connectivity | **BLOCKED** — local source unavailable |
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
 
-The failed environment gate existed before both architecture slices. Slice B2
-added one passing automated command and introduced no new failure.
+The failed environment gate existed before both architecture slices. Each B2
+contract checkpoint added one passing automated command and introduced no new
+failure.
 
 ## Safety statement
 
@@ -55,7 +62,7 @@ provider project changed.
 
 ## Next gate
 
-Continue Slice B2 with one coherent set of platform-neutral sync envelope leaves.
-It must preserve the root compatibility facade and prove replay, checkpoint,
-resnapshot, and custody behavior. Backend creation and Neon Auth proof remain
-later slices.
+Continue Slice B2 by extracting the platform-neutral catalog/customer DTO
+prerequisites for the remaining delta-pull and controlled-resnapshot envelopes.
+The root compatibility facade and exact serialized fields must remain stable.
+Backend creation and Neon Auth proof remain later slices.

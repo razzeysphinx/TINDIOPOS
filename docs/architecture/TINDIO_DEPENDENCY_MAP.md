@@ -36,8 +36,8 @@ Offline Mobile
 | `src/app/**` | `src/features`, `src/lib`, Next.js | Web routing and API hosting are colocated |
 | `src/app/api/pos/v2/**` | auth context, services, root contract | Best first Backend extraction seam |
 | `src/features/**` | typed Supabase-shaped clients and generated DB types | Business logic is reusable but database access is not yet backend-owned |
-| `src/contracts/pos.ts` | Web validation schemas/types; device, data-sync, cart, operational, receipt, attendance, display/transfer, support-workspace, live-response, bootstrap-core, checkout-sale, and sync-push domains delegate to `@tindio/contracts` | Remaining stock-validation, ticket, time-clock, and other action payloads are not yet platform-neutral |
-| `apps/mobile/**` | 1 direct relative import from the root POS contract; extracted read, bootstrap, checkout, and sync-push consumers use `@tindio/contracts` | The Mobile API adapter's remaining action payloads block independent packaging |
+| `src/contracts/pos.ts` | Platform-neutral DTO/value/result domains delegate to `@tindio/contracts`; Web validation schemas and application-specific aliases remain compatibility exports | No Mobile consumer depends on this root facade; keep it until Web imports can migrate safely |
+| `apps/mobile/**` | 0 imports from the root POS contract or Web checkout type/schema modules; shared POS contracts use `@tindio/contracts` | 5 files still cross the app boundary for `posItemKey` or Web UI design tokens |
 | `apps/mobile/src/features/session` | Supabase session type/client, offline readiness/custody | Auth migration must preserve local financial state |
 | `database/provider/neon` | Neon Data API `auth.user_id()` / `auth.jwt()` | Provider adapter seam exists; token semantics still require proof |
 | `.github/workflows` | local Supabase, full certification, migration/restore scripts | CI cannot drop Supabase before Auth replacement tests exist |

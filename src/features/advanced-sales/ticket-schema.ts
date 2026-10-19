@@ -169,23 +169,7 @@ export type TicketReallocationLines =
     typeof ticketReallocationLinesSchema
   >;
 
-export type TicketActionResult =
-  | {
-      ok: true;
-      ticketId: string;
-      message: string;
-    }
-  | {
-      ok: false;
-      message: string;
-    };
-
-export type TicketMutationResult =
-  | {
-      ok: true;
-      message: string;
-    }
-  | {
-      ok: false;
-      message: string;
-    };
+export type {
+  TicketActionResult,
+  TicketMutationResult,
+} from "@tindio/contracts";

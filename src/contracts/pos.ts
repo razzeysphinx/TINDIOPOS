@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 import type {
+  CheckoutSaleActionResult,
   ValidateCartStockActionResult,
-} from "@/features/checkout/checkout-types";
-import type { CheckoutSaleActionResult } from "@tindio/contracts";
+} from "@tindio/contracts";
 export {
   TINDIO_POS_API_VERSION,
 } from "@tindio/contracts";
@@ -13,6 +13,11 @@ export type {
   AttendanceEmployeesResult,
   CheckoutSaleActionResult,
   CheckoutSaleValues,
+  TicketActionResult,
+  TicketMutationResult,
+  TimeClockActionResult,
+  ValidateCartStockActionResult,
+  ValidateCartStockValues,
   PosActiveShift,
   PosClientUpgradeRequiredResponse,
   PosCloseShiftV2Response,
@@ -145,12 +150,7 @@ export {
 
 export type {
   CheckoutSubmission,
-  ValidateCartStockValues,
 } from "@/features/checkout/checkout-schema";
-
-export type {
-  ValidateCartStockActionResult,
-} from "@/features/checkout/checkout-types";
 
 export {
   changePosDeviceRegisterSchema,
@@ -214,10 +214,6 @@ export {
   clockOutSchema,
 } from "@/features/time-clock/time-clock-schema";
 
-export type {
-  TimeClockActionResult,
-} from "@/features/time-clock/time-clock-types";
-
 export {
   approveManagerApprovalSchema,
   requestManagerApprovalSchema,
@@ -247,11 +243,6 @@ export {
   moveOpenTicketLinesSchema,
   saveOpenTicketSchema,
   splitOpenTicketSchema,
-} from "@/features/advanced-sales/ticket-schema";
-
-export type {
-  TicketActionResult,
-  TicketMutationResult,
 } from "@/features/advanced-sales/ticket-schema";
 
 export type {

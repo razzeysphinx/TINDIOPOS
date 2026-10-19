@@ -88,7 +88,8 @@ test("Web facades retain old paths while Mobile read consumers use the package",
 
   assert.match(timeClockFacade, /from ["']@tindio\/contracts["']/);
   assert.doesNotMatch(timeClockFacade, /export type (?:TimeClockEntry|AttendanceEmployee|AttendanceEmployeesResult)\s*=/);
-  assert.match(timeClockFacade, /export type TimeClockActionResult\s*=/);
+  assert.match(timeClockFacade, /TimeClockActionResult,[\s\S]*from ["']@tindio\/contracts["']/);
+  assert.doesNotMatch(timeClockFacade, /export type TimeClockActionResult\s*=/);
   assert.match(posFacade, /from ["']@\/features\/receipts\/refund-schema["']/);
 
   const mobileSources = await Promise.all([

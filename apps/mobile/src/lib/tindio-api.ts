@@ -24,14 +24,12 @@ import type {
   PosSyncResnapshotResponse,
   PosSyncPushEvent,
   PosSyncPushResponse,
-} from "@tindio/contracts";
-import type {
   TicketActionResult,
   TicketMutationResult,
   TimeClockActionResult,
   ValidateCartStockActionResult,
   ValidateCartStockValues,
-} from "../../../../src/contracts/pos";
+} from "@tindio/contracts";
 import { mobileEnvironment } from "./env";
 import {
   observeApiResponseBytes,

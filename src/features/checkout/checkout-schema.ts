@@ -1,7 +1,10 @@
 import { z } from "zod";
 
 import { posDeviceCredentialSchema } from "@/features/devices/device-schema";
-import type { CheckoutSaleValues } from "@tindio/contracts";
+import type {
+  CheckoutSaleValues,
+  ValidateCartStockValues,
+} from "@tindio/contracts";
 
 const moneyAmount = z
   .string()
@@ -29,9 +32,9 @@ export const validateCartStockSchema = z.object({
     variantId: true,
     quantity: true,
   })).min(1).max(100),
-});
+}) satisfies z.ZodType<ValidateCartStockValues>;
 
-export type ValidateCartStockValues = z.infer<typeof validateCartStockSchema>;
+export type { ValidateCartStockValues } from "@tindio/contracts";
 
 const checkoutPaymentSchema = z
   .object({

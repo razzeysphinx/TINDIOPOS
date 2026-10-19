@@ -19,3 +19,17 @@ export type AttendanceEmployee = {
 export type AttendanceEmployeesResult =
   | { ok: true; employees: AttendanceEmployee[] }
   | { ok: false; message: string; employees: [] };
+
+export type TimeClockActionResult =
+  | { ok: true; message: string; entry: TimeClockEntry }
+  | {
+      ok: false;
+      message: string;
+      code?: string;
+      openShift?: {
+        id: string;
+        registerId: string;
+        registerName: string;
+        openedAt: string;
+      };
+    };

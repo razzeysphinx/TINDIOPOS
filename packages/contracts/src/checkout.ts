@@ -91,3 +91,34 @@ export type CheckoutSaleActionResult =
         | "SEQUENCE_OUT_OF_ORDER";
       sync?: CheckoutSequenceInfo;
     };
+
+export type ValidateCartStockValues = {
+  storeId: string;
+  registerId: string;
+  items: Array<{
+    productId: string;
+    variantId: string | null;
+    quantity: number;
+  }>;
+};
+
+export type NegativeStockPolicy = "allow" | "warn" | "block";
+
+export type NegativeStockItem = {
+  productId: string;
+  variantId: string | null;
+  productName: string;
+  variantName: string | null;
+  availableQuantity: number;
+  cartQuantity: number;
+  projectedQuantity: number;
+};
+
+export type ValidateCartStockActionResult =
+  | {
+      ok: true;
+      policy: NegativeStockPolicy;
+      items: NegativeStockItem[];
+      checkedAt: string;
+    }
+  | { ok: false; message: string };

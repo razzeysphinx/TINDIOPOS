@@ -37,6 +37,27 @@ export type PosTicketAssignee = {
   fullName: string;
 };
 
+export type TicketActionResult =
+  | {
+      ok: true;
+      ticketId: string;
+      message: string;
+    }
+  | {
+      ok: false;
+      message: string;
+    };
+
+export type TicketMutationResult =
+  | {
+      ok: true;
+      message: string;
+    }
+  | {
+      ok: false;
+      message: string;
+    };
+
 export type PosOpenShiftV2Response =
   | { ok: true; message: string; shift: PosActiveShift }
   | { ok: false; message: string };

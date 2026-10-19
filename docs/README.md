@@ -6,6 +6,13 @@ existing locations, so discoverability is preferred over cosmetic relocation.
 
 ## Current architecture and product
 
+- [Architecture modernization target](architecture/TINDIO_TARGET_ARCHITECTURE.md)
+- [Current architecture audit](architecture/TINDIO_CURRENT_ARCHITECTURE_AUDIT.md)
+- [Dependency map](architecture/TINDIO_DEPENDENCY_MAP.md)
+- [Migration sequence](architecture/TINDIO_MIGRATION_SEQUENCE.md)
+- [Production cutover checklist](architecture/TINDIO_PRODUCTION_CUTOVER_CHECKLIST.md)
+- [Architecture certification](architecture/TINDIO_ARCHITECTURE_CERTIFICATION.md)
+- [ADR-0001: Neon-only identity and dedicated backend target](architecture/ADR-0001-neon-only-auth-and-backend-boundary.md)
 - [Architecture](architecture.md)
 - [Backup, recovery, and data governance](backup-recovery-and-data-governance.md)
 - [Mobile + Neon source of truth](TINDIO_MOBILE_NEON_SOURCE_OF_TRUTH.md)

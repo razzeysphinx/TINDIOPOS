@@ -5,12 +5,20 @@ Next.js Web Back Office/POS and a native Expo/React Native Android POS.
 
 ## Architecture
 
+The approved modernization target is one monorepo with independently deployable
+Web, Mobile, and Backend applications, Neon Auth, and the existing canonical
+Neon PostgreSQL database. Supabase Auth remains active during the controlled
+transition; see the [current audit](docs/architecture/TINDIO_CURRENT_ARCHITECTURE_AUDIT.md)
+and [migration ADR](docs/architecture/ADR-0001-neon-only-auth-and-backend-boundary.md).
+
 - `src/` — Next.js 16 App Router application, web POS, Back Office, API routes,
   authentication boundaries, and business services.
 - `apps/mobile/` — Android-first Expo SDK 57 cashier application with local
   SQLite, durable transaction custody, offline cash sales, and synchronization.
 - `apps/store-hub/` — retained Store Hub transport. It is deliberately deferred
   from the v1 release and is not a certified merchant feature.
+- `packages/contracts/` — platform-neutral versioned contract foundation. The
+  existing POS contract remains a compatibility facade during incremental extraction.
 - `database/` — canonical business schema. `database/baseline/` holds the immutable
   baseline, followed by ordered forward migrations and provider adapters.
 - `supabase/` — Supabase Auth/local test infrastructure. It is not the canonical

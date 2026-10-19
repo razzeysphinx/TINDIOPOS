@@ -1,5 +1,12 @@
 # TINDIO architecture
 
+> Historical implementation contract: the approved future provider and
+> application-boundary direction is now governed by
+> [ADR-0001](architecture/ADR-0001-neon-only-auth-and-backend-boundary.md) and
+> [the target architecture](architecture/TINDIO_TARGET_ARCHITECTURE.md).
+> Supabase Auth remains the active runtime until that controlled migration is
+> certified; this document is not evidence that the target cutover is complete.
+
 ## Scope
 
 This document is the architecture contract through Phase 7. Phase 1 implements identity, organization setup, stores, registers, employees, RBAC, and their database security boundaries. Phase 2 implements the catalogue and basic inventory model. Phase 3 implements the in-memory POS cart. Phase 4 implements checkout and financial records, Phase 5 adds receipts and refunds, Phase 6 adds accountable register shifts and cash control, and Phase 7 adds customer CRM and loyalty.

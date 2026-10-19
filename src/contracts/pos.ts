@@ -36,8 +36,9 @@ import type {
   Json,
 } from "@/lib/supabase/database.types";
 
-export const TINDIO_POS_API_VERSION =
-  "v2" as const;
+export {
+  TINDIO_POS_API_VERSION,
+} from "@tindio/contracts";
 
 export const posUuidSchema =
   z.uuid();

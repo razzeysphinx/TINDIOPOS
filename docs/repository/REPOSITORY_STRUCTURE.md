@@ -15,6 +15,9 @@ stable when external tooling discovers them by convention.
   authenticated `(app)` group; support routes are permission-gated in the
   layout/navigation rather than moved solely for aesthetics.
 - `apps/store-hub/` — deferred Store Hub transport retained for post-v1 work.
+- `packages/contracts/` — platform-neutral versioned contract package. Its
+  initial API-version export is consumed through the existing Web compatibility
+  facade while larger POS contracts are separated incrementally.
 
 ## Data and provider infrastructure
 

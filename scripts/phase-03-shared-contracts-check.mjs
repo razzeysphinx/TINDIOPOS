@@ -50,8 +50,12 @@ const [
 
 const packageJson = JSON.parse(packageText);
 
-test("current POS V2 has one client-safe canonical contract entrypoint", () => {
-  assert.match(contract, /TINDIO_POS_API_VERSION\s*=\s*["']v2["']/);
+test("current POS V2 has one client-safe canonical contract entrypoint", async () => {
+  assert.match(contract, /from ["']@tindio\/contracts["']/);
+  assert.match(
+    await source("packages/contracts/src/index.ts"),
+    /TINDIO_POS_API_VERSION\s*=\s*["']v2["']/,
+  );
   assert.match(contract, /posCatalogV2QuerySchema/);
   assert.match(contract, /posCustomerSearchQuerySchema/);
   assert.match(contract, /posModifierQuerySchema/);

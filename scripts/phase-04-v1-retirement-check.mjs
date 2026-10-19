@@ -39,7 +39,11 @@ test("the legacy POS V1 API tree is retired", async () => {
 
 test("the shared POS contract is V2", async () => {
   assert.equal(await exists("src/contracts/pos-v1.ts"), false);
-  assert.match(await source("src/contracts/pos.ts"), /TINDIO_POS_API_VERSION\s*=\s*["']v2["']/);
+  assert.match(await source("src/contracts/pos.ts"), /from ["']@tindio\/contracts["']/);
+  assert.match(
+    await source("packages/contracts/src/index.ts"),
+    /TINDIO_POS_API_VERSION\s*=\s*["']v2["']/,
+  );
 });
 
 test("obsolete V1 bootstrap infrastructure has no active source references", () => {

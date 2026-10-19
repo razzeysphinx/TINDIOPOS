@@ -1,5 +1,5 @@
 {
-  "name": "tindio-pos",
+  "name": "@tindio/web",
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.34.5",
@@ -10,10 +10,16 @@
   },
   "scripts": {
     "dev": "next dev",
+    "web:dev": "next dev",
+    "web:typecheck": "tsc --noEmit --incremental false",
+    "web:build": "next build",
+    "contracts:typecheck": "pnpm --dir packages/contracts typecheck",
+    "workspace:typecheck": "pnpm web:typecheck && pnpm contracts:typecheck && pnpm mobile:typecheck",
     "mobile:start": "pnpm --dir apps/mobile start",
     "mobile:android": "pnpm --dir apps/mobile android",
     "mobile:typecheck": "pnpm --dir apps/mobile typecheck",
     "test:repository-structure": "node --test scripts/repository-structure-check.mjs",
+    "test:architecture-foundation": "node --test scripts/architecture-foundation-check.mjs",
     "test:phase-06-native-foundation": "node --test scripts/phase-06-native-foundation-check.mjs",
     "test:phase-06-provider-neutral-device-runtime": "node --test scripts/phase-06-provider-neutral-device-runtime-check.mjs",
     "test:phase-06-device-enrollment": "node --test scripts/phase-06-device-enrollment-check.mjs",
@@ -242,6 +248,7 @@
     "apply:neon-inventory-count-runtime-repair": "node scripts/apply-neon-inventory-count-runtime-boundary-repair.mjs"
   },
   "dependencies": {
+    "@tindio/contracts": "workspace:*",
     "@base-ui/react": "^1.7.0",
     "@hookform/resolvers": "5.9.1",
     "@neon/config": "^1.3.1",

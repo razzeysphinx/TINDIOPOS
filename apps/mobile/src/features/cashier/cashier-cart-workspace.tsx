@@ -7,7 +7,7 @@ import type {
   PosDiscount,
   PosTaxRate,
 } from "@tindio/contracts";
-import { posItemKey } from "../../../../../src/features/pos/pos-types";
+import { posItemKey } from "@tindio/contracts/cart";
 
 import { TindioButton } from "../../ui/tindio-button";
 import { TindioFeedback } from "../../ui/tindio-feedback";

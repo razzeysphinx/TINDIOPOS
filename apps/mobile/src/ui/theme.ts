@@ -1,4 +1,4 @@
-import { tindioDesignTokens } from "../../../../src/contracts/ui/tindio-design-tokens";
+import { tindioDesignTokens } from "@tindio/contracts/ui";
 
 export const tindioTheme = {
   ...tindioDesignTokens,

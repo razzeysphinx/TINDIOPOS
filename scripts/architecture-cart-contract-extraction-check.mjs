@@ -50,8 +50,8 @@ test("Web cart facades preserve their existing import paths and key behavior", a
     assert.doesNotMatch(posFacade, new RegExp(`export type ${typeName}\\s*=`));
   }
   assert.match(posTypesFacade, /PosCartLine/);
-  assert.match(posTypesFacade, /function posItemKey/);
-  assert.match(posTypesFacade, /ticket:\$\{item\.ticketLineId\}/);
+  assert.match(posTypesFacade, /export \{ posItemKey \} from ["']@tindio\/contracts\/cart["']/);
+  assert.doesNotMatch(posTypesFacade, /function posItemKey/);
   assert.match(posTypesFacade, /from ["']@tindio\/contracts["']/);
 });
 

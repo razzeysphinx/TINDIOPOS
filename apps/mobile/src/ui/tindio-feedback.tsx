@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ActivityIndicator, StyleSheet, Text, View, type ViewProps } from "react-native";
 
-import type { TindioStatusTone } from "../../../../src/contracts/ui/tindio-design-tokens";
+import type { TindioStatusTone } from "@tindio/contracts/ui";
 import { tindioTheme } from "./theme";
 import { useTindioAccessibilityPreferences } from "./tindio-accessibility";
 

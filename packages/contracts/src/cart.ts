@@ -38,3 +38,16 @@ export type PosCartLine = PosCatalogItem & {
   itemNote?: string | null;
   modifiers?: PosModifierOption[];
 };
+
+export function posItemKey(
+  item: Pick<PosCatalogItem, "productId" | "variantId"> & {
+    modifierOptionIds?: string[];
+    manualPriceMinor?: number | null;
+    ticketLineId?: string;
+    itemNote?: string | null;
+  },
+) {
+  if (item.ticketLineId) return `ticket:${item.ticketLineId}`;
+
+  return `${item.productId}:${item.variantId ?? "simple"}:${item.manualPriceMinor ?? "catalog"}:${[...(item.modifierOptionIds ?? [])].sort().join(",")}:${item.itemNote ?? ""}`;
+}

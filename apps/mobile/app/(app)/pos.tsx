@@ -19,7 +19,7 @@ import type {
   PosModifierOption,
   PosOpenTicket,
 } from "@tindio/contracts";
-import { posItemKey } from "../../../../src/features/pos/pos-types";
+import { posItemKey } from "@tindio/contracts/cart";
 import {
   getUnresolvedOnlineCheckoutIntent,
   markOnlineCheckoutIntentAcknowledged,

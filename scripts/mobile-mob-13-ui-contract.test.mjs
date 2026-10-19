@@ -5,7 +5,10 @@ import test from "node:test";
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("shared contract is framework-neutral and complete", async () => {
-  const source = await read("src/contracts/ui/tindio-design-tokens.ts");
+  const [source, facade] = await Promise.all([
+    read("packages/contracts/src/ui.ts"),
+    read("src/contracts/ui/tindio-design-tokens.ts"),
+  ]);
   assert.doesNotMatch(source, /from ["'](?:react|react-native|expo|next|node:)/);
   for (const token of ["brand", "surface", "content", "border", "status", "typography", "space", "radius", "elevation", "icon", "target", "motion"]) {
     assert.match(source, new RegExp(`${token}:`));
@@ -14,6 +17,7 @@ test("shared contract is framework-neutral and complete", async () => {
     assert.match(source, new RegExp(`${status}:`));
   }
   assert.match(source, /brandApproval: "candidate"/);
+  assert.match(facade, /from ["']@tindio\/contracts\/ui["']/);
 });
 
 test("web variables adapt the shared semantic vocabulary", async () => {

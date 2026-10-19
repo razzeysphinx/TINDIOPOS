@@ -6,7 +6,7 @@ Status: **IN PROGRESS**
 |---|---|---|---|
 | A | Audit, target architecture, ADR, dependency map, baseline | **IMPLEMENTED** | Clean/synchronized Git; evidence recorded; no production mutation |
 | B1 | Add `packages/*`, contracts foundation, independent commands | **IMPLEMENTED** | Typecheck/build/compatibility checks pass |
-| B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IN PROGRESS: MOBILE POS CONTRACT SURFACE COMPLETE; 5 HELPER/TOKEN EDGES REMAIN** | Backend/Web/Mobile contract tests; unchanged wire format |
+| B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **PLANNED** | Independent health/build/test plus dual-route compatibility |
 | D | Progressive Backend extraction, mutations last | **PLANNED** | Financial/idempotency/offline replay equivalence |
@@ -17,17 +17,19 @@ Status: **IN PROGRESS**
 | I | Remove active Supabase runtime dependencies | **PLANNED** | Zero supported-client dependency; separate decommission approval |
 | J | Performance measurement, cleanup, independent CI/CD | **PLANNED** | Evidence-based optimization and final certification |
 
-## Next smallest safe slice: B2 continuation
+## Next smallest safe slice: C foundation
 
-- Remove the final five Mobile-to-Web helper/token edges by extracting the
-  provider-neutral `posItemKey` helper and shared TINDIO design tokens.
-- Preserve `src/contracts/pos.ts` re-exports and the existing JSON wire shape.
-- Replace only matching Mobile relative imports and recount the dependency edge.
-- Run contract, Web build, Mobile typecheck/export, sync, replay, and custody
-  regression gates.
+- Create the independent `apps/backend/` foundation with its own health,
+  typecheck, build, and test commands.
+- Extract one read-only POS v2 endpoint behind a dual-route compatibility
+  adapter, recommended: the already package-typed bootstrap core response.
+- Keep the existing Next.js route active and prove identical authentication,
+  authorization, status, headers, and JSON response behavior.
+- Do not move checkout, sync-push, custody, or other mutation endpoints in the
+  foundation slice.
 
-Do not create the Backend app in B2; contract independence is the prerequisite
-that keeps the Backend from importing the Web application.
+Do not change a deployed API origin or route clients to the new Backend without
+separate compatibility evidence and approval.
 
 ## Mandatory stop points
 

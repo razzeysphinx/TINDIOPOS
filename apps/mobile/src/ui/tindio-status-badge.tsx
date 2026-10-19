@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View, type ViewProps } from "react-native";
 
-import type { TindioStatusTone } from "../../../../src/contracts/ui/tindio-design-tokens";
+import type { TindioStatusTone } from "@tindio/contracts/ui";
 import { tindioTheme } from "./theme";
 
 type TindioStatusBadgeProps = ViewProps & {

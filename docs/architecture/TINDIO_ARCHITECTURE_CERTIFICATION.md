@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE B2 MOBILE ACTION CONTRACTS CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE B2 COMPLETE; MOBILE-TO-WEB SOURCE DECOUPLING CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0, Slice B1, and the Slice B2 platform-neutral Mobile POS contract surface
+Certified scope: Phase 0, Slice B1, and completed Slice B2 platform-neutral Mobile POS contracts/helpers/tokens
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -86,6 +86,15 @@ Database: **CANONICAL NEON UNCHANGED**
 - The Mobile API adapter, local stock estimator, and stock cache now use the
   package. Mobile has zero imports from the root POS facade or Web checkout
   schema/type modules; five unrelated helper/design-token edges remain.
+- The deterministic `posItemKey` helper and shared TINDIO design-token contract
+  moved into the package while their existing Web paths remain compatibility
+  facades.
+- Focused `@tindio/contracts/cart` and `@tindio/contracts/ui` runtime exports
+  preserve analyzable bundles; Android remains at 1,473 modules and about 4.2 MB
+  instead of pulling the package barrel into the UI bundle.
+- All five final helper/token consumers now use package subpaths. Mobile has no
+  remaining relative imports into the root Web source tree, completing Slice
+  B2 without changing component logic or visual behavior.
 
 ## Results
 
@@ -110,12 +119,14 @@ Database: **CANONICAL NEON UNCHANGED**
 | POS bootstrap/business compatibility | **PASS (4/4)** |
 | Checkout/sync-push compatibility | **PASS (4/4)** |
 | Mobile action-contract compatibility | **PASS (4/4)** |
+| Helper/design-token compatibility | **PASS (4/4)** |
+| Mobile UI contract | **PASS (4/4)** |
 | Device sequence and delta reconciliation | **PASS (2/2)** |
 | Catalogue/cache/local-first/resnapshot behavior | **PASS (11/11)** |
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **186/187 automated commands pass** |
+| Static catalogue | **187/188 automated commands pass** |
 | Local Supabase/Docker source connectivity | **BLOCKED** — local source unavailable |
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -133,8 +144,8 @@ provider project changed.
 
 ## Next gate
 
-Continue Slice B2 with the next coherent platform-neutral group, recommended:
-the remaining `posItemKey` and shared UI design-token dependencies used by five
-Mobile files. Removing those helper/token edges will complete the planned
-Mobile-to-Web source decoupling before Backend creation. Neon Auth proof remains
-a later slice.
+Begin Slice C with an independently buildable `apps/backend/` foundation and
+one read-only POS v2 endpoint behind a dual-route compatibility adapter,
+recommended: bootstrap core. Keep the current Next.js route active and do not
+move financial mutations or change deployed client origins in the foundation
+slice. Neon Auth proof remains a later slice.

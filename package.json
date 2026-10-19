@@ -31,6 +31,7 @@
     "test:architecture-bootstrap-contracts": "node --test scripts/architecture-bootstrap-contract-extraction-check.mjs",
     "test:architecture-checkout-sync-contracts": "node --test scripts/architecture-checkout-sync-contract-extraction-check.mjs",
     "test:architecture-action-contracts": "node --test scripts/architecture-action-contract-extraction-check.mjs",
+    "test:architecture-helper-tokens": "node --test scripts/architecture-helper-token-extraction-check.mjs",
     "test:phase-06-native-foundation": "node --test scripts/phase-06-native-foundation-check.mjs",
     "test:phase-06-provider-neutral-device-runtime": "node --test scripts/phase-06-provider-neutral-device-runtime-check.mjs",
     "test:phase-06-device-enrollment": "node --test scripts/phase-06-device-enrollment-check.mjs",

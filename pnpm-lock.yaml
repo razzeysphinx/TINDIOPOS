@@ -103,7 +103,11 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  apps/backend: {}
+  apps/backend:
+    dependencies:
+      '@supabase/supabase-js':
+        specifier: 2.112.3
+        version: 2.112.3
 
   apps/mobile:
     dependencies:

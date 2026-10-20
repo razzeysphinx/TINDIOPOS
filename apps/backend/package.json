@@ -3,9 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.112.3"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "test": "pnpm run build && node --test test/health.test.mjs test/bootstrap-proxy.test.mjs",
+    "test": "pnpm run build && node --test test/*.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }
 }

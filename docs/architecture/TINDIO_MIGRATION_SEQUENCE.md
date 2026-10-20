@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **PLANNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — FIRST READ OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -30,14 +30,25 @@ Status: **IN PROGRESS**
 - Do not move checkout, sync-push, custody, or other mutation endpoints in the
   foundation slice. **IMPLEMENTED.**
 
-## Next smallest safe slice: D read ownership
+## Completed Slice D1: bootstrap read ownership
 
-- Move bootstrap authentication, authorization, and core loading behind a
-  Backend-owned server boundary while the compatibility proxy remains the
-  rollback path.
-- Keep all mutations in Next.js and keep both clients on their existing origin.
-- Prove the Backend-owned read produces the same 200/401/403/503 contract before
-  selecting another read-only POS domain.
+- Bootstrap authentication, organization scoping, POS permission checks, and
+  Neon Data API core loading are Backend-owned. **IMPLEMENTED.**
+- `TINDIO_BOOTSTRAP_READ_MODE=proxy` retains the allowlisted Web compatibility
+  adapter as an explicit rollback. **IMPLEMENTED.**
+- The owned path preserves the 200/401/403/503 response envelope, retry rule,
+  cache control, and request ID without exposing identity or token data.
+  **IMPLEMENTED.**
+- All mutations remain in Next.js and both clients retain their current origin.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D2 another read-only domain
+
+- Select one non-financial POS reference read that already has a stable shared
+  contract and move its server ownership behind the same Backend boundary.
+- Keep checkout, sync-push, shift custody, and every other mutation in Next.js.
+- Preserve the Web route as rollback and prove supported-client compatibility
+  before any deployed origin change.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE C COMPLETE; FIRST BACKEND READ ADAPTER CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE D1 COMPLETE; FIRST BACKEND-OWNED READ CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0, Slices B1–B2, and completed Slice C Backend foundation/bootstrap compatibility route
+Certified scope: Phase 0, Slices B1-B2, Slice C, and Slice D1 Backend-owned bootstrap read with proxy rollback
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -99,8 +99,8 @@ Database: **CANONICAL NEON UNCHANGED**
   build, and test commands.
 - `GET /api/health` uses a stateless Web `Response`, the default Node.js
   runtime, a stable JSON payload, and `cache-control: no-store`.
-- The Backend foundation has no framework, provider client, database driver,
-  environment-secret access, Web-source import, or business endpoint.
+- The health foundation remains provider-neutral and isolated from Web source
+  and business endpoints.
 - Root workspace typechecking now certifies Web, contracts, Backend, and Mobile
   as separate boundaries.
 - Backend `GET /api/pos/v2/bootstrap` now provides the first read-only dual-route
@@ -113,6 +113,18 @@ Database: **CANONICAL NEON UNCHANGED**
   self-referential upstream origins fail closed with a bounded 503 response.
 - Web and Mobile continue using `/api/pos/v2/bootstrap` on their existing API
   origin; no deployed routing or environment was changed.
+- Backend bootstrap now verifies the explicit bearer with Supabase Auth
+  `getClaims`, validates organization scope, enforces both POS permissions, and
+  loads `get_pos_bootstrap_core_v2` through Neon's external-JWT Data API.
+- The provider adapter rewrites only `/rest/v1` requests to Neon and removes the
+  Supabase publishable API key while preserving the caller bearer for RLS.
+- Backend defaults to owned mode; `TINDIO_BOOTSTRAP_READ_MODE=proxy` retains the
+  allowlisted Web compatibility path as rollback.
+- Backend requires Node.js 22 or newer, matching current Supabase JS support and
+  the repository's Node 22 certification workflow.
+- The owned path preserves the existing 200/401/403/503 envelopes, bounded
+  failures, no-store policy, identity-mapping retry, and request IDs without
+  returning token, subject, email, or provider error detail.
 
 ## Results
 
@@ -121,9 +133,9 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend health/bootstrap behavior | **PASS (6/6)** |
+| Backend health/bootstrap behavior | **PASS (23/23)** |
 | Backend foundation boundary | **PASS (3/3)** |
-| Backend bootstrap compatibility boundary | **PASS (4/4)** |
+| Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -152,9 +164,8 @@ Database: **CANONICAL NEON UNCHANGED**
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
 
-The failed environment gate existed before these architecture slices. The
-bootstrap compatibility slice added one passing automated command and
-introduced no new failure.
+The failed environment gate existed before these architecture slices. Slice D1
+introduced no new certification failure.
 
 ## Safety statement
 
@@ -167,8 +178,8 @@ is an inert example containing no credential.
 
 ## Next gate
 
-Begin Slice D by moving bootstrap authentication, authorization, and core loading
-behind a Backend-owned server boundary while retaining the proxy as a rollback
-path. Prove the same 200/401/403/503 behavior before another read extraction.
-Do not move financial mutations or change deployed client origins. Neon Auth
-proof remains a later slice.
+Begin Slice D2 by selecting one stable, non-financial POS reference read and
+moving its server ownership behind the same Backend boundary. Retain the Web
+route as rollback and prove supported-client compatibility. Do not move
+financial mutations or change deployed client origins. Neon Auth proof remains
+a later slice.

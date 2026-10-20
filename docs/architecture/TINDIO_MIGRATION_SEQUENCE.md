@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — SIX READS OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — SEVEN READS OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -94,13 +94,26 @@ Status: **IN PROGRESS**
 - Receipt detail, reprint/delivery, refunds, checkout, and every mutation remain
   in Next.js. **IMPLEMENTED.**
 
-## Next smallest safe slice: D7 POS receipt-detail read ownership
+## Completed Slice D7: POS receipt-detail read ownership
 
 - Move only `GET /api/pos/v2/receipts/[receiptId]` behind the Backend boundary
   while preserving UUID validation, authorization, 404 behavior, and the full
-  immutable receipt snapshot.
+  immutable receipt snapshot. **IMPLEMENTED.**
 - Retain the Web detail route as rollback and keep delivery, refunds, checkout,
-  and all other mutations in Next.js.
+  and all other mutations in Next.js. **IMPLEMENTED.**
+- `TINDIO_RECEIPT_DETAIL_READ_MODE=proxy` preserves the exact dynamic path and
+  query while rejecting nested delivery/refund mutation paths. **IMPLEMENTED.**
+- Every receipt, sale, item, payment, and completed-refund snapshot field is
+  strictly validated before the existing camelCase response is returned.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D8 POS attendance-employee read ownership
+
+- Move only `GET /api/pos/v2/attendance/employees` behind the Backend boundary
+  while preserving the time-clock feature gate, `attendance.use` permission,
+  assigned-store validation, employee projection, and current failure bodies.
+- Retain the Web route as rollback and keep clock-in, clock-out, shift custody,
+  checkout, sync, and every other mutation in Next.js.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

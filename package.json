@@ -42,6 +42,7 @@
     "test:architecture-backend-modifiers": "pnpm backend:test && node --test scripts/architecture-backend-modifiers-ownership-check.mjs",
     "test:architecture-backend-customers": "pnpm backend:test && node --test scripts/architecture-backend-customers-ownership-check.mjs",
     "test:architecture-backend-receipts": "pnpm backend:test && node --test scripts/architecture-backend-receipts-ownership-check.mjs",
+    "test:architecture-backend-receipt-detail": "pnpm backend:test && node --test scripts/architecture-backend-receipt-detail-ownership-check.mjs",
     "test:phase-06-native-foundation": "node --test scripts/phase-06-native-foundation-check.mjs",
     "test:phase-06-provider-neutral-device-runtime": "node --test scripts/phase-06-provider-neutral-device-runtime-check.mjs",
     "test:phase-06-device-enrollment": "node --test scripts/phase-06-device-enrollment-check.mjs",

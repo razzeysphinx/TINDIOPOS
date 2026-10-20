@@ -108,6 +108,9 @@ importers:
       '@supabase/supabase-js':
         specifier: 2.112.3
         version: 2.112.3
+      '@tindio/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
 
   apps/mobile:
     dependencies:

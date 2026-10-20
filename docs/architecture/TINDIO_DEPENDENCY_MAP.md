@@ -38,7 +38,7 @@ Offline Mobile
 | `src/features/**` | typed Supabase-shaped clients and generated DB types | Business logic is reusable but database access is not yet backend-owned |
 | `src/contracts/pos.ts` | Platform-neutral DTO/value/result domains delegate to `@tindio/contracts`; Web validation schemas and application-specific aliases remain compatibility exports | No Mobile consumer depends on this root facade; keep it until Web imports can migrate safely |
 | `apps/mobile/**` | Mobile-local source plus focused `@tindio/contracts`, `/cart`, and `/ui` package imports | No relative imports cross into the root Web source tree |
-| `apps/backend/**` | Backend-local health plus owned bootstrap auth/authorization/Neon read and allowlisted proxy rollback | Independent build/test boundary and first read ownership exist; no mutation or client origin has moved |
+| `apps/backend/**` | Backend-local health plus owned bootstrap/reference auth, validation, Neon reads, and allowlisted proxy rollbacks | Independent build/test boundary and two read domains exist; no mutation or client origin has moved |
 | `apps/mobile/src/features/session` | Supabase session type/client, offline readiness/custody | Auth migration must preserve local financial state |
 | `database/provider/neon` | Neon Data API `auth.user_id()` / `auth.jwt()` | Provider adapter seam exists; token semantics still require proof |
 | `.github/workflows` | local Supabase, full certification, migration/restore scripts | CI cannot drop Supabase before Auth replacement tests exist |
@@ -78,5 +78,7 @@ to Web UI modules.
 4. Extract one read-only POS v2 endpoint behind a Backend compatibility adapter. **DONE: bootstrap.**
 5. Move that endpoint's authentication, authorization, and Neon loading into
    Backend while retaining the adapter as rollback. **DONE: bootstrap.**
-6. Extract mutation endpoints only after idempotency, custody, and financial
+6. Extract a second stable read using a focused shared contract and the same
+   provider boundary. **DONE: POS reference.**
+7. Extract mutation endpoints only after idempotency, custody, and financial
   replay tests pass against both routes.

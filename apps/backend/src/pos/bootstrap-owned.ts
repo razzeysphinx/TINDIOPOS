@@ -161,12 +161,13 @@ export async function handleOwnedPosBootstrap(
     return failure(401, "AUTH_INVALID", requestId);
   }
 
-  const requestedOrganization = request.headers.get(
+  const requestedHeader = request.headers.get(
     POS_V2_ORGANIZATION_HEADER,
   );
+  const requestedOrganization = requestedHeader || null;
 
   if (
-    requestedOrganization !== null
+    requestedOrganization
     && !UUID_PATTERN.test(requestedOrganization)
   ) {
     return failure(403, "ORGANIZATION_FORBIDDEN", requestId);

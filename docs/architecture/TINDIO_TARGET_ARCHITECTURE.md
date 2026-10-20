@@ -29,7 +29,7 @@ deployment boundaries.
 |---|---|---|
 | Web | `apps/web/` eventually; Back Office, Web POS, and public routes remain one Next.js app | **DEFERRED MOVE**; root `src/` remains active to avoid premature path/deployment churn |
 | Mobile | `apps/mobile/` Expo/React Native app, package `com.tindio.pos` | **ALREADY IMPLEMENTED** |
-| Backend | `apps/backend/` independently built API owning auth, authorization, orchestration, and DB access | **FOUNDATION + FIRST READ OWNERSHIP IMPLEMENTED**; bootstrap auth, authorization, and Neon core loading are Backend-owned with an explicit Web proxy rollback |
+| Backend | `apps/backend/` independently built API owning auth, authorization, orchestration, and DB access | **FOUNDATION + TWO READ DOMAINS IMPLEMENTED**; bootstrap and POS reference are Backend-owned with explicit Web proxy rollbacks |
 | Contracts | `packages/contracts/` platform-neutral versioned API contracts | **FOUNDATION IMPLEMENTED**; full POS contract separation remains planned |
 | Shared | `packages/shared/` only for proven platform-neutral reuse | **DEFERRED**; no empty package created |
 | Database | `database/` immutable baseline, ordered migrations, provider adapters | **ALREADY IMPLEMENTED** |

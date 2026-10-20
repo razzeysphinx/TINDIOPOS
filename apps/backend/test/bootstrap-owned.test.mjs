@@ -145,6 +145,31 @@ test("owned bootstrap validates organization scope before database access", asyn
   await assertFailure(response, 403, "ORGANIZATION_FORBIDDEN");
 });
 
+test("owned bootstrap treats an empty organization header as absent", async () => {
+  let observedOrganization = "not-called";
+  const response = await handleOwnedPosBootstrap(
+    request({
+      authorization: `Bearer ${TOKEN}`,
+      "x-tindio-organization-id": "",
+    }),
+    dependencies({
+      loadCore: async (_token, organizationId) => {
+        observedOrganization = organizationId;
+        return {
+          data: {
+            ok: true,
+            permissions: ["pos.access", "sales.create"],
+          },
+          error: null,
+        };
+      },
+    }),
+  );
+
+  assert.equal(observedOrganization, null);
+  assert.equal(response.status, 200);
+});
+
 test("owned bootstrap retries only an identity-unmapped core result", async () => {
   const calls = [];
   const response = await handleOwnedPosBootstrap(

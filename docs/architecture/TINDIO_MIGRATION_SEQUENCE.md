@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — FIRST READ OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — TWO READS OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -42,13 +42,26 @@ Status: **IN PROGRESS**
 - All mutations remain in Next.js and both clients retain their current origin.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D2 another read-only domain
+## Completed Slice D2: POS reference read ownership
 
-- Select one non-financial POS reference read that already has a stable shared
-  contract and move its server ownership behind the same Backend boundary.
-- Keep checkout, sync-push, shift custody, and every other mutation in Next.js.
-- Preserve the Web route as rollback and prove supported-client compatibility
-  before any deployed origin change.
+- POS reference authentication, organization scoping, bundle validation, and
+  Neon Data API loading are Backend-owned. **IMPLEMENTED.**
+- `TINDIO_REFERENCE_READ_MODE=proxy` retains the existing Web reference route
+  as an allowlisted rollback. **IMPLEMENTED.**
+- The 200/401/403/503 body, request ID, no-store policy, reference version, and
+  ETag contracts remain unchanged. **IMPLEMENTED.**
+- A focused `@tindio/contracts/pos-data` export supplies the cross-runtime type
+  without importing the Bundler-oriented package barrel. **IMPLEMENTED.**
+- All mutations remain in Next.js and both clients retain their current origin.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D3 POS catalogue read ownership
+
+- Move the bounded, paginated catalogue read behind the Backend boundary while
+  preserving its search/favorites/recent modes and shared response contract.
+- Retain the Web route as rollback and prove exact query validation, pagination,
+  authorization, and supported-client compatibility.
+- Keep checkout, sync-push, shift custody, and every mutation in Next.js.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

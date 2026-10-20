@@ -12,6 +12,10 @@
       "types": "./src/cart.ts",
       "default": "./src/cart.ts"
     },
+    "./pos-data": {
+      "types": "./src/pos-data.ts",
+      "default": "./src/pos-data.ts"
+    },
     "./ui": {
       "types": "./src/ui.ts",
       "default": "./src/ui.ts"

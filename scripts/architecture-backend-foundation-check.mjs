@@ -18,10 +18,15 @@ test("backend is an independently operated workspace", async () => {
   assert.equal(backendManifest.engines.node, ">=22");
   assert.deepEqual(Object.keys(backendManifest.dependencies ?? {}), [
     "@supabase/supabase-js",
+    "@tindio/contracts",
   ]);
   assert.equal(
     backendManifest.dependencies["@supabase/supabase-js"],
     "2.112.3",
+  );
+  assert.equal(
+    backendManifest.dependencies["@tindio/contracts"],
+    "workspace:*",
   );
   assert.equal(backendManifest.scripts.typecheck, "tsc -p tsconfig.json --noEmit");
   assert.equal(backendManifest.scripts.build, "tsc -p tsconfig.build.json");

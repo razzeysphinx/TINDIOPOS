@@ -5,11 +5,12 @@ import test from "node:test";
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("Backend owns bootstrap authentication and Neon core loading", async () => {
-  const [route, service, owned, runtime, environmentExample] = await Promise.all([
+  const [route, service, owned, runtime, posReadRuntime, environmentExample] = await Promise.all([
     read("apps/backend/api/pos/v2/bootstrap.ts"),
     read("apps/backend/src/pos/bootstrap-service.ts"),
     read("apps/backend/src/pos/bootstrap-owned.ts"),
     read("apps/backend/src/pos/bootstrap-runtime.ts"),
+    read("apps/backend/src/pos/pos-read-runtime.ts"),
     read("apps/backend/.env.example"),
   ]);
 
@@ -19,9 +20,9 @@ test("Backend owns bootstrap authentication and Neon core loading", async () => 
   assert.match(route, /TINDIO_BOOTSTRAP_READ_MODE/);
   assert.match(service, /options\.mode \?\? ["']owned["']/);
   assert.match(owned, /Bearer \(\[\^\\s\]\+\)/);
-  assert.match(runtime, /auth\.getClaims\(token\)/);
+  assert.match(posReadRuntime, /auth\.getClaims\(token\)/);
   assert.match(runtime, /get_pos_bootstrap_core_v2/);
-  assert.match(runtime, /createNeonDataApiFetch/);
+  assert.match(posReadRuntime, /createNeonDataApiFetch/);
   assert.match(environmentExample, /^TINDIO_BOOTSTRAP_READ_MODE=owned$/m);
   assert.match(environmentExample, /^SUPABASE_URL=/m);
   assert.match(environmentExample, /^SUPABASE_PUBLISHABLE_KEY=/m);
@@ -88,11 +89,12 @@ test("compatibility proxy remains an explicit allowlisted rollback", async () =>
 
 test("provider boundary keeps Auth and database credentials separated", async () => {
   const [runtime, adapter, allBackendSource] = await Promise.all([
-    read("apps/backend/src/pos/bootstrap-runtime.ts"),
+    read("apps/backend/src/pos/pos-read-runtime.ts"),
     read("apps/backend/src/database/neon-data-api-fetch.ts"),
     Promise.all([
       "apps/backend/api/pos/v2/bootstrap.ts",
       "apps/backend/src/pos/bootstrap-runtime.ts",
+      "apps/backend/src/pos/pos-read-runtime.ts",
       "apps/backend/src/pos/bootstrap-owned.ts",
       "apps/backend/src/pos/bootstrap-service.ts",
       "apps/backend/src/pos/bootstrap-proxy.ts",

@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D1 COMPLETE; FIRST BACKEND-OWNED READ CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
+Status: **SLICE D2 COMPLETE; TWO BACKEND-OWNED READS CERTIFIED; ENVIRONMENT BLOCKER RECORDED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, and Slice D1 Backend-owned bootstrap read with proxy rollback
+Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D2 Backend-owned bootstrap/reference reads with proxy rollback
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -125,6 +125,19 @@ Database: **CANONICAL NEON UNCHANGED**
 - The owned path preserves the existing 200/401/403/503 envelopes, bounded
   failures, no-store policy, identity-mapping retry, and request IDs without
   returning token, subject, email, or provider error detail.
+- Backend `GET /api/pos/v2/reference` now owns bearer verification,
+  organization scoping, strict reference-bundle validation, and
+  `get_pos_reference_bundle_v2` loading through the shared Neon Data API
+  runtime boundary.
+- The reference rollback proxy preserves only the required request fields and
+  response metadata, including `ETag` and `x-tindio-reference-version`, while
+  dropping cookies and unrelated headers.
+- A focused `@tindio/contracts/pos-data` export gives NodeNext Backend code the
+  existing response type without importing the Bundler-oriented package barrel.
+- Both owned reads now preserve the established empty-organization-header
+  behavior by treating an empty value as no explicit organization selection.
+- Web and Mobile continue calling their current `/api/pos/v2/reference` route;
+  no deployed routing, mutation ownership, or environment was changed.
 
 ## Results
 
@@ -133,9 +146,10 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend health/bootstrap behavior | **PASS (23/23)** |
+| Backend health/read behavior | **PASS (42/42)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
+| Backend reference ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -159,12 +173,12 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **189/190 automated commands pass** |
+| Static catalogue | **190/191 automated commands pass** |
 | Local Supabase/Docker source connectivity | **BLOCKED** — local source unavailable |
 | Full local DB/pgTAP | **NOT_RUN** due to the same environment blocker |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
 
-The failed environment gate existed before these architecture slices. Slice D1
+The failed environment gate existed before these architecture slices. Slice D2
 introduced no new certification failure.
 
 ## Safety statement
@@ -178,8 +192,7 @@ is an inert example containing no credential.
 
 ## Next gate
 
-Begin Slice D2 by selecting one stable, non-financial POS reference read and
-moving its server ownership behind the same Backend boundary. Retain the Web
-route as rollback and prove supported-client compatibility. Do not move
-financial mutations or change deployed client origins. Neon Auth proof remains
-a later slice.
+Begin Slice D3 by moving the bounded POS catalogue read behind the same Backend
+boundary while preserving search/favorites/recent modes, pagination, query
+validation, and the Web rollback route. Do not move financial mutations or
+change deployed client origins. Neon Auth proof remains a later slice.

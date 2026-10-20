@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — EIGHT READS OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — NINE READS OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -120,13 +120,30 @@ Status: **IN PROGRESS**
 - Null data remains an empty success, while loader/provider and malformed-row
   failures preserve the existing HTTP 200 failure envelope. **IMPLEMENTED.**
 
-## Next smallest safe slice: D9 POS live-state read ownership
+## Completed Slice D9: POS live-state read ownership
 
 - Move only `GET /api/pos/v2/live` behind the Backend boundary while preserving
   required organization scope, optional store/register headers, identity retry,
   strict aggregate validation, request IDs, and the exact V2 live envelope.
+  **IMPLEMENTED.**
 - Retain the Web route as rollback and keep checkout, customer-display writes,
   ticket operations, attendance mutations, sync, and every mutation in Next.js.
+  **IMPLEMENTED.**
+- `TINDIO_LIVE_READ_MODE=proxy` preserves the complete query string and only
+  forwards the established organization, optional store, and optional register
+  scope headers. **IMPLEMENTED.**
+- Invalid aggregate envelopes fail closed while the established tolerant
+  transfer, open-ticket, cart-line, modifier, customer, and assignee row mapping
+  remains unchanged. **IMPLEMENTED.**
+
+## Next smallest safe slice: D10 non-financial mutation compatibility harness
+
+- Inventory and freeze the exact customer-display update contract as the
+  lowest-risk mutation candidate, including authorization, open-shift denial,
+  status/body/header behavior, and rollback requirements.
+- Add dual-route compatibility tests before moving any mutation ownership.
+- Do not move checkout, refunds, transfer receipt, ticket custody, attendance,
+  sync, or any financial/offline-replayed mutation in this slice.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

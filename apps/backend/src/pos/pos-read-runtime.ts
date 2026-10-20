@@ -21,7 +21,8 @@ export type PosReadRpcName =
   | "search_pos_customers"
   | "get_pos_receipt_history"
   | "get_pos_receipt_detail"
-  | "get_attendance_employees";
+  | "get_attendance_employees"
+  | "get_pos_live_state_v2";
 
 export type PosReadRpcArguments = Record<
   string,

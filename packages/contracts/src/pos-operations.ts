@@ -1,5 +1,5 @@
-import type { PosCartLine } from "./cart";
-import type { PosCustomer } from "./pos-data";
+import type { PosCartLine } from "./cart.js";
+import type { PosCustomer } from "./pos-data.js";
 
 export type PosStore = {
   id: string;

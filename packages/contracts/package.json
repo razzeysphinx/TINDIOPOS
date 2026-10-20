@@ -20,6 +20,10 @@
       "types": "./src/pos-data.ts",
       "default": "./src/pos-data.ts"
     },
+    "./pos-runtime": {
+      "types": "./src/pos-runtime.ts",
+      "default": "./src/pos-runtime.ts"
+    },
     "./receipts": {
       "types": "./src/receipts.ts",
       "default": "./src/receipts.ts"

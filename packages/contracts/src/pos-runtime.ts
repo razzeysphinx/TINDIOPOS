@@ -1,6 +1,6 @@
-import type { TimeClockEntry } from "./attendance";
-import type { BusinessType } from "./business";
-import type { PosCustomerDisplaySession } from "./customer-display";
+import type { TimeClockEntry } from "./attendance.js";
+import type { BusinessType } from "./business.js";
+import type { PosCustomerDisplaySession } from "./customer-display.js";
 import type {
   PosCatalogItem,
   PosCategory,
@@ -10,15 +10,15 @@ import type {
   PosPaymentMethod,
   PosTaxRate,
   PosTicketTemplate,
-} from "./pos-data";
+} from "./pos-data.js";
 import type {
   PosActiveShift,
   PosOpenTicket,
   PosRegister,
   PosStore,
   PosTicketAssignee,
-} from "./pos-operations";
-import type { PosIncomingTransfer } from "./transfers";
+} from "./pos-operations.js";
+import type { PosIncomingTransfer } from "./transfers.js";
 
 export type PosBootstrapV2CoreResponse = {
   ok: true;

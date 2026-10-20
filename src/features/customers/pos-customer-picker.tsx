@@ -14,10 +14,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { createCustomerAction } from "@/features/customers/actions";
+import { POS_CUSTOMER_CREATION_DATABASE_MESSAGE } from "@tindio/contracts/customer-creation";
 import { createCustomerSchema } from "@/features/customers/customer-schema";
 import type { PosCustomer } from "@/features/pos/pos-types";
-import { fetchPosV2Command } from "@/features/pos/pos-v2-browser-api";
+import { createPosV2Customer, fetchPosV2Command } from "@/features/pos/pos-v2-browser-api";
 
 type CustomerSearchResponse =
   | { customers: PosCustomer[] }
@@ -217,17 +217,19 @@ const emptyCustomerDraft: PosCustomerCreateDraft = {
 };
 
 /**
- * A compact POS entry point for the existing customer creation action. It
- * intentionally uses the same schema and server authorization as Back Office.
+ * A compact POS entry point for the shared customer-creation HTTP command. It
+ * intentionally uses the same schema and authorization as Back Office.
  */
 export function PosCustomerCreateDialog({
   onCreated,
   onOpenChange,
   open,
+  organizationId,
 }: {
   onCreated: (customer: PosCustomer) => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  organizationId: string;
 }) {
   const [draft, setDraft] = useState<PosCustomerCreateDraft>(emptyCustomerDraft);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof PosCustomerCreateDraft, string>>>({});
@@ -269,14 +271,17 @@ export function PosCustomerCreateDialog({
 
     setMessage(null);
     startTransition(async () => {
-      const result = await createCustomerAction(parsed.data);
-      if (!result.ok || !result.data) {
-        setMessage(result.message);
-        return;
+      try {
+        const result = await createPosV2Customer(organizationId, parsed.data);
+        if (!result.ok) {
+          setMessage(result.message);
+          return;
+        }
+        onCreated(result.data);
+        close();
+      } catch {
+        setMessage(POS_CUSTOMER_CREATION_DATABASE_MESSAGE);
       }
-
-      onCreated(result.data);
-      close();
     });
   };
 

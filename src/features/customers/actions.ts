@@ -3,15 +3,9 @@
 import { revalidatePath } from "next/cache";
 
 import {
-  POS_CUSTOMER_CREATION_PERMISSION,
-  POS_CUSTOMER_CREATION_PERMISSION_MESSAGE,
-  type PosCustomerCreationResult,
-} from "@tindio/contracts/customer-creation";
-import {
   adjustCustomerLoyaltyPoints,
   addLoyaltyCardStamp,
   claimLoyaltyCardReward,
-  createCustomer,
   createCustomerSegment,
   importCustomersCsv,
   issueLoyaltyCard,
@@ -24,21 +18,6 @@ import {
 } from "@/features/customers/service";
 import type { CustomerActionResult, LoyaltyCardCredential } from "@/features/customers/customer-types";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
-
-export async function createCustomerAction(input: unknown): Promise<PosCustomerCreationResult> {
-  const context = await requireBusinessContext();
-  if (!hasPermission(context, POS_CUSTOMER_CREATION_PERMISSION)) {
-    return { ok: false, message: POS_CUSTOMER_CREATION_PERMISSION_MESSAGE };
-  }
-
-  const result = await createCustomer({ context, input });
-  if (result.ok) {
-    revalidatePath("/back-office/customers");
-    revalidatePath("/pos");
-  }
-
-  return result;
-}
 
 export async function importCustomersCsvAction(input: unknown): Promise<CustomerActionResult<{ importedCount: number }>> {
   const context = await requireBusinessContext();

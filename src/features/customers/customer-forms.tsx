@@ -20,10 +20,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { POS_CUSTOMER_CREATION_DATABASE_MESSAGE } from "@tindio/contracts/customer-creation";
 import {
   adjustCustomerLoyaltyPointsAction,
   createCustomerSegmentAction,
-  createCustomerAction,
   updateCustomerProfileAction,
   updateCustomerStatusAction,
   updateCustomerSegmentAction,
@@ -43,10 +43,11 @@ import {
   type UpdateLoyaltyProgramValues,
   updateCustomerSegmentSchema,
 } from "@/features/customers/customer-schema";
+import { createPosV2Customer } from "@/features/pos/pos-v2-browser-api";
 
 type ActionResult = { ok: true; message: string } | { ok: false; message: string };
 
-export function CreateCustomerForm() {
+export function CreateCustomerForm({ organizationId }: { organizationId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
@@ -67,12 +68,16 @@ export function CreateCustomerForm() {
   const submit = form.handleSubmit((values) => {
     setResult(null);
     startTransition(async () => {
-      const nextResult = await createCustomerAction(values);
-      setResult(nextResult);
-      if (nextResult.ok) {
-        form.reset();
-        setOpen(false);
-        router.refresh();
+      try {
+        const nextResult = await createPosV2Customer(organizationId, values);
+        setResult(nextResult);
+        if (nextResult.ok) {
+          form.reset();
+          setOpen(false);
+          router.refresh();
+        }
+      } catch {
+        setResult({ ok: false, message: POS_CUSTOMER_CREATION_DATABASE_MESSAGE });
       }
     });
   });

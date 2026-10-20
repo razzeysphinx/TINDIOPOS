@@ -13,6 +13,11 @@ import type {
   PosFavoriteTileUpdate,
 } from "@tindio/contracts/favorite-tile";
 import {
+  POS_CUSTOMER_CREATION_PATH,
+  type CreateCustomerValues,
+  type PosCustomerCreationResult,
+} from "@tindio/contracts/customer-creation";
+import {
   getRealtimeClient,
 } from "@/lib/supabase/realtime-client";
 
@@ -332,4 +337,21 @@ export async function updatePosFavoriteTile(
   );
 
   return await response.json() as PosFavoriteTileActionResult;
+}
+
+export async function createPosV2Customer(
+  organizationId: string,
+  input: CreateCustomerValues,
+): Promise<PosCustomerCreationResult> {
+  const response = await fetchPosV2Command(
+    POS_CUSTOMER_CREATION_PATH,
+    {
+      organizationId,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+
+  return await response.json() as PosCustomerCreationResult;
 }

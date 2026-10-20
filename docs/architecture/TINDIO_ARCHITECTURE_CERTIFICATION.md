@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D14 COMPLETE; CUSTOMER-CREATION CONTRACT CERTIFIED**
+Status: **SLICE D15 COMPLETE; THIRD BACKEND-OWNED MUTATION CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, Slice D11 Backend-owned customer-display update with proxy rollback, the Slice D12 favorite-tile mutation compatibility boundary, Slice D13 Backend-owned favorite-tile update with proxy rollback, and the Slice D14 customer-creation mutation compatibility boundary
+Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, Slice D11 Backend-owned customer-display update with proxy rollback, the Slice D12 favorite-tile mutation compatibility boundary, Slice D13 Backend-owned favorite-tile update with proxy rollback, the Slice D14 customer-creation mutation compatibility boundary, and Slice D15 Backend-owned customer creation with proxy rollback
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -320,6 +320,21 @@ Database: **CANONICAL NEON UNCHANGED**
   mapping, and the POS customer projection without network/database access.
   No Backend route, runtime mode, environment variable, schema, deployment, or
   client origin was added or changed in D14.
+- Backend `POST /api/pos/v2/customers/create` now owns the third bounded,
+  non-financial mutation while preserving the Web route as rollback.
+- The owned path preserves bounded bearer verification, organization selection
+  and identity retry, full business-context validation, `customers.manage`
+  before JSON parsing, exact `400` versus `200` envelopes, normalization,
+  database-error mapping, strict returned-row validation, and success mapping.
+- Supabase remains the identity issuer. Business context and direct customer
+  insertion are sent only through the external-JWT Neon Data API, and the
+  Supabase publishable key is removed at that database-provider boundary.
+- `TINDIO_CUSTOMER_CREATION_MODE=proxy` preserves the complete request body and
+  query while forwarding only allowlisted headers and rejecting loops,
+  credential-bearing origins, cookies, and unrelated ambient headers.
+- Mobile, Web POS, and Back Office now use the same shared HTTP command. The
+  creation-only server action is removed; deployed origins, database schema,
+  checkout, custody, attendance, sync, and offline replay remain unchanged.
 
 ## Results
 
@@ -328,7 +343,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (233/233)** |
+| Backend behavior and contracts | **PASS (253/253)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -344,6 +359,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend favorite-tile mutation compatibility boundary | **PASS (5/5)** |
 | Backend favorite-tile ownership/rollback boundary | **PASS (5/5)** |
 | Backend customer-creation mutation compatibility boundary | **PASS (5/5)** |
+| Backend customer-creation ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -367,7 +383,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (203/203 automated commands)** |
+| Static catalogue | **PASS (204/204 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -377,16 +393,16 @@ Database: **CANONICAL NEON UNCHANGED**
 No production Auth service was provisioned. No database schema or merchant data
 changed. No account was exported/imported. No session format, existing Web POS
 route, JSON wire field, checkout behavior, SQLite database, outbox record,
-deployment, client API origin, or provider project changed. D14 adds only a
-shared contract and an isolated Backend oracle; it adds no Backend route or
-environment setting.
+deployment, client API origin, or provider project changed. The new Backend
+route exists only inside the undeployed Backend workspace; the environment
+example contains no credential.
 
 ## Next gate
 
-Begin Slice D15 by moving only `POST /api/pos/v2/customers/create` behind an
-explicit Backend-owned/proxy boundary. Preserve the D14 direct-insert, RLS,
-trigger, validation, response, and error-mapping contract, and converge the
-Mobile HTTP plus Web POS/Back Office server-action paths without changing the
-deployed client origin. Do not move checkout, refunds, transfer receipt, ticket
-custody, attendance, sync, or any financial/offline-replayed mutation. Neon
-Auth proof remains a later slice.
+Begin Slice D16 by freezing only `POST /api/pos/v2/tickets/save`. Inventory its
+context and permission ordering, assigned-register/open-shift custody,
+validation, idempotency, response envelopes, RPC arguments, and SQL authority
+before moving ownership. Do not move ticket cancel/merge/move/split, checkout,
+refunds, transfer receipt, attendance, sync, or any financial/offline-replayed
+mutation, and do not change deployed client origins. Neon Auth proof remains a
+later slice.

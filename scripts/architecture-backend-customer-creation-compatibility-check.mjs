@@ -38,10 +38,10 @@ test("customer creation has a focused platform-neutral contract", async () => {
   assert.doesNotMatch(contract, /next(?:\/|["'])|react-native|@supabase|@neon|node:(?:fs|path)|process\.env/);
 });
 
-test("Web route, server action, and service consume the frozen contract", async () => {
-  const [route, action, service, schemaFacade] = await Promise.all([
+test("Web rollback route, browser command, and service consume the frozen contract", async () => {
+  const [route, browserApi, service, schemaFacade] = await Promise.all([
     read("src/app/api/pos/v2/customers/create/route.ts"),
-    read("src/features/customers/actions.ts"),
+    read("src/features/pos/pos-v2-browser-api.ts"),
     read("src/features/customers/service.ts"),
     read("src/features/customers/customer-schema.ts"),
   ]);
@@ -52,16 +52,17 @@ test("Web route, server action, and service consume the frozen contract", async 
   assert.ok(handler.indexOf("getPosV2BusinessContext") < handler.indexOf("readPosApiJson"));
   assert.ok(handler.indexOf("hasPermission") < handler.indexOf("readPosApiJson"));
   assert.match(route, /hasPermission\(context, POS_CUSTOMER_CREATION_PERMISSION\)/);
-  assert.match(action, /hasPermission\(context, POS_CUSTOMER_CREATION_PERMISSION\)/);
+  assert.match(browserApi, /createPosV2Customer/);
+  assert.match(browserApi, /POS_CUSTOMER_CREATION_PATH/);
   assert.match(service, /createCustomerSchema\.safeParse\(input\)/);
   assert.match(service, /\.from\(POS_CUSTOMER_CREATION_TABLE\)/);
   assert.match(service, /\.select\(POS_CUSTOMER_CREATION_SELECT\)/);
-  for (const source of [route, action, service, schemaFacade]) {
+  for (const source of [route, browserApi, service, schemaFacade]) {
     assert.match(source, /@tindio\/contracts\/customer-creation/);
   }
 });
 
-test("Backend customer-creation oracle is isolated and does not claim route ownership", async () => {
+test("Backend customer-creation oracle remains isolated beside the owned route", async () => {
   const [oracle, backendEnv] = await Promise.all([
     read("apps/backend/src/pos/customer-creation-compatibility.ts"),
     read("apps/backend/.env.example"),
@@ -72,8 +73,8 @@ test("Backend customer-creation oracle is isolated and does not claim route owne
   assert.match(oracle, /customerCreationDatabaseFailure/);
   assert.match(oracle, /mapCreatedCustomer/);
   assert.doesNotMatch(oracle, /fetch\(|createPosReadRuntime|createNeonDataApiFetch|\.from\(|process\.env/);
-  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/customers/create.ts", import.meta.url)), false);
-  assert.doesNotMatch(backendEnv, /CUSTOMER_CREATION/);
+  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/customers/create.ts", import.meta.url)), true);
+  assert.match(backendEnv, /^TINDIO_CUSTOMER_CREATION_MODE=owned$/m);
 });
 
 test("database authority retains customer RLS, generated identity, constraints, and uniqueness", async () => {
@@ -101,20 +102,25 @@ test("database authority retains customer RLS, generated identity, constraints, 
   assert.match(providerNeutral, /CREATE POLICY "customers_select_manager"[^;]+USING[^;]+'customers\.manage'/s);
 });
 
-test("customer creation keeps existing Mobile HTTP and Web server-action entry points", async () => {
-  const [mobileApi, mobilePos, webPicker, backOfficeForm, checkout, refund, syncPush] = await Promise.all([
+test("customer creation converges Mobile and Web on the HTTP entry point", async () => {
+  const [mobileApi, mobilePos, browserApi, webPicker, backOfficeForm, actions, checkout, refund, syncPush] = await Promise.all([
     read("apps/mobile/src/lib/tindio-api.ts"),
     read("apps/mobile/app/(app)/pos.tsx"),
+    read("src/features/pos/pos-v2-browser-api.ts"),
     read("src/features/customers/pos-customer-picker.tsx"),
     read("src/features/customers/customer-forms.tsx"),
+    read("src/features/customers/actions.ts"),
     read("src/app/api/pos/v2/checkout/route.ts"),
     read("src/app/api/pos/v2/receipts/[receiptId]/refund/route.ts"),
     read("src/app/api/pos/v2/sync/push/route.ts"),
   ]);
   assert.match(mobileApi, /request\(POS_CUSTOMER_CREATION_PATH/);
   assert.match(mobilePos, /createPosV2Customer/);
-  assert.match(webPicker, /createCustomerAction/);
-  assert.match(backOfficeForm, /createCustomerAction/);
+  assert.match(browserApi, /export async function createPosV2Customer/);
+  assert.match(browserApi, /POS_CUSTOMER_CREATION_PATH/);
+  assert.match(webPicker, /createPosV2Customer\(organizationId/);
+  assert.match(backOfficeForm, /createPosV2Customer\(organizationId/);
+  assert.doesNotMatch(actions, /createCustomerAction/);
   assert.match(checkout, /export async function POST/);
   assert.match(refund, /export async function POST/);
   assert.match(syncPush, /export async function POST/);

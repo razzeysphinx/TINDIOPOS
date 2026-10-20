@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — NINE READS AND TWO NON-FINANCIAL MUTATIONS OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — NINE READS AND THREE NON-FINANCIAL MUTATIONS OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -213,17 +213,28 @@ Status: **IN PROGRESS**
 - Keep checkout, refunds, transfer receipt, ticket custody, attendance, sync,
   and every financial/offline-replayed mutation in Next.js. **IMPLEMENTED.**
 
-## Next smallest safe slice: D15 customer-creation mutation ownership
+## Completed Slice D15: customer-creation mutation ownership
 
 - Move only `POST /api/pos/v2/customers/create` behind an explicit Backend-
   owned/proxy boundary while preserving every frozen D14 contract and the Web
-  route as rollback.
+  route as rollback. **IMPLEMENTED.**
 - Resolve Mobile HTTP plus Web POS/Back Office server-action entry points onto
   one mutation authority without changing the deployed client API origin.
+  **IMPLEMENTED.**
 - Keep direct RLS-protected insert and database-generated identity semantics;
-  do not invent an RPC or add store/open-shift prerequisites.
+  do not invent an RPC or add store/open-shift prerequisites. **IMPLEMENTED.**
 - Keep checkout, refunds, transfer receipt, ticket custody, attendance, sync,
-  and every financial/offline-replayed mutation unchanged.
+  and every financial/offline-replayed mutation unchanged. **IMPLEMENTED.**
+
+## Next smallest safe slice: D16 open-ticket save compatibility harness
+
+- Inventory and freeze only `POST /api/pos/v2/tickets/save`, including context,
+  permission, assigned-register/open-shift custody, validation, idempotency,
+  exact response envelopes, RPC arguments, and database authority.
+- Add a network/database-independent Backend oracle and compatibility gates
+  before moving any ticket mutation ownership.
+- Keep ticket cancel/merge/move/split, checkout, refunds, transfer receipt,
+  attendance, sync, and every financial/offline-replayed mutation unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

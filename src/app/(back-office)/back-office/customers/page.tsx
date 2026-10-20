@@ -42,7 +42,7 @@ export default async function CustomersPage() {
         action={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Badge variant="secondary"><UsersRound aria-hidden="true" />{customers.length} customers</Badge>
-            <CreateCustomerForm />
+            <CreateCustomerForm organizationId={context.organization.id} />
           </div>
         }
         description="Keep customer details in one place, manage loyalty, and review completed purchases."
@@ -60,7 +60,7 @@ export default async function CustomersPage() {
         <CustomerDirectory customers={customers} />
       ) : (
         <BackOfficeStateCard
-          action={<CreateCustomerForm />}
+          action={<CreateCustomerForm organizationId={context.organization.id} />}
           description="Add a customer here, then select them from the POS cart before checkout."
           icon={<UsersRound className="size-5" aria-hidden="true" />}
           title="No customers yet"

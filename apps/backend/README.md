@@ -49,6 +49,9 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
 - `POST /api/pos/v2/favorites` owns bearer verification, business-context and
   `products.manage` validation, assigned-store and request validation, and the
   idempotent `set_pos_favorite_tile` command through the same Neon boundary.
+- `POST /api/pos/v2/customers/create` owns bearer verification, business-context
+  and `customers.manage` validation, normalized customer input, and the direct
+  RLS-protected `customers` insert through the same Neon boundary.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`,
@@ -58,7 +61,8 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_ATTENDANCE_EMPLOYEES_READ_MODE=owned`, and
 `TINDIO_LIVE_READ_MODE=owned`, and
 `TINDIO_CUSTOMER_DISPLAY_UPDATE_MODE=owned`, and
-`TINDIO_FAVORITE_TILE_UPDATE_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_FAVORITE_TILE_UPDATE_MODE=owned`, and
+`TINDIO_CUSTOMER_CREATION_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -89,8 +93,9 @@ mutation authority; its origin is unchanged.
 The Slice D14 customer-creation compatibility oracle is also network- and
 database-independent. It freezes the existing Web route, server-action, direct
 RLS-protected table insert, generated customer identity, and response mapping.
-It does not add a Backend route or environment mode; Mobile keeps its HTTP
-entry point while Web POS and Back Office keep their server-action entry point.
+Slice D15 uses that frozen contract in the isolated owned command and allowlisted
+Web rollback proxy. Mobile, Web POS, and Back Office now invoke the shared HTTP
+path; their deployed API origins are unchanged.
 
 No financial, custody, attendance, or offline-replayed mutation, authentication
 provider, deployment, or client API origin has moved. Clients continue using

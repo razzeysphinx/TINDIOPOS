@@ -1542,6 +1542,7 @@ export function PosTerminal({
           }}
           onOpenChange={setIsCustomerCreateOpen}
           open={isCustomerCreateOpen}
+          organizationId={organizationId}
         />
       ) : null}
       {isPaymentScreenOpen && selectedRegister && activeShift ? (

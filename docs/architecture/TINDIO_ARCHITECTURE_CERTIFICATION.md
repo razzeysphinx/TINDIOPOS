@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D5 COMPLETE; FIVE BACKEND-OWNED READS CERTIFIED**
+Status: **SLICE D6 COMPLETE; SIX BACKEND-OWNED READS CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D5 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search reads with proxy rollback
+Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D6 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search reads with proxy rollback
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -179,6 +179,22 @@ Database: **CANONICAL NEON UNCHANGED**
 - Web and Mobile continue calling `/api/pos/v2/customers` on their current API
   origins. No customer creation, financial mutation, client, Web route, schema,
   deployed environment, or API origin changed.
+- Backend `GET /api/pos/v2/receipts` now owns the bounded receipt-search read,
+  including full business-context validation and the `pos.access`,
+  `sales.create`, and `receipts.view` permission gate.
+- The owned path preserves first-value query parsing, whitespace trimming, the
+  100-character search bound, positive safe receipt-number cursor coercion,
+  fixed 25-row database limit, and the established `hasMore` rule.
+- Every receipt summary field and payment-method discriminator is strictly
+  validated before the existing snake_case response is returned. Authorization
+  denials and provider failures are bounded without exposing provider detail.
+- The receipt rollback proxy preserves the complete query string while
+  retaining loop rejection and the established header allowlists.
+- A focused `@tindio/contracts/receipts` export supplies the cross-runtime list
+  contract without importing the package barrel.
+- Web and Mobile continue calling `/api/pos/v2/receipts` on their current API
+  origins. Receipt detail, delivery, refunds, checkout, all other mutations,
+  deployment configuration, and client origins remain unchanged.
 
 ## Results
 
@@ -187,13 +203,14 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend health/read behavior | **PASS (92/92)** |
+| Backend health/read behavior | **PASS (112/112)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
 | Backend catalogue ownership/rollback boundary | **PASS (5/5)** |
 | Backend modifiers ownership/rollback boundary | **PASS (5/5)** |
 | Backend customer-search ownership/rollback boundary | **PASS (5/5)** |
+| Backend receipt-search ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -217,7 +234,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (194/194 automated commands)** |
+| Static catalogue | **PASS (195/195 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -233,8 +250,8 @@ is an inert example containing no credential.
 
 ## Next gate
 
-Begin Slice D6 by moving the bounded POS receipt-search read behind the Backend
-boundary while preserving its permission checks, cursor semantics, response
-mapping, and a Web rollback route. Do not move refund, delivery, checkout, or
-other financial mutations, and do not change deployed client origins. Neon Auth
-proof remains a later slice.
+Begin Slice D7 by moving only the POS receipt-detail read behind the Backend
+boundary while preserving UUID validation, authorization, unavailable-receipt
+404 behavior, immutable snapshot mapping, and a Web rollback route. Do not move
+receipt delivery, refunds, checkout, or other financial mutations, and do not
+change deployed client origins. Neon Auth proof remains a later slice.

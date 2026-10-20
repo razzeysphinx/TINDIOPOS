@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — FIVE READS OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — SIX READS OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -81,13 +81,26 @@ Status: **IN PROGRESS**
 - Customer creation, checkout, sync-push, shift custody, and every mutation
   remain in Next.js. **IMPLEMENTED.**
 
-## Next smallest safe slice: D6 POS receipt-search read ownership
+## Completed Slice D6: POS receipt-search read ownership
 
-- Move the bounded receipt list/search read behind the Backend boundary while
-  preserving permission checks, pagination cursor semantics, and response
-  mapping.
-- Retain the Web route as rollback and keep refund, delivery, checkout, and all
-  other mutations in Next.js.
+- The bounded receipt list/search read is Backend-owned with full business
+  context validation and the `pos.access`, `sales.create`, and `receipts.view`
+  permission gate. **IMPLEMENTED.**
+- Search trimming, the 100-character bound, positive safe receipt-number cursor,
+  fixed 25-row limit, and exact snake_case receipt summaries remain unchanged.
+  **IMPLEMENTED.**
+- `TINDIO_RECEIPTS_READ_MODE=proxy` retains the query-preserving Web rollback.
+  **IMPLEMENTED.**
+- Receipt detail, reprint/delivery, refunds, checkout, and every mutation remain
+  in Next.js. **IMPLEMENTED.**
+
+## Next smallest safe slice: D7 POS receipt-detail read ownership
+
+- Move only `GET /api/pos/v2/receipts/[receiptId]` behind the Backend boundary
+  while preserving UUID validation, authorization, 404 behavior, and the full
+  immutable receipt snapshot.
+- Retain the Web detail route as rollback and keep delivery, refunds, checkout,
+  and all other mutations in Next.js.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

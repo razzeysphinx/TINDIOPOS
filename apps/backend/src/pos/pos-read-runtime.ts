@@ -18,11 +18,12 @@ export type PosReadRpcName =
   | "get_pos_reference_bundle_v2"
   | "get_pos_catalog_v2"
   | "get_pos_modifiers_v2"
-  | "search_pos_customers";
+  | "search_pos_customers"
+  | "get_pos_receipt_history";
 
 export type PosReadRpcArguments = Record<
   string,
-  string | number | undefined
+  string | number | null | undefined
 >;
 
 export type PosReadRpcResult = {

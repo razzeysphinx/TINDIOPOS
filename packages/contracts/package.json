@@ -16,6 +16,10 @@
       "types": "./src/pos-data.ts",
       "default": "./src/pos-data.ts"
     },
+    "./receipts": {
+      "types": "./src/receipts.ts",
+      "default": "./src/receipts.ts"
+    },
     "./ui": {
       "types": "./src/ui.ts",
       "default": "./src/ui.ts"

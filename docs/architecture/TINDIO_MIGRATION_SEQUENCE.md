@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — NINE READS OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — NINE READS OWNED; FIRST MUTATION CONTRACT FROZEN** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -136,14 +136,30 @@ Status: **IN PROGRESS**
   transfer, open-ticket, cart-line, modifier, customer, and assignee row mapping
   remains unchanged. **IMPLEMENTED.**
 
-## Next smallest safe slice: D10 non-financial mutation compatibility harness
+## Completed Slice D10: customer-display mutation compatibility harness
 
-- Inventory and freeze the exact customer-display update contract as the
-  lowest-risk mutation candidate, including authorization, open-shift denial,
-  status/body/header behavior, and rollback requirements.
-- Add dual-route compatibility tests before moving any mutation ownership.
-- Do not move checkout, refunds, transfer receipt, ticket custody, attendance,
-  sync, or any financial/offline-replayed mutation in this slice.
+- Freeze the exact customer-display update schema, HTTP constants, permission
+  gate, RPC arguments, open-shift denial, status/body/header behavior, and SQL
+  authority in the focused `@tindio/contracts/customer-display` boundary.
+  **IMPLEMENTED.**
+- Keep the existing Next.js `PUT /api/pos/v2/customer-display` route
+  authoritative while making it consume the shared contract. **IMPLEMENTED.**
+- Add a Backend compatibility oracle and certification harness without adding
+  a Backend route, network/database access, provider dependency, environment
+  switch, or client-origin change. **IMPLEMENTED.**
+- Keep checkout, refunds, transfer receipt, ticket custody, attendance, sync,
+  and every financial/offline-replayed mutation in Next.js. **IMPLEMENTED.**
+
+## Next smallest safe slice: D11 customer-display update ownership
+
+- Move only `PUT /api/pos/v2/customer-display` behind the Backend boundary,
+  preserving business-context resolution, both permissions, schema defaults
+  and bounds, exact RPC arguments, `42501` mapping, and the `204`/`no-store`
+  success response.
+- Add an explicit owned/proxy mode with an allowlisted rollback to the existing
+  Web route before changing any deployed client origin.
+- Keep checkout, refunds, transfer receipt, ticket custody, attendance, sync,
+  and every financial/offline-replayed mutation in Next.js.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

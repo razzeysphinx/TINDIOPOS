@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 
-import { customerDisplayStateSchema } from "@/features/customer-display/customer-display-types";
+import {
+  CUSTOMER_DISPLAY_INVALID_ERROR,
+  CUSTOMER_DISPLAY_OPEN_SHIFT_DATABASE_CODE,
+  CUSTOMER_DISPLAY_OPEN_SHIFT_ERROR,
+  CUSTOMER_DISPLAY_PERMISSION_ERROR,
+  CUSTOMER_DISPLAY_UPDATE_ERROR,
+  CUSTOMER_DISPLAY_UPDATE_PERMISSIONS,
+  CUSTOMER_DISPLAY_UPDATE_RPC,
+  customerDisplayUpdateSchema,
+} from "@tindio/contracts/customer-display";
 import { hasPermission } from "@/lib/auth/dal";
 import { getPosV2BusinessContext } from "@/lib/auth/pos-v2-business-context";
 import { createBusinessContextClient } from "@/lib/supabase/context-client";
-
-const updateSchema = z.object({
-  sessionId: z.uuid(),
-  state: customerDisplayStateSchema,
-});
 
 export async function PUT(request: NextRequest) {
   const resolved = await getPosV2BusinessContext(request);
@@ -18,18 +21,21 @@ export async function PUT(request: NextRequest) {
 
   const context = resolved.context;
 
-  if (!hasPermission(context, "pos.access") || !hasPermission(context, "sales.create")) {
-    return NextResponse.json({ error: "POS access is not permitted." }, { status: 403 });
+  if (
+    !hasPermission(context, CUSTOMER_DISPLAY_UPDATE_PERMISSIONS[0])
+    || !hasPermission(context, CUSTOMER_DISPLAY_UPDATE_PERMISSIONS[1])
+  ) {
+    return NextResponse.json({ error: CUSTOMER_DISPLAY_PERMISSION_ERROR }, { status: 403 });
   }
 
   const body = await request.json().catch(() => null);
-  const parsed = updateSchema.safeParse(body);
+  const parsed = customerDisplayUpdateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "The customer display update is invalid." }, { status: 400 });
+    return NextResponse.json({ error: CUSTOMER_DISPLAY_INVALID_ERROR }, { status: 400 });
   }
 
   const supabase = await createBusinessContextClient(context);
-  const { error } = await supabase.rpc("set_customer_display_state", {
+  const { error } = await supabase.rpc(CUSTOMER_DISPLAY_UPDATE_RPC, {
     target_organization_id: context.organization.id,
     target_session_id: parsed.data.sessionId,
     target_state: parsed.data.state,
@@ -37,8 +43,12 @@ export async function PUT(request: NextRequest) {
 
   if (error) {
     return NextResponse.json(
-      { error: error.code === "42501" ? "An open shift is required for this display." : "The display could not be updated." },
-      { status: error.code === "42501" ? 403 : 500 },
+      {
+        error: error.code === CUSTOMER_DISPLAY_OPEN_SHIFT_DATABASE_CODE
+          ? CUSTOMER_DISPLAY_OPEN_SHIFT_ERROR
+          : CUSTOMER_DISPLAY_UPDATE_ERROR,
+      },
+      { status: error.code === CUSTOMER_DISPLAY_OPEN_SHIFT_DATABASE_CODE ? 403 : 500 },
     );
   }
 

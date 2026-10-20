@@ -68,6 +68,11 @@ mutation paths. The live proxy additionally forwards only the optional
 `x-tindio-store-id` and `x-tindio-register-id` scope headers. Cookies and
 unrelated headers are dropped.
 
+Slice D10 also includes a non-operational customer-display compatibility oracle
+that freezes request validation, authorization denial, RPC-error mapping, and
+the expected `204` response. It performs no network or database calls, exposes
+no mutation route, and adds no provider or environment switch.
+
 No mutation route, authentication provider, deployment, or client API origin
 has moved. Clients continue using the existing Next.js route until a separate
 deployment and cutover is approved.

@@ -57,7 +57,9 @@ test("feature facades retain old paths while Mobile transfer reads use the packa
   }
   assert.match(posTypesFacade, /PosIncomingTransfer/);
   assert.doesNotMatch(posTypesFacade, /export type PosIncomingTransfer\s*=/);
-  assert.match(displayFacade, /export type \{ PosCustomerDisplaySession \} from ["']@tindio\/contracts["']/);
+  assert.match(displayFacade, /from ["']@tindio\/contracts\/customer-display["']/);
+  assert.match(displayFacade, /customerDisplayStateSchema/);
+  assert.match(displayFacade, /customerDisplayUpdateSchema/);
   assert.match(displayFacade, /export type CustomerDisplayActionResult\s*=/);
   assert.match(transferFacade, /from ["']@tindio\/contracts["']/);
   assert.doesNotMatch(transferFacade, /export type ReceivableTransferStatus\s*=/);

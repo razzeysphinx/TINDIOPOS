@@ -16,6 +16,10 @@
       "types": "./src/attendance.ts",
       "default": "./src/attendance.ts"
     },
+    "./customer-display": {
+      "types": "./src/customer-display.ts",
+      "default": "./src/customer-display.ts"
+    },
     "./pos-data": {
       "types": "./src/pos-data.ts",
       "default": "./src/pos-data.ts"

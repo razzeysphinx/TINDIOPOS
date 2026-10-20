@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D9 COMPLETE; NINE BACKEND-OWNED READS CERTIFIED**
+Status: **SLICE D10 COMPLETE; CUSTOMER-DISPLAY MUTATION CONTRACT CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback
+Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, and the Slice D10 customer-display mutation compatibility boundary
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -245,6 +245,19 @@ Database: **CANONICAL NEON UNCHANGED**
   writes, ticket actions, attendance mutations, sync, every other mutation,
   database schema, deployment configuration, and client routing remain
   unchanged.
+- A focused `@tindio/contracts/customer-display` export now freezes the exact
+  customer-display state/update schema, HTTP path, permission pair, RPC name,
+  error bodies, open-shift database code, and success response requirements.
+- The authoritative Web `PUT /api/pos/v2/customer-display` route consumes that
+  contract while preserving business-context resolution, Zod defaults and
+  bounds, exact RPC arguments, `42501` mapping, and `204`/`no-store` success.
+- A Backend compatibility oracle reproduces validation and error mapping for
+  certification only. It exposes no HTTP handler and performs no network,
+  database, provider, or environment access.
+- Static checks preserve the SQL permission and exact open-shift prerequisites,
+  organization-scoped update, and provider-neutral role grants. No mutation
+  ownership, schema, deployment, client origin, or financial/offline behavior
+  changed.
 
 ## Results
 
@@ -253,7 +266,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend health/read behavior | **PASS (170/170)** |
+| Backend behavior and contracts | **PASS (178/178)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -264,6 +277,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend receipt-detail ownership/rollback boundary | **PASS (5/5)** |
 | Backend attendance-employee ownership/rollback boundary | **PASS (5/5)** |
 | Backend live-state ownership/rollback boundary | **PASS (5/5)** |
+| Backend customer-display mutation compatibility boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -287,7 +301,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (198/198 automated commands)** |
+| Static catalogue | **PASS (199/199 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -303,8 +317,10 @@ is an inert example containing no credential.
 
 ## Next gate
 
-Begin Slice D10 by freezing the customer-display update contract and adding a
-dual-route compatibility harness for the lowest-risk non-financial mutation.
-Do not move checkout, refunds, transfer receipt, ticket custody, attendance,
-sync, or any financial/offline-replayed mutation, and do not change deployed
-client origins. Neon Auth proof remains a later slice.
+Begin Slice D11 by moving only `PUT /api/pos/v2/customer-display` behind an
+explicit Backend owned/proxy boundary with allowlisted rollback. Preserve the
+full business-context, permission, validation, RPC, error, and `204`/`no-store`
+contract certified in D10. Do not move checkout, refunds, transfer receipt,
+ticket custody, attendance, sync, or any financial/offline-replayed mutation,
+and do not change deployed client origins. Neon Auth proof remains a later
+slice.

@@ -43,6 +43,7 @@ const [
   posModifiersRoute,
   posCustomersRoute,
   posCustomerDisplayRoute,
+  customerDisplayContract,
   offlineCheckoutRoute,
   offlineCheckoutService,
   reportsExportRoute,
@@ -87,6 +88,7 @@ const [
   source("../src/app/api/pos/v2/modifiers/route.ts"),
   source("../src/app/api/pos/v2/customers/route.ts"),
   source("../src/app/api/pos/v2/customer-display/route.ts"),
+  source("../packages/contracts/src/customer-display.ts"),
   source("../src/app/api/pos/v2/offline-checkout/route.ts"),
   source("../src/features/offline/pos-v2-offline-checkout-service.ts"),
   source("../src/app/api/reports/export/route.ts"),
@@ -145,14 +147,14 @@ test("POS capability gates are enforced consistently in the UI, server actions, 
   assert.match(posDrawer, /canViewReceipts/);
   assert.match(posDrawer, /canUseShiftControls/);
 
-  for (const [name, content] of [
-    ["customer", posCustomersRoute],
-    ["customer display", posCustomerDisplayRoute],
-  ]) {
-    assert.match(content, /getPosV2BusinessContext/, `${name} API resolves V2 command context`);
-    assert.match(content, /hasPermission\(context, "pos\.access"/, `${name} API requires POS access`);
-    assert.match(content, /hasPermission\(context, "sales\.create"/, `${name} API requires sales authority`);
-  }
+  assert.match(posCustomersRoute, /getPosV2BusinessContext/, "customer API resolves V2 command context");
+  assert.match(posCustomersRoute, /hasPermission\(context, "pos\.access"/, "customer API requires POS access");
+  assert.match(posCustomersRoute, /hasPermission\(context, "sales\.create"/, "customer API requires sales authority");
+
+  assert.match(posCustomerDisplayRoute, /getPosV2BusinessContext/, "customer display API resolves V2 command context");
+  assert.match(posCustomerDisplayRoute, /CUSTOMER_DISPLAY_UPDATE_PERMISSIONS\[0\]/, "customer display API requires its first shared permission");
+  assert.match(posCustomerDisplayRoute, /CUSTOMER_DISPLAY_UPDATE_PERMISSIONS\[1\]/, "customer display API requires its second shared permission");
+  assert.match(customerDisplayContract, /CUSTOMER_DISPLAY_UPDATE_PERMISSIONS\s*=\s*\["pos\.access", "sales\.create"\]/, "customer display permissions remain POS access plus sales authority");
 
   assert.match(posCatalogRoute, /getPosV2Catalog/);
   assert.match(posModifiersRoute, /getPosV2Modifiers/);

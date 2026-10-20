@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — NINE READS OWNED; FIRST MUTATION CONTRACT FROZEN** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — NINE READS AND ONE NON-FINANCIAL MUTATION OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -150,16 +150,26 @@ Status: **IN PROGRESS**
 - Keep checkout, refunds, transfer receipt, ticket custody, attendance, sync,
   and every financial/offline-replayed mutation in Next.js. **IMPLEMENTED.**
 
-## Next smallest safe slice: D11 customer-display update ownership
+## Completed Slice D11: customer-display update ownership
 
 - Move only `PUT /api/pos/v2/customer-display` behind the Backend boundary,
   preserving business-context resolution, both permissions, schema defaults
   and bounds, exact RPC arguments, `42501` mapping, and the `204`/`no-store`
-  success response.
+  success response. **IMPLEMENTED.**
 - Add an explicit owned/proxy mode with an allowlisted rollback to the existing
-  Web route before changing any deployed client origin.
+  Web route before changing any deployed client origin. **IMPLEMENTED.**
 - Keep checkout, refunds, transfer receipt, ticket custody, attendance, sync,
-  and every financial/offline-replayed mutation in Next.js.
+  and every financial/offline-replayed mutation in Next.js. **IMPLEMENTED.**
+
+## Next smallest safe slice: D12 favorite-tile mutation compatibility harness
+
+- Inventory and freeze only `POST /api/pos/v2/favorites`, including its
+  product-management permission, request validation, tile replacement/removal
+  semantics, response envelope, and database authority.
+- Add a Backend compatibility oracle and dual-route contract tests before
+  moving favorite-tile mutation ownership.
+- Keep customer creation, checkout, refunds, transfer receipt, ticket custody,
+  attendance, sync, and every financial/offline-replayed mutation in Next.js.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

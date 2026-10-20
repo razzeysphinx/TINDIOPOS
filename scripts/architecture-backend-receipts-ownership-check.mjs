@@ -110,5 +110,5 @@ test("Web receipt route and Mobile remain on the current origin", async () => {
   assert.match(detailRoute, /loadPosReceiptDetail/);
   assert.match(deliveryRoute, /queueReceiptDelivery/);
   assert.match(refundRoute, /refundSale/);
-  assert.match(readme, /No mutation route/);
+  assert.match(readme, /No financial, custody, attendance, or offline-replayed mutation/);
 });

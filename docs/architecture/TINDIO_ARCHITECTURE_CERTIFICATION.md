@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D10 COMPLETE; CUSTOMER-DISPLAY MUTATION CONTRACT CERTIFIED**
+Status: **SLICE D11 COMPLETE; FIRST BACKEND-OWNED MUTATION CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, and the Slice D10 customer-display mutation compatibility boundary
+Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, and Slice D11 Backend-owned customer-display update with proxy rollback
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -258,6 +258,20 @@ Database: **CANONICAL NEON UNCHANGED**
   organization-scoped update, and provider-neutral role grants. No mutation
   ownership, schema, deployment, client origin, or financial/offline behavior
   changed.
+- Backend `PUT /api/pos/v2/customer-display` now owns the first bounded,
+  non-financial mutation while preserving the Web route as rollback.
+- The owned path preserves bearer verification, organization selection and one
+  identity-mapping retry, full business-context validation, the exact permission
+  pair, context-before-body ordering, schema defaults/bounds, and RPC arguments.
+- Supabase remains the identity issuer, while both the context and update RPCs
+  are sent only to the external-JWT Neon Data API without forwarding the
+  Supabase publishable key across the database-provider boundary.
+- `TINDIO_CUSTOMER_DISPLAY_UPDATE_MODE=proxy` preserves the complete request
+  body and query while forwarding only allowlisted headers, rejecting loops,
+  credentials in origins, cookies, and unrelated ambient headers.
+- Web and Mobile retain their current API origin. Customer creation, checkout,
+  refunds, transfers, ticket custody, attendance, sync, database schema,
+  deployment configuration, and every financial/offline mutation are unchanged.
 
 ## Results
 
@@ -266,7 +280,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (178/178)** |
+| Backend behavior and contracts | **PASS (198/198)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -278,6 +292,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend attendance-employee ownership/rollback boundary | **PASS (5/5)** |
 | Backend live-state ownership/rollback boundary | **PASS (5/5)** |
 | Backend customer-display mutation compatibility boundary | **PASS (5/5)** |
+| Backend customer-display ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -301,7 +316,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (199/199 automated commands)** |
+| Static catalogue | **PASS (200/200 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -309,18 +324,18 @@ Database: **CANONICAL NEON UNCHANGED**
 ## Safety statement
 
 No production Auth service was provisioned. No database schema or merchant data
-changed. No account was exported/imported. No session format, existing JSON wire
-field, POS API route, checkout behavior, SQLite database, outbox record,
-deployment, client API origin, or provider project changed. The Backend routes
-exist only inside the undeployed Backend workspace; the added environment file
-is an inert example containing no credential.
+changed. No account was exported/imported. No session format, existing Web POS
+route, JSON wire field, checkout behavior, SQLite database, outbox record,
+deployment, client API origin, or provider project changed. The new Backend
+mutation route exists only inside the undeployed Backend workspace; the
+environment example contains no credential.
 
 ## Next gate
 
-Begin Slice D11 by moving only `PUT /api/pos/v2/customer-display` behind an
-explicit Backend owned/proxy boundary with allowlisted rollback. Preserve the
-full business-context, permission, validation, RPC, error, and `204`/`no-store`
-contract certified in D10. Do not move checkout, refunds, transfer receipt,
-ticket custody, attendance, sync, or any financial/offline-replayed mutation,
-and do not change deployed client origins. Neon Auth proof remains a later
-slice.
+Begin Slice D12 by freezing the `POST /api/pos/v2/favorites` contract as the
+next low-risk, non-financial mutation candidate. Inventory its permission,
+validation, replacement/removal semantics, response, and database authority,
+then add a compatibility harness before moving ownership. Do not move customer
+creation, checkout, refunds, transfer receipt, ticket custody, attendance, sync,
+or any financial/offline-replayed mutation, and do not change deployed client
+origins. Neon Auth proof remains a later slice.

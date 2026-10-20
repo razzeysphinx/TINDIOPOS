@@ -103,5 +103,5 @@ test("Web rollback remains authoritative and attendance mutations stay in Next.j
   assert.match(clockInRoute, /clockIn/);
   assert.match(clockOutRoute, /clockOut/);
   assert.doesNotMatch(mobileApi, /TINDIO_WEB_API_ORIGIN|apps\/backend/);
-  assert.match(readme, /No mutation route/);
+  assert.match(readme, /No financial, custody, attendance, or offline-replayed mutation/);
 });

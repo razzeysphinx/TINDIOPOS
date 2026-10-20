@@ -107,5 +107,5 @@ test("Web customer route and supported clients remain on the current origin", as
   assert.match(mobileApi, /["'`]\/api\/pos\/v2\/customers/);
   assert.match(webPicker, /["'`]\/api\/pos\/v2\/customers/);
   assert.doesNotMatch(`${mobileApi}\n${webPicker}`, /TINDIO_WEB_API_ORIGIN|apps\/backend/);
-  assert.match(readme, /No mutation route/);
+  assert.match(readme, /No financial, custody, attendance, or offline-replayed mutation/);
 });

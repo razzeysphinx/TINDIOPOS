@@ -38,7 +38,7 @@ Offline Mobile
 | `src/features/**` | typed Supabase-shaped clients and generated DB types | Business logic is reusable but database access is not yet backend-owned |
 | `src/contracts/pos.ts` | Platform-neutral DTO/value/result domains delegate to `@tindio/contracts`; Web validation schemas and application-specific aliases remain compatibility exports | No Mobile consumer depends on this root facade; keep it until Web imports can migrate safely |
 | `apps/mobile/**` | Mobile-local source plus focused `@tindio/contracts`, `/cart`, and `/ui` package imports | No relative imports cross into the root Web source tree |
-| `apps/backend/**` | Backend-local health plus owned bootstrap/reference auth, validation, Neon reads, and allowlisted proxy rollbacks | Independent build/test boundary and two read domains exist; no mutation or client origin has moved |
+| `apps/backend/**` | Backend-local health plus owned POS auth, validation, Neon reads, the bounded customer-display command, and allowlisted proxy rollbacks | Independent build/test boundary owns nine read domains and one non-financial mutation; no client origin has moved |
 | `apps/mobile/src/features/session` | Supabase session type/client, offline readiness/custody | Auth migration must preserve local financial state |
 | `database/provider/neon` | Neon Data API `auth.user_id()` / `auth.jwt()` | Provider adapter seam exists; token semantics still require proof |
 | `.github/workflows` | local Supabase, full certification, migration/restore scripts | CI cannot drop Supabase before Auth replacement tests exist |
@@ -80,5 +80,7 @@ to Web UI modules.
    Backend while retaining the adapter as rollback. **DONE: bootstrap.**
 6. Extract a second stable read using a focused shared contract and the same
    provider boundary. **DONE: POS reference.**
-7. Extract mutation endpoints only after idempotency, custody, and financial
-  replay tests pass against both routes.
+7. Extract the bounded customer-display mutation after its exact compatibility
+   contract and rollback path are certified. **DONE.**
+8. Extract higher-risk mutation endpoints only after idempotency, custody, and
+   financial replay tests pass against both routes.

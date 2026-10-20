@@ -48,7 +48,7 @@ test("customer-display update has a focused shared validation and HTTP contract"
   );
 });
 
-test("Web remains the authoritative mutation route and consumes the shared contract", async () => {
+test("Web rollback route consumes the shared contract", async () => {
   const [route, facade, legacyRoute] = await Promise.all([
     read("src/app/api/pos/v2/customer-display/route.ts"),
     read("src/features/customer-display/customer-display-types.ts"),
@@ -75,7 +75,7 @@ test("Web remains the authoritative mutation route and consumes the shared contr
   assert.match(legacyRoute, /from ["']@\/app\/api\/pos\/v2\/customer-display\/route["']/);
 });
 
-test("Backend compatibility oracle freezes parity without taking mutation ownership", async () => {
+test("Backend compatibility oracle remains runtime-independent beside the owned route", async () => {
   const oracle = await read("apps/backend/src/pos/customer-display-compatibility.ts");
 
   assert.match(oracle, /from ["']@tindio\/contracts\/customer-display["']/);
@@ -84,7 +84,7 @@ test("Backend compatibility oracle freezes parity without taking mutation owners
   assert.match(oracle, /customerDisplayPermissionFailure/);
   assert.match(oracle, /mapCustomerDisplayRpcError/);
   assert.doesNotMatch(oracle, /fetch\(|createPosReadRuntime|createNeonDataApiFetch|\.rpc\(|process\.env/);
-  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/customer-display.ts", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/customer-display.ts", import.meta.url)), true);
 });
 
 test("database authority retains permission, active-session, open-shift, and role grants", async () => {
@@ -118,7 +118,7 @@ test("database authority retains permission, active-session, open-shift, and rol
   assert.match(providerNeutral, /GRANT ALL ON FUNCTION "public"\."set_customer_display_state"[^;]+TO "tindio_authenticated"/);
 });
 
-test("D10 leaves clients, origins, financial mutations, and deployment unchanged", async () => {
+test("customer-display ownership leaves clients, origins, financial mutations, and deployment unchanged", async () => {
   const [terminal, checkout, refund, syncPush, backendReadme] = await Promise.all([
     read("src/features/pos/pos-terminal.tsx"),
     read("src/app/api/pos/v2/checkout/route.ts"),
@@ -132,6 +132,6 @@ test("D10 leaves clients, origins, financial mutations, and deployment unchanged
   assert.match(checkout, /export async function POST/);
   assert.match(refund, /export async function POST/);
   assert.match(syncPush, /export async function POST/);
-  assert.match(backendReadme, /No mutation route/);
-  assert.doesNotMatch(backendReadme, /TINDIO_CUSTOMER_DISPLAY_UPDATE_MODE/);
+  assert.match(backendReadme, /No financial, custody, attendance, or offline-replayed mutation/);
+  assert.match(backendReadme, /TINDIO_CUSTOMER_DISPLAY_UPDATE_MODE/);
 });

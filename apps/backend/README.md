@@ -43,6 +43,9 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
   store/register scope, identity retry, strict live-envelope validation, and
   transfer/ticket aggregate mapping through `get_pos_live_state_v2` on the
   same boundary.
+- `PUT /api/pos/v2/customer-display` owns bearer verification, business-context
+  and permission validation, the frozen display update contract, and the
+  `set_customer_display_state` command through the same Neon boundary.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`,
@@ -50,7 +53,8 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_RECEIPTS_READ_MODE=owned`, and
 `TINDIO_RECEIPT_DETAIL_READ_MODE=owned`, and
 `TINDIO_ATTENDANCE_EMPLOYEES_READ_MODE=owned`, and
-`TINDIO_LIVE_READ_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_LIVE_READ_MODE=owned`, and
+`TINDIO_CUSTOMER_DISPLAY_UPDATE_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -68,11 +72,10 @@ mutation paths. The live proxy additionally forwards only the optional
 `x-tindio-store-id` and `x-tindio-register-id` scope headers. Cookies and
 unrelated headers are dropped.
 
-Slice D10 also includes a non-operational customer-display compatibility oracle
-that freezes request validation, authorization denial, RPC-error mapping, and
-the expected `204` response. It performs no network or database calls, exposes
-no mutation route, and adds no provider or environment switch.
+The Slice D10 customer-display compatibility oracle remains network- and
+database-independent. Slice D11 uses that frozen contract in the isolated
+owned command and its allowlisted Web rollback proxy.
 
-No mutation route, authentication provider, deployment, or client API origin
-has moved. Clients continue using the existing Next.js route until a separate
-deployment and cutover is approved.
+No financial, custody, attendance, or offline-replayed mutation, authentication
+provider, deployment, or client API origin has moved. Clients continue using
+the existing Next.js route until a separate deployment and cutover is approved.

@@ -122,5 +122,5 @@ test("Web compatibility route, clients, and mutation ownership remain unchanged"
   assert.match(mobileApi, /request\(["']\/api\/pos\/v2\/bootstrap["']/);
   assert.match(webApi, /["']\/api\/pos\/v2\/bootstrap["']/);
   assert.doesNotMatch(`${mobileApi}\n${webApi}`, /TINDIO_WEB_API_ORIGIN|apps\/backend/);
-  assert.match(backendFiles, /No mutation route/);
+  assert.match(backendFiles, /No financial, custody, attendance, or offline-replayed mutation/);
 });

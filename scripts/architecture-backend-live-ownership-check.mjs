@@ -125,5 +125,5 @@ test("Web rollback remains authoritative and all live-adjacent mutations stay in
   assert.match(clockIn, /export async function POST/);
   assert.match(syncPush, /export async function POST/);
   assert.doesNotMatch(mobileApi, /TINDIO_WEB_API_ORIGIN|apps\/backend/);
-  assert.match(readme, /No mutation route/);
+  assert.match(readme, /No financial, custody, attendance, or offline-replayed mutation/);
 });

@@ -105,5 +105,5 @@ test("Web rollback route remains authoritative and mutations stay in Next.js", a
   assert.match(deliveryRoute, /queueReceiptDelivery/);
   assert.match(refundRoute, /refundSale/);
   assert.doesNotMatch(mobileApi, /TINDIO_WEB_API_ORIGIN|apps\/backend/);
-  assert.match(readme, /No mutation route/);
+  assert.match(readme, /No financial, custody, attendance, or offline-replayed mutation/);
 });

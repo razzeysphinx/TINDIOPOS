@@ -3,95 +3,14 @@ import { z } from "zod";
 import {
   posDeviceCredentialSchema,
 } from "@/features/devices/device-schema";
+import {
+  openTicketCartLineSchema,
+  saveOpenTicketSchema,
+  type OpenTicketCartLineValues,
+} from "@tindio/contracts/open-ticket-save";
 
-export const ticketCartLineSchema =
-  z.object({
-    productId: z.uuid(),
-    variantId: z.uuid().nullable(),
-    quantity: z
-      .number()
-      .min(0.001)
-      .max(10_000)
-      .refine(
-        (value) =>
-          Number.isInteger(
-            value * 1_000,
-          ),
-      ),
-    modifierOptionIds:
-      z.array(z.uuid()).max(50),
-    productName:
-      z.string().min(1).max(160),
-    variantName:
-      z.string().nullable(),
-    sku:
-      z.string().nullable(),
-    barcode:
-      z.string().nullable(),
-    categoryId:
-      z.uuid().nullable(),
-    priceMinor:
-      z.number().int().min(0),
-    unit:
-      z.string().min(1).max(24),
-    imageUrl:
-      z.url().nullable().optional(),
-    isVariablePrice:
-      z.boolean(),
-    allowFractionalQuantity:
-      z.boolean(),
-    manualPriceMinor:
-      z.number().int().positive().nullable(),
-    ticketLineId:
-      z.uuid().optional(),
-    itemNote:
-      z.string()
-        .trim()
-        .max(500)
-        .nullable()
-        .optional(),
-    modifiers:
-      z.array(
-        z.object({
-          id: z.uuid(),
-          name:
-            z.string().max(100),
-          priceMinor:
-            z.number()
-              .int()
-              .min(0),
-        }),
-      ).optional(),
-  });
-
-export const saveOpenTicketSchema =
-  z.object({
-    storeId: z.uuid(),
-    registerId: z.uuid(),
-    ticketId: z.uuid().nullable(),
-    customerId: z.uuid().nullable(),
-    diningOptionId:
-      z.uuid().nullable(),
-    assignedEmployeeId:
-      z.uuid().nullable(),
-    label:
-      z.string()
-        .trim()
-        .min(1)
-        .max(100),
-    note:
-      z.string()
-        .trim()
-        .max(500),
-    cart:
-      z.array(ticketCartLineSchema)
-        .min(1)
-        .max(100),
-    device:
-      posDeviceCredentialSchema
-        .nullable()
-        .optional(),
-  });
+export const ticketCartLineSchema = openTicketCartLineSchema;
+export { saveOpenTicketSchema };
 
 export const ticketReallocationLinesSchema =
   z.array(
@@ -159,10 +78,7 @@ export const cancelOpenTicketSchema =
         .optional(),
   });
 
-export type TicketCartLineValues =
-  z.infer<
-    typeof ticketCartLineSchema
-  >;
+export type TicketCartLineValues = OpenTicketCartLineValues;
 
 export type TicketReallocationLines =
   z.infer<

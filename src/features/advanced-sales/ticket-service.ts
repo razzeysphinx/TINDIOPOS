@@ -17,6 +17,15 @@ import {
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
 import { createBusinessContextClient } from "@/lib/supabase/context-client";
+import {
+  POS_OPEN_TICKET_SAVE_CONSTRAINT_DATABASE_CODE,
+  POS_OPEN_TICKET_SAVE_DATABASE_MESSAGE,
+  POS_OPEN_TICKET_SAVE_INPUT_MESSAGE,
+  POS_OPEN_TICKET_SAVE_PERMISSION_DATABASE_CODE,
+  POS_OPEN_TICKET_SAVE_PERMISSION_MESSAGE,
+  POS_OPEN_TICKET_SAVE_RPC,
+  POS_OPEN_TICKET_SAVE_SUCCESS_MESSAGE,
+} from "@tindio/contracts/open-ticket-save";
 
 export type {
   TicketActionResult,
@@ -24,10 +33,10 @@ export type {
 } from "@/features/advanced-sales/ticket-schema";
 
 function databaseMessage(error: { code?: string; message?: string } | null) {
-  if (error?.code === "42501" && error.message?.toLowerCase().includes("device")) return error.message;
-  if (error?.code === "42501") return "You do not have permission to change these tickets.";
-  if (error?.code === "23514" && error.message) return error.message;
-  return "TINDIO could not save the ticket change. Nothing was moved.";
+  if (error?.code === POS_OPEN_TICKET_SAVE_PERMISSION_DATABASE_CODE && error.message?.toLowerCase().includes("device")) return error.message;
+  if (error?.code === POS_OPEN_TICKET_SAVE_PERMISSION_DATABASE_CODE) return POS_OPEN_TICKET_SAVE_PERMISSION_MESSAGE;
+  if (error?.code === POS_OPEN_TICKET_SAVE_CONSTRAINT_DATABASE_CODE && error.message) return error.message;
+  return POS_OPEN_TICKET_SAVE_DATABASE_MESSAGE;
 }
 
 function hasTicketContext(context: BusinessContext) {
@@ -75,12 +84,12 @@ function reallocationLines(
 export async function saveOpenTicket({ context, input }: { context: BusinessContext; input: unknown }): Promise<TicketActionResult> {
   const parsed = saveOpenTicketSchema.safeParse(input);
   if (!hasTicketContext(context) || !parsed.success || !context.storeIds.includes(parsed.data.storeId)) {
-    return { ok: false, message: "Check the ticket details and your store access." };
+    return { ok: false, message: POS_OPEN_TICKET_SAVE_INPUT_MESSAGE };
   }
 
   const data = parsed.data;
   const supabase = await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(data.device) });
-  const { data: ticket, error } = await supabase.rpc("save_open_ticket_v2", {
+  const { data: ticket, error } = await supabase.rpc(POS_OPEN_TICKET_SAVE_RPC, {
     target_organization_id: context.organization.id,
     target_store_id: data.storeId,
     target_register_id: data.registerId,
@@ -93,7 +102,7 @@ export async function saveOpenTicket({ context, input }: { context: BusinessCont
     target_cart: ticketCart(data.cart),
   });
   if (error || !ticket?.[0]) return { ok: false, message: databaseMessage(error) };
-  return { ok: true, ticketId: ticket[0].ticket_id, message: "Ticket saved." };
+  return { ok: true, ticketId: ticket[0].ticket_id, message: POS_OPEN_TICKET_SAVE_SUCCESS_MESSAGE };
 }
 
 export async function cancelOpenTicket({ context, input }: { context: BusinessContext; input: unknown }): Promise<TicketMutationResult> {

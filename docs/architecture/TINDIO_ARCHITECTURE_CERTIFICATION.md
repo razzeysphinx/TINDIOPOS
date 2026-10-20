@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D15 COMPLETE; THIRD BACKEND-OWNED MUTATION CERTIFIED**
+Status: **SLICE D16 COMPLETE; OPEN-TICKET SAVE COMPATIBILITY CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, Slice D11 Backend-owned customer-display update with proxy rollback, the Slice D12 favorite-tile mutation compatibility boundary, Slice D13 Backend-owned favorite-tile update with proxy rollback, the Slice D14 customer-creation mutation compatibility boundary, and Slice D15 Backend-owned customer creation with proxy rollback
+Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, Slice D11 Backend-owned customer-display update with proxy rollback, the Slice D12 favorite-tile mutation compatibility boundary, Slice D13 Backend-owned favorite-tile update with proxy rollback, the Slice D14 customer-creation mutation compatibility boundary, Slice D15 Backend-owned customer creation with proxy rollback, and the Slice D16 open-ticket save mutation compatibility boundary
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -335,6 +335,15 @@ Database: **CANONICAL NEON UNCHANGED**
 - Mobile, Web POS, and Back Office now use the same shared HTTP command. The
   creation-only server action is removed; deployed origins, database schema,
   checkout, custody, attendance, sync, and offline replay remain unchanged.
+- A focused `@tindio/contracts/open-ticket-save` export now freezes the path,
+  three application permissions, feature gate, complete nested schema, RPC,
+  database codes, messages, and result envelope.
+- The isolated Backend oracle freezes assigned-store validation, owned-open-
+  shift custody, non-idempotent creation versus stable-ticket updates, exact RPC
+  projection, and database error mapping without network/database access.
+- The Web route remains authoritative. Mobile still uses the HTTP endpoint and
+  Web POS still uses its server action/service. No Backend ticket-save route,
+  runtime mode, schema, deployment, client origin, or adjacent mutation changed.
 
 ## Results
 
@@ -343,7 +352,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (253/253)** |
+| Backend behavior and contracts | **PASS (261/261)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -360,6 +369,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend favorite-tile ownership/rollback boundary | **PASS (5/5)** |
 | Backend customer-creation mutation compatibility boundary | **PASS (5/5)** |
 | Backend customer-creation ownership/rollback boundary | **PASS (5/5)** |
+| Backend open-ticket save mutation compatibility boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -383,7 +393,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (204/204 automated commands)** |
+| Static catalogue | **PASS (205/205 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -392,17 +402,18 @@ Database: **CANONICAL NEON UNCHANGED**
 
 No production Auth service was provisioned. No database schema or merchant data
 changed. No account was exported/imported. No session format, existing Web POS
-route, JSON wire field, checkout behavior, SQLite database, outbox record,
-deployment, client API origin, or provider project changed. The new Backend
-route exists only inside the undeployed Backend workspace; the environment
-example contains no credential.
+route ownership, JSON wire field, checkout behavior, SQLite database, outbox
+record, deployment, client API origin, or provider project changed. The D16
+Backend oracle is network- and database-independent and no Backend ticket-save
+route was added.
 
 ## Next gate
 
-Begin Slice D16 by freezing only `POST /api/pos/v2/tickets/save`. Inventory its
-context and permission ordering, assigned-register/open-shift custody,
-validation, idempotency, response envelopes, RPC arguments, and SQL authority
-before moving ownership. Do not move ticket cancel/merge/move/split, checkout,
-refunds, transfer receipt, attendance, sync, or any financial/offline-replayed
-mutation, and do not change deployed client origins. Neon Auth proof remains a
-later slice.
+Begin Slice D17 by moving only `POST /api/pos/v2/tickets/save` behind an explicit
+Backend-owned/proxy boundary while preserving every frozen D16 contract and the
+existing Web route as rollback. Preserve Mobile HTTP and Web POS behavior,
+assigned-store and owned-open-shift custody, device forwarding, create/update
+semantics, RPC arguments, and exact envelopes. Do not move ticket
+cancel/merge/move/split, checkout, refunds, transfer receipt, attendance, sync,
+or any other financial/offline-replayed mutation, and do not change deployed
+client origins. Neon Auth proof remains a later slice.

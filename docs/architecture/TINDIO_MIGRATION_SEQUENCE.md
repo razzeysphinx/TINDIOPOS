@@ -226,15 +226,29 @@ Status: **IN PROGRESS**
 - Keep checkout, refunds, transfer receipt, ticket custody, attendance, sync,
   and every financial/offline-replayed mutation unchanged. **IMPLEMENTED.**
 
-## Next smallest safe slice: D16 open-ticket save compatibility harness
+## Completed Slice D16: open-ticket save compatibility harness
 
 - Inventory and freeze only `POST /api/pos/v2/tickets/save`, including context,
   permission, assigned-register/open-shift custody, validation, idempotency,
   exact response envelopes, RPC arguments, and database authority.
+  **IMPLEMENTED.**
 - Add a network/database-independent Backend oracle and compatibility gates
-  before moving any ticket mutation ownership.
+  before moving any ticket mutation ownership. **IMPLEMENTED.**
 - Keep ticket cancel/merge/move/split, checkout, refunds, transfer receipt,
   attendance, sync, and every financial/offline-replayed mutation unchanged.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D17 open-ticket save mutation ownership
+
+- Move only `POST /api/pos/v2/tickets/save` behind an explicit Backend-owned/
+  proxy boundary while preserving every frozen D16 contract and the existing
+  Web route as rollback.
+- Preserve Mobile HTTP and Web POS behavior, assigned-store and owned-open-shift
+  custody, device credential forwarding, create/update semantics, exact RPC
+  arguments, and response/error envelopes.
+- Keep ticket cancel/merge/move/split, checkout, refunds, transfer receipt,
+  attendance, sync, and every other financial/offline-replayed mutation
+  unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

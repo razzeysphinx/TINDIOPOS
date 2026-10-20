@@ -32,6 +32,7 @@ import type {
   PosCustomerCreationResult,
 } from "@tindio/contracts";
 import { POS_CUSTOMER_CREATION_PATH } from "@tindio/contracts/customer-creation";
+import { POS_OPEN_TICKET_SAVE_PATH } from "@tindio/contracts/open-ticket-save";
 import { mobileEnvironment } from "./env";
 import {
   observeApiResponseBytes,
@@ -586,7 +587,7 @@ export async function savePosV2Ticket(
   organizationId: string,
   input: unknown,
 ) {
-  return (await request("/api/pos/v2/tickets/save", {
+  return (await request(POS_OPEN_TICKET_SAVE_PATH, {
     organizationId,
     init: jsonPost(input),
   })).json() as Promise<TicketActionResult>;

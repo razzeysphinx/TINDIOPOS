@@ -97,6 +97,12 @@ Slice D15 uses that frozen contract in the isolated owned command and allowliste
 Web rollback proxy. Mobile, Web POS, and Back Office now invoke the shared HTTP
 path; their deployed API origins are unchanged.
 
+The Slice D16 open-ticket save compatibility oracle is network- and database-
+independent. It freezes the existing Web-owned route, Mobile HTTP and Web
+server-action entry points, assigned-store and owned-open-shift custody, create
+versus update idempotency, validation bounds, RPC projection, and database error
+mapping. No Backend ticket-save route or runtime mode exists in this slice.
+
 No financial, custody, attendance, or offline-replayed mutation, authentication
 provider, deployment, or client API origin has moved. Clients continue using
 the existing Next.js route until a separate deployment and cutover is approved.

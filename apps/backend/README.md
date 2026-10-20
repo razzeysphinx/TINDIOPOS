@@ -35,12 +35,17 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
   same three-part receipt permission gate, UUID validation, unavailable-receipt
   404 behavior, strict immutable-snapshot validation, and bounded
   `get_pos_receipt_detail` loading through the same boundary.
+- `GET /api/pos/v2/attendance/employees` owns the time-clock feature gate,
+  `attendance.use` permission, assigned-store validation, strict employee-row
+  mapping, and bounded `get_attendance_employees` loading through the same
+  boundary.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`,
 `TINDIO_MODIFIERS_READ_MODE=owned`, `TINDIO_CUSTOMERS_READ_MODE=owned`, and
 `TINDIO_RECEIPTS_READ_MODE=owned`, and
-`TINDIO_RECEIPT_DETAIL_READ_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_RECEIPT_DETAIL_READ_MODE=owned`, and
+`TINDIO_ATTENDANCE_EMPLOYEES_READ_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -51,10 +56,10 @@ rollback. All proxies forward only `Accept`, `Authorization`, and
 `x-tindio-organization-id`. It preserves the upstream status, body,
 `Cache-Control`, `Content-Type`, `Retry-After`, and `x-tindio-request-id`; the
 reference proxy also preserves `ETag` and `x-tindio-reference-version`. The
-catalogue, modifiers, customer-search, receipt-search, and receipt-detail
-proxies preserve their complete query strings. The detail proxy preserves only
-one dynamic receipt path and rejects nested delivery/refund mutation paths.
-Cookies and unrelated headers are dropped.
+catalogue, modifiers, customer-search, receipt-search, receipt-detail, and
+attendance-employee proxies preserve their complete query strings. The detail
+proxy preserves only one dynamic receipt path and rejects nested delivery/refund
+mutation paths. Cookies and unrelated headers are dropped.
 
 No mutation route, authentication provider, deployment, or client API origin
 has moved. Clients continue using the existing Next.js route until a separate

@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D7 COMPLETE; SEVEN BACKEND-OWNED READS CERTIFIED**
+Status: **SLICE D8 COMPLETE; EIGHT BACKEND-OWNED READS CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D7 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail reads with proxy rollback
+Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D8 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee reads with proxy rollback
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -210,6 +210,23 @@ Database: **CANONICAL NEON UNCHANGED**
 - Web and Mobile retain their current API origin. Receipt delivery, refunds,
   checkout, clock mutations, every other mutation, database schema, and
   deployment configuration remain unchanged.
+- Backend `GET /api/pos/v2/attendance/employees` now owns the bounded employee
+  read with full business-context validation, the `time_clock` feature gate,
+  `attendance.use` permission, and assigned-store enforcement.
+- The owned path preserves first-value `store` parsing, exact snake_case RPC
+  arguments, camelCase employee and current-entry mapping, and the `Assigned
+  store` fallback through the shared Neon Data API boundary.
+- Null database data remains the established empty success. Provider errors,
+  database denials, and malformed rows preserve the existing HTTP 200 failure
+  envelope with an empty employee list and no provider detail.
+- `TINDIO_ATTENDANCE_EMPLOYEES_READ_MODE=proxy` retains the query-preserving Web
+  rollback with loop rejection and the established request/response header
+  allowlists.
+- A focused `@tindio/contracts/attendance` export supplies the cross-runtime
+  employee contract without importing the package barrel.
+- Web and Mobile retain their current API origin. Clock-in, clock-out, shift
+  custody, checkout, sync, every other mutation, database schema, deployment
+  configuration, and client routing remain unchanged.
 
 ## Results
 
@@ -218,7 +235,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend health/read behavior | **PASS (133/133)** |
+| Backend health/read behavior | **PASS (153/153)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -227,6 +244,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend customer-search ownership/rollback boundary | **PASS (5/5)** |
 | Backend receipt-search ownership/rollback boundary | **PASS (5/5)** |
 | Backend receipt-detail ownership/rollback boundary | **PASS (5/5)** |
+| Backend attendance-employee ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -250,7 +268,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (196/196 automated commands)** |
+| Static catalogue | **PASS (197/197 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -266,9 +284,9 @@ is an inert example containing no credential.
 
 ## Next gate
 
-Begin Slice D8 by moving only the POS attendance-employee read behind the
-Backend boundary while preserving the time-clock feature gate,
-`attendance.use` permission, assigned-store validation, exact employee mapping,
-and a Web rollback route. Do not move clock-in, clock-out, shift custody,
-checkout, sync, or other mutations, and do not change deployed client origins.
-Neon Auth proof remains a later slice.
+Begin Slice D9 by moving only the POS live-state read behind the Backend
+boundary while preserving required organization scope, optional store/register
+headers, identity retry, strict aggregate mapping, request IDs, and a Web
+rollback route. Do not move checkout, customer-display writes, ticket actions,
+attendance mutations, sync, or other mutations, and do not change deployed
+client origins. Neon Auth proof remains a later slice.

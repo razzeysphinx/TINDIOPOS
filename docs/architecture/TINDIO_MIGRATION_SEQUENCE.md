@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — SEVEN READS OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — EIGHT READS OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -107,13 +107,26 @@ Status: **IN PROGRESS**
   strictly validated before the existing camelCase response is returned.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D8 POS attendance-employee read ownership
+## Completed Slice D8: POS attendance-employee read ownership
 
 - Move only `GET /api/pos/v2/attendance/employees` behind the Backend boundary
   while preserving the time-clock feature gate, `attendance.use` permission,
   assigned-store validation, employee projection, and current failure bodies.
+  **IMPLEMENTED.**
 - Retain the Web route as rollback and keep clock-in, clock-out, shift custody,
-  checkout, sync, and every other mutation in Next.js.
+  checkout, sync, and every other mutation in Next.js. **IMPLEMENTED.**
+- `TINDIO_ATTENDANCE_EMPLOYEES_READ_MODE=proxy` retains the query-preserving Web
+  rollback with the established header allowlists. **IMPLEMENTED.**
+- Null data remains an empty success, while loader/provider and malformed-row
+  failures preserve the existing HTTP 200 failure envelope. **IMPLEMENTED.**
+
+## Next smallest safe slice: D9 POS live-state read ownership
+
+- Move only `GET /api/pos/v2/live` behind the Backend boundary while preserving
+  required organization scope, optional store/register headers, identity retry,
+  strict aggregate validation, request IDs, and the exact V2 live envelope.
+- Retain the Web route as rollback and keep checkout, customer-display writes,
+  ticket operations, attendance mutations, sync, and every mutation in Next.js.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

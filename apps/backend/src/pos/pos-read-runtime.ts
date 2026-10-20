@@ -20,7 +20,8 @@ export type PosReadRpcName =
   | "get_pos_modifiers_v2"
   | "search_pos_customers"
   | "get_pos_receipt_history"
-  | "get_pos_receipt_detail";
+  | "get_pos_receipt_detail"
+  | "get_attendance_employees";
 
 export type PosReadRpcArguments = Record<
   string,

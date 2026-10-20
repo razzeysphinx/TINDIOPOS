@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D3 COMPLETE; THREE BACKEND-OWNED READS CERTIFIED**
+Status: **SLICE D4 COMPLETE; FOUR BACKEND-OWNED READS CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D3 Backend-owned bootstrap/reference/catalogue reads with proxy rollback
+Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D4 Backend-owned bootstrap/reference/catalogue/modifiers reads with proxy rollback
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -151,6 +151,20 @@ Database: **CANONICAL NEON UNCHANGED**
 - Web and Mobile continue calling `/api/pos/v2/catalog` on their current API
   origins. No catalogue client, Web route, database schema, mutation, or
   deployed environment changed.
+- Backend `GET /api/pos/v2/modifiers` now owns the bounded modifiers read with
+  exact store/product UUID validation, explicit organization scope, bearer
+  verification, and `get_pos_modifiers_v2` loading through the shared Neon
+  Data API boundary.
+- Modifier groups preserve their identifiers, names, minimum/maximum selection
+  values, option identifiers/names, and minor-unit prices under strict response
+  validation. Only transient identity mapping retries.
+- The modifiers rollback proxy preserves the complete store/product query while
+  retaining the same loop rejection and request/response header allowlists.
+- The focused cart contract export is now NodeNext-compatible through an
+  explicit `.js` type-import specifier, while its Web and Mobile API remains
+  unchanged.
+- Web and Mobile continue calling `/api/pos/v2/modifiers` on their current API
+  origins. No client, Web route, schema, mutation, or environment changed.
 
 ## Results
 
@@ -159,11 +173,12 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend health/read behavior | **PASS (57/57)** |
+| Backend health/read behavior | **PASS (72/72)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
 | Backend catalogue ownership/rollback boundary | **PASS (5/5)** |
+| Backend modifiers ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -187,7 +202,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (192/192 automated commands)** |
+| Static catalogue | **PASS (193/193 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -203,8 +218,9 @@ is an inert example containing no credential.
 
 ## Next gate
 
-Begin Slice D4 by moving the bounded POS modifiers read behind the same Backend
-boundary while preserving product/store query validation, modifier selection
-rules, strict response validation, and the Web rollback route. Do not move
-financial mutations or change deployed client origins. Neon Auth proof remains
-a later slice.
+Begin Slice D5 by moving the POS customer-search read behind the Backend
+boundary while preserving assigned-store enforcement, `pos.access` plus
+`sales.create` authorization, the open-shift prerequisite, bounded search
+results, response mapping, and a Web rollback route. Do not move customer or
+financial mutations, and do not change deployed client origins. Neon Auth proof
+remains a later slice.

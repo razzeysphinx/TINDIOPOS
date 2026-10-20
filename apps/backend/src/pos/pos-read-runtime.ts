@@ -16,7 +16,8 @@ type PosReadRuntimeOptions = {
 export type PosReadRpcName =
   | "get_pos_bootstrap_core_v2"
   | "get_pos_reference_bundle_v2"
-  | "get_pos_catalog_v2";
+  | "get_pos_catalog_v2"
+  | "get_pos_modifiers_v2";
 
 export type PosReadRpcArguments = Record<
   string,

@@ -1,4 +1,4 @@
-import type { PosCatalogItem } from "./pos-data";
+import type { PosCatalogItem } from "./pos-data.js";
 
 export type PosModifierOption = {
   id: string;

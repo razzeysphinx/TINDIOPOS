@@ -8,6 +8,10 @@ import type {
   PosModifiersV2Response,
   PosReferenceV2Response,
 } from "@/contracts/pos";
+import type {
+  PosFavoriteTileActionResult,
+  PosFavoriteTileUpdate,
+} from "@tindio/contracts/favorite-tile";
 import {
   getRealtimeClient,
 } from "@/lib/supabase/realtime-client";
@@ -311,4 +315,21 @@ export async function fetchPosV2Modifiers(
   return (
     await response.json()
   ) as PosModifiersV2Response;
+}
+
+export async function updatePosFavoriteTile(
+  organizationId: string,
+  update: PosFavoriteTileUpdate,
+): Promise<PosFavoriteTileActionResult> {
+  const response = await fetchPosV2Command(
+    "/api/pos/v2/favorites",
+    {
+      organizationId,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(update),
+    },
+  );
+
+  return await response.json() as PosFavoriteTileActionResult;
 }

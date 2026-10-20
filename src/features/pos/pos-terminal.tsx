@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { POS_FAVORITE_TILE_UPDATE_MESSAGE } from "@tindio/contracts/favorite-tile";
 import {
   type FormEvent,
   type KeyboardEvent,
@@ -56,6 +57,7 @@ import {
   fetchPosV2Catalog,
   fetchPosV2Command,
   fetchPosV2Modifiers,
+  updatePosFavoriteTile,
 } from "@/features/pos/pos-v2-browser-api";
 import type { PosCapabilities } from "@/features/pos/pos-capabilities";
 import { useCompactPosPresentation } from "@/features/pos/pos-responsive";
@@ -72,7 +74,6 @@ import { PosCustomerCreateDialog, PosCustomerPicker } from "@/features/customers
 import { signOutAction } from "@/features/auth/actions";
 import { closeShiftAction, openShiftAction } from "@/features/shifts/actions";
 import type { TimeClockEntry } from "@/features/time-clock/time-clock-types";
-import { setPosFavoriteTileAction } from "@/features/pos/actions";
 import {
   posItemKey,
   type PosCartLine,
@@ -777,25 +778,29 @@ export function PosTerminal({
     const isFavorite = favoriteItemKeys.has(itemKey);
 
     startFavoriteTransition(async () => {
-      const result = await setPosFavoriteTileAction({
-        storeId: selectedStoreId,
-        productId: item.productId,
-        variantId: item.variantId,
-        isFavorite: !isFavorite,
-      });
-      setNotice(result.message);
+      try {
+        const result = await updatePosFavoriteTile(organizationId, {
+          storeId: selectedStoreId,
+          productId: item.productId,
+          variantId: item.variantId,
+          isFavorite: !isFavorite,
+        });
+        setNotice(result.message);
 
-      if (!result.ok) return;
+        if (!result.ok) return;
 
-      setFavoriteItems((current) => {
-        if (result.isFavorite) {
-          return current.some((candidate) => posItemKey(candidate) === itemKey)
-            ? current
-            : [...current, item];
-        }
+        setFavoriteItems((current) => {
+          if (result.isFavorite) {
+            return current.some((candidate) => posItemKey(candidate) === itemKey)
+              ? current
+              : [...current, item];
+          }
 
-        return current.filter((candidate) => posItemKey(candidate) !== itemKey);
-      });
+          return current.filter((candidate) => posItemKey(candidate) !== itemKey);
+        });
+      } catch {
+        setNotice(POS_FAVORITE_TILE_UPDATE_MESSAGE);
+      }
     });
   };
 

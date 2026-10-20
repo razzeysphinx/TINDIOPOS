@@ -47,10 +47,9 @@ test("favorite-tile mutation has a focused platform-neutral contract", async () 
   );
 });
 
-test("authoritative Web API, action, and service consume the frozen contract", async () => {
-  const [route, action, service, schemaFacade, typeFacade] = await Promise.all([
+test("Web rollback API and service consume the frozen contract", async () => {
+  const [route, service, schemaFacade, typeFacade] = await Promise.all([
     read("src/app/api/pos/v2/favorites/route.ts"),
-    read("src/features/pos/actions.ts"),
     read("src/features/pos/service.ts"),
     read("src/features/pos/pos-schema.ts"),
     read("src/features/pos/pos-types.ts"),
@@ -65,11 +64,6 @@ test("authoritative Web API, action, and service consume the frozen contract", a
   assert.match(route, /hasPermission\(context, POS_FAVORITE_TILE_PERMISSION\)/);
   assert.match(route, /setPosFavoriteTile\(\{ context, input: body\.input \}\)/);
 
-  assert.match(action, /export async function setPosFavoriteTileAction/);
-  assert.match(action, /requireBusinessContext\(\)/);
-  assert.match(action, /hasPermission\(context, POS_FAVORITE_TILE_PERMISSION\)/);
-  assert.match(action, /revalidatePath\("\/pos"\)/);
-
   assert.match(service, /favoriteTileSchema\.safeParse\(input\)/);
   assert.match(service, /context\.storeIds\.includes\(parsed\.data\.storeId\)/);
   assert.match(service, /supabase\.rpc\(POS_FAVORITE_TILE_RPC/);
@@ -82,17 +76,13 @@ test("authoritative Web API, action, and service consume the frozen contract", a
   ]) assert.match(service, new RegExp(`\\b${argument}\\b`));
   assert.match(service, /data !== parsed\.data\.isFavorite/);
 
-  for (const source of [route, action, service, schemaFacade, typeFacade]) {
+  for (const source of [route, service, schemaFacade, typeFacade]) {
     assert.match(source, /@tindio\/contracts\/favorite-tile/);
   }
 });
 
-test("Backend favorite-tile oracle is isolated and does not claim ownership", async () => {
-  const [oracle, backendReadme, rootManifest] = await Promise.all([
-    read("apps/backend/src/pos/favorite-tile-compatibility.ts"),
-    read("apps/backend/README.md"),
-    read("package.json"),
-  ]);
+test("Backend favorite-tile oracle remains isolated beside the owned route", async () => {
+  const oracle = await read("apps/backend/src/pos/favorite-tile-compatibility.ts");
 
   assert.match(oracle, /from ["']@tindio\/contracts\/favorite-tile["']/);
   assert.match(oracle, /FAVORITE_TILE_COMPATIBILITY_CONTRACT/);
@@ -103,9 +93,7 @@ test("Backend favorite-tile oracle is isolated and does not claim ownership", as
     oracle,
     /fetch\(|createPosReadRuntime|createNeonDataApiFetch|\.rpc\(|process\.env/,
   );
-  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/favorites.ts", import.meta.url)), false);
-  assert.doesNotMatch(backendReadme, /TINDIO_FAVORITES?(?:_TILE)?_(?:UPDATE_)?MODE/);
-  assert.doesNotMatch(rootManifest, /TINDIO_FAVORITES?(?:_TILE)?_(?:UPDATE_)?MODE/);
+  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/favorites.ts", import.meta.url)), true);
 });
 
 test("database authority retains access, saleability, ordering, idempotency, and role policy", async () => {
@@ -147,17 +135,20 @@ test("database authority retains access, saleability, ordering, idempotency, and
   assert.match(providerNeutral, /GRANT ALL ON FUNCTION "public"\."set_pos_favorite_tile"[^;]+TO "tindio_authenticated"/);
 });
 
-test("favorite-tile compatibility work leaves clients and higher-risk mutations unchanged", async () => {
-  const [terminal, checkout, refund, syncPush, favoriteRoute] = await Promise.all([
+test("favorite-tile ownership leaves the client origin and higher-risk mutations unchanged", async () => {
+  const [terminal, browserApi, actions, checkout, refund, syncPush, favoriteRoute] = await Promise.all([
     read("src/features/pos/pos-terminal.tsx"),
+    read("src/features/pos/pos-v2-browser-api.ts"),
+    read("src/features/pos/actions.ts"),
     read("src/app/api/pos/v2/checkout/route.ts"),
     read("src/app/api/pos/v2/receipts/[receiptId]/refund/route.ts"),
     read("src/app/api/pos/v2/sync/push/route.ts"),
     read("src/app/api/pos/v2/favorites/route.ts"),
   ]);
 
-  assert.match(terminal, /setPosFavoriteTileAction/);
-  assert.doesNotMatch(terminal, /["']\/api\/pos\/v2\/favorites["']/);
+  assert.match(terminal, /updatePosFavoriteTile/);
+  assert.match(browserApi, /["']\/api\/pos\/v2\/favorites["']/);
+  assert.doesNotMatch(actions, /setPosFavoriteTileAction/);
   assert.match(favoriteRoute, /setPosFavoriteTile/);
   assert.match(checkout, /export async function POST/);
   assert.match(refund, /export async function POST/);

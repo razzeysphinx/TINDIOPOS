@@ -1,37 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-
-import {
-  POS_FAVORITE_TILE_PERMISSION,
-  POS_FAVORITE_TILE_PERMISSION_MESSAGE,
-  type PosFavoriteTileActionResult,
-} from "@tindio/contracts/favorite-tile";
-
-import { setPosFavoriteTile } from "@/features/pos/service";
 import { loadPosReceiptDetail, type PosReceiptDetail } from "@/features/pos/data";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { z } from "zod";
-
-export async function setPosFavoriteTileAction(
-  input: unknown,
-): Promise<PosFavoriteTileActionResult> {
-  const context = await requireBusinessContext();
-
-  if (!hasPermission(context, POS_FAVORITE_TILE_PERMISSION)) {
-    return {
-      ok: false,
-      message: POS_FAVORITE_TILE_PERMISSION_MESSAGE,
-    };
-  }
-
-  const result = await setPosFavoriteTile({ context, input });
-  if (result.ok) {
-    revalidatePath("/pos");
-  }
-
-  return result;
-}
 
 const receiptIdSchema = z.object({ receiptId: z.uuid() });
 

@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — NINE READS AND ONE NON-FINANCIAL MUTATION OWNED; SECOND MUTATION CONTRACT FROZEN** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — NINE READS AND TWO NON-FINANCIAL MUTATIONS OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -177,18 +177,34 @@ Status: **IN PROGRESS**
   attendance, sync, and every financial/offline-replayed mutation in Next.js.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D13 favorite-tile mutation ownership
+## Completed Slice D13: favorite-tile mutation ownership
 
 - Move only `POST /api/pos/v2/favorites` behind an explicit Backend-owned/proxy
   boundary while preserving every frozen D12 contract and the existing Web
-  route as rollback.
-- Resolve the existing dual entry point deliberately: the Web POS currently
-  invokes `setPosFavoriteTileAction` while the HTTP route remains available.
-  Both paths must delegate to one owned command boundary or remain explicitly
-  compatibility-tested; do not create divergent mutation authorities.
+  route as rollback. **IMPLEMENTED.**
+- Converge the POS UI on the same-origin HTTP command and remove the redundant
+  favorite-only server action so there is one mutation entry point.
+  **IMPLEMENTED.**
+- Preserve context-first resolution, permission-before-JSON ordering, exact
+  `400` versus `200` envelopes, nullable variants, assigned-store validation,
+  RPC arguments/error mapping, and idempotent pin/unpin results. **IMPLEMENTED.**
+- Verify Supabase-issued bearer claims while sending business-context and
+  favorite RPC traffic only through the external-JWT Neon Data API.
+  **IMPLEMENTED.**
 - Keep client origins, database schema, customer creation, checkout, refunds,
   transfer receipt, ticket custody, attendance, sync, and every financial or
-  offline-replayed mutation unchanged.
+  offline-replayed mutation unchanged. **IMPLEMENTED.**
+
+## Next smallest safe slice: D14 customer-creation compatibility harness
+
+- Inventory and freeze only `POST /api/pos/v2/customers/create`, including
+  context and permission ordering, assigned-store/open-shift requirements,
+  validation, normalization, duplicate handling, exact response envelopes, RPC
+  arguments, and database authority.
+- Add a network/database-independent Backend oracle and compatibility gates
+  before moving customer-creation ownership.
+- Keep checkout, refunds, transfer receipt, ticket custody, attendance, sync,
+  and every financial/offline-replayed mutation in Next.js.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

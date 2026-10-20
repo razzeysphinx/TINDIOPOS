@@ -48,6 +48,7 @@
     "test:architecture-backend-customer-display-compatibility": "pnpm backend:test && node --test scripts/architecture-backend-customer-display-compatibility-check.mjs",
     "test:architecture-backend-customer-display": "pnpm backend:test && node --test scripts/architecture-backend-customer-display-ownership-check.mjs",
     "test:architecture-backend-favorite-tile-compatibility": "pnpm backend:test && node --test scripts/architecture-backend-favorite-tile-compatibility-check.mjs",
+    "test:architecture-backend-favorite-tile": "pnpm backend:test && node --test scripts/architecture-backend-favorite-tile-ownership-check.mjs",
     "test:phase-06-native-foundation": "node --test scripts/phase-06-native-foundation-check.mjs",
     "test:phase-06-provider-neutral-device-runtime": "node --test scripts/phase-06-provider-neutral-device-runtime-check.mjs",
     "test:phase-06-device-enrollment": "node --test scripts/phase-06-device-enrollment-check.mjs",

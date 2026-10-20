@@ -46,6 +46,9 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
 - `PUT /api/pos/v2/customer-display` owns bearer verification, business-context
   and permission validation, the frozen display update contract, and the
   `set_customer_display_state` command through the same Neon boundary.
+- `POST /api/pos/v2/favorites` owns bearer verification, business-context and
+  `products.manage` validation, assigned-store and request validation, and the
+  idempotent `set_pos_favorite_tile` command through the same Neon boundary.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`,
@@ -54,13 +57,14 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_RECEIPT_DETAIL_READ_MODE=owned`, and
 `TINDIO_ATTENDANCE_EMPLOYEES_READ_MODE=owned`, and
 `TINDIO_LIVE_READ_MODE=owned`, and
-`TINDIO_CUSTOMER_DISPLAY_UPDATE_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_CUSTOMER_DISPLAY_UPDATE_MODE=owned`, and
+`TINDIO_FAVORITE_TILE_UPDATE_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
 provider boundary.
 
-Set the route's read mode to `proxy` with `TINDIO_WEB_API_ORIGIN` only for
+Set a route's read/update mode to `proxy` with `TINDIO_WEB_API_ORIGIN` only for
 rollback. All proxies forward only `Accept`, `Authorization`, and
 `x-tindio-organization-id`. It preserves the upstream status, body,
 `Cache-Control`, `Content-Type`, `Retry-After`, and `x-tindio-request-id`; the
@@ -76,12 +80,11 @@ The Slice D10 customer-display compatibility oracle remains network- and
 database-independent. Slice D11 uses that frozen contract in the isolated
 owned command and its allowlisted Web rollback proxy.
 
-The Slice D12 favorite-tile compatibility oracle is also network- and
-database-independent. It freezes the current Web API and server-action
-behavior before ownership moves: permission and assigned-store checks,
-nullable variants, saleability/capacity failures, idempotent pin/unpin results,
-and the distinction between malformed-request HTTP 400 and action-result HTTP
-200. There is no Backend favorites route or mode environment variable yet.
+The Slice D12 favorite-tile compatibility oracle remains network- and
+database-independent. Slice D13 uses that frozen contract in the isolated
+owned command and allowlisted Web rollback proxy. The POS browser now invokes
+the shared HTTP path directly instead of maintaining a second server-action
+mutation authority; its origin is unchanged.
 
 No financial, custody, attendance, or offline-replayed mutation, authentication
 provider, deployment, or client API origin has moved. Clients continue using

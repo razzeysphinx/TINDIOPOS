@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — NINE READS AND ONE NON-FINANCIAL MUTATION OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — NINE READS AND ONE NON-FINANCIAL MUTATION OWNED; SECOND MUTATION CONTRACT FROZEN** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -161,15 +161,34 @@ Status: **IN PROGRESS**
 - Keep checkout, refunds, transfer receipt, ticket custody, attendance, sync,
   and every financial/offline-replayed mutation in Next.js. **IMPLEMENTED.**
 
-## Next smallest safe slice: D12 favorite-tile mutation compatibility harness
+## Completed Slice D12: favorite-tile mutation compatibility harness
 
-- Inventory and freeze only `POST /api/pos/v2/favorites`, including its
-  product-management permission, request validation, tile replacement/removal
-  semantics, response envelope, and database authority.
-- Add a Backend compatibility oracle and dual-route contract tests before
-  moving favorite-tile mutation ownership.
+- Freeze only `POST /api/pos/v2/favorites`, including context-first resolution,
+  its product-management permission before JSON parsing, request and assigned-
+  store validation, nullable variants, idempotent pin/unpin semantics, and the
+  malformed-request `400` versus action-result `200` envelopes. **IMPLEMENTED.**
+- Freeze the SQL authority: POS workspace/open-shift access, saleability,
+  advisory locking, first-free position from 1 through 24, exact database error
+  mapping, provider-neutral grants, and store-scoped RLS. **IMPLEMENTED.**
+- Add a network/database-independent Backend compatibility oracle without a
+  Backend route, mode variable, deployment change, or client-origin change.
+  **IMPLEMENTED.**
 - Keep customer creation, checkout, refunds, transfer receipt, ticket custody,
   attendance, sync, and every financial/offline-replayed mutation in Next.js.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D13 favorite-tile mutation ownership
+
+- Move only `POST /api/pos/v2/favorites` behind an explicit Backend-owned/proxy
+  boundary while preserving every frozen D12 contract and the existing Web
+  route as rollback.
+- Resolve the existing dual entry point deliberately: the Web POS currently
+  invokes `setPosFavoriteTileAction` while the HTTP route remains available.
+  Both paths must delegate to one owned command boundary or remain explicitly
+  compatibility-tested; do not create divergent mutation authorities.
+- Keep client origins, database schema, customer creation, checkout, refunds,
+  transfer receipt, ticket custody, attendance, sync, and every financial or
+  offline-replayed mutation unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

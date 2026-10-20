@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D11 COMPLETE; FIRST BACKEND-OWNED MUTATION CERTIFIED**
+Status: **SLICE D12 COMPLETE; FAVORITE-TILE MUTATION CONTRACT CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, and Slice D11 Backend-owned customer-display update with proxy rollback
+Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, Slice D11 Backend-owned customer-display update with proxy rollback, and the Slice D12 favorite-tile mutation compatibility boundary
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -272,6 +272,22 @@ Database: **CANONICAL NEON UNCHANGED**
 - Web and Mobile retain their current API origin. Customer creation, checkout,
   refunds, transfers, ticket custody, attendance, sync, database schema,
   deployment configuration, and every financial/offline mutation are unchanged.
+- A focused `@tindio/contracts/favorite-tile` export freezes the exact path,
+  permission, schema, result messages, RPC name/error codes, and 24-tile limit.
+- The authoritative Web HTTP route and server action consume that contract
+  while preserving context-before-body ordering, permission-before-JSON
+  ordering, assigned-store validation, nullable variants, and exact RPC args.
+- The Backend compatibility oracle reproduces validation and RPC result mapping
+  without exposing an HTTP handler, environment mode, network/database access,
+  or a second runtime mutation authority.
+- Static checks preserve saleability, active POS workspace/shift access,
+  advisory locking, first-free 1-through-24 placement, idempotent pin/unpin,
+  provider-neutral grants, and store-scoped RLS. Malformed JSON remains HTTP
+  `400`; permission, validation, RPC failure, and success results remain HTTP
+  `200` through the Web action envelope.
+- The POS UI still invokes the existing server action and the Web API route is
+  still authoritative. No ownership, client origin, schema, deployment, or
+  higher-risk mutation changed in Slice D12.
 
 ## Results
 
@@ -280,7 +296,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (198/198)** |
+| Backend behavior and contracts | **PASS (206/206)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -293,6 +309,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend live-state ownership/rollback boundary | **PASS (5/5)** |
 | Backend customer-display mutation compatibility boundary | **PASS (5/5)** |
 | Backend customer-display ownership/rollback boundary | **PASS (5/5)** |
+| Backend favorite-tile mutation compatibility boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -316,7 +333,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (200/200 automated commands)** |
+| Static catalogue | **PASS (201/201 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -332,10 +349,11 @@ environment example contains no credential.
 
 ## Next gate
 
-Begin Slice D12 by freezing the `POST /api/pos/v2/favorites` contract as the
-next low-risk, non-financial mutation candidate. Inventory its permission,
-validation, replacement/removal semantics, response, and database authority,
-then add a compatibility harness before moving ownership. Do not move customer
-creation, checkout, refunds, transfer receipt, ticket custody, attendance, sync,
-or any financial/offline-replayed mutation, and do not change deployed client
-origins. Neon Auth proof remains a later slice.
+Begin Slice D13 by moving only `POST /api/pos/v2/favorites` behind an explicit
+Backend-owned/proxy boundary while preserving the frozen D12 behavior and the
+Web route as rollback. The POS UI currently uses a server action, so the HTTP
+route and action must converge on one owned command boundary or remain
+explicitly compatibility-tested; do not leave divergent mutation authorities.
+Do not move customer creation, checkout, refunds, transfer receipt, ticket
+custody, attendance, sync, or any financial/offline-replayed mutation, and do
+not change deployed client origins. Neon Auth proof remains a later slice.

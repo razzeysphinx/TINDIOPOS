@@ -19,7 +19,4 @@ export type {
 } from "@tindio/contracts";
 
 export { posItemKey } from "@tindio/contracts/cart";
-
-export type PosFavoriteTileActionResult =
-  | { ok: true; isFavorite: boolean; message: string }
-  | { ok: false; message: string };
+export type { PosFavoriteTileActionResult } from "@tindio/contracts/favorite-tile";

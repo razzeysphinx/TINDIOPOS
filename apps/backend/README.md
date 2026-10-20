@@ -76,6 +76,13 @@ The Slice D10 customer-display compatibility oracle remains network- and
 database-independent. Slice D11 uses that frozen contract in the isolated
 owned command and its allowlisted Web rollback proxy.
 
+The Slice D12 favorite-tile compatibility oracle is also network- and
+database-independent. It freezes the current Web API and server-action
+behavior before ownership moves: permission and assigned-store checks,
+nullable variants, saleability/capacity failures, idempotent pin/unpin results,
+and the distinction between malformed-request HTTP 400 and action-result HTTP
+200. There is no Backend favorites route or mode environment variable yet.
+
 No financial, custody, attendance, or offline-replayed mutation, authentication
 provider, deployment, or client API origin has moved. Clients continue using
 the existing Next.js route until a separate deployment and cutover is approved.

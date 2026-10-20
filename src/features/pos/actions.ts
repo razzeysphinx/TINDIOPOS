@@ -2,9 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 
+import {
+  POS_FAVORITE_TILE_PERMISSION,
+  POS_FAVORITE_TILE_PERMISSION_MESSAGE,
+  type PosFavoriteTileActionResult,
+} from "@tindio/contracts/favorite-tile";
+
 import { setPosFavoriteTile } from "@/features/pos/service";
 import { loadPosReceiptDetail, type PosReceiptDetail } from "@/features/pos/data";
-import type { PosFavoriteTileActionResult } from "@/features/pos/pos-types";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { z } from "zod";
 
@@ -13,10 +18,10 @@ export async function setPosFavoriteTileAction(
 ): Promise<PosFavoriteTileActionResult> {
   const context = await requireBusinessContext();
 
-  if (!hasPermission(context, "products.manage")) {
+  if (!hasPermission(context, POS_FAVORITE_TILE_PERMISSION)) {
     return {
       ok: false,
-      message: "Product-management permission is required to configure POS tiles.",
+      message: POS_FAVORITE_TILE_PERMISSION_MESSAGE,
     };
   }
 

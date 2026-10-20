@@ -192,7 +192,12 @@ export type {
 
 export {
   favoriteTileSchema,
-} from "@/features/pos/pos-schema";
+} from "@tindio/contracts/favorite-tile";
+
+export type {
+  PosFavoriteTileActionResult,
+  PosFavoriteTileUpdate,
+} from "@tindio/contracts/favorite-tile";
 
 export {
   createCustomerSchema,

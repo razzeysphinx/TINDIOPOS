@@ -1,3 +1,7 @@
+import {
+  POS_FAVORITE_TILE_PERMISSION,
+  POS_FAVORITE_TILE_PERMISSION_MESSAGE,
+} from "@tindio/contracts/favorite-tile";
 import { posApiJson, readPosApiJson } from "@/features/pos/pos-api-response";
 import { setPosFavoriteTile } from "@/features/pos/service";
 import { hasPermission } from "@/lib/auth/dal";
@@ -7,8 +11,8 @@ export async function POST(request: Request) {
   const resolved = await getPosV2BusinessContext(request);
   if (!resolved.ok) return resolved.response;
   const context = resolved.context;
-  if (!hasPermission(context, "products.manage")) {
-    return posApiJson({ ok: false, message: "Product-management permission is required to configure POS tiles." });
+  if (!hasPermission(context, POS_FAVORITE_TILE_PERMISSION)) {
+    return posApiJson({ ok: false, message: POS_FAVORITE_TILE_PERMISSION_MESSAGE });
   }
 
   const body = await readPosApiJson(request);

@@ -24,10 +24,15 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
 - `GET /api/pos/v2/modifiers` owns product/store query validation, bearer
   verification, explicit organization scope, modifier-group validation, and
   `get_pos_modifiers_v2` loading through the same boundary.
+- `GET /api/pos/v2/customers` owns business-context and assigned-store
+  validation, `pos.access` plus `sales.create` authorization, the open-shift
+  prerequisite, and the bounded `search_pos_customers` lookup through the same
+  boundary.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`, and
-`TINDIO_MODIFIERS_READ_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_MODIFIERS_READ_MODE=owned`, and `TINDIO_CUSTOMERS_READ_MODE=owned`
+paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -38,8 +43,8 @@ rollback. All proxies forward only `Accept`, `Authorization`, and
 `x-tindio-organization-id`. It preserves the upstream status, body,
 `Cache-Control`, `Content-Type`, `Retry-After`, and `x-tindio-request-id`; the
 reference proxy also preserves `ETag` and `x-tindio-reference-version`. The
-catalogue and modifiers proxies preserve their complete validated query
-strings. Cookies and unrelated headers are dropped.
+catalogue, modifiers, and customer-search proxies preserve their complete
+validated query strings. Cookies and unrelated headers are dropped.
 
 No mutation route, authentication provider, deployment, or client API origin
 has moved. Clients continue using the existing Next.js route until a separate

@@ -17,7 +17,8 @@ export type PosReadRpcName =
   | "get_pos_bootstrap_core_v2"
   | "get_pos_reference_bundle_v2"
   | "get_pos_catalog_v2"
-  | "get_pos_modifiers_v2";
+  | "get_pos_modifiers_v2"
+  | "search_pos_customers";
 
 export type PosReadRpcArguments = Record<
   string,
@@ -78,28 +79,44 @@ export function createPosReadRuntime({
     fetchImpl,
   });
 
+  const createDatabaseClient = (token: string) => createClient(
+    supabaseUrl,
+    publishableKey,
+    {
+      accessToken: async () => token,
+      auth: {
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        persistSession: false,
+      },
+      global: {
+        fetch: databaseFetch,
+      },
+    },
+  );
+
   return {
     verifyClaims: async (token: string) => authClient.auth.getClaims(token),
+    findOpenShift: async (
+      token: string,
+      organizationId: string,
+      storeId: string,
+      employeeId: string,
+    ): Promise<PosReadRpcResult> =>
+      createDatabaseClient(token)
+        .from("shifts")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .eq("store_id", storeId)
+        .eq("opened_by_employee_id", employeeId)
+        .eq("status", "open")
+        .maybeSingle(),
     callRpc: async (
       token: string,
       name: PosReadRpcName,
       args: PosReadRpcArguments,
     ): Promise<PosReadRpcResult> => {
-      const database = createClient(
-        supabaseUrl,
-        publishableKey,
-        {
-          accessToken: async () => token,
-          auth: {
-            autoRefreshToken: false,
-            detectSessionInUrl: false,
-            persistSession: false,
-          },
-          global: {
-            fetch: databaseFetch,
-          },
-        },
-      );
+      const database = createDatabaseClient(token);
 
       return database.rpc(name, args);
     },

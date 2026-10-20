@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D4 COMPLETE; FOUR BACKEND-OWNED READS CERTIFIED**
+Status: **SLICE D5 COMPLETE; FIVE BACKEND-OWNED READS CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D4 Backend-owned bootstrap/reference/catalogue/modifiers reads with proxy rollback
+Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D5 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search reads with proxy rollback
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -165,6 +165,20 @@ Database: **CANONICAL NEON UNCHANGED**
   unchanged.
 - Web and Mobile continue calling `/api/pos/v2/modifiers` on their current API
   origins. No client, Web route, schema, mutation, or environment changed.
+- Backend `GET /api/pos/v2/customers` now owns the bounded customer-search read,
+  including full business-context validation, assigned-store enforcement,
+  `pos.access` plus `sales.create` authorization, and the cashier open-shift
+  prerequisite.
+- The owned customer path preserves the existing trim and 100-character query
+  bound, fixed eight-result database limit, exact customer field mapping, and
+  403-versus-500 database failure classification under strict row validation.
+- The customer rollback proxy preserves the complete store/search query while
+  retaining the established loop rejection and request/response allowlists.
+- Customer search reuses the focused `@tindio/contracts/pos-data` export and all
+  authenticated database traffic remains on the shared Neon Data API adapter.
+- Web and Mobile continue calling `/api/pos/v2/customers` on their current API
+  origins. No customer creation, financial mutation, client, Web route, schema,
+  deployed environment, or API origin changed.
 
 ## Results
 
@@ -173,12 +187,13 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend health/read behavior | **PASS (72/72)** |
+| Backend health/read behavior | **PASS (92/92)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
 | Backend catalogue ownership/rollback boundary | **PASS (5/5)** |
 | Backend modifiers ownership/rollback boundary | **PASS (5/5)** |
+| Backend customer-search ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -202,7 +217,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (193/193 automated commands)** |
+| Static catalogue | **PASS (194/194 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -218,9 +233,8 @@ is an inert example containing no credential.
 
 ## Next gate
 
-Begin Slice D5 by moving the POS customer-search read behind the Backend
-boundary while preserving assigned-store enforcement, `pos.access` plus
-`sales.create` authorization, the open-shift prerequisite, bounded search
-results, response mapping, and a Web rollback route. Do not move customer or
-financial mutations, and do not change deployed client origins. Neon Auth proof
-remains a later slice.
+Begin Slice D6 by moving the bounded POS receipt-search read behind the Backend
+boundary while preserving its permission checks, cursor semantics, response
+mapping, and a Web rollback route. Do not move refund, delivery, checkout, or
+other financial mutations, and do not change deployed client origins. Neon Auth
+proof remains a later slice.

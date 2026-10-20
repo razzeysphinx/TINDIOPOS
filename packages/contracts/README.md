@@ -12,6 +12,8 @@ active-shift, open-ticket, ticket-assignee, shift-response, receipt
 summary/detail/list, attendance entry/employee/list, customer-display session,
 state/update validation and HTTP compatibility constants, favorite-tile
 validation, mutation results, and HTTP/database compatibility constants,
+customer-creation validation, result, projection, and HTTP/database compatibility
+constants,
 incoming-transfer projection, POS support-workspace, and POS live-response
 contracts. It also owns the supported business-type values and guard, the
 client-safe POS bootstrap V2 core response, checkout sale and stock-validation

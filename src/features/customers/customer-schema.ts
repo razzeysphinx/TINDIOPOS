@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { createCustomerSchema } from "@tindio/contracts/customer-creation";
+
+export { createCustomerSchema } from "@tindio/contracts/customer-creation";
+export type { CreateCustomerValues } from "@tindio/contracts/customer-creation";
 
 const optionalText = (maximum: number) =>
   z.string().trim().max(maximum);
@@ -7,22 +11,6 @@ const moneyAmount = z
   .string()
   .trim()
   .regex(/^\d{1,10}(?:\.\d{1,2})?$/, "Enter an amount with up to 2 decimal places.");
-
-export const createCustomerSchema = z.object({
-  fullName: z.string().trim().min(1, "Enter the customer's name.").max(160),
-  email: optionalText(320).refine(
-    (value) => !value || z.string().email().safeParse(value).success,
-    "Enter a valid email address.",
-  ),
-  phone: optionalText(40),
-  address: optionalText(500),
-  birthday: z.string().trim().date().or(z.literal("")),
-  notes: optionalText(1000),
-  loyaltyCardCode: optionalText(80).refine(
-    (value) => !value || value.length >= 3,
-    "Enter at least 3 characters for the loyalty card.",
-  ),
-});
 
 export const updateCustomerStatusSchema = z.object({
   customerId: z.uuid(),
@@ -126,7 +114,6 @@ export const importCustomersCsvSchema = z.object({
   })).min(1).max(500),
 });
 
-export type CreateCustomerValues = z.infer<typeof createCustomerSchema>;
 export type CreateCustomerSegmentValues = z.infer<typeof createCustomerSegmentSchema>;
 export type UpdateCustomerSegmentValues = z.infer<typeof updateCustomerSegmentSchema>;
 export type UpdateCustomerProfileValues = z.infer<typeof updateCustomerProfileSchema>;

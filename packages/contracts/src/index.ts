@@ -10,6 +10,7 @@ export * from "./device";
 export * from "./attendance";
 export * from "./cart";
 export * from "./customer-display";
+export * from "./customer-creation";
 export * from "./favorite-tile";
 export * from "./pos-data";
 export * from "./pos-operations";

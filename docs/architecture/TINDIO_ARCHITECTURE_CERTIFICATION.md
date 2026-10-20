@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D13 COMPLETE; SECOND BACKEND-OWNED MUTATION CERTIFIED**
+Status: **SLICE D14 COMPLETE; CUSTOMER-CREATION CONTRACT CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, Slice D11 Backend-owned customer-display update with proxy rollback, the Slice D12 favorite-tile mutation compatibility boundary, and Slice D13 Backend-owned favorite-tile update with proxy rollback
+Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, Slice D11 Backend-owned customer-display update with proxy rollback, the Slice D12 favorite-tile mutation compatibility boundary, Slice D13 Backend-owned favorite-tile update with proxy rollback, and the Slice D14 customer-creation mutation compatibility boundary
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -306,6 +306,20 @@ Database: **CANONICAL NEON UNCHANGED**
   redundant favorite-only server action is removed. Web and Mobile origins,
   database schema, deployment, customer creation, and every financial,
   custody, attendance, or offline-replayed mutation remain unchanged.
+- A focused `@tindio/contracts/customer-creation` export now freezes the path,
+  `customers.manage` permission, normalized input schema, selected database
+  projection, exact messages, and success/failure result envelope.
+- The Web route still resolves business context and permission before JSON.
+  Mobile still uses that HTTP route, while Web POS and Back Office still use
+  the shared server action/service; D14 moves neither entry point.
+- Customer creation performs a direct `customers` insert. It has no store or
+  open-shift prerequisite and no RPC. RLS enforces organization permission;
+  the database trigger serializes and assigns customer numbers and default
+  loyalty codes, while constraints and unique keys remain authoritative.
+- The isolated Backend oracle reproduces validation, permission/database-error
+  mapping, and the POS customer projection without network/database access.
+  No Backend route, runtime mode, environment variable, schema, deployment, or
+  client origin was added or changed in D14.
 
 ## Results
 
@@ -314,7 +328,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (226/226)** |
+| Backend behavior and contracts | **PASS (233/233)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -329,6 +343,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend customer-display ownership/rollback boundary | **PASS (5/5)** |
 | Backend favorite-tile mutation compatibility boundary | **PASS (5/5)** |
 | Backend favorite-tile ownership/rollback boundary | **PASS (5/5)** |
+| Backend customer-creation mutation compatibility boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -352,7 +367,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (202/202 automated commands)** |
+| Static catalogue | **PASS (203/203 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -362,17 +377,16 @@ Database: **CANONICAL NEON UNCHANGED**
 No production Auth service was provisioned. No database schema or merchant data
 changed. No account was exported/imported. No session format, existing Web POS
 route, JSON wire field, checkout behavior, SQLite database, outbox record,
-deployment, client API origin, or provider project changed. The new Backend
-mutation route exists only inside the undeployed Backend workspace; the
-environment example contains no credential.
+deployment, client API origin, or provider project changed. D14 adds only a
+shared contract and an isolated Backend oracle; it adds no Backend route or
+environment setting.
 
 ## Next gate
 
-Begin Slice D14 by freezing `POST /api/pos/v2/customers/create` as the next
-bounded non-financial mutation candidate. Inventory its context and permission
-ordering, assigned-store and open-shift requirements, validation and
-normalization, duplicate behavior, response envelopes, RPC arguments, and SQL
-authority before moving ownership. Do not move checkout, refunds, transfer
-receipt, ticket custody, attendance, sync, or any financial/offline-replayed
-mutation, and do not change deployed client origins. Neon Auth proof remains a
-later slice.
+Begin Slice D15 by moving only `POST /api/pos/v2/customers/create` behind an
+explicit Backend-owned/proxy boundary. Preserve the D14 direct-insert, RLS,
+trigger, validation, response, and error-mapping contract, and converge the
+Mobile HTTP plus Web POS/Back Office server-action paths without changing the
+deployed client origin. Do not move checkout, refunds, transfer receipt, ticket
+custody, attendance, sync, or any financial/offline-replayed mutation. Neon
+Auth proof remains a later slice.

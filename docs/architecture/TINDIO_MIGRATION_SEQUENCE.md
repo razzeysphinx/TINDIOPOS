@@ -195,16 +195,35 @@ Status: **IN PROGRESS**
   transfer receipt, ticket custody, attendance, sync, and every financial or
   offline-replayed mutation unchanged. **IMPLEMENTED.**
 
-## Next smallest safe slice: D14 customer-creation compatibility harness
+## Completed Slice D14: customer-creation compatibility harness
 
 - Inventory and freeze only `POST /api/pos/v2/customers/create`, including
-  context and permission ordering, assigned-store/open-shift requirements,
-  validation, normalization, duplicate handling, exact response envelopes, RPC
-  arguments, and database authority.
+  context-first and permission-before-JSON ordering, schema validation and
+  trimming, exact response envelopes, direct table-insert projection, and
+  database authority. Creation has no assigned-store or open-shift prerequisite.
+  **IMPLEMENTED.**
 - Add a network/database-independent Backend oracle and compatibility gates
   before moving customer-creation ownership.
+  **IMPLEMENTED.**
+- Freeze the existing dual entry points: Mobile uses the HTTP route while Web
+  POS and Back Office use the shared server action/service. **IMPLEMENTED.**
+- Preserve customer-number and default loyalty-code generation in the database
+  trigger, organization-scoped uniqueness, field constraints, and
+  provider-neutral `customers.manage` INSERT/SELECT RLS. **IMPLEMENTED.**
 - Keep checkout, refunds, transfer receipt, ticket custody, attendance, sync,
-  and every financial/offline-replayed mutation in Next.js.
+  and every financial/offline-replayed mutation in Next.js. **IMPLEMENTED.**
+
+## Next smallest safe slice: D15 customer-creation mutation ownership
+
+- Move only `POST /api/pos/v2/customers/create` behind an explicit Backend-
+  owned/proxy boundary while preserving every frozen D14 contract and the Web
+  route as rollback.
+- Resolve Mobile HTTP plus Web POS/Back Office server-action entry points onto
+  one mutation authority without changing the deployed client API origin.
+- Keep direct RLS-protected insert and database-generated identity semantics;
+  do not invent an RPC or add store/open-shift prerequisites.
+- Keep checkout, refunds, transfer receipt, ticket custody, attendance, sync,
+  and every financial/offline-replayed mutation unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

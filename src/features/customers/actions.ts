@@ -3,6 +3,11 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  POS_CUSTOMER_CREATION_PERMISSION,
+  POS_CUSTOMER_CREATION_PERMISSION_MESSAGE,
+  type PosCustomerCreationResult,
+} from "@tindio/contracts/customer-creation";
+import {
   adjustCustomerLoyaltyPoints,
   addLoyaltyCardStamp,
   claimLoyaltyCardReward,
@@ -18,13 +23,12 @@ import {
   updateLoyaltyProgram,
 } from "@/features/customers/service";
 import type { CustomerActionResult, LoyaltyCardCredential } from "@/features/customers/customer-types";
-import type { PosCustomer } from "@/features/pos/pos-types";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 
-export async function createCustomerAction(input: unknown): Promise<CustomerActionResult<PosCustomer>> {
+export async function createCustomerAction(input: unknown): Promise<PosCustomerCreationResult> {
   const context = await requireBusinessContext();
-  if (!hasPermission(context, "customers.manage")) {
-    return { ok: false, message: "You do not have permission to manage customers." };
+  if (!hasPermission(context, POS_CUSTOMER_CREATION_PERMISSION)) {
+    return { ok: false, message: POS_CUSTOMER_CREATION_PERMISSION_MESSAGE };
   }
 
   const result = await createCustomer({ context, input });

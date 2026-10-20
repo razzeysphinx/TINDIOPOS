@@ -20,6 +20,10 @@
       "types": "./src/customer-display.ts",
       "default": "./src/customer-display.ts"
     },
+    "./customer-creation": {
+      "types": "./src/customer-creation.ts",
+      "default": "./src/customer-creation.ts"
+    },
     "./favorite-tile": {
       "types": "./src/favorite-tile.ts",
       "default": "./src/favorite-tile.ts"

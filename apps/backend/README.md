@@ -86,6 +86,12 @@ owned command and allowlisted Web rollback proxy. The POS browser now invokes
 the shared HTTP path directly instead of maintaining a second server-action
 mutation authority; its origin is unchanged.
 
+The Slice D14 customer-creation compatibility oracle is also network- and
+database-independent. It freezes the existing Web route, server-action, direct
+RLS-protected table insert, generated customer identity, and response mapping.
+It does not add a Backend route or environment mode; Mobile keeps its HTTP
+entry point while Web POS and Back Office keep their server-action entry point.
+
 No financial, custody, attendance, or offline-replayed mutation, authentication
 provider, deployment, or client API origin has moved. Clients continue using
 the existing Next.js route until a separate deployment and cutover is approved.

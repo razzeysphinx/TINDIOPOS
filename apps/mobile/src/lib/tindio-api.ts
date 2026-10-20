@@ -10,7 +10,6 @@ import type {
   PosBootstrapV2CoreResponse,
   PosCatalogV2Response,
   PosCloseShiftV2Response,
-  PosCustomer,
   PosCustomerSearchResponse,
   PosLiveV2Response,
   PosModifiersV2Response,
@@ -29,7 +28,10 @@ import type {
   TimeClockActionResult,
   ValidateCartStockActionResult,
   ValidateCartStockValues,
+  CreateCustomerValues,
+  PosCustomerCreationResult,
 } from "@tindio/contracts";
+import { POS_CUSTOMER_CREATION_PATH } from "@tindio/contracts/customer-creation";
 import { mobileEnvironment } from "./env";
 import {
   observeApiResponseBytes,
@@ -49,9 +51,7 @@ export type BasicActionResult =
   | { ok: true; message: string }
   | { ok: false; message: string };
 
-export type CustomerCreateResult =
-  | { ok: true; message: string; data?: PosCustomer }
-  | { ok: false; message: string };
+export type CustomerCreateResult = PosCustomerCreationResult;
 
 export type RefundResult =
   | {
@@ -437,17 +437,9 @@ export async function searchPosV2Customers(
 
 export async function createPosV2Customer(
   organizationId: string,
-  input: {
-    fullName: string;
-    email: string;
-    phone: string;
-    address: string;
-    birthday: string;
-    notes: string;
-    loyaltyCardCode: string;
-  },
+  input: CreateCustomerValues,
 ) {
-  return (await request("/api/pos/v2/customers/create", {
+  return (await request(POS_CUSTOMER_CREATION_PATH, {
     organizationId,
     init: jsonPost(input),
   })).json() as Promise<CustomerCreateResult>;

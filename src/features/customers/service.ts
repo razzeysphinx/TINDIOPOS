@@ -1,5 +1,14 @@
 import "server-only";
 
+import {
+  POS_CUSTOMER_CREATION_DATABASE_MESSAGE,
+  POS_CUSTOMER_CREATION_INPUT_MESSAGE,
+  POS_CUSTOMER_CREATION_SELECT,
+  POS_CUSTOMER_CREATION_SUCCESS_MESSAGE,
+  POS_CUSTOMER_CREATION_TABLE,
+  type PosCustomerCreationResult,
+} from "@tindio/contracts/customer-creation";
+
 import { moneyInputToMinor } from "@/features/catalog/catalog-money";
 import {
   createCustomerSegmentSchema,
@@ -18,14 +27,13 @@ import {
 } from "@/features/customers/customer-schema";
 import { createLoyaltyCardCode, createLoyaltyCardVerificationToken } from "@/features/customers/loyalty-card-token";
 import type { CustomerActionResult, LoyaltyCardCredential } from "@/features/customers/customer-types";
-import type { PosCustomer } from "@/features/pos/pos-types";
 import type { BusinessContext } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
 import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 function customerDatabaseMessage(message: string | undefined) {
-  if (message?.includes("customers_")) return "Check the customer details and try again.";
-  return "TINDIO could not save this customer.";
+  if (message?.includes("customers_")) return POS_CUSTOMER_CREATION_INPUT_MESSAGE;
+  return POS_CUSTOMER_CREATION_DATABASE_MESSAGE;
 }
 
 export async function createCustomer({
@@ -34,13 +42,13 @@ export async function createCustomer({
 }: {
   context: BusinessContext;
   input: unknown;
-}): Promise<CustomerActionResult<PosCustomer>> {
+}): Promise<PosCustomerCreationResult> {
   const parsed = createCustomerSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Check the customer details and try again." };
+  if (!parsed.success) return { ok: false, message: POS_CUSTOMER_CREATION_INPUT_MESSAGE };
 
   const supabase = await createBusinessContextClient(context);
   const { data, error } = await supabase
-    .from("customers")
+    .from(POS_CUSTOMER_CREATION_TABLE)
     .insert({
       organization_id: context.organization.id,
       full_name: parsed.data.fullName,
@@ -51,14 +59,14 @@ export async function createCustomer({
       notes: parsed.data.notes || null,
       loyalty_card_code: parsed.data.loyaltyCardCode || undefined,
     })
-    .select("id, customer_number, loyalty_card_code, full_name, email, phone")
+    .select(POS_CUSTOMER_CREATION_SELECT)
     .single();
 
   if (error || !data) return { ok: false, message: customerDatabaseMessage(error?.message) };
 
   return {
     ok: true,
-    message: "Customer created.",
+    message: POS_CUSTOMER_CREATION_SUCCESS_MESSAGE,
     data: {
       id: data.id,
       customerNumber: data.customer_number,

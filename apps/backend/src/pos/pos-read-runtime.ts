@@ -15,7 +15,13 @@ type PosReadRuntimeOptions = {
 
 export type PosReadRpcName =
   | "get_pos_bootstrap_core_v2"
-  | "get_pos_reference_bundle_v2";
+  | "get_pos_reference_bundle_v2"
+  | "get_pos_catalog_v2";
+
+export type PosReadRpcArguments = Record<
+  string,
+  string | number | undefined
+>;
 
 export type PosReadRpcResult = {
   data: unknown;
@@ -76,7 +82,7 @@ export function createPosReadRuntime({
     callRpc: async (
       token: string,
       name: PosReadRpcName,
-      args: { target_organization_id?: string },
+      args: PosReadRpcArguments,
     ): Promise<PosReadRpcResult> => {
       const database = createClient(
         supabaseUrl,

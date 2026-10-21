@@ -6,7 +6,6 @@ import {
   cancelOpenTicket,
   mergeOpenTickets,
   moveOpenTicketLines,
-  saveOpenTicket,
   splitOpenTicket,
   type TicketActionResult,
   type TicketMutationResult,
@@ -17,13 +16,6 @@ export type { TicketActionResult } from "@/features/advanced-sales/ticket-servic
 
 function revalidateTickets() {
   revalidatePath("/pos");
-}
-
-export async function saveOpenTicketAction(input: unknown): Promise<TicketActionResult> {
-  const context = await requireBusinessContext();
-  const result = await saveOpenTicket({ context, input });
-  if (result.ok) revalidateTickets();
-  return result;
 }
 
 export async function cancelOpenTicketAction(input: unknown): Promise<TicketMutationResult> {

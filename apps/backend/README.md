@@ -62,7 +62,8 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_LIVE_READ_MODE=owned`, and
 `TINDIO_CUSTOMER_DISPLAY_UPDATE_MODE=owned`, and
 `TINDIO_FAVORITE_TILE_UPDATE_MODE=owned`, and
-`TINDIO_CUSTOMER_CREATION_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_CUSTOMER_CREATION_MODE=owned`, and
+`TINDIO_OPEN_TICKET_SAVE_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -103,6 +104,12 @@ server-action entry points, assigned-store and owned-open-shift custody, create
 versus update idempotency, validation bounds, RPC projection, and database error
 mapping. No Backend ticket-save route or runtime mode exists in this slice.
 
-No financial, custody, attendance, or offline-replayed mutation, authentication
-provider, deployment, or client API origin has moved. Clients continue using
-the existing Next.js route until a separate deployment and cutover is approved.
+Slice D17 uses that frozen contract in an isolated owned command and allowlisted
+Web rollback proxy. Mobile and Web POS now invoke the same HTTP path. Device
+credentials remain in the validated body until the owned runtime converts them
+to Neon RPC headers; ambient device headers and cookies are never proxied.
+
+No financial, custody, attendance, or offline-replayed mutation outside the
+explicitly listed Backend-owned commands, authentication provider, deployment,
+or client API origin has moved. Clients continue using the existing Next.js
+route until a separate deployment and cutover is approved.

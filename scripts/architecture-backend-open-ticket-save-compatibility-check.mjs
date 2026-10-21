@@ -34,7 +34,7 @@ test("open-ticket save has a focused platform-neutral contract", async () => {
   assert.doesNotMatch(contract, /next(?:\/|["'])|react-native|@supabase|@neon|node:(?:fs|path)|process\.env/);
 });
 
-test("Web authoritative route and service consume the frozen contract", async () => {
+test("Web rollback route and service consume the frozen contract", async () => {
   const [route, action, service, schema] = await Promise.all([
     read("src/app/api/pos/v2/tickets/save/route.ts"),
     read("src/features/advanced-sales/ticket-actions.ts"),
@@ -47,7 +47,7 @@ test("Web authoritative route and service consume the frozen contract", async ()
   const handler = route.slice(route.indexOf("export async function POST"));
   assert.ok(handler.indexOf("getPosV2BusinessContext") < handler.indexOf("readPosApiJson"));
   assert.match(handler, /saveOpenTicket\(\{ context, input: body\.input \}\)/);
-  assert.match(action, /saveOpenTicketAction/);
+  assert.doesNotMatch(action, /saveOpenTicketAction/);
   assert.match(action, /requireBusinessContext\(\)/);
   for (const permission of ["pos.access", "sales.create", "tickets.manage"]) {
     assert.ok(service.includes(`hasPermission(context, "${permission}")`));
@@ -59,15 +59,19 @@ test("Web authoritative route and service consume the frozen contract", async ()
   assert.match(service, /@tindio\/contracts\/open-ticket-save/);
 });
 
-test("Backend open-ticket save oracle remains isolated and unowned", async () => {
-  const oracle = await read("apps/backend/src/pos/open-ticket-save-compatibility.ts");
+test("Backend open-ticket save oracle remains isolated beside the owned route", async () => {
+  const [oracle, backendEnv] = await Promise.all([
+    read("apps/backend/src/pos/open-ticket-save-compatibility.ts"),
+    read("apps/backend/.env.example"),
+  ]);
 
   assert.match(oracle, /OPEN_TICKET_SAVE_COMPATIBILITY_CONTRACT/);
   assert.match(oracle, /validateOpenTicketSave/);
   assert.match(oracle, /toOpenTicketSaveRpcArguments/);
   assert.match(oracle, /mapOpenTicketSaveRpcResult/);
   assert.doesNotMatch(oracle, /fetch\(|createPosReadRuntime|createNeonDataApiFetch|@supabase|@neon|process\.env/);
-  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/tickets/save.ts", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/tickets/save.ts", import.meta.url)), true);
+  assert.match(backendEnv, /^TINDIO_OPEN_TICKET_SAVE_MODE=owned$/m);
 });
 
 test("database authority retains shift custody, validation, reassignment, and stable updates", async () => {
@@ -101,11 +105,13 @@ test("database authority retains shift custody, validation, reassignment, and st
   assert.match(providerNeutral, /GRANT ALL ON FUNCTION "public"\."save_open_ticket_v2"[^;]+TO "tindio_authenticated"/s);
 });
 
-test("open-ticket save preserves current Mobile HTTP and Web action entry points", async () => {
-  const [mobileApi, mobilePos, webPos, cancel, merge, move, split, checkout, refund, syncPush] = await Promise.all([
+test("open-ticket save converges Mobile and Web on the HTTP entry point", async () => {
+  const [mobileApi, mobilePos, browserApi, webPos, actions, cancel, merge, move, split, checkout, refund, syncPush] = await Promise.all([
     read("apps/mobile/src/lib/tindio-api.ts"),
     read("apps/mobile/app/(app)/pos.tsx"),
+    read("src/features/pos/pos-v2-browser-api.ts"),
     read("src/features/pos/pos-terminal.tsx"),
+    read("src/features/advanced-sales/ticket-actions.ts"),
     read("src/app/api/pos/v2/tickets/cancel/route.ts"),
     read("src/app/api/pos/v2/tickets/merge/route.ts"),
     read("src/app/api/pos/v2/tickets/move-lines/route.ts"),
@@ -118,7 +124,10 @@ test("open-ticket save preserves current Mobile HTTP and Web action entry points
   assert.match(mobileApi, /request\(POS_OPEN_TICKET_SAVE_PATH/);
   assert.match(mobileApi, /@tindio\/contracts\/open-ticket-save/);
   assert.match(mobilePos, /savePosV2Ticket/);
-  assert.match(webPos, /saveOpenTicketAction/);
+  assert.match(browserApi, /export async function savePosV2OpenTicket/);
+  assert.match(browserApi, /POS_OPEN_TICKET_SAVE_PATH/);
+  assert.match(webPos, /savePosV2OpenTicket\(organizationId/);
+  assert.doesNotMatch(actions, /saveOpenTicketAction/);
   for (const source of [cancel, merge, move, split, checkout, refund, syncPush]) {
     assert.match(source, /export async function POST/);
   }

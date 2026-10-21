@@ -18,6 +18,11 @@ import {
   type PosCustomerCreationResult,
 } from "@tindio/contracts/customer-creation";
 import {
+  POS_OPEN_TICKET_SAVE_PATH,
+  type OpenTicketSaveResult,
+  type SaveOpenTicketValues,
+} from "@tindio/contracts/open-ticket-save";
+import {
   getRealtimeClient,
 } from "@/lib/supabase/realtime-client";
 
@@ -354,4 +359,21 @@ export async function createPosV2Customer(
   );
 
   return await response.json() as PosCustomerCreationResult;
+}
+
+export async function savePosV2OpenTicket(
+  organizationId: string,
+  input: SaveOpenTicketValues,
+): Promise<OpenTicketSaveResult> {
+  const response = await fetchPosV2Command(
+    POS_OPEN_TICKET_SAVE_PATH,
+    {
+      organizationId,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+
+  return await response.json() as OpenTicketSaveResult;
 }

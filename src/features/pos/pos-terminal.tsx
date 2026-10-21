@@ -57,6 +57,7 @@ import {
   fetchPosV2Catalog,
   fetchPosV2Command,
   fetchPosV2Modifiers,
+  savePosV2OpenTicket,
   updatePosFavoriteTile,
 } from "@/features/pos/pos-v2-browser-api";
 import type { PosCapabilities } from "@/features/pos/pos-capabilities";
@@ -95,7 +96,7 @@ import {
 } from "@/features/pos/pos-types";
 import { cn } from "@/lib/utils";
 import { customerDisplayChannel, getRealtimeClient } from "@/lib/supabase/realtime-client";
-import { cancelOpenTicketAction, saveOpenTicketAction } from "@/features/advanced-sales/ticket-actions";
+import { cancelOpenTicketAction } from "@/features/advanced-sales/ticket-actions";
 import { TicketOperationsDialog, TicketSaveDialog } from "@/features/advanced-sales/ticket-workspace-dialogs";
 import { Popover } from "@base-ui/react/popover";
 
@@ -973,7 +974,7 @@ export function PosTerminal({
     if (!selectedRegister || cart.length === 0) return;
     const savedCart = cart.map((line) => line.ticketLineId ? line : { ...line, ticketLineId: crypto.randomUUID() });
     startTicketTransition(async () => {
-      const result = await saveOpenTicketAction({
+      const result = await savePosV2OpenTicket(organizationId, {
         storeId: selectedStoreId,
         registerId: selectedRegister.id,
         ticketId: activeTicketId,

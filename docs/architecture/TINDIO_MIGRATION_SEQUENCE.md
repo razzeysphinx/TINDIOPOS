@@ -357,16 +357,27 @@ Status: **IN PROGRESS**
 - Keep refunds, transfer receipt, attendance, sync, and every other financial/
   offline-replayed mutation unchanged. **IMPLEMENTED.**
 
-## Next smallest safe slice: D27 checkout ownership
+## Completed Slice D27: checkout ownership
 
 - Move only `POST /api/pos/v2/checkout` behind an explicit Backend-owned/proxy
   boundary while preserving every frozen D26 contract and the existing Web
-  route as rollback.
+  route as rollback. **IMPLEMENTED.**
 - Preserve both accepted request shapes, exact idempotency and replay semantics,
   assigned store/register and first-commit open-shift custody, payment and stock
-  effects, response mapping, and the post-commit stock warning.
+  effects, response mapping, and the post-commit stock warning. **IMPLEMENTED.**
 - Keep offline checkout/sync replay, refunds, transfer receipt, attendance, and
-  every other financial mutation unchanged.
+  every other financial mutation unchanged. **IMPLEMENTED.**
+
+## Next smallest safe slice: D28 offline checkout compatibility harness
+
+- Inventory and freeze only `POST /api/pos/v2/offline-checkout`, including
+  authenticated organization/store/register/device/shift custody, offline
+  metadata and expected-total guards, replay identity, payment restrictions,
+  response envelopes, and terminal versus retryable conflict semantics.
+- Add a network/database-independent Backend oracle and compatibility gates
+  before moving offline checkout or sync ownership.
+- Keep sync push, refunds, transfer receipt, attendance, and every other
+  financial mutation unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

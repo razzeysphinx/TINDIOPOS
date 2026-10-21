@@ -63,7 +63,7 @@ test("Web checkout remains the rollback authority and consumes the frozen schema
   assert.match(service, /\.rpc\("get_checkout_stock_warning"/);
 });
 
-test("Backend checkout oracle remains network and database independent without an owned route", async () => {
+test("Backend checkout oracle remains network and database independent alongside the owned route", async () => {
   const oracle = await read("apps/backend/src/pos/checkout-compatibility.ts");
 
   assert.match(oracle, /CHECKOUT_COMPATIBILITY_CONTRACT/);
@@ -76,7 +76,7 @@ test("Backend checkout oracle remains network and database independent without a
   );
   assert.equal(
     existsSync(new URL("../apps/backend/api/pos/v2/checkout.ts", import.meta.url)),
-    false,
+    true,
   );
 });
 
@@ -123,7 +123,7 @@ test("database authority retains atomic checkout, replay, custody, payment, stoc
   assert.match(baseline, /private\.consume_made_to_order_composite_sale/);
 });
 
-test("D26 shares the checkout path without moving clients or adjacent financial mutations", async () => {
+test("D27 preserves the shared checkout path, Web rollback, and adjacent financial mutations", async () => {
   const [mobileApi, webPayment, backendReadme, refund, transfer, attendance, sync] = await Promise.all([
     read("apps/mobile/src/lib/tindio-api.ts"),
     read("src/features/checkout/payment-screen.tsx"),
@@ -142,5 +142,5 @@ test("D26 shares the checkout path without moving clients or adjacent financial 
   for (const mutation of [refund, transfer, attendance, sync]) {
     assert.match(mutation, /export async function POST/);
   }
-  assert.match(backendReadme, /Slice D26 checkout compatibility oracle/);
+  assert.match(backendReadme, /Slice D27 Backend-owned checkout/);
 });

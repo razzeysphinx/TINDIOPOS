@@ -66,6 +66,10 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
 - `POST /api/pos/v2/tickets/merge` owns the frozen dual-ticket validation,
   same-register shift/device custody, and `merge_open_tickets` command through
   the same boundary.
+- `POST /api/pos/v2/checkout` owns the frozen online sale validation, assigned
+  store/register and first-commit shift/device custody, idempotent
+  `checkout_advanced_sale` command, and post-commit stock warning through the
+  same boundary.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`,
@@ -81,7 +85,8 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_OPEN_TICKET_CANCEL_MODE=owned`, and
 `TINDIO_OPEN_TICKET_MOVE_LINES_MODE=owned`, and
 `TINDIO_OPEN_TICKET_SPLIT_MODE=owned`, and
-`TINDIO_OPEN_TICKET_MERGE_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_OPEN_TICKET_MERGE_MODE=owned`, and
+`TINDIO_CHECKOUT_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -186,7 +191,15 @@ wrapped and legacy request bodies, Supabase bearer and organization context,
 permissions, assigned-store/register and open-shift custody, device-header
 forwarding, idempotent operation identity, payment and stock semantics, exact
 RPC projection, financial effects, post-commit warning, and response mapping.
-No Backend checkout route or runtime mode exists in this slice.
+The oracle remains the compatibility boundary for ownership verification.
+
+Slice D27 Backend-owned checkout uses that frozen contract in an isolated owned
+command and allowlisted Web rollback proxy. Supabase verifies the bearer while
+business context, checkout, and stock-warning RPC traffic uses only Neon's
+external-JWT Data API. Wrapped device credentials become checkout RPC headers;
+cookies and ambient device credentials are never proxied. The existing Web
+route remains available for rollback, client API origins are unchanged, and
+offline checkout/sync replay plus adjacent financial mutations remain in Web.
 
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,

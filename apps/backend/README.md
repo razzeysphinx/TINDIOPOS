@@ -201,6 +201,14 @@ cookies and ambient device credentials are never proxied. The existing Web
 route remains available for rollback, client API origins are unchanged, and
 offline checkout/sync replay plus adjacent financial mutations remain in Web.
 
+The Slice D28 offline-checkout compatibility oracle is network- and database-
+independent. It freezes the existing Web-owned direct route and sync-push reuse,
+both accepted request shapes, business-context-before-body ordering, optional
+device sequencing, device/store/register custody, exact reservation and
+finalization states, expected-total and cash-only settlement guards, terminal
+outcome recording, database conflict classification, and response mapping. No
+Backend offline-checkout route or runtime mode exists in this slice.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

@@ -1,4 +1,10 @@
 import "server-only";
+import {
+  POS_OFFLINE_CHECKOUT_NOTE_MESSAGE,
+  POS_OFFLINE_CHECKOUT_PAYMENT_MESSAGE,
+  POS_OFFLINE_CHECKOUT_PAYMENT_METHOD_MESSAGE,
+  POS_OFFLINE_CHECKOUT_TOTAL_MESSAGE,
+} from "@tindio/contracts/offline-checkout";
 
 import { moneyInputToMinor } from "@/features/catalog/catalog-money";
 import {
@@ -293,7 +299,7 @@ export async function completeCheckout(
   if (options.guardOfflineTotal && !offlineTotalMarker) {
     return {
       ok: false,
-      message: "The queued sale is missing its original total and needs review.",
+      message: POS_OFFLINE_CHECKOUT_TOTAL_MESSAGE,
       retryable: false,
       failureCode: "DUPLICATE_TRANSACTION",
     };
@@ -307,7 +313,7 @@ export async function completeCheckout(
   ) {
     return {
       ok: false,
-      message: "This queued sale note is too long to sync safely and needs review.",
+      message: POS_OFFLINE_CHECKOUT_NOTE_MESSAGE,
       retryable: false,
     };
   }
@@ -318,7 +324,7 @@ export async function completeCheckout(
     if (!payment || data.payments.length !== 1 || !payment.tenderedAmount) {
       return {
         ok: false,
-        message: "Offline settlement requires one cached cash payment.",
+        message: POS_OFFLINE_CHECKOUT_PAYMENT_MESSAGE,
         retryable: false,
         failureCode: "PERMISSION_CHANGED",
       };
@@ -333,7 +339,7 @@ export async function completeCheckout(
     if (methodError || !method || method.payment_type !== "CASH" || method.offline_policy !== "cash") {
       return {
         ok: false,
-        message: "This payment method no longer permits automatic offline cash settlement.",
+        message: POS_OFFLINE_CHECKOUT_PAYMENT_METHOD_MESSAGE,
         retryable: false,
         failureCode: "PERMISSION_CHANGED",
       };

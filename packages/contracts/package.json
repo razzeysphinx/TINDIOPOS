@@ -16,6 +16,10 @@
       "types": "./src/checkout.ts",
       "default": "./src/checkout.ts"
     },
+    "./offline-checkout": {
+      "types": "./src/offline-checkout.ts",
+      "default": "./src/offline-checkout.ts"
+    },
     "./attendance": {
       "types": "./src/attendance.ts",
       "default": "./src/attendance.ts"

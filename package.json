@@ -63,6 +63,7 @@
     "test:architecture-backend-open-ticket-merge": "pnpm backend:test && node --test scripts/architecture-backend-open-ticket-merge-ownership-check.mjs",
     "test:architecture-backend-checkout-compatibility": "pnpm backend:test && node --test scripts/architecture-backend-checkout-compatibility-check.mjs",
     "test:architecture-backend-checkout": "pnpm backend:test && node --test scripts/architecture-backend-checkout-ownership-check.mjs",
+    "test:architecture-backend-offline-checkout-compatibility": "pnpm backend:test && node --test scripts/architecture-backend-offline-checkout-compatibility-check.mjs",
     "test:phase-06-native-foundation": "node --test scripts/phase-06-native-foundation-check.mjs",
     "test:phase-06-provider-neutral-device-runtime": "node --test scripts/phase-06-provider-neutral-device-runtime-check.mjs",
     "test:phase-06-device-enrollment": "node --test scripts/phase-06-device-enrollment-check.mjs",

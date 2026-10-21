@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { POS_OFFLINE_CHECKOUT_PATH } from "@tindio/contracts/offline-checkout";
 
 import type { CheckoutSaleActionResult } from "@/features/checkout/checkout-types";
 import {
@@ -131,7 +132,7 @@ async function syncOne(
       };
     }
 
-    const response = await fetchPosV2Command("/api/pos/v2/offline-checkout", {
+    const response = await fetchPosV2Command(POS_OFFLINE_CHECKOUT_PATH, {
       method: "POST",
       organizationId,
       headers: { "Content-Type": "application/json" },

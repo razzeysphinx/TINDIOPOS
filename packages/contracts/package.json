@@ -44,6 +44,10 @@
       "types": "./src/open-ticket-split.ts",
       "default": "./src/open-ticket-split.ts"
     },
+    "./open-ticket-merge": {
+      "types": "./src/open-ticket-merge.ts",
+      "default": "./src/open-ticket-merge.ts"
+    },
     "./pos-data": {
       "types": "./src/pos-data.ts",
       "default": "./src/pos-data.ts"

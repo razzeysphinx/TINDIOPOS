@@ -53,6 +53,15 @@ import {
   POS_OPEN_TICKET_SPLIT_RPC,
   POS_OPEN_TICKET_SPLIT_SUCCESS_MESSAGE,
 } from "@tindio/contracts/open-ticket-split";
+import {
+  POS_OPEN_TICKET_MERGE_CONSTRAINT_DATABASE_CODE,
+  POS_OPEN_TICKET_MERGE_DATABASE_MESSAGE,
+  POS_OPEN_TICKET_MERGE_INPUT_MESSAGE,
+  POS_OPEN_TICKET_MERGE_PERMISSION_DATABASE_CODE,
+  POS_OPEN_TICKET_MERGE_PERMISSION_MESSAGE,
+  POS_OPEN_TICKET_MERGE_RPC,
+  POS_OPEN_TICKET_MERGE_SUCCESS_MESSAGE,
+} from "@tindio/contracts/open-ticket-merge";
 
 export type {
   TicketActionResult,
@@ -85,6 +94,13 @@ function splitDatabaseMessage(error: { code?: string; message?: string } | null)
   if (error?.code === POS_OPEN_TICKET_SPLIT_PERMISSION_DATABASE_CODE) return POS_OPEN_TICKET_SPLIT_PERMISSION_MESSAGE;
   if (error?.code === POS_OPEN_TICKET_SPLIT_CONSTRAINT_DATABASE_CODE && error.message) return error.message;
   return POS_OPEN_TICKET_SPLIT_DATABASE_MESSAGE;
+}
+
+function mergeDatabaseMessage(error: { code?: string; message?: string } | null) {
+  if (error?.code === POS_OPEN_TICKET_MERGE_PERMISSION_DATABASE_CODE && error.message?.toLowerCase().includes("device")) return error.message;
+  if (error?.code === POS_OPEN_TICKET_MERGE_PERMISSION_DATABASE_CODE) return POS_OPEN_TICKET_MERGE_PERMISSION_MESSAGE;
+  if (error?.code === POS_OPEN_TICKET_MERGE_CONSTRAINT_DATABASE_CODE && error.message) return error.message;
+  return POS_OPEN_TICKET_MERGE_DATABASE_MESSAGE;
 }
 
 function hasTicketContext(context: BusinessContext) {
@@ -195,12 +211,12 @@ export async function splitOpenTicket({ context, input }: { context: BusinessCon
 
 export async function mergeOpenTickets({ context, input }: { context: BusinessContext; input: unknown }): Promise<TicketMutationResult> {
   const parsed = mergeOpenTicketsSchema.safeParse(input);
-  if (!hasTicketContext(context) || !parsed.success) return { ok: false, message: "Choose two different open tickets." };
-  const { error } = await (await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(parsed.data.device) })).rpc("merge_open_tickets", {
+  if (!hasTicketContext(context) || !parsed.success) return { ok: false, message: POS_OPEN_TICKET_MERGE_INPUT_MESSAGE };
+  const { error } = await (await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(parsed.data.device) })).rpc(POS_OPEN_TICKET_MERGE_RPC, {
     target_organization_id: context.organization.id,
     target_source_ticket_id: parsed.data.sourceTicketId,
     target_destination_ticket_id: parsed.data.destinationTicketId,
   });
-  if (error) return { ok: false, message: databaseMessage(error) };
-  return { ok: true, message: "Tickets merged. The original source ticket remains in the audit history." };
+  if (error) return { ok: false, message: mergeDatabaseMessage(error) };
+  return { ok: true, message: POS_OPEN_TICKET_MERGE_SUCCESS_MESSAGE };
 }

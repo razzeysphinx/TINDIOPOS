@@ -16,6 +16,7 @@ export * from "./open-ticket-save";
 export * from "./open-ticket-cancel";
 export * from "./open-ticket-move-lines";
 export * from "./open-ticket-split";
+export * from "./open-ticket-merge";
 export * from "./pos-data";
 export * from "./pos-operations";
 export * from "./pos-runtime";

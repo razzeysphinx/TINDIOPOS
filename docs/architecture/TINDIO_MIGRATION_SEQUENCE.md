@@ -321,13 +321,26 @@ Status: **IN PROGRESS**
 - Keep ticket merge, checkout, refunds, transfer receipt, attendance, sync, and
   every other financial/offline-replayed mutation unchanged. **IMPLEMENTED.**
 
-## Next smallest safe slice: D24 open-ticket merge compatibility harness
+## Completed Slice D24: open-ticket merge compatibility harness
 
 - Inventory and freeze only `POST /api/pos/v2/tickets/merge`, including context,
   permissions, feature and dual-ticket shift/device custody, validation,
   response envelopes, RPC arguments, audit effects, and SQL authority.
+  **IMPLEMENTED.**
 - Add a network/database-independent Backend oracle and compatibility gates
-  before moving merge ownership.
+  before moving merge ownership. **IMPLEMENTED.**
+- Keep checkout, refunds, transfer receipt, attendance, sync, and every other
+  financial/offline-replayed mutation unchanged. **IMPLEMENTED.**
+
+## Next smallest safe slice: D25 open-ticket merge ownership
+
+- Move only `POST /api/pos/v2/tickets/merge` behind an explicit Backend-owned/
+  proxy boundary while preserving every frozen D24 contract and the existing
+  Web route as rollback.
+- Preserve Mobile HTTP and Web POS behavior, dual-ticket same-register scope,
+  owned-open-shift/device custody, database-only distinct-ticket validation,
+  full-source movement, source audit history, exact RPC arguments, audit
+  effects, and response envelopes.
 - Keep checkout, refunds, transfer receipt, attendance, sync, and every other
   financial/offline-replayed mutation unchanged.
 

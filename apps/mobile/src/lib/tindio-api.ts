@@ -43,6 +43,10 @@ import {
   type OpenTicketSplitResult,
 } from "@tindio/contracts/open-ticket-split";
 import { POS_OPEN_TICKET_SAVE_PATH } from "@tindio/contracts/open-ticket-save";
+import {
+  POS_OPEN_TICKET_MERGE_PATH,
+  type OpenTicketMergeResult,
+} from "@tindio/contracts/open-ticket-merge";
 import { mobileEnvironment } from "./env";
 import {
   observeApiResponseBytes,
@@ -627,10 +631,10 @@ export async function mergePosV2Ticket(
   organizationId: string,
   input: unknown,
 ) {
-  return (await request("/api/pos/v2/tickets/merge", {
+  return (await request(POS_OPEN_TICKET_MERGE_PATH, {
     organizationId,
     init: jsonPost(input),
-  })).json() as Promise<TicketMutationResult>;
+  })).json() as Promise<OpenTicketMergeResult>;
 }
 
 export async function movePosV2TicketLines(

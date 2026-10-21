@@ -162,6 +162,14 @@ now invoke the same HTTP path. Device credentials remain in the validated body
 until the owned runtime converts them to Neon RPC headers; ambient device
 headers and cookies are never proxied.
 
+The Slice D24 open-ticket merge compatibility oracle is network- and database-
+independent. It freezes the existing Web-owned route, Mobile HTTP and Web
+server-action entry points, context and feature gates, same-store/register open-
+ticket and owned-shift/device custody, application versus database validation,
+full-source movement, destination capacity, preserved source audit cart, merged
+status/reference, exact RPC projection, audit effects, and response mapping. No
+Backend ticket-merge route or runtime mode exists in this slice.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 
 import {
-  cancelOpenTicket,
   mergeOpenTickets,
   moveOpenTicketLines,
   splitOpenTicket,
@@ -16,13 +15,6 @@ export type { TicketActionResult } from "@/features/advanced-sales/ticket-servic
 
 function revalidateTickets() {
   revalidatePath("/pos");
-}
-
-export async function cancelOpenTicketAction(input: unknown): Promise<TicketMutationResult> {
-  const context = await requireBusinessContext();
-  const result = await cancelOpenTicket({ context, input });
-  if (result.ok) revalidateTickets();
-  return result;
 }
 
 export async function moveOpenTicketLinesAction(input: unknown): Promise<TicketMutationResult> {

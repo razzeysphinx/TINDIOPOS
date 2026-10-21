@@ -54,6 +54,7 @@ import { focusCustomerPicker, PosOperationalDrawer } from "@/features/pos/pos-op
 import { readPosWorkspacePreferences } from "@/features/pos/pos-preferences";
 import { PosWorkspaceHeader } from "@/features/pos/pos-workspace-header";
 import {
+  cancelPosV2OpenTicket,
   fetchPosV2Catalog,
   fetchPosV2Command,
   fetchPosV2Modifiers,
@@ -96,7 +97,6 @@ import {
 } from "@/features/pos/pos-types";
 import { cn } from "@/lib/utils";
 import { customerDisplayChannel, getRealtimeClient } from "@/lib/supabase/realtime-client";
-import { cancelOpenTicketAction } from "@/features/advanced-sales/ticket-actions";
 import { TicketOperationsDialog, TicketSaveDialog } from "@/features/advanced-sales/ticket-workspace-dialogs";
 import { Popover } from "@base-ui/react/popover";
 
@@ -1123,7 +1123,7 @@ export function PosTerminal({
                   className="text-xs text-muted-foreground hover:text-destructive"
                   disabled={isTicketPending}
                   onClick={() => startTicketTransition(async () => {
-                    const result = await cancelOpenTicketAction({ ticketId: ticket.id, device: deviceCredential });
+                    const result = await cancelPosV2OpenTicket(organizationId, { ticketId: ticket.id, device: deviceCredential });
                     setNotice(result.message);
                     if (result.ok) {
                       setOpenTickets((current) => current.filter((item) => item.id !== ticket.id));

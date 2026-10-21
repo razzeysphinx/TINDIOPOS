@@ -52,6 +52,11 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
 - `POST /api/pos/v2/customers/create` owns bearer verification, business-context
   and `customers.manage` validation, normalized customer input, and the direct
   RLS-protected `customers` insert through the same Neon boundary.
+- `POST /api/pos/v2/tickets/save` owns the frozen open-ticket save validation,
+  device custody, and `save_open_ticket_v2` command through the same boundary.
+- `POST /api/pos/v2/tickets/cancel` owns the frozen cancellation validation,
+  ticket-derived shift/device custody, and `cancel_open_ticket` command through
+  the same boundary.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`,
@@ -63,7 +68,8 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_CUSTOMER_DISPLAY_UPDATE_MODE=owned`, and
 `TINDIO_FAVORITE_TILE_UPDATE_MODE=owned`, and
 `TINDIO_CUSTOMER_CREATION_MODE=owned`, and
-`TINDIO_OPEN_TICKET_SAVE_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_OPEN_TICKET_SAVE_MODE=owned`, and
+`TINDIO_OPEN_TICKET_CANCEL_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -115,6 +121,11 @@ server-action entry points, context and feature gates, organization-scoped open-
 ticket locking, ticket-derived owned-shift/device custody, repeated-cancel
 failure, RPC projection, and exact response mapping. No Backend ticket-cancel
 route or runtime mode exists in this slice.
+
+Slice D19 uses that frozen contract in an isolated owned command and allowlisted
+Web rollback proxy. Mobile and Web POS now invoke the same HTTP path. Device
+credentials remain in the validated body until the owned runtime converts them
+to Neon RPC headers; ambient device headers and cookies are never proxied.
 
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,

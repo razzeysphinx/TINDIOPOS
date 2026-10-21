@@ -33,7 +33,7 @@ test("open-ticket cancellation has a focused platform-neutral contract", async (
   assert.doesNotMatch(contract, /next(?:\/|["'])|react-native|@supabase|@neon|node:(?:fs|path)|process\.env/);
 });
 
-test("Web authoritative route and service consume the frozen cancellation contract", async () => {
+test("Web rollback route and service consume the frozen cancellation contract", async () => {
   const [route, action, service, schema] = await Promise.all([
     read("src/app/api/pos/v2/tickets/cancel/route.ts"),
     read("src/features/advanced-sales/ticket-actions.ts"),
@@ -46,7 +46,7 @@ test("Web authoritative route and service consume the frozen cancellation contra
   const handler = route.slice(route.indexOf("export async function POST"));
   assert.ok(handler.indexOf("getPosV2BusinessContext") < handler.indexOf("readPosApiJson"));
   assert.match(handler, /cancelOpenTicket\(\{ context, input: body\.input \}\)/);
-  assert.match(action, /cancelOpenTicketAction/);
+  assert.doesNotMatch(action, /cancelOpenTicketAction/);
   assert.match(action, /requireBusinessContext\(\)/);
   for (const permission of ["pos.access", "sales.create", "tickets.manage"]) {
     assert.ok(service.includes(`hasPermission(context, "${permission}")`));
@@ -58,15 +58,19 @@ test("Web authoritative route and service consume the frozen cancellation contra
   assert.match(schema, /@tindio\/contracts\/open-ticket-cancel/);
 });
 
-test("Backend cancellation oracle remains isolated and unowned", async () => {
-  const oracle = await read("apps/backend/src/pos/open-ticket-cancel-compatibility.ts");
+test("Backend cancellation oracle remains isolated beside the owned route", async () => {
+  const [oracle, backendEnv] = await Promise.all([
+    read("apps/backend/src/pos/open-ticket-cancel-compatibility.ts"),
+    read("apps/backend/.env.example"),
+  ]);
 
   assert.match(oracle, /OPEN_TICKET_CANCEL_COMPATIBILITY_CONTRACT/);
   assert.match(oracle, /validateOpenTicketCancel/);
   assert.match(oracle, /toOpenTicketCancelRpcArguments/);
   assert.match(oracle, /mapOpenTicketCancelRpcResult/);
   assert.doesNotMatch(oracle, /fetch\(|createPosReadRuntime|createNeonDataApiFetch|@supabase|@neon|process\.env/);
-  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/tickets/cancel.ts", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/tickets/cancel.ts", import.meta.url)), true);
+  assert.match(backendEnv, /^TINDIO_OPEN_TICKET_CANCEL_MODE=owned$/m);
 });
 
 test("database authority retains ticket lock, shift custody, repeated-cancel failure, and grants", async () => {
@@ -97,10 +101,11 @@ test("database authority retains ticket lock, shift custody, repeated-cancel fai
   assert.match(providerNeutral, /GRANT ALL ON FUNCTION "public"\."cancel_open_ticket"[^;]+TO "tindio_authenticated"/s);
 });
 
-test("D18 preserves Mobile HTTP, Web action, and adjacent mutation ownership", async () => {
-  const [mobileApi, mobileTickets, webPos, actions, readme, save, merge, move, split, checkout, refund, transfer, attendance, sync] = await Promise.all([
+test("D19 converges Mobile and Web while adjacent mutation ownership stays unchanged", async () => {
+  const [mobileApi, mobileTickets, browserApi, webPos, actions, readme, save, merge, move, split, checkout, refund, transfer, attendance, sync] = await Promise.all([
     read("apps/mobile/src/lib/tindio-api.ts"),
     read("apps/mobile/app/(app)/tickets.tsx"),
+    read("src/features/pos/pos-v2-browser-api.ts"),
     read("src/features/pos/pos-terminal.tsx"),
     read("src/features/advanced-sales/ticket-actions.ts"),
     read("apps/backend/README.md"),
@@ -117,11 +122,13 @@ test("D18 preserves Mobile HTTP, Web action, and adjacent mutation ownership", a
 
   assert.match(mobileApi, /request\(POS_OPEN_TICKET_CANCEL_PATH/);
   assert.match(mobileTickets, /cancelPosV2Ticket/);
-  assert.match(webPos, /cancelOpenTicketAction/);
-  assert.match(actions, /export async function cancelOpenTicketAction/);
+  assert.match(browserApi, /export async function cancelPosV2OpenTicket/);
+  assert.match(browserApi, /POS_OPEN_TICKET_CANCEL_PATH/);
+  assert.match(webPos, /cancelPosV2OpenTicket\(organizationId/);
+  assert.doesNotMatch(actions, /cancelOpenTicketAction/);
   for (const mutation of [save, merge, move, split, checkout, refund, transfer, attendance, sync]) {
     assert.match(mutation, /export async function POST/);
   }
   assert.doesNotMatch(mobileApi, /TINDIO_WEB_API_ORIGIN|apps\/backend/);
-  assert.match(readme, /No Backend ticket-cancel\s+route or runtime mode exists in this slice/);
+  assert.match(readme, /Slice D19 uses that frozen contract/);
 });

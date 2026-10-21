@@ -262,15 +262,27 @@ Status: **IN PROGRESS**
   sync, and every other financial/offline-replayed mutation unchanged.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D19 open-ticket cancellation mutation ownership
+## Completed Slice D19: open-ticket cancellation mutation ownership
 
 - Move only `POST /api/pos/v2/tickets/cancel` behind an explicit Backend-owned/
   proxy boundary while preserving every frozen D18 contract and the existing
-  Web route as rollback.
+  Web route as rollback. **IMPLEMENTED.**
 - Preserve Mobile HTTP and Web POS behavior, ticket-derived store scope, owned-
   open-shift/device custody, repeated-cancel failure, exact RPC arguments, and
-  response/error envelopes.
+  response/error envelopes. **IMPLEMENTED.**
 - Keep ticket merge/move/split, checkout, refunds, transfer receipt, attendance,
+  sync, and every other financial/offline-replayed mutation unchanged.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D20 open-ticket line-movement compatibility harness
+
+- Inventory and freeze only `POST /api/pos/v2/tickets/move-lines`, including
+  context, permissions, feature and dual-ticket shift/device custody, line and
+  quantity validation, partial-line behavior, exact envelopes, RPC arguments,
+  audit effects, and SQL authority.
+- Add a network/database-independent Backend oracle and compatibility gates
+  before moving line-movement ownership.
+- Keep ticket merge/split, checkout, refunds, transfer receipt, attendance,
   sync, and every other financial/offline-replayed mutation unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without

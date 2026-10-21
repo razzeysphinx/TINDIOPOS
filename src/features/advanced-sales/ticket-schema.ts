@@ -14,30 +14,16 @@ import {
   ticketReallocationLinesSchema,
   type TicketReallocationLines,
 } from "@tindio/contracts/open-ticket-move-lines";
+import { splitOpenTicketSchema } from "@tindio/contracts/open-ticket-split";
 
 export const ticketCartLineSchema = openTicketCartLineSchema;
 export {
   cancelOpenTicketSchema,
   moveOpenTicketLinesSchema,
   saveOpenTicketSchema,
+  splitOpenTicketSchema,
   ticketReallocationLinesSchema,
 };
-
-export const splitOpenTicketSchema =
-  z.object({
-    sourceTicketId: z.uuid(),
-    label:
-      z.string()
-        .trim()
-        .min(1)
-        .max(100),
-    lines:
-      ticketReallocationLinesSchema,
-    device:
-      posDeviceCredentialSchema
-        .nullable()
-        .optional(),
-  });
 
 export const mergeOpenTicketsSchema =
   z.object({

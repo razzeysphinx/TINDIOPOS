@@ -38,6 +38,10 @@ import {
   type MoveOpenTicketLinesValues,
   type OpenTicketMoveLinesResult,
 } from "@tindio/contracts/open-ticket-move-lines";
+import {
+  POS_OPEN_TICKET_SPLIT_PATH,
+  type OpenTicketSplitResult,
+} from "@tindio/contracts/open-ticket-split";
 import { POS_OPEN_TICKET_SAVE_PATH } from "@tindio/contracts/open-ticket-save";
 import { mobileEnvironment } from "./env";
 import {
@@ -613,10 +617,10 @@ export async function splitPosV2Ticket(
   organizationId: string,
   input: unknown,
 ) {
-  return (await request("/api/pos/v2/tickets/split", {
+  return (await request(POS_OPEN_TICKET_SPLIT_PATH, {
     organizationId,
     init: jsonPost(input),
-  })).json() as Promise<TicketActionResult>;
+  })).json() as Promise<OpenTicketSplitResult>;
 }
 
 export async function mergePosV2Ticket(

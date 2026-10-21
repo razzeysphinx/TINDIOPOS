@@ -299,13 +299,25 @@ Status: **IN PROGRESS**
   sync, and every other financial/offline-replayed mutation unchanged.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D22 open-ticket split compatibility harness
+## Completed Slice D22: open-ticket split compatibility harness
 
 - Inventory and freeze only `POST /api/pos/v2/tickets/split`, including context,
   permissions, feature and shift/device custody, validation, response envelopes,
-  RPC arguments, audit effects, and SQL authority.
+  RPC arguments, audit effects, and SQL authority. **IMPLEMENTED.**
 - Add a network/database-independent Backend oracle and compatibility gates
-  before moving split ownership.
+  before moving split ownership. **IMPLEMENTED.**
+- Keep ticket merge, checkout, refunds, transfer receipt, attendance, sync, and
+  every other financial/offline-replayed mutation unchanged. **IMPLEMENTED.**
+
+## Next smallest safe slice: D23 open-ticket split ownership
+
+- Move only `POST /api/pos/v2/tickets/split` behind an explicit Backend-owned/
+  proxy boundary while preserving every frozen D22 contract and the existing
+  Web route as rollback.
+- Preserve Mobile HTTP and Web POS behavior, source-ticket/shift/device custody,
+  inherited destination fields, label and line rules, partial-line identity,
+  current all-selected source behavior, exact RPC arguments, audit effects,
+  ticket identity, and response envelopes.
 - Keep ticket merge, checkout, refunds, transfer receipt, attendance, sync, and
   every other financial/offline-replayed mutation unchanged.
 

@@ -40,6 +40,10 @@
       "types": "./src/open-ticket-move-lines.ts",
       "default": "./src/open-ticket-move-lines.ts"
     },
+    "./open-ticket-split": {
+      "types": "./src/open-ticket-split.ts",
+      "default": "./src/open-ticket-split.ts"
+    },
     "./pos-data": {
       "types": "./src/pos-data.ts",
       "default": "./src/pos-data.ts"

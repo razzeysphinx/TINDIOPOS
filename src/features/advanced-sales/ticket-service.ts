@@ -44,6 +44,15 @@ import {
   POS_OPEN_TICKET_MOVE_LINES_RPC,
   POS_OPEN_TICKET_MOVE_LINES_SUCCESS_MESSAGE,
 } from "@tindio/contracts/open-ticket-move-lines";
+import {
+  POS_OPEN_TICKET_SPLIT_CONSTRAINT_DATABASE_CODE,
+  POS_OPEN_TICKET_SPLIT_DATABASE_MESSAGE,
+  POS_OPEN_TICKET_SPLIT_INPUT_MESSAGE,
+  POS_OPEN_TICKET_SPLIT_PERMISSION_DATABASE_CODE,
+  POS_OPEN_TICKET_SPLIT_PERMISSION_MESSAGE,
+  POS_OPEN_TICKET_SPLIT_RPC,
+  POS_OPEN_TICKET_SPLIT_SUCCESS_MESSAGE,
+} from "@tindio/contracts/open-ticket-split";
 
 export type {
   TicketActionResult,
@@ -69,6 +78,13 @@ function moveLinesDatabaseMessage(error: { code?: string; message?: string } | n
   if (error?.code === POS_OPEN_TICKET_MOVE_LINES_PERMISSION_DATABASE_CODE) return POS_OPEN_TICKET_MOVE_LINES_PERMISSION_MESSAGE;
   if (error?.code === POS_OPEN_TICKET_MOVE_LINES_CONSTRAINT_DATABASE_CODE && error.message) return error.message;
   return POS_OPEN_TICKET_MOVE_LINES_DATABASE_MESSAGE;
+}
+
+function splitDatabaseMessage(error: { code?: string; message?: string } | null) {
+  if (error?.code === POS_OPEN_TICKET_SPLIT_PERMISSION_DATABASE_CODE && error.message?.toLowerCase().includes("device")) return error.message;
+  if (error?.code === POS_OPEN_TICKET_SPLIT_PERMISSION_DATABASE_CODE) return POS_OPEN_TICKET_SPLIT_PERMISSION_MESSAGE;
+  if (error?.code === POS_OPEN_TICKET_SPLIT_CONSTRAINT_DATABASE_CODE && error.message) return error.message;
+  return POS_OPEN_TICKET_SPLIT_DATABASE_MESSAGE;
 }
 
 function hasTicketContext(context: BusinessContext) {
@@ -166,15 +182,15 @@ export async function moveOpenTicketLines({ context, input }: { context: Busines
 
 export async function splitOpenTicket({ context, input }: { context: BusinessContext; input: unknown }): Promise<TicketActionResult> {
   const parsed = splitOpenTicketSchema.safeParse(input);
-  if (!hasTicketContext(context) || !parsed.success) return { ok: false, message: "Enter a name and choose valid ticket items." };
-  const { data: ticketId, error } = await (await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(parsed.data.device) })).rpc("split_open_ticket", {
+  if (!hasTicketContext(context) || !parsed.success) return { ok: false, message: POS_OPEN_TICKET_SPLIT_INPUT_MESSAGE };
+  const { data: ticketId, error } = await (await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(parsed.data.device) })).rpc(POS_OPEN_TICKET_SPLIT_RPC, {
     target_organization_id: context.organization.id,
     target_source_ticket_id: parsed.data.sourceTicketId,
     target_label: parsed.data.label,
     target_lines: reallocationLines(parsed.data.lines),
   });
-  if (error || !ticketId) return { ok: false, message: databaseMessage(error) };
-  return { ok: true, ticketId, message: "A new ticket was created from the selected items." };
+  if (error || !ticketId) return { ok: false, message: splitDatabaseMessage(error) };
+  return { ok: true, ticketId, message: POS_OPEN_TICKET_SPLIT_SUCCESS_MESSAGE };
 }
 
 export async function mergeOpenTickets({ context, input }: { context: BusinessContext; input: unknown }): Promise<TicketMutationResult> {

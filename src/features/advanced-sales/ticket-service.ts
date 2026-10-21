@@ -18,6 +18,15 @@ import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
 import { createBusinessContextClient } from "@/lib/supabase/context-client";
 import {
+  POS_OPEN_TICKET_CANCEL_CONSTRAINT_DATABASE_CODE,
+  POS_OPEN_TICKET_CANCEL_DATABASE_MESSAGE,
+  POS_OPEN_TICKET_CANCEL_INPUT_MESSAGE,
+  POS_OPEN_TICKET_CANCEL_PERMISSION_DATABASE_CODE,
+  POS_OPEN_TICKET_CANCEL_PERMISSION_MESSAGE,
+  POS_OPEN_TICKET_CANCEL_RPC,
+  POS_OPEN_TICKET_CANCEL_SUCCESS_MESSAGE,
+} from "@tindio/contracts/open-ticket-cancel";
+import {
   POS_OPEN_TICKET_SAVE_CONSTRAINT_DATABASE_CODE,
   POS_OPEN_TICKET_SAVE_DATABASE_MESSAGE,
   POS_OPEN_TICKET_SAVE_INPUT_MESSAGE,
@@ -37,6 +46,13 @@ function databaseMessage(error: { code?: string; message?: string } | null) {
   if (error?.code === POS_OPEN_TICKET_SAVE_PERMISSION_DATABASE_CODE) return POS_OPEN_TICKET_SAVE_PERMISSION_MESSAGE;
   if (error?.code === POS_OPEN_TICKET_SAVE_CONSTRAINT_DATABASE_CODE && error.message) return error.message;
   return POS_OPEN_TICKET_SAVE_DATABASE_MESSAGE;
+}
+
+function cancelDatabaseMessage(error: { code?: string; message?: string } | null) {
+  if (error?.code === POS_OPEN_TICKET_CANCEL_PERMISSION_DATABASE_CODE && error.message?.toLowerCase().includes("device")) return error.message;
+  if (error?.code === POS_OPEN_TICKET_CANCEL_PERMISSION_DATABASE_CODE) return POS_OPEN_TICKET_CANCEL_PERMISSION_MESSAGE;
+  if (error?.code === POS_OPEN_TICKET_CANCEL_CONSTRAINT_DATABASE_CODE && error.message) return error.message;
+  return POS_OPEN_TICKET_CANCEL_DATABASE_MESSAGE;
 }
 
 function hasTicketContext(context: BusinessContext) {
@@ -107,16 +123,16 @@ export async function saveOpenTicket({ context, input }: { context: BusinessCont
 
 export async function cancelOpenTicket({ context, input }: { context: BusinessContext; input: unknown }): Promise<TicketMutationResult> {
   const parsed = cancelOpenTicketSchema.safeParse(input);
-  if (!hasTicketContext(context) || !parsed.success) return { ok: false, message: "This ticket is unavailable." };
+  if (!hasTicketContext(context) || !parsed.success) return { ok: false, message: POS_OPEN_TICKET_CANCEL_INPUT_MESSAGE };
   const database = await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(parsed.data.device) }) as unknown as {
     rpc: (name: string, args: Record<string, string>) => Promise<{ error: { code?: string; message?: string } | null }>;
   };
-  const { error } = await database.rpc("cancel_open_ticket", {
+  const { error } = await database.rpc(POS_OPEN_TICKET_CANCEL_RPC, {
     target_organization_id: context.organization.id,
     target_ticket_id: parsed.data.ticketId,
   });
-  if (error) return { ok: false, message: databaseMessage(error) };
-  return { ok: true, message: "Ticket cancelled." };
+  if (error) return { ok: false, message: cancelDatabaseMessage(error) };
+  return { ok: true, message: POS_OPEN_TICKET_CANCEL_SUCCESS_MESSAGE };
 }
 
 export async function moveOpenTicketLines({ context, input }: { context: BusinessContext; input: unknown }): Promise<TicketMutationResult> {

@@ -13,6 +13,7 @@ export * from "./customer-display";
 export * from "./customer-creation";
 export * from "./favorite-tile";
 export * from "./open-ticket-save";
+export * from "./open-ticket-cancel";
 export * from "./pos-data";
 export * from "./pos-operations";
 export * from "./pos-runtime";

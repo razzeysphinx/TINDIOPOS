@@ -8,9 +8,10 @@ import {
   saveOpenTicketSchema,
   type OpenTicketCartLineValues,
 } from "@tindio/contracts/open-ticket-save";
+import { cancelOpenTicketSchema } from "@tindio/contracts/open-ticket-cancel";
 
 export const ticketCartLineSchema = openTicketCartLineSchema;
-export { saveOpenTicketSchema };
+export { cancelOpenTicketSchema, saveOpenTicketSchema };
 
 export const ticketReallocationLinesSchema =
   z.array(
@@ -63,15 +64,6 @@ export const mergeOpenTicketsSchema =
   z.object({
     sourceTicketId: z.uuid(),
     destinationTicketId: z.uuid(),
-    device:
-      posDeviceCredentialSchema
-        .nullable()
-        .optional(),
-  });
-
-export const cancelOpenTicketSchema =
-  z.object({
-    ticketId: z.uuid(),
     device:
       posDeviceCredentialSchema
         .nullable()

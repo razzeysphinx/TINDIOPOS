@@ -250,14 +250,26 @@ Status: **IN PROGRESS**
   attendance, sync, and every other financial/offline-replayed mutation
   unchanged. **IMPLEMENTED.**
 
-## Next smallest safe slice: D18 open-ticket cancellation compatibility harness
+## Completed Slice D18: open-ticket cancellation compatibility harness
 
 - Inventory and freeze only `POST /api/pos/v2/tickets/cancel`, including
   context, permissions, feature and owned-open-shift custody, device forwarding,
   validation, repeated-cancel behavior, exact envelopes, RPC arguments, and SQL
-  authority.
+  authority. **IMPLEMENTED.**
 - Add a network/database-independent Backend oracle and compatibility gates
-  before moving cancellation ownership.
+  before moving cancellation ownership. **IMPLEMENTED.**
+- Keep ticket merge/move/split, checkout, refunds, transfer receipt, attendance,
+  sync, and every other financial/offline-replayed mutation unchanged.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D19 open-ticket cancellation mutation ownership
+
+- Move only `POST /api/pos/v2/tickets/cancel` behind an explicit Backend-owned/
+  proxy boundary while preserving every frozen D18 contract and the existing
+  Web route as rollback.
+- Preserve Mobile HTTP and Web POS behavior, ticket-derived store scope, owned-
+  open-shift/device custody, repeated-cancel failure, exact RPC arguments, and
+  response/error envelopes.
 - Keep ticket merge/move/split, checkout, refunds, transfer receipt, attendance,
   sync, and every other financial/offline-replayed mutation unchanged.
 

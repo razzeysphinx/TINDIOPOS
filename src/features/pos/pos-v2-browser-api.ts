@@ -28,6 +28,11 @@ import {
   type SplitOpenTicketValues,
 } from "@tindio/contracts/open-ticket-split";
 import {
+  POS_OPEN_TICKET_MERGE_PATH,
+  type MergeOpenTicketsValues,
+  type OpenTicketMergeResult,
+} from "@tindio/contracts/open-ticket-merge";
+import {
   POS_CUSTOMER_CREATION_PATH,
   type CreateCustomerValues,
   type PosCustomerCreationResult,
@@ -442,4 +447,21 @@ export async function splitPosV2OpenTicket(
   );
 
   return await response.json() as OpenTicketSplitResult;
+}
+
+export async function mergePosV2OpenTickets(
+  organizationId: string,
+  input: MergeOpenTicketsValues,
+): Promise<OpenTicketMergeResult> {
+  const response = await fetchPosV2Command(
+    POS_OPEN_TICKET_MERGE_PATH,
+    {
+      organizationId,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+
+  return await response.json() as OpenTicketMergeResult;
 }

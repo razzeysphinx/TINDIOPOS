@@ -5,9 +5,7 @@ import { type ReactNode, useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  mergeOpenTicketsAction,
-} from "@/features/advanced-sales/ticket-actions";
-import {
+  mergePosV2OpenTickets,
   movePosV2OpenTicketLines,
   splitPosV2OpenTicket,
 } from "@/features/pos/pos-v2-browser-api";
@@ -130,7 +128,7 @@ export function TicketOperationsDialog({
         ? await movePosV2OpenTicketLines(organizationId, { sourceTicketId, destinationTicketId, lines: selectedLines, device })
         : operation === "split"
           ? await splitPosV2OpenTicket(organizationId, { sourceTicketId, label: splitLabel, lines: selectedLines, device })
-          : await mergeOpenTicketsAction({ sourceTicketId, destinationTicketId, device });
+          : await mergePosV2OpenTickets(organizationId, { sourceTicketId, destinationTicketId, device });
       setMessage(result.message);
       if (result.ok) onComplete(result.message);
     });

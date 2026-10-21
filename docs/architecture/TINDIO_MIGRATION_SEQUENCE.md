@@ -332,17 +332,30 @@ Status: **IN PROGRESS**
 - Keep checkout, refunds, transfer receipt, attendance, sync, and every other
   financial/offline-replayed mutation unchanged. **IMPLEMENTED.**
 
-## Next smallest safe slice: D25 open-ticket merge ownership
+## Completed Slice D25: open-ticket merge ownership
 
 - Move only `POST /api/pos/v2/tickets/merge` behind an explicit Backend-owned/
   proxy boundary while preserving every frozen D24 contract and the existing
   Web route as rollback.
+  **IMPLEMENTED.**
 - Preserve Mobile HTTP and Web POS behavior, dual-ticket same-register scope,
   owned-open-shift/device custody, database-only distinct-ticket validation,
   full-source movement, source audit history, exact RPC arguments, audit
   effects, and response envelopes.
+  **IMPLEMENTED.**
 - Keep checkout, refunds, transfer receipt, attendance, sync, and every other
-  financial/offline-replayed mutation unchanged.
+  financial/offline-replayed mutation unchanged. **IMPLEMENTED.**
+
+## Next smallest safe slice: D26 checkout compatibility harness
+
+- Inventory and freeze only `POST /api/pos/v2/checkout`, including authentication,
+  organization/store/register and shift/device custody, permissions, validation,
+  operation identity, payment and stock semantics, response envelopes, RPC
+  arguments, audit effects, and SQL authority.
+- Add a network/database-independent Backend oracle and compatibility gates
+  before moving checkout ownership.
+- Keep refunds, transfer receipt, attendance, sync, and every other financial/
+  offline-replayed mutation unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

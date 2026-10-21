@@ -63,6 +63,9 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
 - `POST /api/pos/v2/tickets/split` owns the frozen source-ticket, label, and line
   validation, shift/device custody, and `split_open_ticket` command through the
   same boundary.
+- `POST /api/pos/v2/tickets/merge` owns the frozen dual-ticket validation,
+  same-register shift/device custody, and `merge_open_tickets` command through
+  the same boundary.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`,
@@ -77,7 +80,8 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_OPEN_TICKET_SAVE_MODE=owned`, and
 `TINDIO_OPEN_TICKET_CANCEL_MODE=owned`, and
 `TINDIO_OPEN_TICKET_MOVE_LINES_MODE=owned`, and
-`TINDIO_OPEN_TICKET_SPLIT_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_OPEN_TICKET_SPLIT_MODE=owned`, and
+`TINDIO_OPEN_TICKET_MERGE_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -169,6 +173,12 @@ ticket and owned-shift/device custody, application versus database validation,
 full-source movement, destination capacity, preserved source audit cart, merged
 status/reference, exact RPC projection, audit effects, and response mapping. No
 Backend ticket-merge route or runtime mode exists in this slice.
+
+Slice D25 Backend-owned open-ticket merge uses that frozen contract in an
+isolated owned command and allowlisted Web rollback proxy. Mobile and Web POS
+now invoke the same HTTP path. Device credentials remain in the validated body
+until the owned runtime converts them to Neon RPC headers; ambient device
+headers and cookies are never proxied.
 
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,

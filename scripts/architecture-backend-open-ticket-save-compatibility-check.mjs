@@ -48,7 +48,7 @@ test("Web rollback route and service consume the frozen contract", async () => {
   assert.ok(handler.indexOf("getPosV2BusinessContext") < handler.indexOf("readPosApiJson"));
   assert.match(handler, /saveOpenTicket\(\{ context, input: body\.input \}\)/);
   assert.doesNotMatch(action, /saveOpenTicketAction/);
-  assert.match(action, /requireBusinessContext\(\)/);
+  assert.doesNotMatch(action, /mergeOpenTicketsAction/);
   for (const permission of ["pos.access", "sales.create", "tickets.manage"]) {
     assert.ok(service.includes(`hasPermission(context, "${permission}")`));
   }

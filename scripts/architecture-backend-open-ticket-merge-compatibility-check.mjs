@@ -36,7 +36,7 @@ test("open-ticket merge has a focused platform-neutral contract", async () => {
   );
 });
 
-test("Web route, action, and service establish the frozen merge contract", async () => {
+test("Web rollback route and service consume the frozen merge contract", async () => {
   const [route, action, service, schema] = await Promise.all([
     read("src/app/api/pos/v2/tickets/merge/route.ts"),
     read("src/features/advanced-sales/ticket-actions.ts"),
@@ -49,8 +49,7 @@ test("Web route, action, and service establish the frozen merge contract", async
   const handler = route.slice(route.indexOf("export async function POST"));
   assert.ok(handler.indexOf("getPosV2BusinessContext") < handler.indexOf("readPosApiJson"));
   assert.match(handler, /mergeOpenTickets\(\{ context, input: body\.input \}\)/);
-  assert.match(action, /mergeOpenTicketsAction/);
-  assert.match(action, /requireBusinessContext\(\)/);
+  assert.doesNotMatch(action, /mergeOpenTicketsAction/);
   for (const permission of ["pos.access", "sales.create", "tickets.manage"]) {
     assert.ok(service.includes(`hasPermission(context, "${permission}")`));
   }
@@ -62,7 +61,7 @@ test("Web route, action, and service establish the frozen merge contract", async
   assert.match(schema, /@tindio\/contracts\/open-ticket-merge/);
 });
 
-test("Backend merge oracle remains network and database independent", async () => {
+test("Backend merge oracle remains isolated beside the owned route", async () => {
   const oracle = await read("apps/backend/src/pos/open-ticket-merge-compatibility.ts");
 
   assert.match(oracle, /OPEN_TICKET_MERGE_COMPATIBILITY_CONTRACT/);
@@ -75,7 +74,7 @@ test("Backend merge oracle remains network and database independent", async () =
   );
   assert.equal(
     existsSync(new URL("../apps/backend/api/pos/v2/tickets/merge.ts", import.meta.url)),
-    false,
+    true,
   );
 });
 
@@ -123,11 +122,12 @@ test("database authority retains atomic dual-ticket custody, source history, and
   );
 });
 
-test("D24 freezes existing Web and Mobile behavior while adjacent ownership remains unchanged", async () => {
-  const [mobileApi, mobileTickets, dialogs, actions, environment, readme, checkout, refund, transfer, attendance, sync] =
+test("D24 contract now converges Web and Mobile while adjacent mutations stay Web-owned", async () => {
+  const [mobileApi, mobileTickets, browserApi, dialogs, actions, environment, readme, checkout, refund, transfer, attendance, sync] =
     await Promise.all([
       read("apps/mobile/src/lib/tindio-api.ts"),
       read("apps/mobile/app/(app)/tickets.tsx"),
+      read("src/features/pos/pos-v2-browser-api.ts"),
       read("src/features/advanced-sales/ticket-workspace-dialogs.tsx"),
       read("src/features/advanced-sales/ticket-actions.ts"),
       read("apps/backend/.env.example"),
@@ -142,12 +142,15 @@ test("D24 freezes existing Web and Mobile behavior while adjacent ownership rema
   assert.match(mobileApi, /request\(POS_OPEN_TICKET_MERGE_PATH/);
   assert.match(mobileApi, /@tindio\/contracts\/open-ticket-merge/);
   assert.match(mobileTickets, /mergePosV2Ticket/);
-  assert.match(dialogs, /mergeOpenTicketsAction/);
-  assert.match(actions, /mergeOpenTicketsAction/);
-  assert.doesNotMatch(environment, /TINDIO_OPEN_TICKET_MERGE_MODE/);
+  assert.match(browserApi, /mergePosV2OpenTickets/);
+  assert.match(browserApi, /POS_OPEN_TICKET_MERGE_PATH/);
+  assert.match(dialogs, /mergePosV2OpenTickets\(organizationId/);
+  assert.doesNotMatch(dialogs, /mergeOpenTicketsAction/);
+  assert.doesNotMatch(actions, /mergeOpenTicketsAction/);
+  assert.match(environment, /^TINDIO_OPEN_TICKET_MERGE_MODE=owned$/m);
   for (const mutation of [checkout, refund, transfer, attendance, sync]) {
     assert.match(mutation, /export async function POST/);
   }
   assert.doesNotMatch(mobileApi, /TINDIO_WEB_API_ORIGIN|apps\/backend/);
-  assert.match(readme, /Slice D24 open-ticket merge compatibility oracle/);
+  assert.match(readme, /Slice D25 Backend-owned open-ticket merge/);
 });

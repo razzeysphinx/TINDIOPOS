@@ -286,16 +286,28 @@ Status: **IN PROGRESS**
   sync, and every other financial/offline-replayed mutation unchanged.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D21 open-ticket line-movement ownership
+## Completed Slice D21: open-ticket line-movement ownership
 
 - Move only `POST /api/pos/v2/tickets/move-lines` behind an explicit Backend-
   owned/proxy boundary while preserving every frozen D20 contract and the
-  existing Web route as rollback.
+  existing Web route as rollback. **IMPLEMENTED.**
 - Preserve Mobile HTTP and Web POS behavior, same-register ticket scope, owned-
   open-shift/device custody, database-only pair/line validation, partial-line
   identity, exact RPC arguments, audit effects, and response envelopes.
+  **IMPLEMENTED.**
 - Keep ticket merge/split, checkout, refunds, transfer receipt, attendance,
   sync, and every other financial/offline-replayed mutation unchanged.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D22 open-ticket split compatibility harness
+
+- Inventory and freeze only `POST /api/pos/v2/tickets/split`, including context,
+  permissions, feature and shift/device custody, validation, response envelopes,
+  RPC arguments, audit effects, and SQL authority.
+- Add a network/database-independent Backend oracle and compatibility gates
+  before moving split ownership.
+- Keep ticket merge, checkout, refunds, transfer receipt, attendance, sync, and
+  every other financial/offline-replayed mutation unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

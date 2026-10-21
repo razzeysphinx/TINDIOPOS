@@ -18,6 +18,11 @@ import {
   type OpenTicketCancelResult,
 } from "@tindio/contracts/open-ticket-cancel";
 import {
+  POS_OPEN_TICKET_MOVE_LINES_PATH,
+  type MoveOpenTicketLinesValues,
+  type OpenTicketMoveLinesResult,
+} from "@tindio/contracts/open-ticket-move-lines";
+import {
   POS_CUSTOMER_CREATION_PATH,
   type CreateCustomerValues,
   type PosCustomerCreationResult,
@@ -398,4 +403,21 @@ export async function cancelPosV2OpenTicket(
   );
 
   return await response.json() as OpenTicketCancelResult;
+}
+
+export async function movePosV2OpenTicketLines(
+  organizationId: string,
+  input: MoveOpenTicketLinesValues,
+): Promise<OpenTicketMoveLinesResult> {
+  const response = await fetchPosV2Command(
+    POS_OPEN_TICKET_MOVE_LINES_PATH,
+    {
+      organizationId,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+
+  return await response.json() as OpenTicketMoveLinesResult;
 }

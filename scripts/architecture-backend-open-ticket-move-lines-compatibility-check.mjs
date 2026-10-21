@@ -40,10 +40,9 @@ test("open-ticket line movement has a focused platform-neutral contract", async 
   );
 });
 
-test("Web route and service consume the frozen line-movement contract", async () => {
-  const [route, action, service, schema] = await Promise.all([
+test("Web route and service established the frozen line-movement contract", async () => {
+  const [route, service, schema] = await Promise.all([
     read("src/app/api/pos/v2/tickets/move-lines/route.ts"),
-    read("src/features/advanced-sales/ticket-actions.ts"),
     read("src/features/advanced-sales/ticket-service.ts"),
     read("src/features/advanced-sales/ticket-schema.ts"),
   ]);
@@ -53,8 +52,6 @@ test("Web route and service consume the frozen line-movement contract", async ()
   const handler = route.slice(route.indexOf("export async function POST"));
   assert.ok(handler.indexOf("getPosV2BusinessContext") < handler.indexOf("readPosApiJson"));
   assert.match(handler, /moveOpenTicketLines\(\{ context, input: body\.input \}\)/);
-  assert.match(action, /moveOpenTicketLinesAction/);
-  assert.match(action, /requireBusinessContext\(\)/);
   for (const permission of ["pos.access", "sales.create", "tickets.manage"]) {
     assert.ok(service.includes(`hasPermission(context, "${permission}")`));
   }
@@ -66,7 +63,7 @@ test("Web route and service consume the frozen line-movement contract", async ()
   assert.match(service, /@tindio\/contracts\/open-ticket-move-lines/);
 });
 
-test("Backend line-movement oracle remains isolated without an owned route", async () => {
+test("Backend line-movement oracle remains isolated beside the owned route", async () => {
   const oracle = await read(
     "apps/backend/src/pos/open-ticket-move-lines-compatibility.ts",
   );
@@ -81,7 +78,7 @@ test("Backend line-movement oracle remains isolated without an owned route", asy
   );
   assert.equal(
     existsSync(new URL("../apps/backend/api/pos/v2/tickets/move-lines.ts", import.meta.url)),
-    false,
+    true,
   );
 });
 
@@ -128,12 +125,15 @@ test("database authority retains atomic pair, quantity, shift, partial-line, and
   );
 });
 
-test("D20 freezes clients and leaves line movement plus adjacent mutations Web-owned", async () => {
-  const [mobileApi, mobileTickets, actions, readme, merge, split, checkout, refund, transfer, attendance, sync] =
+test("D20 contract now converges Web and Mobile while adjacent mutations stay Web-owned", async () => {
+  const [mobileApi, mobileTickets, browserApi, dialogs, actions, environment, readme, merge, split, checkout, refund, transfer, attendance, sync] =
     await Promise.all([
       read("apps/mobile/src/lib/tindio-api.ts"),
       read("apps/mobile/app/(app)/tickets.tsx"),
+      read("src/features/pos/pos-v2-browser-api.ts"),
+      read("src/features/advanced-sales/ticket-workspace-dialogs.tsx"),
       read("src/features/advanced-sales/ticket-actions.ts"),
+      read("apps/backend/.env.example"),
       read("apps/backend/README.md"),
       read("src/app/api/pos/v2/tickets/merge/route.ts"),
       read("src/app/api/pos/v2/tickets/split/route.ts"),
@@ -147,10 +147,15 @@ test("D20 freezes clients and leaves line movement plus adjacent mutations Web-o
   assert.match(mobileApi, /request\(POS_OPEN_TICKET_MOVE_LINES_PATH/);
   assert.match(mobileApi, /@tindio\/contracts\/open-ticket-move-lines/);
   assert.match(mobileTickets, /movePosV2TicketLines/);
-  assert.match(actions, /moveOpenTicketLinesAction/);
+  assert.match(browserApi, /movePosV2OpenTicketLines/);
+  assert.match(browserApi, /POS_OPEN_TICKET_MOVE_LINES_PATH/);
+  assert.match(dialogs, /movePosV2OpenTicketLines\(organizationId/);
+  assert.doesNotMatch(dialogs, /moveOpenTicketLinesAction/);
+  assert.doesNotMatch(actions, /moveOpenTicketLinesAction/);
+  assert.match(environment, /^TINDIO_OPEN_TICKET_MOVE_LINES_MODE=owned$/m);
   for (const mutation of [merge, split, checkout, refund, transfer, attendance, sync]) {
     assert.match(mutation, /export async function POST/);
   }
   assert.doesNotMatch(mobileApi, /TINDIO_WEB_API_ORIGIN|apps\/backend/);
-  assert.match(readme, /Slice D20 open-ticket line-movement compatibility oracle/);
+  assert.match(readme, /Slice D21 Backend-owned open-ticket line movement/);
 });

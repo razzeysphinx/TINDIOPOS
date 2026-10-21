@@ -1647,7 +1647,7 @@ export function PosTerminal({
         />
       ) : null}
       {isTicketEditorOpen ? <TicketSaveDialog assignees={ticketAssignees} canAssign={canAssignTickets} diningOptions={diningOptions} onClose={() => setIsTicketEditorOpen(false)} onSave={submitTicket} templates={ticketTemplates} ticket={openTickets.find((ticket) => ticket.id === activeTicketId) ?? null} /> : null}
-      {isTicketWorkspaceOpen ? <TicketOperationsDialog device={deviceCredential} onClose={() => setIsTicketWorkspaceOpen(false)} onComplete={(message) => { setNotice(message); setIsTicketWorkspaceOpen(false); onRefreshLive?.({ storeId: selectedStoreId, registerId: selectedRegisterId || null }); }} tickets={openTickets} /> : null}
+      {isTicketWorkspaceOpen ? <TicketOperationsDialog device={deviceCredential} onClose={() => setIsTicketWorkspaceOpen(false)} onComplete={(message) => { setNotice(message); setIsTicketWorkspaceOpen(false); onRefreshLive?.({ storeId: selectedStoreId, registerId: selectedRegisterId || null }); }} organizationId={organizationId} tickets={openTickets} /> : null}
     </>
   );
 }

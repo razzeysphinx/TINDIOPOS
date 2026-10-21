@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 
 import {
   mergeOpenTickets,
-  moveOpenTicketLines,
   splitOpenTicket,
   type TicketActionResult,
   type TicketMutationResult,
@@ -15,13 +14,6 @@ export type { TicketActionResult } from "@/features/advanced-sales/ticket-servic
 
 function revalidateTickets() {
   revalidatePath("/pos");
-}
-
-export async function moveOpenTicketLinesAction(input: unknown): Promise<TicketMutationResult> {
-  const context = await requireBusinessContext();
-  const result = await moveOpenTicketLines({ context, input });
-  if (result.ok) revalidateTickets();
-  return result;
 }
 
 export async function splitOpenTicketAction(input: unknown): Promise<TicketActionResult> {

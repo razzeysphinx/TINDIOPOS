@@ -59,14 +59,16 @@ test("shared sync-push contracts retain ordered acknowledgement envelopes", asyn
 });
 
 test("Web checkout and root POS paths remain compatibility facades", async () => {
-  const [schema, checkoutTypes, posFacade] = await Promise.all([
+  const [contract, schema, checkoutTypes, posFacade] = await Promise.all([
+    read("packages/contracts/src/checkout.ts"),
     read("src/features/checkout/checkout-schema.ts"),
     read("src/features/checkout/checkout-types.ts"),
     read("src/contracts/pos.ts"),
   ]);
 
-  assert.match(schema, /satisfies z\.ZodType<CheckoutSaleValues>/);
-  assert.match(schema, /export type \{ CheckoutSaleValues \} from ["']@tindio\/contracts["']/);
+  assert.match(contract, /satisfies z\.ZodType<CheckoutSaleValues>/);
+  assert.match(schema, /checkoutSaleSchema,[\s\S]*from ["']@tindio\/contracts\/checkout["']/);
+  assert.match(schema, /CheckoutSaleValues,[\s\S]*from ["']@tindio\/contracts\/checkout["']/);
   assert.match(checkoutTypes, /CheckoutSaleActionResult,[\s\S]*CheckoutSequenceInfo,[\s\S]*from ["']@tindio\/contracts["']/);
   for (const typeName of ["PosSyncPushEvent", "PosSyncPushAck", "PosSyncPushResponse"]) {
     assert.match(posFacade, new RegExp(`\\b${typeName}\\b`));

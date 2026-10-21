@@ -55,7 +55,8 @@ test("shared ticket and time-clock results retain their discriminated shapes", a
 });
 
 test("Web schemas and result modules remain compatibility facades", async () => {
-  const [checkoutSchema, checkoutTypes, ticketSchema, timeClockTypes, posFacade] = await Promise.all([
+  const [checkoutContract, checkoutSchema, checkoutTypes, ticketSchema, timeClockTypes, posFacade] = await Promise.all([
+    read("packages/contracts/src/checkout.ts"),
     read("src/features/checkout/checkout-schema.ts"),
     read("src/features/checkout/checkout-types.ts"),
     read("src/features/advanced-sales/ticket-schema.ts"),
@@ -63,8 +64,9 @@ test("Web schemas and result modules remain compatibility facades", async () => 
     read("src/contracts/pos.ts"),
   ]);
 
-  assert.match(checkoutSchema, /satisfies z\.ZodType<ValidateCartStockValues>/);
-  assert.match(checkoutSchema, /export type \{ ValidateCartStockValues \} from ["']@tindio\/contracts["']/);
+  assert.match(checkoutContract, /satisfies z\.ZodType<ValidateCartStockValues>/);
+  assert.match(checkoutSchema, /validateCartStockSchema,[\s\S]*from ["']@tindio\/contracts\/checkout["']/);
+  assert.match(checkoutSchema, /ValidateCartStockValues,[\s\S]*from ["']@tindio\/contracts\/checkout["']/);
   assert.match(checkoutTypes, /ValidateCartStockActionResult,[\s\S]*from ["']@tindio\/contracts["']/);
   assert.match(ticketSchema, /TicketActionResult,[\s\S]*TicketMutationResult,[\s\S]*from ["']@tindio\/contracts["']/);
   assert.match(timeClockTypes, /TimeClockActionResult,[\s\S]*from ["']@tindio\/contracts["']/);

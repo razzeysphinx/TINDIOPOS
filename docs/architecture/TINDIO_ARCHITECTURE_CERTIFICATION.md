@@ -446,6 +446,19 @@ Database: **CANONICAL NEON UNCHANGED**
 - Mobile and Web POS now use the shared HTTP command. The merge-only server
   action is removed; checkout, refunds, transfer receipt, attendance, sync,
   deployment, schema, and client origins are intact.
+- A focused `@tindio/contracts/checkout` export now freezes the shared Web/Mobile
+  path, wrapped and legacy request bodies, validation bounds, permissions,
+  messages, RPC names, and financial result envelope.
+- The isolated Backend oracle freezes JSON-before-context ordering, Supabase
+  bearer and organization selection, assigned-store/register and first-commit
+  open-shift custody, device-header forwarding, conditional discount/ticket
+  permissions, idempotent operation identity, exact RPC projection, payment and
+  stock semantics, financial effects, post-commit warning, and response mapping
+  without network or database access.
+- The existing Web route remains authoritative. Web and Mobile now import the
+  shared path constant but retain their current API origins. No Backend checkout
+  route, runtime mode, schema, deployment, offline replay, or adjacent financial
+  mutation changed.
 
 ## Results
 
@@ -454,7 +467,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (396/396)** |
+| Backend behavior and contracts | **PASS (406/406)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -481,6 +494,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend open-ticket split ownership/rollback boundary | **PASS (5/5)** |
 | Backend open-ticket merge mutation compatibility boundary | **PASS (5/5)** |
 | Backend open-ticket merge ownership/rollback boundary | **PASS (5/5)** |
+| Backend checkout mutation compatibility boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -504,7 +518,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (214/214 automated commands)** |
+| Static catalogue | **PASS (215/215 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -513,18 +527,18 @@ Database: **CANONICAL NEON UNCHANGED**
 
 No production Auth service was provisioned. No database schema or merchant data
 changed. No account was exported/imported. No session format, existing Web POS
-merge route, JSON wire field, checkout behavior, SQLite database, outbox record,
-deployment, client API origin, or provider project changed. The new Backend
-merge route is undeployed, defaults to owned mode, and retains an explicit
-allowlisted proxy rollback; no credential was added or rotated.
+checkout route, accepted JSON body, checkout behavior, SQLite database, outbox
+record, deployment, client API origin, or provider project changed. The D26
+oracle is undeployed and has no network or database dependency; no Backend
+checkout route or runtime mode was added and no credential was added or rotated.
 
 ## Next gate
 
-Begin Slice D26 by freezing only `POST /api/pos/v2/checkout` in a focused,
-platform-neutral contract and network/database-independent Backend oracle.
-Inventory its authentication, organization/store/register and shift/device
-custody, permissions, validation, operation identity, payment and stock
-semantics, response envelopes, RPC projection, database authority, and audit
-effects. Do not move checkout ownership, refunds, transfer receipt, attendance,
-sync, or any other financial/offline-replayed mutation, and do not change
-deployed client origins. Neon Auth proof remains a later slice.
+Begin Slice D27 by moving only `POST /api/pos/v2/checkout` behind a Backend-owned/
+proxy boundary with the existing Web route retained for rollback. Preserve both
+accepted request shapes, Supabase bearer identity, assigned store/register and
+first-commit open-shift custody, device headers, exact idempotency/replay,
+financial and stock effects, response mapping, and post-commit warning. Do not
+move offline checkout/sync replay, refunds, transfer receipt, attendance, or any
+other financial mutation, and do not change deployed client origins. Neon Auth
+proof remains a later slice.

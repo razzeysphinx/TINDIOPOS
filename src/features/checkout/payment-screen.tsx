@@ -19,6 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { POS_CHECKOUT_PATH } from "@tindio/contracts/checkout";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,7 +93,7 @@ async function submitOnlineCheckout(
   payload: CheckoutSaleValues,
   device: PosDeviceCredential | null,
 ): Promise<CheckoutSaleActionResult> {
-  const response = await fetchPosV2Command("/api/pos/v2/checkout", {
+  const response = await fetchPosV2Command(POS_CHECKOUT_PATH, {
     method: "POST",
     organizationId,
     headers: { "Content-Type": "application/json" },

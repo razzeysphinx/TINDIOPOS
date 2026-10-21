@@ -180,6 +180,14 @@ now invoke the same HTTP path. Device credentials remain in the validated body
 until the owned runtime converts them to Neon RPC headers; ambient device
 headers and cookies are never proxied.
 
+The Slice D26 checkout compatibility oracle is network- and database-
+independent. It freezes the existing Web-owned route, shared Web/Mobile path,
+wrapped and legacy request bodies, Supabase bearer and organization context,
+permissions, assigned-store/register and open-shift custody, device-header
+forwarding, idempotent operation identity, payment and stock semantics, exact
+RPC projection, financial effects, post-commit warning, and response mapping.
+No Backend checkout route or runtime mode exists in this slice.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

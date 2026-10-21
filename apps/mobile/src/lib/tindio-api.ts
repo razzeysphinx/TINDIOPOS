@@ -31,6 +31,7 @@ import type {
   CreateCustomerValues,
   PosCustomerCreationResult,
 } from "@tindio/contracts";
+import { POS_CHECKOUT_PATH } from "@tindio/contracts/checkout";
 import { POS_CUSTOMER_CREATION_PATH } from "@tindio/contracts/customer-creation";
 import { POS_OPEN_TICKET_CANCEL_PATH } from "@tindio/contracts/open-ticket-cancel";
 import {
@@ -552,7 +553,7 @@ export async function checkoutPosV2(
   organizationId: string,
   input: unknown,
 ) {
-  return (await request("/api/pos/v2/checkout", {
+  return (await request(POS_CHECKOUT_PATH, {
     organizationId,
     init: jsonPost(input),
   })).json() as Promise<CheckoutSaleActionResult>;

@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D22 COMPLETE; OPEN-TICKET SPLIT COMPATIBILITY CERTIFIED**
+Status: **SLICE D23 COMPLETE; BACKEND-OWNED OPEN-TICKET SPLIT CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, Slice D11 Backend-owned customer-display update with proxy rollback, the Slice D12 favorite-tile mutation compatibility boundary, Slice D13 Backend-owned favorite-tile update with proxy rollback, the Slice D14 customer-creation mutation compatibility boundary, Slice D15 Backend-owned customer creation with proxy rollback, the Slice D16 open-ticket save mutation compatibility boundary, Slice D17 Backend-owned open-ticket save with proxy rollback, the Slice D18 open-ticket cancellation mutation compatibility boundary, Slice D19 Backend-owned open-ticket cancellation with proxy rollback, the Slice D20 open-ticket line-movement compatibility boundary, Slice D21 Backend-owned open-ticket line movement with proxy rollback, and the Slice D22 open-ticket split compatibility boundary
+Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, Slice D11 Backend-owned customer-display update with proxy rollback, the Slice D12 favorite-tile mutation compatibility boundary, Slice D13 Backend-owned favorite-tile update with proxy rollback, the Slice D14 customer-creation mutation compatibility boundary, Slice D15 Backend-owned customer creation with proxy rollback, the Slice D16 open-ticket save mutation compatibility boundary, Slice D17 Backend-owned open-ticket save with proxy rollback, the Slice D18 open-ticket cancellation mutation compatibility boundary, Slice D19 Backend-owned open-ticket cancellation with proxy rollback, the Slice D20 open-ticket line-movement compatibility boundary, Slice D21 Backend-owned open-ticket line movement with proxy rollback, the Slice D22 open-ticket split compatibility boundary, and Slice D23 Backend-owned open-ticket split with proxy rollback
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -411,6 +411,18 @@ Database: **CANONICAL NEON UNCHANGED**
 - The existing Web route remains authoritative. Mobile still uses HTTP and Web
   POS still uses its server action/service. No Backend split route, runtime
   mode, schema, deployment, client origin, or adjacent mutation changed.
+- Backend `POST /api/pos/v2/tickets/split` now owns the seventh bounded mutation
+  while preserving the existing Web route as rollback.
+- The owned path preserves Supabase claim verification, organization selection
+  and identity retry, full business-context validation, context-before-JSON
+  ordering, exact `400` versus `200` envelopes, permissions, feature gate,
+  device-bound RPC execution, returned ticket identity, and error mapping.
+- Context and split RPC traffic use only the external-JWT Neon Data API. The
+  Supabase publishable key is removed at the provider boundary; cookies and
+  ambient device credentials are excluded from rollback proxy forwarding.
+- Mobile and Web POS now use the shared HTTP command. The split-only server
+  action is removed; merge, checkout, refunds, transfer receipt, attendance,
+  sync, deployment, schema, and client origins are intact.
 
 ## Results
 
@@ -419,7 +431,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (347/347)** |
+| Backend behavior and contracts | **PASS (367/367)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -443,6 +455,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend open-ticket line-movement compatibility boundary | **PASS (5/5)** |
 | Backend open-ticket line-movement ownership/rollback boundary | **PASS (5/5)** |
 | Backend open-ticket split mutation compatibility boundary | **PASS (5/5)** |
+| Backend open-ticket split ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -466,7 +479,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (211/211 automated commands)** |
+| Static catalogue | **PASS (212/212 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -475,19 +488,18 @@ Database: **CANONICAL NEON UNCHANGED**
 
 No production Auth service was provisioned. No database schema or merchant data
 changed. No account was exported/imported. No session format, existing Web POS
-split route or server action, JSON wire field, checkout behavior, SQLite
-database, outbox record, deployment, client API origin, or provider project
-changed. The D22 Backend oracle is network- and database-independent and no
-Backend ticket-split route or runtime mode was added.
+split route, JSON wire field, checkout behavior, SQLite database, outbox record,
+deployment, client API origin, or provider project changed. The new Backend
+route is undeployed, defaults to owned mode, and retains an explicit allowlisted
+proxy rollback; no credential was added or rotated.
 
 ## Next gate
 
-Begin Slice D23 by moving only `POST /api/pos/v2/tickets/split` behind an
-explicit Backend-owned/proxy boundary while preserving every frozen D22
-contract and the existing Web route as rollback. Preserve Mobile HTTP and Web
-POS behavior, source-ticket/shift/device custody, inherited destination fields,
-label and line rules, partial-line identity, current all-selected source
-behavior, exact RPC arguments, audit effects, ticket identity, and response
-envelopes. Do not move ticket merge, checkout, refunds, transfer receipt,
-attendance, sync, or any other financial/offline-replayed mutation, and do not
-change deployed client origins. Neon Auth proof remains a later slice.
+Begin Slice D24 by freezing only `POST /api/pos/v2/tickets/merge` in a focused,
+platform-neutral contract and network/database-independent Backend oracle.
+Inventory its context, permissions, feature and dual-ticket shift/device
+custody, validation, RPC projection, database authority, audit effects, and
+exact response envelopes. Do not move merge ownership, checkout, refunds,
+transfer receipt, attendance, sync, or any other financial/offline-replayed
+mutation, and do not change deployed client origins. Neon Auth proof remains a
+later slice.

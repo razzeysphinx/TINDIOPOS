@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   mergeOpenTicketsAction,
-  splitOpenTicketAction,
 } from "@/features/advanced-sales/ticket-actions";
-import { movePosV2OpenTicketLines } from "@/features/pos/pos-v2-browser-api";
+import {
+  movePosV2OpenTicketLines,
+  splitPosV2OpenTicket,
+} from "@/features/pos/pos-v2-browser-api";
 import type {
   PosOpenTicket,
   PosTicketAssignee,
@@ -127,7 +129,7 @@ export function TicketOperationsDialog({
       const result = operation === "move"
         ? await movePosV2OpenTicketLines(organizationId, { sourceTicketId, destinationTicketId, lines: selectedLines, device })
         : operation === "split"
-          ? await splitOpenTicketAction({ sourceTicketId, label: splitLabel, lines: selectedLines, device })
+          ? await splitPosV2OpenTicket(organizationId, { sourceTicketId, label: splitLabel, lines: selectedLines, device })
           : await mergeOpenTicketsAction({ sourceTicketId, destinationTicketId, device });
       setMessage(result.message);
       if (result.ok) onComplete(result.message);

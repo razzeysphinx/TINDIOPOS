@@ -23,6 +23,11 @@ import {
   type OpenTicketMoveLinesResult,
 } from "@tindio/contracts/open-ticket-move-lines";
 import {
+  POS_OPEN_TICKET_SPLIT_PATH,
+  type OpenTicketSplitResult,
+  type SplitOpenTicketValues,
+} from "@tindio/contracts/open-ticket-split";
+import {
   POS_CUSTOMER_CREATION_PATH,
   type CreateCustomerValues,
   type PosCustomerCreationResult,
@@ -420,4 +425,21 @@ export async function movePosV2OpenTicketLines(
   );
 
   return await response.json() as OpenTicketMoveLinesResult;
+}
+
+export async function splitPosV2OpenTicket(
+  organizationId: string,
+  input: SplitOpenTicketValues,
+): Promise<OpenTicketSplitResult> {
+  const response = await fetchPosV2Command(
+    POS_OPEN_TICKET_SPLIT_PATH,
+    {
+      organizationId,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+
+  return await response.json() as OpenTicketSplitResult;
 }

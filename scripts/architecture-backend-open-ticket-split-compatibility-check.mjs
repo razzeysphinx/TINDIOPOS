@@ -36,10 +36,9 @@ test("open-ticket split has a focused platform-neutral contract", async () => {
   );
 });
 
-test("Web route and service consume the frozen split contract", async () => {
-  const [route, action, service, schema] = await Promise.all([
+test("Web route and service established the frozen split contract", async () => {
+  const [route, service, schema] = await Promise.all([
     read("src/app/api/pos/v2/tickets/split/route.ts"),
-    read("src/features/advanced-sales/ticket-actions.ts"),
     read("src/features/advanced-sales/ticket-service.ts"),
     read("src/features/advanced-sales/ticket-schema.ts"),
   ]);
@@ -49,8 +48,6 @@ test("Web route and service consume the frozen split contract", async () => {
   const handler = route.slice(route.indexOf("export async function POST"));
   assert.ok(handler.indexOf("getPosV2BusinessContext") < handler.indexOf("readPosApiJson"));
   assert.match(handler, /splitOpenTicket\(\{ context, input: body\.input \}\)/);
-  assert.match(action, /splitOpenTicketAction/);
-  assert.match(action, /requireBusinessContext\(\)/);
   for (const permission of ["pos.access", "sales.create", "tickets.manage"]) {
     assert.ok(service.includes(`hasPermission(context, "${permission}")`));
   }
@@ -62,7 +59,7 @@ test("Web route and service consume the frozen split contract", async () => {
   assert.match(service, /@tindio\/contracts\/open-ticket-split/);
 });
 
-test("Backend split oracle remains isolated without an owned route", async () => {
+test("Backend split oracle remains isolated beside the owned route", async () => {
   const oracle = await read("apps/backend/src/pos/open-ticket-split-compatibility.ts");
 
   assert.match(oracle, /OPEN_TICKET_SPLIT_COMPATIBILITY_CONTRACT/);
@@ -75,7 +72,7 @@ test("Backend split oracle remains isolated without an owned route", async () =>
   );
   assert.equal(
     existsSync(new URL("../apps/backend/api/pos/v2/tickets/split.ts", import.meta.url)),
-    false,
+    true,
   );
 });
 
@@ -122,12 +119,15 @@ test("database authority retains atomic source, shift, inheritance, line, source
   );
 });
 
-test("D22 freezes clients and leaves split plus adjacent mutations Web-owned", async () => {
-  const [mobileApi, mobileTickets, actions, readme, merge, checkout, refund, transfer, attendance, sync] =
+test("D22 contract now converges Web and Mobile while adjacent mutations stay Web-owned", async () => {
+  const [mobileApi, mobileTickets, browserApi, dialogs, actions, environment, readme, merge, checkout, refund, transfer, attendance, sync] =
     await Promise.all([
       read("apps/mobile/src/lib/tindio-api.ts"),
       read("apps/mobile/app/(app)/tickets.tsx"),
+      read("src/features/pos/pos-v2-browser-api.ts"),
+      read("src/features/advanced-sales/ticket-workspace-dialogs.tsx"),
       read("src/features/advanced-sales/ticket-actions.ts"),
+      read("apps/backend/.env.example"),
       read("apps/backend/README.md"),
       read("src/app/api/pos/v2/tickets/merge/route.ts"),
       read("src/app/api/pos/v2/checkout/route.ts"),
@@ -140,10 +140,15 @@ test("D22 freezes clients and leaves split plus adjacent mutations Web-owned", a
   assert.match(mobileApi, /request\(POS_OPEN_TICKET_SPLIT_PATH/);
   assert.match(mobileApi, /@tindio\/contracts\/open-ticket-split/);
   assert.match(mobileTickets, /splitPosV2Ticket/);
-  assert.match(actions, /splitOpenTicketAction/);
+  assert.match(browserApi, /splitPosV2OpenTicket/);
+  assert.match(browserApi, /POS_OPEN_TICKET_SPLIT_PATH/);
+  assert.match(dialogs, /splitPosV2OpenTicket\(organizationId/);
+  assert.doesNotMatch(dialogs, /splitOpenTicketAction/);
+  assert.doesNotMatch(actions, /splitOpenTicketAction/);
+  assert.match(environment, /^TINDIO_OPEN_TICKET_SPLIT_MODE=owned$/m);
   for (const mutation of [merge, checkout, refund, transfer, attendance, sync]) {
     assert.match(mutation, /export async function POST/);
   }
   assert.doesNotMatch(mobileApi, /TINDIO_WEB_API_ORIGIN|apps\/backend/);
-  assert.match(readme, /Slice D22 open-ticket split compatibility oracle/);
+  assert.match(readme, /Slice D23 Backend-owned open-ticket split/);
 });

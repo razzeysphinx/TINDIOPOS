@@ -33,6 +33,11 @@ import type {
 } from "@tindio/contracts";
 import { POS_CUSTOMER_CREATION_PATH } from "@tindio/contracts/customer-creation";
 import { POS_OPEN_TICKET_CANCEL_PATH } from "@tindio/contracts/open-ticket-cancel";
+import {
+  POS_OPEN_TICKET_MOVE_LINES_PATH,
+  type MoveOpenTicketLinesValues,
+  type OpenTicketMoveLinesResult,
+} from "@tindio/contracts/open-ticket-move-lines";
 import { POS_OPEN_TICKET_SAVE_PATH } from "@tindio/contracts/open-ticket-save";
 import { mobileEnvironment } from "./env";
 import {
@@ -626,12 +631,12 @@ export async function mergePosV2Ticket(
 
 export async function movePosV2TicketLines(
   organizationId: string,
-  input: unknown,
+  input: MoveOpenTicketLinesValues,
 ) {
-  return (await request("/api/pos/v2/tickets/move-lines", {
+  return (await request(POS_OPEN_TICKET_MOVE_LINES_PATH, {
     organizationId,
     init: jsonPost(input),
-  })).json() as Promise<TicketMutationResult>;
+  })).json() as Promise<OpenTicketMoveLinesResult>;
 }
 
 export async function receivePosV2Transfer(

@@ -36,6 +36,10 @@
       "types": "./src/open-ticket-cancel.ts",
       "default": "./src/open-ticket-cancel.ts"
     },
+    "./open-ticket-move-lines": {
+      "types": "./src/open-ticket-move-lines.ts",
+      "default": "./src/open-ticket-move-lines.ts"
+    },
     "./pos-data": {
       "types": "./src/pos-data.ts",
       "default": "./src/pos-data.ts"

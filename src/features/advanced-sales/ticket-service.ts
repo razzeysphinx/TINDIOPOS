@@ -35,6 +35,15 @@ import {
   POS_OPEN_TICKET_SAVE_RPC,
   POS_OPEN_TICKET_SAVE_SUCCESS_MESSAGE,
 } from "@tindio/contracts/open-ticket-save";
+import {
+  POS_OPEN_TICKET_MOVE_LINES_CONSTRAINT_DATABASE_CODE,
+  POS_OPEN_TICKET_MOVE_LINES_DATABASE_MESSAGE,
+  POS_OPEN_TICKET_MOVE_LINES_INPUT_MESSAGE,
+  POS_OPEN_TICKET_MOVE_LINES_PERMISSION_DATABASE_CODE,
+  POS_OPEN_TICKET_MOVE_LINES_PERMISSION_MESSAGE,
+  POS_OPEN_TICKET_MOVE_LINES_RPC,
+  POS_OPEN_TICKET_MOVE_LINES_SUCCESS_MESSAGE,
+} from "@tindio/contracts/open-ticket-move-lines";
 
 export type {
   TicketActionResult,
@@ -53,6 +62,13 @@ function cancelDatabaseMessage(error: { code?: string; message?: string } | null
   if (error?.code === POS_OPEN_TICKET_CANCEL_PERMISSION_DATABASE_CODE) return POS_OPEN_TICKET_CANCEL_PERMISSION_MESSAGE;
   if (error?.code === POS_OPEN_TICKET_CANCEL_CONSTRAINT_DATABASE_CODE && error.message) return error.message;
   return POS_OPEN_TICKET_CANCEL_DATABASE_MESSAGE;
+}
+
+function moveLinesDatabaseMessage(error: { code?: string; message?: string } | null) {
+  if (error?.code === POS_OPEN_TICKET_MOVE_LINES_PERMISSION_DATABASE_CODE && error.message?.toLowerCase().includes("device")) return error.message;
+  if (error?.code === POS_OPEN_TICKET_MOVE_LINES_PERMISSION_DATABASE_CODE) return POS_OPEN_TICKET_MOVE_LINES_PERMISSION_MESSAGE;
+  if (error?.code === POS_OPEN_TICKET_MOVE_LINES_CONSTRAINT_DATABASE_CODE && error.message) return error.message;
+  return POS_OPEN_TICKET_MOVE_LINES_DATABASE_MESSAGE;
 }
 
 function hasTicketContext(context: BusinessContext) {
@@ -137,15 +153,15 @@ export async function cancelOpenTicket({ context, input }: { context: BusinessCo
 
 export async function moveOpenTicketLines({ context, input }: { context: BusinessContext; input: unknown }): Promise<TicketMutationResult> {
   const parsed = moveOpenTicketLinesSchema.safeParse(input);
-  if (!hasTicketContext(context) || !parsed.success) return { ok: false, message: "Choose valid source, destination, and ticket lines." };
-  const { error } = await (await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(parsed.data.device) })).rpc("move_open_ticket_lines", {
+  if (!hasTicketContext(context) || !parsed.success) return { ok: false, message: POS_OPEN_TICKET_MOVE_LINES_INPUT_MESSAGE };
+  const { error } = await (await createBusinessContextClient(context, { headers: posDeviceRequestHeaders(parsed.data.device) })).rpc(POS_OPEN_TICKET_MOVE_LINES_RPC, {
     target_organization_id: context.organization.id,
     target_source_ticket_id: parsed.data.sourceTicketId,
     target_destination_ticket_id: parsed.data.destinationTicketId,
     target_lines: reallocationLines(parsed.data.lines),
   });
-  if (error) return { ok: false, message: databaseMessage(error) };
-  return { ok: true, message: "Selected items moved to the destination ticket." };
+  if (error) return { ok: false, message: moveLinesDatabaseMessage(error) };
+  return { ok: true, message: POS_OPEN_TICKET_MOVE_LINES_SUCCESS_MESSAGE };
 }
 
 export async function splitOpenTicket({ context, input }: { context: BusinessContext; input: unknown }): Promise<TicketActionResult> {

@@ -274,14 +274,26 @@ Status: **IN PROGRESS**
   sync, and every other financial/offline-replayed mutation unchanged.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D20 open-ticket line-movement compatibility harness
+## Completed Slice D20: open-ticket line-movement compatibility harness
 
 - Inventory and freeze only `POST /api/pos/v2/tickets/move-lines`, including
   context, permissions, feature and dual-ticket shift/device custody, line and
   quantity validation, partial-line behavior, exact envelopes, RPC arguments,
-  audit effects, and SQL authority.
+  audit effects, and SQL authority. **IMPLEMENTED.**
 - Add a network/database-independent Backend oracle and compatibility gates
-  before moving line-movement ownership.
+  before moving line-movement ownership. **IMPLEMENTED.**
+- Keep ticket merge/split, checkout, refunds, transfer receipt, attendance,
+  sync, and every other financial/offline-replayed mutation unchanged.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D21 open-ticket line-movement ownership
+
+- Move only `POST /api/pos/v2/tickets/move-lines` behind an explicit Backend-
+  owned/proxy boundary while preserving every frozen D20 contract and the
+  existing Web route as rollback.
+- Preserve Mobile HTTP and Web POS behavior, same-register ticket scope, owned-
+  open-shift/device custody, database-only pair/line validation, partial-line
+  identity, exact RPC arguments, audit effects, and response envelopes.
 - Keep ticket merge/split, checkout, refunds, transfer receipt, attendance,
   sync, and every other financial/offline-replayed mutation unchanged.
 

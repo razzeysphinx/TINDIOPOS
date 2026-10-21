@@ -9,40 +9,19 @@ import {
   type OpenTicketCartLineValues,
 } from "@tindio/contracts/open-ticket-save";
 import { cancelOpenTicketSchema } from "@tindio/contracts/open-ticket-cancel";
+import {
+  moveOpenTicketLinesSchema,
+  ticketReallocationLinesSchema,
+  type TicketReallocationLines,
+} from "@tindio/contracts/open-ticket-move-lines";
 
 export const ticketCartLineSchema = openTicketCartLineSchema;
-export { cancelOpenTicketSchema, saveOpenTicketSchema };
-
-export const ticketReallocationLinesSchema =
-  z.array(
-    z.object({
-      ticketLineId: z.uuid(),
-      quantity:
-        z.number()
-          .min(0.001)
-          .max(10_000)
-          .refine(
-            (value) =>
-              Number.isInteger(
-                value * 1_000,
-              ),
-          ),
-    }),
-  )
-    .min(1)
-    .max(100);
-
-export const moveOpenTicketLinesSchema =
-  z.object({
-    sourceTicketId: z.uuid(),
-    destinationTicketId: z.uuid(),
-    lines:
-      ticketReallocationLinesSchema,
-    device:
-      posDeviceCredentialSchema
-        .nullable()
-        .optional(),
-  });
+export {
+  cancelOpenTicketSchema,
+  moveOpenTicketLinesSchema,
+  saveOpenTicketSchema,
+  ticketReallocationLinesSchema,
+};
 
 export const splitOpenTicketSchema =
   z.object({
@@ -72,10 +51,7 @@ export const mergeOpenTicketsSchema =
 
 export type TicketCartLineValues = OpenTicketCartLineValues;
 
-export type TicketReallocationLines =
-  z.infer<
-    typeof ticketReallocationLinesSchema
-  >;
+export type { TicketReallocationLines };
 
 export type {
   TicketActionResult,

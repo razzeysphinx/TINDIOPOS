@@ -587,6 +587,20 @@ Database: **CANONICAL NEON UNCHANGED**
   paths/input types at its current origin. No Backend attendance mutation route,
   runtime mode, schema, deployment, authentication provider, shift custody,
   exchange, or adjacent mutation changed.
+- Backend `POST /api/pos/v2/attendance/clock-in` and
+  `POST /api/pos/v2/attendance/clock-out` now own the fourteenth and fifteenth
+  bounded mutations while preserving both existing Web routes as rollback.
+- The owned handlers preserve context-first feature/permission gates, assigned-
+  store clock-in validation, employee clock-out validation, request-id replay,
+  employee PIN verification, the open-register-shift guard, time-entry/audit
+  effects, approved database-error detail, and exact result envelopes.
+- Supabase verifies bearer claims while business context and both attendance RPCs
+  use only Neon's external-JWT Data API. The shared rollback proxy rejects loops
+  and forwards only allowlisted headers; cookies and ambient device credentials
+  do not cross the boundary.
+- Mobile retains the shared paths and its existing deployed origin. Schema,
+  deployment, authentication-provider ownership, shift open/close ownership,
+  exchanges, and adjacent mutations remain unchanged.
 
 ## Results
 
@@ -595,7 +609,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (557/557)** |
+| Backend behavior and contracts | **PASS (582/582)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -633,6 +647,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend transfer-receipt compatibility boundary | **PASS (5/5)** |
 | Backend transfer-receipt ownership/rollback boundary | **PASS (5/5)** |
 | Backend attendance mutation compatibility boundary | **PASS (5/5)** |
+| Backend attendance mutation ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -656,7 +671,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (225/225 automated commands)** |
+| Static catalogue | **PASS (226/226 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -675,15 +690,17 @@ rollback route remains intact. D35 adds no schema, credential, provider setting,
 deployment, or live client cutover. D36 adds only a shared attendance-mutation
 contract, isolated compatibility oracle, and certification gate; both Web
 attendance mutation routes remain authoritative and undeployed client origins
-remain unchanged.
+remain unchanged. The D37 Backend attendance boundary is also undeployed and
+both Web rollback routes remain intact. D37 adds no schema, credential, provider
+setting, deployment, or live client cutover.
 
 ## Next gate
 
-Begin Slice D37 by moving only `POST /api/pos/v2/attendance/clock-in` and
-`POST /api/pos/v2/attendance/clock-out` behind an explicit Backend-owned/proxy
-boundary while preserving the D36 contract and both Web routes as rollback.
-Preserve context-first authorization, terminal and employee store custody,
-request-id replay, employee PIN verification, open-register-shift protection,
-time-entry/audit effects, and exact response mapping through Neon's external-JWT
-boundary. Do not change deployed client origins, shift open/close ownership,
-adjacent mutations, or authentication-provider ownership.
+Begin Slice D38 by freezing only the existing `linkSaleExchangeAction` in a
+platform-neutral contract and network/database-independent Backend oracle.
+Preserve sales-create/refund permissions, refund and replacement-receipt
+identities, idempotency, immutable sale/refund custody, database error mapping,
+replay behavior, and exact result messages. Do not create a Backend exchange
+route or change receipt settings/delivery, shift custody, adjacent mutations,
+deployed client origins, or authentication-provider ownership in that
+compatibility slice.

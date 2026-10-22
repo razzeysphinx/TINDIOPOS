@@ -83,6 +83,10 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
   receipt validation, destination-store employee custody, idempotent
   `receive_stock_transfer`, and locked destination-stock effects through the
   same boundary.
+- `POST /api/pos/v2/attendance/clock-in` and
+  `POST /api/pos/v2/attendance/clock-out` own context-first time-clock gates,
+  assigned-store/employee PIN validation, request replay, open-register-shift
+  protection, and audited time-entry effects through the same boundary.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`,
@@ -103,7 +107,8 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_OFFLINE_CHECKOUT_MODE=owned`, and
 `TINDIO_SYNC_PUSH_MODE=owned`, and
 `TINDIO_REFUND_MODE=owned`, and
-`TINDIO_TRANSFER_RECEIPT_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_TRANSFER_RECEIPT_MODE=owned`, and
+`TINDIO_ATTENDANCE_MUTATION_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -300,6 +305,15 @@ employee store custody, open-register-shift guard, time-entry and audit effects,
 database error mapping, and action result envelopes. No Backend attendance
 mutation route or runtime mode exists; the Web routes remain authoritative,
 Mobile retains its current API origin, and adjacent mutations remain unchanged.
+
+Slice D37 Backend-owned attendance mutations use that frozen contract in two
+isolated owned commands and a shared allowlisted Web rollback proxy. Supabase
+verifies the bearer while business context and clock-in/clock-out RPC traffic
+use only Neon's external-JWT Data API. Database authority retains terminal and
+employee store custody, request replay, employee PIN verification, the open-
+register-shift guard, time-entry writes, and audit effects. Both Web routes
+remain available for rollback, client origins are unchanged, and shift
+open/close plus adjacent mutations remain in Web.
 
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,

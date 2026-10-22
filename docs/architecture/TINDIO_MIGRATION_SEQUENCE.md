@@ -478,17 +478,29 @@ Status: **IN PROGRESS**
   client origins, and authentication-provider ownership unchanged.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D37 attendance mutation ownership
+## Completed Slice D37: attendance mutation ownership
 
 - Move only `POST /api/pos/v2/attendance/clock-in` and
   `POST /api/pos/v2/attendance/clock-out` behind an explicit Backend-owned/proxy
   boundary while preserving every frozen D36 contract and both Web routes as
-  rollback.
+  rollback. **IMPLEMENTED.**
 - Preserve context-first authorization, terminal and employee store custody,
   request-id replay, employee PIN verification, the open-register-shift guard,
   time-entry/audit effects, and exact response mapping through Neon's external-
-  JWT boundary.
+  JWT boundary. **IMPLEMENTED.**
 - Keep shift open/close ownership, exchanges, every other financial mutation,
+  deployed client origins, and authentication-provider ownership unchanged.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D38 sale-exchange compatibility harness
+
+- Inventory and freeze only the existing `linkSaleExchangeAction`, including
+  sales-create/refund permissions, refund and replacement-receipt identities,
+  idempotency, immutable sale/refund custody, database errors, replay behavior,
+  and exact result messages.
+- Add a platform-neutral shared contract and network/database-independent
+  Backend oracle before creating any Backend exchange route or moving ownership.
+- Keep receipt settings/delivery, shift custody, every other financial mutation,
   deployed client origins, and authentication-provider ownership unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without

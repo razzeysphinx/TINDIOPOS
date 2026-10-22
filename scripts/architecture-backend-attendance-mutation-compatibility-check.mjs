@@ -52,7 +52,7 @@ test("Web attendance retains context-first gates, shared validation, and exact R
   assert.match(service, /result\.result_code === "OPEN_REGISTER_SHIFT"/);
 });
 
-test("Backend attendance oracle is isolated and no mutation route exists", async () => {
+test("Backend attendance oracle remains isolated beside the owned mutation routes", async () => {
   const oracle = await read("apps/backend/src/pos/attendance-mutation-compatibility.ts");
   for (const value of [
     "ATTENDANCE_MUTATION_COMPATIBILITY_CONTRACT", "validateAttendanceMutationRoute",
@@ -61,8 +61,8 @@ test("Backend attendance oracle is isolated and no mutation route exists", async
     "ATTENDANCE_MUTATION_ROUTE_MESSAGES",
   ]) assert.match(oracle, new RegExp(`\\b${value}\\b`));
   assert.doesNotMatch(oracle, /fetch\(|createPosReadRuntime|createNeonDataApiFetch|@supabase|@neon|process\.env/);
-  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/attendance/clock-in.ts", import.meta.url)), false);
-  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/attendance/clock-out.ts", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/attendance/clock-in.ts", import.meta.url)), true);
+  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/attendance/clock-out.ts", import.meta.url)), true);
 });
 
 test("database authority retains terminal, employee, replay, shift, entry, and audit custody", async () => {
@@ -89,7 +89,7 @@ test("database authority retains terminal, employee, replay, shift, entry, and a
   }
 });
 
-test("D36 preserves Mobile paths and leaves attendance ownership and adjacent boundaries unchanged", async () => {
+test("D36 contract remains intact after D37 ownership while adjacent boundaries stay unchanged", async () => {
   const [mobileApi, clockInRoute, clockOutRoute, backendRead, backendReadme] = await Promise.all([
     read("apps/mobile/src/lib/tindio-api.ts"),
     read("src/app/api/pos/v2/attendance/clock-in/route.ts"),
@@ -106,5 +106,5 @@ test("D36 preserves Mobile paths and leaves attendance ownership and adjacent bo
   assert.match(backendRead, /export async function GET/);
   assert.doesNotMatch(mobileApi, /TINDIO_WEB_API_ORIGIN|apps\/backend/);
   assert.match(backendReadme, /Slice D36 attendance-mutation compatibility oracle/);
-  assert.match(backendReadme, /No Backend attendance\s+mutation route or runtime mode exists/);
+  assert.match(backendReadme, /Slice D37 Backend-owned attendance mutations/);
 });

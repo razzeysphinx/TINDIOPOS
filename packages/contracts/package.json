@@ -84,6 +84,10 @@
       "types": "./src/refund.ts",
       "default": "./src/refund.ts"
     },
+    "./sale-exchange": {
+      "types": "./src/sale-exchange.ts",
+      "default": "./src/sale-exchange.ts"
+    },
     "./transfer-receipt": {
       "types": "./src/transfer-receipt.ts",
       "default": "./src/transfer-receipt.ts"

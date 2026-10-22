@@ -492,14 +492,28 @@ Status: **IN PROGRESS**
   deployed client origins, and authentication-provider ownership unchanged.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D38 sale-exchange compatibility harness
+## Completed Slice D38: sale-exchange compatibility harness
 
 - Inventory and freeze only the existing `linkSaleExchangeAction`, including
   sales-create/refund permissions, refund and replacement-receipt identities,
   idempotency, immutable sale/refund custody, database errors, replay behavior,
-  and exact result messages.
+  and exact result messages. **IMPLEMENTED.**
 - Add a platform-neutral shared contract and network/database-independent
   Backend oracle before creating any Backend exchange route or moving ownership.
+  **IMPLEMENTED.**
+- Keep receipt settings/delivery, shift custody, every other financial mutation,
+  deployed client origins, and authentication-provider ownership unchanged.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D39 sale-exchange ownership
+
+- Move only sale-exchange linking behind an explicit Backend-owned/proxy
+  boundary while preserving every frozen D38 contract and the existing Server
+  Action as rollback.
+- Preserve context-first authentication, both sales permissions, completed
+  refund/replacement identities, actor-and-payload replay, immutable source
+  transactions, database authority, and exact result messages through Neon's
+  external-JWT boundary.
 - Keep receipt settings/delivery, shift custody, every other financial mutation,
   deployed client origins, and authentication-provider ownership unchanged.
 

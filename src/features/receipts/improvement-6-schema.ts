@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+export {
+  saleExchangeSchema,
+  type SaleExchangeValues,
+} from "@tindio/contracts/sale-exchange";
+
 const optionalText = (maximum: number) => z.string().trim().max(maximum);
 
 export const receiptSettingsSchema = z.object({
@@ -27,12 +32,6 @@ export const receiptDeliveryRecipientSchema = z.string().trim().email().max(320)
 export const receiptDeliverySchema = z.object({
   receiptId: z.uuid(),
   recipient: receiptDeliveryRecipientSchema,
-  idempotencyKey: z.uuid(),
-});
-
-export const saleExchangeSchema = z.object({
-  refundId: z.uuid(),
-  replacementReceiptNumber: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   idempotencyKey: z.uuid(),
 });
 

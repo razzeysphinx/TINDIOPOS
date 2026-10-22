@@ -315,6 +315,15 @@ register-shift guard, time-entry writes, and audit effects. Both Web routes
 remain available for rollback, client origins are unchanged, and shift
 open/close plus adjacent mutations remain in Web.
 
+The Slice D38 sale-exchange compatibility oracle is network- and database-
+independent. It freezes the existing Next.js Server Action, both required sales
+permissions, completed refund and replacement-receipt identities, exact RPC
+projection, actor-and-payload idempotency, immutable source-transaction
+custody, database error mapping, replay behavior, receipt revalidation, and
+exact result messages. No Backend exchange route or runtime mode exists; the
+Server Action remains authoritative, and receipt settings, receipt delivery,
+shift custody, client origins, and adjacent mutations remain unchanged.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

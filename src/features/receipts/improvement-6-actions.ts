@@ -3,6 +3,14 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  POS_SALE_EXCHANGE_DATABASE_MESSAGE,
+  POS_SALE_EXCHANGE_INPUT_MESSAGE,
+  POS_SALE_EXCHANGE_PERMISSION_MESSAGE,
+  POS_SALE_EXCHANGE_RPC,
+  saleExchangeSuccessMessage,
+} from "@tindio/contracts/sale-exchange";
+
+import {
   receiptSettingsSchema,
   saleExchangeSchema,
 } from "@/features/receipts/improvement-6-schema";
@@ -93,16 +101,16 @@ export async function linkSaleExchangeAction(
 ): Promise<ReceiptImprovementActionResult> {
   const context = await requireBusinessContext();
   if (!hasPermission(context, "sales.refund") || !hasPermission(context, "sales.create")) {
-    return { ok: false, message: "Sales and refund permission are required to record an exchange." };
+    return { ok: false, message: POS_SALE_EXCHANGE_PERMISSION_MESSAGE };
   }
 
   const parsed = saleExchangeSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, message: "Choose a completed return and enter a valid replacement receipt number." };
+    return { ok: false, message: POS_SALE_EXCHANGE_INPUT_MESSAGE };
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("link_sale_exchange", {
+  const { data, error } = await supabase.rpc(POS_SALE_EXCHANGE_RPC, {
     target_organization_id: context.organization.id,
     target_refund_id: parsed.data.refundId,
     target_replacement_receipt_number: parsed.data.replacementReceiptNumber,
@@ -116,7 +124,7 @@ export async function linkSaleExchangeAction(
       message: receiptDatabaseMessage(
         error?.code,
         error?.message,
-        "TINDIO could not link this return and replacement sale.",
+        POS_SALE_EXCHANGE_DATABASE_MESSAGE,
       ),
     };
   }
@@ -125,8 +133,6 @@ export async function linkSaleExchangeAction(
   revalidatePath("/back-office/receipts/[receiptId]", "page");
   return {
     ok: true,
-    message: result.was_replayed
-      ? `This exchange is already linked to receipt #${result.replacement_receipt_number}.`
-      : `Exchange recorded: return linked to replacement receipt #${result.replacement_receipt_number}.`,
+    message: saleExchangeSuccessMessage(result),
   };
 }

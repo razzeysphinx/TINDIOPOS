@@ -73,6 +73,9 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
 - `POST /api/pos/v2/offline-checkout` owns the frozen offline sale validation,
   optional device sequence reservation/finalization, cash-only settlement,
   checkout, and terminal outcome recording through the same boundary.
+- `POST /api/pos/v2/sync/push` owns the frozen ordered replay batch, validates
+  its explicit device once, reuses the Backend offline-checkout processor for
+  each event, and stops after the first non-success acknowledgement.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`,
@@ -90,7 +93,8 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_OPEN_TICKET_SPLIT_MODE=owned`, and
 `TINDIO_OPEN_TICKET_MERGE_MODE=owned`, and
 `TINDIO_CHECKOUT_MODE=owned`, and
-`TINDIO_OFFLINE_CHECKOUT_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_OFFLINE_CHECKOUT_MODE=owned`, and
+`TINDIO_SYNC_PUSH_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -229,6 +233,16 @@ authenticated employee/device-store custody, exact offline-checkout processor
 submission, acknowledgement classification, stop-on-first-nonsuccess behavior,
 and versioned response envelope. No Backend sync-push route or runtime mode
 exists in this slice; Mobile keeps its existing Web API origin and path.
+
+Slice D31 Backend-owned sync push uses that frozen contract in an isolated
+owned command and allowlisted Web rollback proxy. Supabase verifies the bearer
+and business context once per batch; the explicit batch device is validated
+once through Neon's external-JWT Data API. Each ordered event then reuses the
+Backend offline-checkout processor with the verified claims and context cached,
+while all device-sequence, checkout, stock-warning, finalization, and outcome-
+recording traffic remains on the Neon boundary. The existing Web route remains
+available for rollback, Mobile keeps the same path and API origin, and adjacent
+financial mutations remain in Web.
 
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,

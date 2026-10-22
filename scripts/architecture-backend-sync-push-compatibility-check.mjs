@@ -59,7 +59,7 @@ test("Web sync push retains context, ordered identity checks, device validation,
   ]) assert.match(route, new RegExp(`\\b${value}\\b`));
 });
 
-test("Backend sync-push oracle is network and database independent before ownership", async () => {
+test("Backend sync-push oracle remains isolated beside the owned route", async () => {
   const oracle = await read("apps/backend/src/pos/sync-push-compatibility.ts");
 
   for (const value of [
@@ -74,7 +74,7 @@ test("Backend sync-push oracle is network and database independent before owners
   );
   assert.equal(
     existsSync(new URL("../apps/backend/api/pos/v2/sync/push.ts", import.meta.url)),
-    false,
+    true,
   );
 });
 

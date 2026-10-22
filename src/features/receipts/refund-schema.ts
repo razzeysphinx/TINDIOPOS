@@ -1,21 +1,2 @@
-import { z } from "zod";
-
-const refundItemSchema = z.object({
-  saleItemId: z.uuid(),
-  quantity: z.number().int().min(1).max(10000),
-  // Older clients omitted this field and retain the historical restock
-  // behavior. New refund workflows always choose explicitly.
-  returnToStock: z.boolean().optional().default(true),
-});
-
-export const refundSaleSchema = z.object({
-  saleId: z.uuid(),
-  paymentMethodId: z.uuid(),
-  idempotencyKey: z.uuid(),
-  reason: z.string().trim().min(2).max(500),
-  referenceNumber: z.string().trim().max(120),
-  items: z.array(refundItemSchema).min(1).max(100),
-  approvalRequestId: z.uuid().nullable().optional(),
-});
-
-export type RefundSaleValues = z.infer<typeof refundSaleSchema>;
+export { refundSaleSchema } from "@tindio/contracts/refund";
+export type { RefundSaleValues } from "@tindio/contracts/refund";

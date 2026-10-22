@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D31 COMPLETE; BACKEND-OWNED SYNC PUSH CERTIFIED**
+Status: **SLICE D32 COMPLETE; REFUND COMPATIBILITY CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, Slice D11 Backend-owned customer-display update with proxy rollback, the Slice D12 favorite-tile mutation compatibility boundary, Slice D13 Backend-owned favorite-tile update with proxy rollback, the Slice D14 customer-creation mutation compatibility boundary, Slice D15 Backend-owned customer creation with proxy rollback, the Slice D16 open-ticket save mutation compatibility boundary, Slice D17 Backend-owned open-ticket save with proxy rollback, the Slice D18 open-ticket cancellation mutation compatibility boundary, Slice D19 Backend-owned open-ticket cancellation with proxy rollback, the Slice D20 open-ticket line-movement compatibility boundary, Slice D21 Backend-owned open-ticket line movement with proxy rollback, the Slice D22 open-ticket split compatibility boundary, Slice D23 Backend-owned open-ticket split with proxy rollback, the Slice D24 open-ticket merge compatibility boundary, Slice D25 Backend-owned open-ticket merge with proxy rollback, the Slice D26 checkout compatibility boundary, Slice D27 Backend-owned checkout with proxy rollback, the Slice D28 offline-checkout compatibility boundary, Slice D29 Backend-owned offline checkout with proxy rollback, the Slice D30 sync-push compatibility boundary, and Slice D31 Backend-owned sync push with proxy rollback
+Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, Slice D11 Backend-owned customer-display update with proxy rollback, the Slice D12 favorite-tile mutation compatibility boundary, Slice D13 Backend-owned favorite-tile update with proxy rollback, the Slice D14 customer-creation mutation compatibility boundary, Slice D15 Backend-owned customer creation with proxy rollback, the Slice D16 open-ticket save mutation compatibility boundary, Slice D17 Backend-owned open-ticket save with proxy rollback, the Slice D18 open-ticket cancellation mutation compatibility boundary, Slice D19 Backend-owned open-ticket cancellation with proxy rollback, the Slice D20 open-ticket line-movement compatibility boundary, Slice D21 Backend-owned open-ticket line movement with proxy rollback, the Slice D22 open-ticket split compatibility boundary, Slice D23 Backend-owned open-ticket split with proxy rollback, the Slice D24 open-ticket merge compatibility boundary, Slice D25 Backend-owned open-ticket merge with proxy rollback, the Slice D26 checkout compatibility boundary, Slice D27 Backend-owned checkout with proxy rollback, the Slice D28 offline-checkout compatibility boundary, Slice D29 Backend-owned offline checkout with proxy rollback, the Slice D30 sync-push compatibility boundary, Slice D31 Backend-owned sync push with proxy rollback, and the Slice D32 refund compatibility boundary
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -524,6 +524,18 @@ Database: **CANONICAL NEON UNCHANGED**
 - Mobile retains `/api/pos/v2/sync/push` and its existing deployed origin. The
   Web rollback route, schema, outbox records, refunds, transfer receipt,
   attendance, deployment, and authentication-provider ownership are unchanged.
+- A focused `@tindio/contracts/refund` export now freezes the dynamic receipt
+  path, permission and database vocabulary, bounded refund schema, historical
+  restock default, exact messages, database row, and response envelope.
+- The isolated Backend oracle freezes context-first route sequencing, immutable
+  receipt-derived sale identity, permission-or-approval execution, normalized
+  RPC projection, actor-and-payload idempotency, conditional inventory return,
+  payment/reference policy, error mapping, and replay messages without network
+  or database access.
+- The existing Web route and server action remain authoritative. Web and Mobile
+  consume the shared schema/path or result contract while retaining their
+  current origins. No Backend refund route, runtime mode, schema, deployment,
+  authentication provider, transfer, attendance, or exchange mutation changed.
 
 ## Results
 
@@ -532,7 +544,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (490/490)** |
+| Backend behavior and contracts | **PASS (499/499)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -565,6 +577,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend offline-checkout ownership/rollback boundary | **PASS (5/5)** |
 | Backend sync-push compatibility boundary | **PASS (5/5)** |
 | Backend sync-push ownership/rollback boundary | **PASS (5/5)** |
+| Backend refund mutation compatibility boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -588,7 +601,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (220/220 automated commands)** |
+| Static catalogue | **PASS (221/221 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -600,15 +613,17 @@ changed. No account was exported/imported. No session format, existing Web POS
 offline-checkout or sync-push route, accepted JSON body, checkout behavior,
 SQLite database, outbox record, deployment, client API origin, or provider
 project changed. The D29 Backend offline-checkout and D31 Backend sync-push
-boundaries are undeployed; their Web rollback routes remain intact. D31 adds no
-credential or provider setting and performs no live client cutover.
+boundaries are undeployed; their Web rollback routes remain intact. D32 adds
+only a shared contract and isolated oracle: Web refund authority is unchanged,
+and no Backend refund route, credential, provider setting, or live client
+cutover was added.
 
 ## Next gate
 
-Begin Slice D32 by freezing only
-`POST /api/pos/v2/receipts/:receiptId/refund` in a platform-neutral contract and
-network/database-independent Backend oracle. Preserve receipt and organization
-custody, permissions and approval fallback, quantities, tender/reference rules,
-idempotency, stock effects, error mapping, and the exact response envelope. Do
-not move refund ownership, adjacent financial mutations, deployed client
-origins, or authentication-provider ownership in that compatibility slice.
+Begin Slice D33 by moving only
+`POST /api/pos/v2/receipts/:receiptId/refund` behind an explicit Backend-owned/
+proxy boundary. Preserve every D32 receipt/sale custody, permission-or-approval,
+validation, idempotency, tender, conditional stock, error, and response contract
+with the existing Web route retained as rollback. Do not change adjacent
+financial mutations, deployed client origins, or authentication-provider
+ownership. Neon Auth proof remains a later slice.

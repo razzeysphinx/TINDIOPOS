@@ -48,6 +48,7 @@ import {
   POS_OPEN_TICKET_MERGE_PATH,
   type OpenTicketMergeResult,
 } from "@tindio/contracts/open-ticket-merge";
+import { posRefundPath, type RefundSaleResult } from "@tindio/contracts/refund";
 import { mobileEnvironment } from "./env";
 import {
   observeApiResponseBytes,
@@ -69,18 +70,7 @@ export type BasicActionResult =
 
 export type CustomerCreateResult = PosCustomerCreationResult;
 
-export type RefundResult =
-  | {
-      ok: true;
-      message: string;
-      data: {
-        refundId: string;
-        refundNumber: number;
-        totalMinor: number;
-        wasReplayed: boolean;
-      };
-    }
-  | { ok: false; message: string };
+export type RefundResult = RefundSaleResult;
 
 export type TransferReceiveResult =
   | { ok: true; message: string; data?: { receiptId?: string; stockRequestId?: string } }
@@ -518,7 +508,7 @@ export async function refundPosV2Receipt(
     }>;
   },
 ) {
-  return (await request(`/api/pos/v2/receipts/${receiptId}/refund`, {
+  return (await request(posRefundPath(receiptId), {
     organizationId,
     init: jsonPost(input),
   })).json() as Promise<RefundResult>;

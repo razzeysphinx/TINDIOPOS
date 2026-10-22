@@ -1,34 +1,33 @@
 import "server-only";
 
+import {
+  POS_REFUND_DATABASE_MESSAGE,
+  POS_REFUND_DATABASE_PERMISSION_MESSAGE,
+  POS_REFUND_IDEMPOTENCY_MESSAGE,
+  POS_REFUND_INCOMPLETE_MESSAGE,
+  POS_REFUND_INPUT_MESSAGE,
+  POS_REFUND_PERMISSION_MESSAGE,
+  refundSaleSchema,
+  type RefundSaleResult,
+  type RefundSaleValues,
+} from "@tindio/contracts/refund";
 import { receiptDeliverySchema } from "@/features/receipts/improvement-6-schema";
-import { refundSaleSchema, type RefundSaleValues } from "@/features/receipts/refund-schema";
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
 import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
-export type RefundSaleActionResult =
-  | {
-      ok: true;
-      message: string;
-      data: {
-        refundId: string;
-        refundNumber: number;
-        totalMinor: number;
-        wasReplayed: boolean;
-      };
-    }
-  | { ok: false; message: string };
+export type RefundSaleActionResult = RefundSaleResult;
 
 export type ReceiptImprovementActionResult =
   | { ok: true; message: string }
   | { ok: false; message: string };
 
 function refundDatabaseMessage(code: string | undefined, message: string | undefined) {
-  if (code === "42501") return "You do not have permission to process refunds for this sale.";
-  if (code === "23505") return "This refund key belongs to a different request. Start a new refund.";
+  if (code === "42501") return POS_REFUND_DATABASE_PERMISSION_MESSAGE;
+  if (code === "23505") return POS_REFUND_IDEMPOTENCY_MESSAGE;
   if (code === "23514" && message) return message;
-  if (code === "40001") return "The prior refund did not finish. Try again with a new refund.";
-  return "TINDIO could not process this refund. No payment record or stock change was made.";
+  if (code === "40001") return POS_REFUND_INCOMPLETE_MESSAGE;
+  return POS_REFUND_DATABASE_MESSAGE;
 }
 
 function receiptDatabaseMessage(
@@ -51,10 +50,10 @@ export async function refundSale({
 }): Promise<RefundSaleActionResult> {
   const parsed = refundSaleSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, message: "Check the selected quantities, refund method, and reason before continuing." };
+    return { ok: false, message: POS_REFUND_INPUT_MESSAGE };
   }
   if (!hasPermission(context, "sales.refund") && !parsed.data.approvalRequestId) {
-    return { ok: false, message: "You do not have permission to process refunds." };
+    return { ok: false, message: POS_REFUND_PERMISSION_MESSAGE };
   }
 
   const data = parsed.data satisfies RefundSaleValues;

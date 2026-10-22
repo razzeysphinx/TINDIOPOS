@@ -76,6 +76,10 @@
       "types": "./src/receipts.ts",
       "default": "./src/receipts.ts"
     },
+    "./refund": {
+      "types": "./src/refund.ts",
+      "default": "./src/refund.ts"
+    },
     "./ui": {
       "types": "./src/ui.ts",
       "default": "./src/ui.ts"

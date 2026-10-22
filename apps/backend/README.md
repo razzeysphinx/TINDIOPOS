@@ -244,6 +244,15 @@ recording traffic remains on the Neon boundary. The existing Web route remains
 available for rollback, Mobile keeps the same path and API origin, and adjacent
 financial mutations remain in Web.
 
+The Slice D32 refund compatibility oracle is network- and database-independent.
+It freezes the Web-owned receipt-path route and server action, context-first
+route sequencing, immutable receipt-derived sale identity, permission-or-
+approval custody, normalized item/reason/reference bounds, legacy restock
+default, exact RPC projection, actor-and-payload idempotency, payment and stock
+effects, database error mapping, and new/replayed response envelopes. No Backend
+refund route or runtime mode exists; Web and Mobile retain their existing API
+origins and entry points.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

@@ -418,14 +418,26 @@ Status: **IN PROGRESS**
   deployed client origins, and authentication-provider ownership unchanged.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D32 refund compatibility harness
+## Completed Slice D32: refund compatibility harness
 
 - Inventory and freeze only `POST /api/pos/v2/receipts/:receiptId/refund`,
   including receipt/organization custody, permissions and approval fallback,
   item quantities, payment method/reference rules, idempotency, stock effects,
-  database error mapping, and the exact result envelope.
+  database error mapping, and the exact result envelope. **IMPLEMENTED.**
 - Add a network/database-independent Backend oracle and compatibility gates
-  before moving refund ownership.
+  before moving refund ownership. **IMPLEMENTED.**
+- Keep transfer receipt, attendance, exchanges, every other financial mutation,
+  deployed client origins, and authentication-provider ownership unchanged.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D33 refund ownership
+
+- Move only `POST /api/pos/v2/receipts/:receiptId/refund` behind an explicit
+  Backend-owned/proxy boundary while preserving every frozen D32 contract and
+  the existing Web route as rollback.
+- Resolve receipt-derived sale custody before mutation, preserve permission-or-
+  approval execution, idempotent replay, payment and conditional stock effects,
+  and exact response mapping through the external-JWT Neon boundary.
 - Keep transfer receipt, attendance, exchanges, every other financial mutation,
   deployed client origins, and authentication-provider ownership unchanged.
 

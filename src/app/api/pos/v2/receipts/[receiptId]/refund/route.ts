@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  POS_REFUND_RECEIPT_INVALID_MESSAGE,
+  POS_REFUND_RECEIPT_UNAVAILABLE_MESSAGE,
+} from "@tindio/contracts/refund";
 
 import { loadPosReceiptDetail } from "@/features/pos/data";
 import { posApiJson, readPosApiJson } from "@/features/pos/pos-api-response";
@@ -12,11 +16,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ rec
   if (!resolved.ok) return resolved.response;
   const context = resolved.context;
   const receiptId = receiptIdSchema.safeParse((await params).receiptId);
-  if (!receiptId.success) return posApiJson({ ok: false, message: "This receipt is invalid." }, 400);
+  if (!receiptId.success) return posApiJson({ ok: false, message: POS_REFUND_RECEIPT_INVALID_MESSAGE }, 400);
   const body = await readPosApiJson(request);
   if (!body.ok) return body.response;
   const detail = await loadPosReceiptDetail(context, receiptId.data);
-  if (!detail) return posApiJson({ ok: false, message: "This receipt is unavailable." }, 404);
+  if (!detail) return posApiJson({ ok: false, message: POS_REFUND_RECEIPT_UNAVAILABLE_MESSAGE }, 404);
   const input = { ...(body.input && typeof body.input === "object" ? body.input : {}), saleId: detail.sale.id };
   return posApiJson(await refundSale({ context, input }));
 }

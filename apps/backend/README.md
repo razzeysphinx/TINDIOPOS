@@ -222,6 +222,14 @@ and cookies are never proxied. The Web direct route remains available for
 rollback, Web sync push keeps its existing processor, and client origins remain
 unchanged.
 
+The Slice D30 sync-push compatibility oracle is network- and database-
+independent. It freezes the existing Web-owned batch route, context-before-body
+ordering, one-device ascending unique event and idempotency identities,
+authenticated employee/device-store custody, exact offline-checkout processor
+submission, acknowledgement classification, stop-on-first-nonsuccess behavior,
+and versioned response envelope. No Backend sync-push route or runtime mode
+exists in this slice; Mobile keeps its existing Web API origin and path.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

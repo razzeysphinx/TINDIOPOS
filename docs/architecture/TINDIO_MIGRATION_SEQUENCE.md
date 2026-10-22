@@ -392,14 +392,27 @@ Status: **IN PROGRESS**
   deployed client origins, and authentication-provider ownership unchanged.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D30 sync-push compatibility harness
+## Completed Slice D30: sync-push compatibility harness
 
 - Inventory and freeze only `POST /api/pos/v2/sync/push`, including batch
   validation, ascending unique event/device identity, authenticated business
   context and device custody, stop-on-first-nonsuccess behavior, acknowledgement
   envelopes, and reuse of the frozen offline-checkout processor.
+  **IMPLEMENTED.**
 - Add a network/database-independent Backend oracle and compatibility gates
-  before moving sync-push ownership.
+  before moving sync-push ownership. **IMPLEMENTED.**
+- Keep refunds, transfer receipt, attendance, every other financial mutation,
+  deployed client origins, and authentication-provider ownership unchanged.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D31 sync-push ownership
+
+- Move only `POST /api/pos/v2/sync/push` behind an explicit Backend-owned/proxy
+  boundary while preserving every frozen D30 contract and the existing Web
+  route as rollback.
+- Reuse the frozen Backend offline-checkout processor for each event, preserving
+  authenticated business context, device custody, request order, exact
+  acknowledgement mapping, and stop-on-first-nonsuccess behavior.
 - Keep refunds, transfer receipt, attendance, every other financial mutation,
   deployed client origins, and authentication-provider ownership unchanged.
 

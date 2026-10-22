@@ -16,9 +16,17 @@
       "types": "./src/checkout.ts",
       "default": "./src/checkout.ts"
     },
+    "./device": {
+      "types": "./src/device.ts",
+      "default": "./src/device.ts"
+    },
     "./offline-checkout": {
       "types": "./src/offline-checkout.ts",
       "default": "./src/offline-checkout.ts"
+    },
+    "./sync-push": {
+      "types": "./src/sync-push.ts",
+      "default": "./src/sync-push.ts"
     },
     "./attendance": {
       "types": "./src/attendance.ts",

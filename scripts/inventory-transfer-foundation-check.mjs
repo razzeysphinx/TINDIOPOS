@@ -129,7 +129,8 @@ test("request writers are forward-replaced only by Phase 06", () => {
 
 test("application command callers retain the direct RPC signatures", () => {
   assert.match(advancedActions, /supabase\.rpc\("create_direct_stock_transfer"/);
-  assert.match(advancedActions, /supabase\.rpc\("receive_stock_transfer"/);
+  assert.match(advancedActions, /supabase\.rpc\(POS_TRANSFER_RECEIPT_RPC/);
+  assert.match(advancedActions, /@tindio\/contracts\/transfer-receipt/);
 });
 
 test("all active receiving readers accept only canonical receivable states", () => {

@@ -443,14 +443,26 @@ Status: **IN PROGRESS**
   deployed client origins, and authentication-provider ownership unchanged.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D34 transfer-receipt compatibility harness
+## Completed Slice D34: transfer-receipt compatibility harness
 
 - Inventory and freeze only `POST /api/pos/v2/transfers/:transferId/receive`,
   including organization/store/device/shift custody, accepted quantities,
   idempotency, inventory effects, validation, database errors, and response
-  mapping.
+  mapping. **IMPLEMENTED.**
 - Add a network/database-independent Backend oracle and compatibility gates
-  before moving transfer-receipt ownership.
+  before moving transfer-receipt ownership. **IMPLEMENTED.**
+- Keep attendance, exchanges, every other financial mutation, deployed client
+  origins, and authentication-provider ownership unchanged. **IMPLEMENTED.**
+
+## Next smallest safe slice: D35 transfer-receipt ownership
+
+- Move only `POST /api/pos/v2/transfers/:transferId/receive` behind an explicit
+  Backend-owned/proxy boundary while preserving every frozen D34 contract and
+  the existing Web route as rollback.
+- Preserve context-first authorization, path-owned transfer identity,
+  destination-store employee custody, operation-key replay, locked quantity
+  application, audit effects, and exact response mapping through Neon's
+  external-JWT boundary.
 - Keep attendance, exchanges, every other financial mutation, deployed client
   origins, and authentication-provider ownership unchanged.
 

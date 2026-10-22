@@ -1,4 +1,5 @@
 import { z } from "zod";
+export { receiveStockTransferSchema } from "@tindio/contracts/transfer-receipt";
 
 const optionalUuid = z
   .string()
@@ -15,11 +16,6 @@ const quantity = z
   .refine((value) => Number(value) > 0, "Quantity must be greater than zero.");
 
 const countedQuantity = z
-  .string()
-  .trim()
-  .regex(/^\d{1,8}(?:\.\d{1,3})?$/, "Use a non-negative quantity with up to 3 decimals.");
-
-const receiptQuantity = z
   .string()
   .trim()
   .regex(/^\d{1,8}(?:\.\d{1,3})?$/, "Use a non-negative quantity with up to 3 decimals.");
@@ -260,36 +256,6 @@ export const recordInventoryAdjustmentSchema = z.object({
   note: z.string().trim().min(2, "Explain why this stock is changing.").max(500),
   approvalRequestId: z.uuid().nullable().optional(),
 });
-
-export const receiveStockTransferSchema = z
-  .object({
-    operationId,
-    stockTransferId: z.uuid("Select a transfer."),
-    note: z.string().trim().max(500),
-    lines: z
-      .array(z.object({
-        stockTransferLineId: z.uuid(),
-        receivedQuantity: receiptQuantity,
-        shortQuantity: receiptQuantity,
-        discrepancyNote: z.string().trim().max(500),
-      }))
-      .min(1, "Enter at least one received quantity.")
-      .max(100),
-  })
-  .superRefine((value, context) => {
-    if (new Set(value.lines.map((line) => line.stockTransferLineId)).size !== value.lines.length) {
-      context.addIssue({ code: "custom", path: ["lines"], message: "Each transfer line can be received once per receipt." });
-    }
-
-    for (const [index, line] of value.lines.entries()) {
-      if (Number(line.receivedQuantity) + Number(line.shortQuantity) <= 0) {
-        context.addIssue({ code: "custom", path: ["lines", index], message: "Enter a received or short quantity." });
-      }
-      if (Number(line.shortQuantity) > 0 && line.discrepancyNote.length < 2) {
-        context.addIssue({ code: "custom", path: ["lines", index, "discrepancyNote"], message: "Explain the shortage or damage." });
-      }
-    }
-  });
 
 export const returnToSupplierSchema = z
   .object({

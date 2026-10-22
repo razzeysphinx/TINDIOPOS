@@ -1,6 +1,15 @@
 import "server-only";
 
-import { receiveStockTransferSchema } from "@/features/inventory/advanced-inventory-schema";
+import {
+  POS_TRANSFER_RECEIPT_DATABASE_MESSAGE,
+  POS_TRANSFER_RECEIPT_INVENTORY_DISABLED_MESSAGE,
+  POS_TRANSFER_RECEIPT_PERMISSION_MESSAGE,
+  POS_TRANSFER_RECEIPT_RPC,
+  POS_TRANSFER_RECEIPT_SUCCESS_MESSAGE,
+  POS_TRANSFER_RECEIPT_TRANSFERS_DISABLED_MESSAGE,
+  receiveStockTransferSchema,
+  type TransferReceiptResult,
+} from "@tindio/contracts/transfer-receipt";
 import { hasAllInventoryCapabilities } from "@/features/inventory/inventory-permissions";
 import { receiveStockRequestSchema } from "@/features/inventory/supply-chain-schema";
 import type { BusinessContext } from "@/lib/auth/dal";
@@ -41,17 +50,17 @@ function canReceive(context: BusinessContext) {
     && hasAllInventoryCapabilities(context, ["inventory.transfer.receive"]);
 }
 
-export async function receivePosStockTransfer({ context, input }: { context: BusinessContext; input: unknown }): Promise<PosTransferResult<{ receiptId: string }>> {
-  if (!context.features.inventory) return { ok: false, message: "Inventory is disabled for this business." };
+export async function receivePosStockTransfer({ context, input }: { context: BusinessContext; input: unknown }): Promise<TransferReceiptResult> {
+  if (!context.features.inventory) return { ok: false, message: POS_TRANSFER_RECEIPT_INVENTORY_DISABLED_MESSAGE };
   if (!hasAllInventoryCapabilities(context, ["inventory.transfer.receive"])) {
-    return { ok: false, message: "You do not have permission to receive stock transfers." };
+    return { ok: false, message: POS_TRANSFER_RECEIPT_PERMISSION_MESSAGE };
   }
-  if (!context.features.transfers) return { ok: false, message: "Stock transfers are disabled for this business." };
+  if (!context.features.transfers) return { ok: false, message: POS_TRANSFER_RECEIPT_TRANSFERS_DISABLED_MESSAGE };
   const parsed = receiveStockTransferSchema.safeParse(input);
   if (!parsed.success) return validationFailure();
 
   const supabase = await createBusinessContextClient(context);
-  const { data, error } = await supabase.rpc("receive_stock_transfer", {
+  const { data, error } = await supabase.rpc(POS_TRANSFER_RECEIPT_RPC, {
     target_organization_id: context.organization.id,
     target_stock_transfer_id: parsed.data.stockTransferId,
     target_note: parsed.data.note,
@@ -63,8 +72,8 @@ export async function receivePosStockTransfer({ context, input }: { context: Bus
       discrepancy_note: line.discrepancyNote || null,
     })) as Json,
   });
-  if (error || !data) return { ok: false, message: directTransferDatabaseMessage(error?.code, "TINDIO could not receive this transfer.") };
-  return { ok: true, message: "Transfer receipt posted and destination stock updated.", data: { receiptId: data } };
+  if (error || !data) return { ok: false, message: directTransferDatabaseMessage(error?.code, POS_TRANSFER_RECEIPT_DATABASE_MESSAGE) };
+  return { ok: true, message: POS_TRANSFER_RECEIPT_SUCCESS_MESSAGE, data: { receiptId: data } };
 }
 
 export async function receivePosStockRequest({ context, input }: { context: BusinessContext; input: unknown }): Promise<PosTransferResult<{ stockRequestId: string }>> {

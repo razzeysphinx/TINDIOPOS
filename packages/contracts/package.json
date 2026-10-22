@@ -80,6 +80,10 @@
       "types": "./src/refund.ts",
       "default": "./src/refund.ts"
     },
+    "./transfer-receipt": {
+      "types": "./src/transfer-receipt.ts",
+      "default": "./src/transfer-receipt.ts"
+    },
     "./ui": {
       "types": "./src/ui.ts",
       "default": "./src/ui.ts"

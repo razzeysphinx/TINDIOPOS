@@ -87,7 +87,12 @@ test(
 
     assert.match(
       advancedActions,
-      /supabase\.rpc\("receive_stock_transfer"/,
+      /supabase\.rpc\(POS_TRANSFER_RECEIPT_RPC/,
+    );
+
+    assert.match(
+      advancedActions,
+      /@tindio\/contracts\/transfer-receipt/,
     );
 
     assert.match(

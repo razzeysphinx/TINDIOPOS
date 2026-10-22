@@ -49,6 +49,10 @@ import {
   type OpenTicketMergeResult,
 } from "@tindio/contracts/open-ticket-merge";
 import { posRefundPath, type RefundSaleResult } from "@tindio/contracts/refund";
+import {
+  posTransferReceiptPath,
+  type TransferReceiptResult,
+} from "@tindio/contracts/transfer-receipt";
 import { mobileEnvironment } from "./env";
 import {
   observeApiResponseBytes,
@@ -643,10 +647,10 @@ export async function receivePosV2Transfer(
   transferId: string,
   input: unknown,
 ) {
-  return (await request(`/api/pos/v2/transfers/${transferId}/receive`, {
+  return (await request(posTransferReceiptPath(transferId), {
     organizationId,
     init: jsonPost(input),
-  })).json() as Promise<TransferReceiveResult>;
+  })).json() as Promise<TransferReceiptResult>;
 }
 
 export async function receivePosV2StockRequest(

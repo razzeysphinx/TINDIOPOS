@@ -23,5 +23,6 @@ export * from "./pos-runtime";
 export * from "./receipts";
 export * from "./sync-control";
 export * from "./sync-push";
+export * from "./transfer-receipt";
 export * from "./transfers";
 export * from "./ui";

@@ -267,6 +267,16 @@ or ambient device credentials. The Web route and server action remain available
 for rollback, client origins are unchanged, and adjacent mutations remain in
 Web.
 
+The Slice D34 transfer-receipt compatibility oracle is network- and database-
+independent. It freezes the context-first dynamic transfer route, path-owned
+transfer identity, inventory/transfer feature gates, receive capability,
+bounded received and short quantities, discrepancy notes, canonical RPC
+projection, operation-key replay, destination-store employee custody, locked
+inventory effects, database error mapping, and exact result envelope. No
+Backend transfer-receipt route or runtime mode exists; the Web route remains
+authoritative, Mobile retains its current API origin, and adjacent mutations
+remain unchanged.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

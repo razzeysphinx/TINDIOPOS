@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D34 COMPLETE; TRANSFER-RECEIPT COMPATIBILITY CERTIFIED**
+Status: **SLICE D35 COMPLETE; BACKEND-OWNED TRANSFER RECEIPT CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, Slice D11 Backend-owned customer-display update with proxy rollback, the Slice D12 favorite-tile mutation compatibility boundary, Slice D13 Backend-owned favorite-tile update with proxy rollback, the Slice D14 customer-creation mutation compatibility boundary, Slice D15 Backend-owned customer creation with proxy rollback, the Slice D16 open-ticket save mutation compatibility boundary, Slice D17 Backend-owned open-ticket save with proxy rollback, the Slice D18 open-ticket cancellation mutation compatibility boundary, Slice D19 Backend-owned open-ticket cancellation with proxy rollback, the Slice D20 open-ticket line-movement compatibility boundary, Slice D21 Backend-owned open-ticket line movement with proxy rollback, the Slice D22 open-ticket split compatibility boundary, Slice D23 Backend-owned open-ticket split with proxy rollback, the Slice D24 open-ticket merge compatibility boundary, Slice D25 Backend-owned open-ticket merge with proxy rollback, the Slice D26 checkout compatibility boundary, Slice D27 Backend-owned checkout with proxy rollback, the Slice D28 offline-checkout compatibility boundary, Slice D29 Backend-owned offline checkout with proxy rollback, the Slice D30 sync-push compatibility boundary, Slice D31 Backend-owned sync push with proxy rollback, the Slice D32 refund compatibility boundary, Slice D33 Backend-owned refund with proxy rollback, and the Slice D34 transfer-receipt compatibility boundary
+Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, Slice D11 Backend-owned customer-display update with proxy rollback, the Slice D12 favorite-tile mutation compatibility boundary, Slice D13 Backend-owned favorite-tile update with proxy rollback, the Slice D14 customer-creation mutation compatibility boundary, Slice D15 Backend-owned customer creation with proxy rollback, the Slice D16 open-ticket save mutation compatibility boundary, Slice D17 Backend-owned open-ticket save with proxy rollback, the Slice D18 open-ticket cancellation mutation compatibility boundary, Slice D19 Backend-owned open-ticket cancellation with proxy rollback, the Slice D20 open-ticket line-movement compatibility boundary, Slice D21 Backend-owned open-ticket line movement with proxy rollback, the Slice D22 open-ticket split compatibility boundary, Slice D23 Backend-owned open-ticket split with proxy rollback, the Slice D24 open-ticket merge compatibility boundary, Slice D25 Backend-owned open-ticket merge with proxy rollback, the Slice D26 checkout compatibility boundary, Slice D27 Backend-owned checkout with proxy rollback, the Slice D28 offline-checkout compatibility boundary, Slice D29 Backend-owned offline checkout with proxy rollback, the Slice D30 sync-push compatibility boundary, Slice D31 Backend-owned sync push with proxy rollback, the Slice D32 refund compatibility boundary, Slice D33 Backend-owned refund with proxy rollback, the Slice D34 transfer-receipt compatibility boundary, and Slice D35 Backend-owned transfer receipt with proxy rollback
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -561,6 +561,20 @@ Database: **CANONICAL NEON UNCHANGED**
   path/result contract at its current origin. No Backend transfer-receipt route,
   runtime mode, schema, deployment, authentication provider, attendance,
   exchange, or adjacent mutation changed.
+- Backend `POST /api/pos/v2/transfers/:transferId/receive` now owns the
+  thirteenth bounded mutation while preserving the existing Web route as
+  rollback.
+- The owned path preserves bounded Supabase claim verification, context-first
+  ordering, dynamic transfer validation, path-owned transfer identity, feature
+  and permission precedence, normalized input, database error mapping, and the
+  exact response envelope.
+- Business context and `receive_stock_transfer` traffic use only the external-
+  JWT Neon Data API. Database authority retains destination-store employee
+  custody, operation-and-payload replay, advisory and row locks, received/short
+  accounting, destination stock effects, and audit logging.
+- Web and Mobile retain the shared transfer-receipt contract and existing
+  origins. Schema, deployment, authentication-provider ownership, attendance,
+  stock-request receipt, exchanges, and adjacent mutations remain unchanged.
 
 ## Results
 
@@ -569,7 +583,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (529/529)** |
+| Backend behavior and contracts | **PASS (549/549)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -605,6 +619,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend refund mutation compatibility boundary | **PASS (5/5)** |
 | Backend refund ownership/rollback boundary | **PASS (5/5)** |
 | Backend transfer-receipt compatibility boundary | **PASS (5/5)** |
+| Backend transfer-receipt ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
@@ -628,7 +643,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (223/223 automated commands)** |
+| Static catalogue | **PASS (224/224 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -642,16 +657,16 @@ SQLite database, outbox record, deployment, client API origin, or provider
 project changed. The D29 Backend offline-checkout and D31 Backend sync-push
 boundaries are undeployed; their Web rollback routes remain intact. The D33
 Backend refund boundary is also undeployed and its Web rollback route remains
-intact. The D34 transfer-receipt boundary is compatibility-only and retains the
-authoritative Web route. D34 adds no Backend route, schema, credential, provider
-setting, deployment, or live client cutover.
+intact. The D35 Backend transfer-receipt boundary is also undeployed and its Web
+rollback route remains intact. D35 adds no schema, credential, provider setting,
+deployment, or live client cutover.
 
 ## Next gate
 
-Begin Slice D35 by moving only
-`POST /api/pos/v2/transfers/:transferId/receive` behind an explicit Backend-
-owned/proxy boundary with the Web route retained for rollback. Preserve every
-frozen D34 contract, external-JWT organization and destination-store employee
-custody, operation-key replay, locked inventory effects, audit behavior, and
-exact response mapping. Do not move adjacent mutations, deployed client
-origins, or authentication-provider ownership.
+Begin Slice D36 by freezing only `POST /api/pos/v2/attendance/clock-in` and
+`POST /api/pos/v2/attendance/clock-out` in a platform-neutral contract and
+network/database-independent Backend oracle. Preserve context-first feature and
+permission gates, store/employee custody, validation, database effects, error
+mapping, and exact response envelopes. Do not move attendance ownership,
+adjacent mutations, deployed client origins, or authentication-provider
+ownership in that compatibility slice.

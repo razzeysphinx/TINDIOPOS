@@ -454,17 +454,28 @@ Status: **IN PROGRESS**
 - Keep attendance, exchanges, every other financial mutation, deployed client
   origins, and authentication-provider ownership unchanged. **IMPLEMENTED.**
 
-## Next smallest safe slice: D35 transfer-receipt ownership
+## Completed Slice D35: transfer-receipt ownership
 
 - Move only `POST /api/pos/v2/transfers/:transferId/receive` behind an explicit
   Backend-owned/proxy boundary while preserving every frozen D34 contract and
-  the existing Web route as rollback.
+  the existing Web route as rollback. **IMPLEMENTED.**
 - Preserve context-first authorization, path-owned transfer identity,
   destination-store employee custody, operation-key replay, locked quantity
   application, audit effects, and exact response mapping through Neon's
-  external-JWT boundary.
+  external-JWT boundary. **IMPLEMENTED.**
 - Keep attendance, exchanges, every other financial mutation, deployed client
-  origins, and authentication-provider ownership unchanged.
+  origins, and authentication-provider ownership unchanged. **IMPLEMENTED.**
+
+## Next smallest safe slice: D36 attendance mutation compatibility harness
+
+- Inventory and freeze only `POST /api/pos/v2/attendance/clock-in` and
+  `POST /api/pos/v2/attendance/clock-out`, including business/store/employee
+  custody, feature and permission gates, validation, database effects, error
+  mapping, and exact response envelopes.
+- Add a network/database-independent Backend oracle and compatibility gates
+  before moving attendance mutation ownership.
+- Keep shift custody, exchanges, every other financial mutation, deployed
+  client origins, and authentication-provider ownership unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

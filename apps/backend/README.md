@@ -79,6 +79,10 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
 - `POST /api/pos/v2/receipts/:receiptId/refund` owns context-first receipt/sale
   custody, permission-or-approval validation, idempotent `refund_sale`, payment,
   and conditional stock-return effects through the same boundary.
+- `POST /api/pos/v2/transfers/:transferId/receive` owns context-first transfer
+  receipt validation, destination-store employee custody, idempotent
+  `receive_stock_transfer`, and locked destination-stock effects through the
+  same boundary.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`,
@@ -98,7 +102,8 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_CHECKOUT_MODE=owned`, and
 `TINDIO_OFFLINE_CHECKOUT_MODE=owned`, and
 `TINDIO_SYNC_PUSH_MODE=owned`, and
-`TINDIO_REFUND_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_REFUND_MODE=owned`, and
+`TINDIO_TRANSFER_RECEIPT_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -276,6 +281,16 @@ inventory effects, database error mapping, and exact result envelope. No
 Backend transfer-receipt route or runtime mode exists; the Web route remains
 authoritative, Mobile retains its current API origin, and adjacent mutations
 remain unchanged.
+
+Slice D35 Backend-owned transfer receipt uses that frozen contract in an
+isolated owned command and allowlisted dynamic-path Web rollback proxy.
+Supabase verifies the bearer while business context and
+`receive_stock_transfer` traffic use only Neon's external-JWT Data API. The
+database retains destination-store employee custody, operation-and-payload
+replay, row and advisory locking, received/short quantity accounting,
+destination stock updates, and audit effects. The Web route remains available
+for rollback, client origins are unchanged, and adjacent mutations remain in
+Web.
 
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,

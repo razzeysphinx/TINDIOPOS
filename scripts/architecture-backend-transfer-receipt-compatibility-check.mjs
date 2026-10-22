@@ -49,7 +49,7 @@ test("Web transfer receipt retains context-first custody, path authority, shared
   assert.match(service, /target_operation_id/);
 });
 
-test("Backend transfer-receipt oracle is isolated and no owned route exists", async () => {
+test("Backend transfer-receipt oracle remains isolated beside the owned route", async () => {
   const oracle = await read("apps/backend/src/pos/transfer-receipt-compatibility.ts");
   for (const value of [
     "TRANSFER_RECEIPT_COMPATIBILITY_CONTRACT", "validateTransferReceiptId",
@@ -60,7 +60,7 @@ test("Backend transfer-receipt oracle is isolated and no owned route exists", as
   assert.doesNotMatch(oracle, /fetch\(|createPosReadRuntime|createNeonDataApiFetch|@supabase|@neon|process\.env/);
   assert.equal(
     existsSync(new URL("../apps/backend/api/pos/v2/transfers/[transferId]/receive.ts", import.meta.url)),
-    false,
+    true,
   );
 });
 

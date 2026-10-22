@@ -292,6 +292,15 @@ destination stock updates, and audit effects. The Web route remains available
 for rollback, client origins are unchanged, and adjacent mutations remain in
 Web.
 
+The Slice D36 attendance-mutation compatibility oracle is network- and
+database-independent. It freezes the context-first clock-in and clock-out
+routes, common feature/permission gate, assigned-store and employee PIN
+validation, exact RPC projections, request-id replay behavior, terminal and
+employee store custody, open-register-shift guard, time-entry and audit effects,
+database error mapping, and action result envelopes. No Backend attendance
+mutation route or runtime mode exists; the Web routes remain authoritative,
+Mobile retains its current API origin, and adjacent mutations remain unchanged.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

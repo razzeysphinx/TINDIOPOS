@@ -32,6 +32,10 @@
       "types": "./src/attendance.ts",
       "default": "./src/attendance.ts"
     },
+    "./attendance-mutation": {
+      "types": "./src/attendance-mutation.ts",
+      "default": "./src/attendance-mutation.ts"
+    },
     "./customer-display": {
       "types": "./src/customer-display.ts",
       "default": "./src/customer-display.ts"

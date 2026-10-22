@@ -71,6 +71,7 @@
     "test:architecture-backend-refund": "pnpm backend:test && node --test scripts/architecture-backend-refund-ownership-check.mjs",
     "test:architecture-backend-transfer-receipt-compatibility": "pnpm backend:test && node --test scripts/architecture-backend-transfer-receipt-compatibility-check.mjs",
     "test:architecture-backend-transfer-receipt": "pnpm backend:test && node --test scripts/architecture-backend-transfer-receipt-ownership-check.mjs",
+    "test:architecture-backend-attendance-mutation-compatibility": "pnpm backend:test && node --test scripts/architecture-backend-attendance-mutation-compatibility-check.mjs",
     "test:phase-06-native-foundation": "node --test scripts/phase-06-native-foundation-check.mjs",
     "test:phase-06-provider-neutral-device-runtime": "node --test scripts/phase-06-provider-neutral-device-runtime-check.mjs",
     "test:phase-06-device-enrollment": "node --test scripts/phase-06-device-enrollment-check.mjs",

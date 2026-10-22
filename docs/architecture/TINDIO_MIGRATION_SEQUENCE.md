@@ -466,16 +466,30 @@ Status: **IN PROGRESS**
 - Keep attendance, exchanges, every other financial mutation, deployed client
   origins, and authentication-provider ownership unchanged. **IMPLEMENTED.**
 
-## Next smallest safe slice: D36 attendance mutation compatibility harness
+## Completed Slice D36: attendance mutation compatibility harness
 
 - Inventory and freeze only `POST /api/pos/v2/attendance/clock-in` and
   `POST /api/pos/v2/attendance/clock-out`, including business/store/employee
   custody, feature and permission gates, validation, database effects, error
-  mapping, and exact response envelopes.
+  mapping, and exact response envelopes. **IMPLEMENTED.**
 - Add a network/database-independent Backend oracle and compatibility gates
-  before moving attendance mutation ownership.
+  before moving attendance mutation ownership. **IMPLEMENTED.**
 - Keep shift custody, exchanges, every other financial mutation, deployed
   client origins, and authentication-provider ownership unchanged.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D37 attendance mutation ownership
+
+- Move only `POST /api/pos/v2/attendance/clock-in` and
+  `POST /api/pos/v2/attendance/clock-out` behind an explicit Backend-owned/proxy
+  boundary while preserving every frozen D36 contract and both Web routes as
+  rollback.
+- Preserve context-first authorization, terminal and employee store custody,
+  request-id replay, employee PIN verification, the open-register-shift guard,
+  time-entry/audit effects, and exact response mapping through Neon's external-
+  JWT boundary.
+- Keep shift open/close ownership, exchanges, every other financial mutation,
+  deployed client origins, and authentication-provider ownership unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

@@ -1,5 +1,13 @@
 import "server-only";
 
+import {
+  POS_ATTENDANCE_CLOCK_IN_DATABASE_MESSAGE,
+  POS_ATTENDANCE_CLOCK_IN_INPUT_MESSAGE,
+  POS_ATTENDANCE_CLOCK_IN_RPC,
+  POS_ATTENDANCE_CLOCK_OUT_DATABASE_MESSAGE,
+  POS_ATTENDANCE_CLOCK_OUT_INPUT_MESSAGE,
+  POS_ATTENDANCE_CLOCK_OUT_RPC,
+} from "@tindio/contracts/attendance-mutation";
 import { clockInSchema, clockOutSchema } from "@/features/time-clock/time-clock-schema";
 import type { TimeClockActionResult } from "@/features/time-clock/time-clock-types";
 import type { BusinessContext } from "@/lib/auth/dal";
@@ -25,11 +33,11 @@ export async function clockInEmployee({
   const parsed = clockInSchema.safeParse(input);
 
   if (!parsed.success || !context.storeIds.includes(parsed.data.storeId)) {
-    return { ok: false, message: "Choose one of your assigned stores before clocking in." };
+    return { ok: false, message: POS_ATTENDANCE_CLOCK_IN_INPUT_MESSAGE };
   }
 
   const supabase = await createBusinessContextClient(context);
-  const { data, error } = await supabase.rpc("clock_in_employee_with_pin", {
+  const { data, error } = await supabase.rpc(POS_ATTENDANCE_CLOCK_IN_RPC, {
     target_employee_id: parsed.data.employeeId,
     target_organization_id: context.organization.id,
     target_pin: parsed.data.pin,
@@ -44,7 +52,7 @@ export async function clockInEmployee({
       message: timeClockDatabaseMessage(
         error?.code ?? undefined,
         error?.message ?? undefined,
-        "TINDIO could not clock this employee in.",
+        POS_ATTENDANCE_CLOCK_IN_DATABASE_MESSAGE,
       ),
     };
   }
@@ -77,11 +85,11 @@ export async function clockOutEmployee({
 }): Promise<TimeClockActionResult> {
   const parsed = clockOutSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, message: "Choose an employee and enter their 6–12 digit PIN." };
+    return { ok: false, message: POS_ATTENDANCE_CLOCK_OUT_INPUT_MESSAGE };
   }
 
   const supabase = await createBusinessContextClient(context);
-  const { data, error } = await supabase.rpc("clock_out_employee_with_pin", {
+  const { data, error } = await supabase.rpc(POS_ATTENDANCE_CLOCK_OUT_RPC, {
     target_employee_id: parsed.data.employeeId,
     target_organization_id: context.organization.id,
     target_pin: parsed.data.pin,
@@ -95,7 +103,7 @@ export async function clockOutEmployee({
       message: timeClockDatabaseMessage(
         error?.code ?? undefined,
         error?.message ?? undefined,
-        "TINDIO could not clock this employee out.",
+        POS_ATTENDANCE_CLOCK_OUT_DATABASE_MESSAGE,
       ),
     };
   }

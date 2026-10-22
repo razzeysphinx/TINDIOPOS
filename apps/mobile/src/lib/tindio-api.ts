@@ -32,6 +32,12 @@ import type {
   PosCustomerCreationResult,
 } from "@tindio/contracts";
 import { POS_CHECKOUT_PATH } from "@tindio/contracts/checkout";
+import {
+  POS_ATTENDANCE_CLOCK_IN_PATH,
+  POS_ATTENDANCE_CLOCK_OUT_PATH,
+  type ClockInValues,
+  type ClockOutValues,
+} from "@tindio/contracts/attendance-mutation";
 import { POS_CUSTOMER_CREATION_PATH } from "@tindio/contracts/customer-creation";
 import { POS_OPEN_TICKET_CANCEL_PATH } from "@tindio/contracts/open-ticket-cancel";
 import {
@@ -565,14 +571,9 @@ export async function fetchPosV2AttendanceEmployees(
 
 export async function clockInPosV2Employee(
   organizationId: string,
-  input: {
-    storeId: string;
-    employeeId: string;
-    pin: string;
-    requestId: string;
-  },
+  input: ClockInValues,
 ) {
-  return (await request("/api/pos/v2/attendance/clock-in", {
+  return (await request(POS_ATTENDANCE_CLOCK_IN_PATH, {
     organizationId,
     init: jsonPost(input),
   })).json() as Promise<TimeClockActionResult>;
@@ -580,13 +581,9 @@ export async function clockInPosV2Employee(
 
 export async function clockOutPosV2Employee(
   organizationId: string,
-  input: {
-    employeeId: string;
-    pin: string;
-    requestId: string;
-  },
+  input: ClockOutValues,
 ) {
-  return (await request("/api/pos/v2/attendance/clock-out", {
+  return (await request(POS_ATTENDANCE_CLOCK_OUT_PATH, {
     organizationId,
     init: jsonPost(input),
   })).json() as Promise<TimeClockActionResult>;

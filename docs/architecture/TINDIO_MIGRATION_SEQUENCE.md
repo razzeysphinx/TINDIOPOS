@@ -380,14 +380,26 @@ Status: **IN PROGRESS**
 - Keep sync push, refunds, transfer receipt, attendance, and every other
   financial mutation unchanged. **IMPLEMENTED.**
 
-## Next smallest safe slice: D29 offline checkout ownership
+## Completed Slice D29: offline checkout ownership
 
 - Move only direct `POST /api/pos/v2/offline-checkout` behind an explicit
   Backend-owned/proxy boundary while preserving every frozen D28 contract and
-  the existing Web route as rollback.
+  the existing Web route as rollback. **IMPLEMENTED.**
 - Keep the Web sync-push route on the same frozen processor until its own
   compatibility and ownership slice; do not split sequence or recording
-  semantics while moving the direct route.
+  semantics while moving the direct route. **IMPLEMENTED.**
+- Keep refunds, transfer receipt, attendance, every other financial mutation,
+  deployed client origins, and authentication-provider ownership unchanged.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D30 sync-push compatibility harness
+
+- Inventory and freeze only `POST /api/pos/v2/sync/push`, including batch
+  validation, ascending unique event/device identity, authenticated business
+  context and device custody, stop-on-first-nonsuccess behavior, acknowledgement
+  envelopes, and reuse of the frozen offline-checkout processor.
+- Add a network/database-independent Backend oracle and compatibility gates
+  before moving sync-push ownership.
 - Keep refunds, transfer receipt, attendance, every other financial mutation,
   deployed client origins, and authentication-provider ownership unchanged.
 

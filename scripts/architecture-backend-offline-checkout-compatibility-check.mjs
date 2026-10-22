@@ -65,7 +65,7 @@ test("Web rollback route and sync push retain the ordered offline processor", as
   assert.match(checkout, /POS_OFFLINE_CHECKOUT_PAYMENT_METHOD_MESSAGE/);
 });
 
-test("Backend offline oracle is isolated and no owned route exists", async () => {
+test("Backend offline oracle remains isolated beside the owned route", async () => {
   const oracle = await read("apps/backend/src/pos/offline-checkout-compatibility.ts");
 
   for (const value of [
@@ -82,7 +82,7 @@ test("Backend offline oracle is isolated and no owned route exists", async () =>
   );
   assert.equal(
     existsSync(new URL("../apps/backend/api/pos/v2/offline-checkout.ts", import.meta.url)),
-    false,
+    true,
   );
 });
 

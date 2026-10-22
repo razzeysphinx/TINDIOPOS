@@ -70,6 +70,9 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
   store/register and first-commit shift/device custody, idempotent
   `checkout_advanced_sale` command, and post-commit stock warning through the
   same boundary.
+- `POST /api/pos/v2/offline-checkout` owns the frozen offline sale validation,
+  optional device sequence reservation/finalization, cash-only settlement,
+  checkout, and terminal outcome recording through the same boundary.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`,
@@ -86,7 +89,8 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_OPEN_TICKET_MOVE_LINES_MODE=owned`, and
 `TINDIO_OPEN_TICKET_SPLIT_MODE=owned`, and
 `TINDIO_OPEN_TICKET_MERGE_MODE=owned`, and
-`TINDIO_CHECKOUT_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_CHECKOUT_MODE=owned`, and
+`TINDIO_OFFLINE_CHECKOUT_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -208,6 +212,15 @@ device sequencing, device/store/register custody, exact reservation and
 finalization states, expected-total and cash-only settlement guards, terminal
 outcome recording, database conflict classification, and response mapping. No
 Backend offline-checkout route or runtime mode exists in this slice.
+
+Slice D29 Backend-owned offline checkout uses that frozen contract in an
+isolated owned command and allowlisted Web rollback proxy. Supabase verifies the
+bearer while business context, payment-method policy, checkout, stock-warning,
+device sequence, and outcome-recording traffic uses only Neon's external-JWT
+Data API. Explicit body device credentials become RPC headers; ambient headers
+and cookies are never proxied. The Web direct route remains available for
+rollback, Web sync push keeps its existing processor, and client origins remain
+unchanged.
 
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,

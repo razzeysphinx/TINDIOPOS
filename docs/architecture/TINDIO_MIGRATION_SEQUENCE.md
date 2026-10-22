@@ -430,16 +430,29 @@ Status: **IN PROGRESS**
   deployed client origins, and authentication-provider ownership unchanged.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D33 refund ownership
+## Completed Slice D33: refund ownership
 
 - Move only `POST /api/pos/v2/receipts/:receiptId/refund` behind an explicit
   Backend-owned/proxy boundary while preserving every frozen D32 contract and
-  the existing Web route as rollback.
+  the existing Web route as rollback. **IMPLEMENTED.**
 - Resolve receipt-derived sale custody before mutation, preserve permission-or-
   approval execution, idempotent replay, payment and conditional stock effects,
   and exact response mapping through the external-JWT Neon boundary.
+  **IMPLEMENTED.**
 - Keep transfer receipt, attendance, exchanges, every other financial mutation,
   deployed client origins, and authentication-provider ownership unchanged.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D34 transfer-receipt compatibility harness
+
+- Inventory and freeze only `POST /api/pos/v2/transfers/:transferId/receive`,
+  including organization/store/device/shift custody, accepted quantities,
+  idempotency, inventory effects, validation, database errors, and response
+  mapping.
+- Add a network/database-independent Backend oracle and compatibility gates
+  before moving transfer-receipt ownership.
+- Keep attendance, exchanges, every other financial mutation, deployed client
+  origins, and authentication-provider ownership unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

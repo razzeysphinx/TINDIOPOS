@@ -76,6 +76,9 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
 - `POST /api/pos/v2/sync/push` owns the frozen ordered replay batch, validates
   its explicit device once, reuses the Backend offline-checkout processor for
   each event, and stops after the first non-success acknowledgement.
+- `POST /api/pos/v2/receipts/:receiptId/refund` owns context-first receipt/sale
+  custody, permission-or-approval validation, idempotent `refund_sale`, payment,
+  and conditional stock-return effects through the same boundary.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`,
@@ -94,7 +97,8 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_OPEN_TICKET_MERGE_MODE=owned`, and
 `TINDIO_CHECKOUT_MODE=owned`, and
 `TINDIO_OFFLINE_CHECKOUT_MODE=owned`, and
-`TINDIO_SYNC_PUSH_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_SYNC_PUSH_MODE=owned`, and
+`TINDIO_REFUND_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -252,6 +256,16 @@ default, exact RPC projection, actor-and-payload idempotency, payment and stock
 effects, database error mapping, and new/replayed response envelopes. No Backend
 refund route or runtime mode exists; Web and Mobile retain their existing API
 origins and entry points.
+
+Slice D33 Backend-owned refund uses that frozen contract in an isolated owned
+command and an allowlisted dynamic-path Web rollback proxy. Supabase verifies
+the bearer while business context, immutable receipt lookup, and `refund_sale`
+traffic use only Neon's external-JWT Data API. The owned handler derives the
+sale identity from the receipt before validation, preserves permission-or-
+approval execution and exact replay/error envelopes, and never forwards cookies
+or ambient device credentials. The Web route and server action remain available
+for rollback, client origins are unchanged, and adjacent mutations remain in
+Web.
 
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,

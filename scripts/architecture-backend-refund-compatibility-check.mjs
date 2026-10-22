@@ -56,7 +56,7 @@ test("Web refund retains context-first receipt custody, shared validation, and R
   assert.match(service, /target_approval_request_id/);
 });
 
-test("Backend refund oracle is network and database independent before ownership", async () => {
+test("Backend refund oracle remains isolated beside the owned route", async () => {
   const oracle = await read("apps/backend/src/pos/refund-compatibility.ts");
   for (const value of [
     "REFUND_COMPATIBILITY_CONTRACT", "validateRefundReceiptId",
@@ -69,7 +69,7 @@ test("Backend refund oracle is network and database independent before ownership
   );
   assert.equal(
     existsSync(new URL("../apps/backend/api/pos/v2/receipts/[receiptId]/refund.ts", import.meta.url)),
-    false,
+    true,
   );
 });
 

@@ -518,15 +518,30 @@ Status: **IN PROGRESS**
   deployed client origins, and authentication-provider ownership unchanged.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D40 receipt-settings and delivery compatibility harness
+## Completed Slice D40: receipt-settings and delivery compatibility harness
 
 - Inventory and freeze only `updateReceiptSettingsAction` and
   `queueReceiptDeliveryAction`, including permissions, bounded settings and
   recipient inputs, receipt identity, idempotency, database effects, error
   mapping, revalidation, and exact result messages.
+  **IMPLEMENTED.**
 - Add focused platform-neutral contracts and network/database-independent
   Backend oracles before creating any Backend receipt-settings or delivery
   route or moving ownership.
+  **IMPLEMENTED.**
+- Keep sale exchange, shift custody, every other financial mutation, deployed
+  client origins, and authentication-provider ownership unchanged.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D41 receipt-settings and delivery ownership
+
+- Move only receipt-settings updates and digital-receipt queueing behind
+  explicit Backend-owned/proxy boundaries while preserving every frozen D40
+  contract and both existing Server Actions as rollback.
+- Preserve context-first authentication, permission gates, bounded inputs,
+  receipt scope, actor-and-payload replay, settings snapshots, immutable
+  delivery outbox custody, database authority, and exact result messages
+  through Neon's external-JWT boundary.
 - Keep sale exchange, shift custody, every other financial mutation, deployed
   client origins, and authentication-provider ownership unchanged.
 

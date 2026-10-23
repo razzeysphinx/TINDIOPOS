@@ -3,8 +3,14 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  POS_RECEIPT_SETTINGS_DATABASE_MESSAGE,
+  POS_RECEIPT_SETTINGS_INPUT_MESSAGE,
+  POS_RECEIPT_SETTINGS_PERMISSION_MESSAGE,
+  POS_RECEIPT_SETTINGS_RPC,
+  POS_RECEIPT_SETTINGS_SUCCESS_MESSAGE,
   receiptSettingsSchema,
-} from "@/features/receipts/improvement-6-schema";
+} from "@tindio/contracts/receipt-settings";
+
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 import { linkSaleExchange, queueReceiptDelivery } from "@/features/receipts/service";
@@ -29,16 +35,16 @@ export async function updateReceiptSettingsAction(
 ): Promise<ReceiptImprovementActionResult> {
   const context = await requireBusinessContext();
   if (!hasPermission(context, "settings.manage")) {
-    return { ok: false, message: "You do not have permission to update receipt settings." };
+    return { ok: false, message: POS_RECEIPT_SETTINGS_PERMISSION_MESSAGE };
   }
 
   const parsed = receiptSettingsSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, message: "Check the receipt business information and layout values." };
+    return { ok: false, message: POS_RECEIPT_SETTINGS_INPUT_MESSAGE };
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("update_receipt_settings", {
+  const { data, error } = await supabase.rpc(POS_RECEIPT_SETTINGS_RPC, {
     target_organization_id: context.organization.id,
     target_business_name: parsed.data.businessName,
     target_business_address: parsed.data.businessAddress,
@@ -62,7 +68,7 @@ export async function updateReceiptSettingsAction(
       message: receiptDatabaseMessage(
         error?.code,
         error?.message,
-        "TINDIO could not save the receipt settings.",
+        POS_RECEIPT_SETTINGS_DATABASE_MESSAGE,
       ),
     };
   }
@@ -70,7 +76,7 @@ export async function updateReceiptSettingsAction(
   revalidatePath("/back-office/receipt-settings");
   return {
     ok: true,
-    message: "Receipt settings saved. New receipts will preserve this layout; existing receipts stay unchanged.",
+    message: POS_RECEIPT_SETTINGS_SUCCESS_MESSAGE,
   };
 }
 

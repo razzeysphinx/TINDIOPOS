@@ -91,8 +91,8 @@ test("D38 contract remains intact after D39 ownership while adjacent receipt bou
   assert.match(route, /export async function POST/);
   assert.match(action, /export async function updateReceiptSettingsAction/);
   assert.match(action, /export async function queueReceiptDeliveryAction/);
-  assert.match(settingsSchema, /export const receiptSettingsSchema/);
-  assert.match(settingsSchema, /export const receiptDeliverySchema/);
+  assert.match(settingsSchema, /\breceiptSettingsSchema\b/);
+  assert.match(settingsSchema, /\breceiptDeliverySchema\b/);
   assert.match(deliveryService, /queueReceiptDelivery/);
   assert.match(backendReadme, /Slice D38 sale-exchange compatibility oracle/);
 });

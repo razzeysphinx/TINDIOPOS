@@ -22,6 +22,8 @@ export * from "./pos-data";
 export * from "./pos-operations";
 export * from "./pos-runtime";
 export * from "./receipts";
+export * from "./receipt-settings";
+export * from "./receipt-delivery";
 export * from "./sale-exchange";
 export * from "./sync-control";
 export * from "./sync-push";

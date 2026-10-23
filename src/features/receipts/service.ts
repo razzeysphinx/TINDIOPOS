@@ -1,6 +1,16 @@
 import "server-only";
 
 import {
+  POS_RECEIPT_DELIVERY_CHANNEL,
+  POS_RECEIPT_DELIVERY_DATABASE_MESSAGE,
+  POS_RECEIPT_DELIVERY_INPUT_MESSAGE,
+  POS_RECEIPT_DELIVERY_PERMISSION_MESSAGE,
+  POS_RECEIPT_DELIVERY_RPC,
+  receiptDeliverySchema,
+  receiptDeliverySuccessMessage,
+  type ReceiptDeliveryResult,
+} from "@tindio/contracts/receipt-delivery";
+import {
   POS_REFUND_DATABASE_MESSAGE,
   POS_REFUND_DATABASE_PERMISSION_MESSAGE,
   POS_REFUND_IDEMPOTENCY_MESSAGE,
@@ -20,7 +30,6 @@ import {
   saleExchangeSuccessMessage,
   type SaleExchangeResult,
 } from "@tindio/contracts/sale-exchange";
-import { receiptDeliverySchema } from "@/features/receipts/improvement-6-schema";
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
 import { createBusinessContextClient } from "@/lib/supabase/context-client";
@@ -139,29 +148,24 @@ export async function queueReceiptDelivery({
 }: {
   context: BusinessContext;
   input: unknown;
-}): Promise<ReceiptImprovementActionResult> {
+}): Promise<ReceiptDeliveryResult> {
   if (!hasPermission(context, "receipts.reprint")) {
-    return { ok: false, message: "You do not have permission to queue a digital receipt." };
+    return { ok: false, message: POS_RECEIPT_DELIVERY_PERMISSION_MESSAGE };
   }
   const parsed = receiptDeliverySchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Enter a valid recipient email address." };
+  if (!parsed.success) return { ok: false, message: POS_RECEIPT_DELIVERY_INPUT_MESSAGE };
 
   const supabase = await createBusinessContextClient(context);
-  const { data, error } = await supabase.rpc("queue_receipt_delivery", {
+  const { data, error } = await supabase.rpc(POS_RECEIPT_DELIVERY_RPC, {
     target_organization_id: context.organization.id,
     target_receipt_id: parsed.data.receiptId,
-    target_delivery_channel: "EMAIL",
+    target_delivery_channel: POS_RECEIPT_DELIVERY_CHANNEL,
     target_recipient: parsed.data.recipient,
     target_idempotency_key: parsed.data.idempotencyKey,
   });
   const result = data?.[0];
   if (error || !result) {
-    return { ok: false, message: receiptDatabaseMessage(error?.code, error?.message, "TINDIO could not queue this digital receipt.") };
+    return { ok: false, message: receiptDatabaseMessage(error?.code, error?.message, POS_RECEIPT_DELIVERY_DATABASE_MESSAGE) };
   }
-  return {
-    ok: true,
-    message: result.was_replayed
-      ? "This digital receipt request was already queued."
-      : "Digital receipt request queued securely.",
-  };
+  return { ok: true, message: receiptDeliverySuccessMessage(result) };
 }

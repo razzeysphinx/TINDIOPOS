@@ -75,6 +75,7 @@
     "test:architecture-backend-attendance-mutation": "pnpm backend:test && node --test scripts/architecture-backend-attendance-mutation-ownership-check.mjs",
     "test:architecture-backend-sale-exchange-compatibility": "pnpm backend:test && node --test scripts/architecture-backend-sale-exchange-compatibility-check.mjs",
     "test:architecture-backend-sale-exchange": "pnpm backend:test && node --test scripts/architecture-backend-sale-exchange-ownership-check.mjs",
+    "test:architecture-backend-receipt-administration-compatibility": "pnpm backend:test && node --test scripts/architecture-backend-receipt-administration-compatibility-check.mjs",
     "test:phase-06-native-foundation": "node --test scripts/phase-06-native-foundation-check.mjs",
     "test:phase-06-provider-neutral-device-runtime": "node --test scripts/phase-06-provider-neutral-device-runtime-check.mjs",
     "test:phase-06-device-enrollment": "node --test scripts/phase-06-device-enrollment-check.mjs",

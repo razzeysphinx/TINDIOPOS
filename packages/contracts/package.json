@@ -80,6 +80,14 @@
       "types": "./src/receipts.ts",
       "default": "./src/receipts.ts"
     },
+    "./receipt-settings": {
+      "types": "./src/receipt-settings.ts",
+      "default": "./src/receipt-settings.ts"
+    },
+    "./receipt-delivery": {
+      "types": "./src/receipt-delivery.ts",
+      "default": "./src/receipt-delivery.ts"
+    },
     "./refund": {
       "types": "./src/refund.ts",
       "default": "./src/refund.ts"

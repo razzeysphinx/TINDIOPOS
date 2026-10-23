@@ -333,6 +333,16 @@ immutable source transactions, and audit effects. The existing Server Action
 and new Web route share the direct Web service for rollback; client origins are
 unchanged, and receipt settings/delivery plus adjacent mutations remain in Web.
 
+The Slice D40 receipt-administration compatibility oracle is network- and
+database-independent. It freezes the two existing Next.js Server Actions for
+receipt settings and digital receipt delivery, their context-first permission
+checks, bounded inputs, exact RPC projections, receipt and actor custody,
+delivery idempotency, settings snapshot and immutable outbox effects, database
+error mapping, revalidation, and exact result messages. No Backend receipt-
+settings or delivery route or runtime mode exists; both Server Actions remain
+authoritative, and sale exchange, shift custody, client origins, and adjacent
+mutations remain unchanged.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

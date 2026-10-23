@@ -77,7 +77,7 @@ test("D39 moves sale exchange only while the Server Action and adjacent boundari
   assert.match(webRoute, /linkSaleExchange\(\{ context: resolved\.context, input: body\.input \}\)/);
   assert.match(action, /export async function linkSaleExchangeAction/);
   assert.match(action, /linkSaleExchange\(\{ context, input \}\)/);
-  assert.match(settingsSchema, /export const receiptSettingsSchema/);
+  assert.match(settingsSchema, /\breceiptSettingsSchema\b/);
   for (const mutation of [attendance, refund]) assert.match(mutation, /export async function POST/);
   assert.match(backendReadme, /Slice D39 Backend-owned sale exchange/);
 });

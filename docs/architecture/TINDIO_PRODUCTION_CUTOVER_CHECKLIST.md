@@ -7,7 +7,12 @@ Status: **NOT READY — OWNER APPROVAL REQUIRED AT CUTOVER**
 - [x] Canonical repository/branch/HEAD verified.
 - [x] Canonical Neon project and branch verified read-only.
 - [x] Current Supabase Auth/Web/Mobile dependency inventory recorded.
+- [x] Phase E provider capability, account/region access, linked-branch status,
+      and 13-flow synthetic proof requirements assessed read-only.
 - [ ] Disposable Neon branch and synthetic Auth environment approved.
+- [ ] Password reset/account-claim or OAuth reauthentication policy approved;
+      existing Supabase password hashes are not treated as portable.
+- [ ] Expo/React Native session persistence and refresh proof path approved.
 - [ ] Current Neon Auth Web, server, Mobile, Data API, RLS, rate-limit, email,
       reset, verification, revocation, and account-import behavior proven.
 - [ ] Identity mapping and collision policy reviewed.

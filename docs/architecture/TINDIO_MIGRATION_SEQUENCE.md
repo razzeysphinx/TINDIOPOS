@@ -10,7 +10,7 @@ Status: **IN PROGRESS**
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
 | D | Progressive Backend extraction, mutations last | **PHASE D COMPLETE; 43 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
-| E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
+| E | Isolated synthetic Neon Auth proof on a non-production branch | **E1 COMPLETE — PROVISIONING BLOCKED ON OWNER DECISIONS** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
 | H | Controlled production cutover | **OWNER APPROVAL REQUIRED** | Monitoring, rollback, supported clients, tenant/financial proof |
@@ -680,14 +680,31 @@ Status: **IN PROGRESS**
 The post-D50 inventory has 0 Web-owned POS v2 routes without Backend
 counterparts. Phase D is complete.
 
-## Next phase gate: Phase E prerequisite assessment
+## Completed Slice E1: Neon Auth prerequisite assessment
 
-- Confirm the required Neon Auth capability, project access, non-production
-  branch, and owner approvals before any provider configuration.
-- Define the isolated synthetic-user 13-flow proof, including Web, Mobile, RLS,
-  refresh, revocation, and rollback evidence.
-- Keep Supabase Auth active and do not export/import real accounts, migrate
-  passwords, rotate credentials, deploy, or cut over clients during planning.
+- Confirmed current Managed Better Auth availability, authenticated Neon CLI
+  access, AWS region eligibility, project-level administrator permission, and
+  the exact linked canonical branch through read-only provider checks.
+  **IMPLEMENTED.**
+- Confirmed that Neon Auth is not configured on the linked branch and preserved
+  Supabase as the active Auth issuer plus external-JWT Data API verifier.
+  **IMPLEMENTED.**
+- Froze a machine-readable 13-flow synthetic proof across Web, Backend, Mobile,
+  Data API, RLS, revocation, and Supabase rollback. Every flow remains
+  `NOT_RUN`; no source check is treated as runtime proof. **IMPLEMENTED.**
+- Recorded five mandatory owner decisions covering disposable branch source,
+  password continuity, synthetic email/domains, Mobile runtime proof, and
+  rollback authority. **IMPLEMENTED.**
+
+## Next smallest safe slice: E2 isolated environment provisioning
+
+- First obtain explicit approval for all five decisions recorded in
+  `TINDIO_PHASE_E_NEON_AUTH_PREREQUISITES.md`.
+- Create one expiring, non-production branch from a proven synthetic-only,
+  schema-only, or anonymized source; enable Managed Better Auth only there.
+- Record its branch-scoped Auth/Data API endpoints and trusted local/preview
+  domains without changing existing Web, Mobile, Backend, or deployment origins.
+- Stop before application integration or any real-user import.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

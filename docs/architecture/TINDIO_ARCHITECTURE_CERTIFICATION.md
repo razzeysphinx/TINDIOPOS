@@ -1,8 +1,10 @@
 # TINDIO architecture certification
 
-Status: **SLICE D50 COMPLETE; PHASE D CLOSURE CERTIFIED**
+Status: **SLICE E1 COMPLETE; NEON AUTH PREREQUISITES ASSESSED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, and completed Phase D (Slices D1-D50) with all 43 supported POS v2 routes Backend-owned and Web rollback preserved
+Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and Phase E prerequisite Slice E1 without provider provisioning
+
+Retained Phase D certification: **SLICE D50 COMPLETE; PHASE D CLOSURE CERTIFIED**
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -720,6 +722,15 @@ Database: **CANONICAL NEON UNCHANGED**
   cookie or device-secret forwarding. All Web handlers remain intact.
 - Phase D closes without schema, deployment, Auth provider, credential, client
   origin, or live cutover changes.
+- Read-only provider checks confirm Neon CLI 4.14.3 OAuth access, administrator
+  permission to the linked `aws-us-east-2` project, the canonical branch
+  identity, and that Managed Better Auth is not configured on that branch.
+- A machine-readable Phase E matrix freezes exactly 13 synthetic-only Web,
+  Backend, Mobile, Data API, database/RLS, revocation, and rollback flows. All
+  remain `NOT_RUN` until real isolated execution evidence exists.
+- Provisioning remains fail-closed pending owner decisions for the disposable
+  branch source, password continuity, synthetic email/domains, Mobile runtime
+  proof, and rollback authority. Supabase Auth remains active.
 
 ## Results
 
@@ -780,6 +791,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend stock-operation compatibility boundary | **PASS (5/5)** |
 | Backend stock-operation ownership/rollback boundary | **PASS (5/5)** |
 | Phase D complete route/owner/rollback inventory | **PASS (7/7)** |
+| Phase E Neon Auth prerequisite boundary | **PASS (6/6)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -803,7 +815,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (238/239 automated commands); 1 ENVIRONMENT-BLOCKED** |
+| Static catalogue | **PASS (239/240 automated commands); 1 ENVIRONMENT-BLOCKED** |
 | Local Supabase/Docker source connectivity | **BLOCKED**; Docker CLI/daemon unavailable in this environment |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -888,12 +900,17 @@ architecture certification. All 43 supported POS v2 Web routes have exact
 Backend counterparts across 29 owned-by-default boundaries, and every Web
 rollback handler remains intact. No schema, deployment, Auth provider,
 credential, client origin, or live cutover changed. Phase D is complete.
+The E1 prerequisite assessment used only repository inspection, current official
+provider documentation, and read-only Neon CLI queries. Managed Better Auth is
+not configured on the linked canonical branch. No branch, Auth service, user,
+session, trusted domain, secret, schema, deployment, or client origin was
+created or changed. Supabase Auth remains active, and all 13 proof flows remain
+`NOT_RUN` pending isolated execution.
 
 ## Next gate
 
-Begin only the Phase E prerequisite assessment: confirm Neon Auth capability,
-non-production branch access, and owner approvals, then define the isolated
-synthetic-user 13-flow proof across Web, Mobile, RLS, refresh, revocation, and
-rollback. Keep Supabase Auth active. Do not configure production Auth,
-export/import real accounts, migrate passwords, rotate credentials, deploy, or
-cut over a client origin without the mandatory approvals.
+Begin E2 only after explicit approval of the five decisions in the Phase E
+prerequisite assessment. Then create one expiring non-production branch from a
+proven synthetic-only, schema-only, or anonymized source and enable Managed
+Better Auth only there. Do not integrate application runtimes, import real
+users, change deployments, or cut over any client origin in E2.

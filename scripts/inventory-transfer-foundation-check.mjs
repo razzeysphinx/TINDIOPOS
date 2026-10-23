@@ -124,7 +124,8 @@ test("request writers are forward-replaced only by Phase 06", () => {
   assert.match(requestMigration, /create or replace function private\.dispatch_stock_request/);
   assert.match(requestMigration, /create or replace function private\.receive_stock_request/);
   assert.match(supplyChainActions, /supabase\.rpc\("dispatch_stock_request"/);
-  assert.match(supplyChainActions, /supabase\.rpc\("receive_stock_request"/);
+  assert.match(supplyChainActions, /supabase\.rpc\(POS_STOCK_REQUEST_RECEIPT_RPC/);
+  assert.match(supplyChainActions, /@tindio\/contracts\/stock-request-receipt/);
 });
 
 test("application command callers retain the direct RPC signatures", () => {

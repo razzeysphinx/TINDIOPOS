@@ -1,4 +1,5 @@
 import { z } from "zod";
+export { receiveStockRequestSchema } from "@tindio/contracts/stock-request-receipt";
 
 const uuid = z.uuid("Choose a valid record.");
 const operationId = z.uuid("Start the operation again and retry.");
@@ -106,35 +107,3 @@ export const dispatchStockRequestSchema = requestIdentifierSchema.extend({
   operationId,
   note: z.string().trim().max(500),
 });
-
-export const receiveStockRequestSchema = z
-  .object({
-    operationId,
-    stockRequestId: uuid,
-    note: z.string().trim().max(500),
-    lines: z
-      .array(
-        z.object({
-          stockTransferLineId: uuid,
-          receivedQuantity: nonNegativeQuantity,
-          shortQuantity: nonNegativeQuantity,
-          discrepancyNote: z.string().trim().max(500),
-        }),
-      )
-      .min(1)
-      .max(100),
-  })
-  .superRefine((value, context) => {
-    if (new Set(value.lines.map((line) => line.stockTransferLineId)).size !== value.lines.length) {
-      context.addIssue({ code: "custom", path: ["lines"], message: "Each transfer line can be received once per submission." });
-    }
-
-    for (const [index, line] of value.lines.entries()) {
-      if (Number(line.receivedQuantity) + Number(line.shortQuantity) <= 0) {
-        context.addIssue({ code: "custom", path: ["lines", index], message: "Enter a received or short quantity." });
-      }
-      if (Number(line.shortQuantity) > 0 && line.discrepancyNote.length < 2) {
-        context.addIssue({ code: "custom", path: ["lines", index, "discrepancyNote"], message: "Explain the shortage or discrepancy." });
-      }
-    }
-  });

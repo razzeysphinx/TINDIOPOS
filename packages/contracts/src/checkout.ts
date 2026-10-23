@@ -11,6 +11,18 @@ export const POS_CHECKOUT_PERMISSIONS = [
 export const POS_CHECKOUT_DISCOUNT_PERMISSION = "discounts.apply" as const;
 export const POS_CHECKOUT_TICKET_PERMISSION = "tickets.manage" as const;
 
+export const POS_CART_STOCK_VALIDATION_PATH = "/api/pos/v2/cart/validate-stock" as const;
+export const POS_CART_STOCK_VALIDATION_RPC = "validate_pos_cart_stock" as const;
+export const POS_CART_STOCK_VALIDATION_PERMISSIONS = POS_CHECKOUT_PERMISSIONS;
+export const POS_CART_STOCK_PERMISSION_MESSAGE =
+  "You do not have permission to start payment." as const;
+export const POS_CART_STOCK_INPUT_MESSAGE =
+  "Check the cart, then try Charge again." as const;
+export const POS_CART_STOCK_STORE_MESSAGE =
+  "You are not assigned to this store." as const;
+export const POS_CART_STOCK_SAFEGUARD_MESSAGE =
+  "TINDIO could not read this store's stock safeguard." as const;
+
 export const POS_CHECKOUT_REQUEST_INVALID_MESSAGE =
   "The checkout data is invalid. Return to the cart and try again." as const;
 export const POS_CHECKOUT_PERMISSION_MESSAGE =

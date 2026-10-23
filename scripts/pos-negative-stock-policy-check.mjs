@@ -19,7 +19,8 @@ test("Charge performs a fresh server-side stock check before payment", () => {
   assert.match(terminal, /startStockValidationTransition/);
   assert.match(terminal, /result\.policy !== "allow"/);
   assert.match(terminal, /setIsPaymentScreenOpen\(true\)/);
-  assert.match(service, /validate_pos_cart_stock/);
+  assert.match(service, /POS_CART_STOCK_VALIDATION_RPC/);
+  assert.match(service, /@tindio\/contracts\/checkout/);
   assert.match(service, /target_sale_id: result\.sale_id/);
   assert.match(migration, /private\.require_pos_capabilities/);
   assert.match(migration, /shift\.status = 'open'/);

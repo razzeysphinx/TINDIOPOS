@@ -27,6 +27,7 @@ export * from "./receipt-settings";
 export * from "./receipt-delivery";
 export * from "./sale-exchange";
 export * from "./shift-control";
+export * from "./stock-request-receipt";
 export * from "./sync-control";
 export * from "./sync-push";
 export * from "./transfer-receipt";

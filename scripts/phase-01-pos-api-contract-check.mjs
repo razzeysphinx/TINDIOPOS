@@ -125,7 +125,8 @@ test("protected checkout and inventory architecture remains authoritative", asyn
   assert.doesNotMatch(transferService, /supabase\/migrations|checkout_advanced_sale/);
   assert.match(transferService, /POS_TRANSFER_RECEIPT_RPC/);
   assert.match(transferService, /@tindio\/contracts\/transfer-receipt/);
-  assert.match(transferService, /receive_stock_request/);
+  assert.match(transferService, /POS_STOCK_REQUEST_RECEIPT_RPC/);
+  assert.match(transferService, /@tindio\/contracts\/stock-request-receipt/);
 });
 
 test("Phase 01 documentation names V2 as the current API while preserving the locked roadmap", async () => {

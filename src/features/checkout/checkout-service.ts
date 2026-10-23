@@ -5,6 +5,14 @@ import {
   POS_OFFLINE_CHECKOUT_PAYMENT_METHOD_MESSAGE,
   POS_OFFLINE_CHECKOUT_TOTAL_MESSAGE,
 } from "@tindio/contracts/offline-checkout";
+import {
+  POS_CART_STOCK_INPUT_MESSAGE,
+  POS_CART_STOCK_PERMISSION_MESSAGE,
+  POS_CART_STOCK_SAFEGUARD_MESSAGE,
+  POS_CART_STOCK_STORE_MESSAGE,
+  POS_CART_STOCK_VALIDATION_PERMISSIONS,
+  POS_CART_STOCK_VALIDATION_RPC,
+} from "@tindio/contracts/checkout";
 
 import { moneyInputToMinor } from "@/features/catalog/catalog-money";
 import {
@@ -27,7 +35,7 @@ import type { Json } from "@/lib/supabase/database.types";
 import { createBusinessContextClient } from "@/lib/supabase/context-client";
 
 type StockValidationRpc = {
-  rpc: (name: "validate_pos_cart_stock", args: {
+  rpc: (name: typeof POS_CART_STOCK_VALIDATION_RPC, args: {
     target_organization_id: string;
     target_store_id: string;
     target_register_id: string;
@@ -66,23 +74,21 @@ export async function validateCartStock(
   input: unknown,
 ): Promise<ValidateCartStockActionResult> {
   if (
-    !hasPermission(context, "pos.access")
-    || !hasPermission(context, "sales.create")
-    || !hasPermission(context, "payments.accept")
+    !POS_CART_STOCK_VALIDATION_PERMISSIONS.every((permission) => hasPermission(context, permission))
   ) {
-    return { ok: false, message: "You do not have permission to start payment." };
+    return { ok: false, message: POS_CART_STOCK_PERMISSION_MESSAGE };
   }
 
   const parsed = validateCartStockSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Check the cart, then try Charge again." };
+  if (!parsed.success) return { ok: false, message: POS_CART_STOCK_INPUT_MESSAGE };
   const data = parsed.data satisfies ValidateCartStockValues;
   if (!context.storeIds.includes(data.storeId)) {
-    return { ok: false, message: "You are not assigned to this store." };
+    return { ok: false, message: POS_CART_STOCK_STORE_MESSAGE };
   }
 
   const supabase = await createBusinessContextClient(context);
   const { data: result, error } = await (supabase as unknown as StockValidationRpc).rpc(
-    "validate_pos_cart_stock",
+    POS_CART_STOCK_VALIDATION_RPC,
     {
       target_organization_id: context.organization.id,
       target_store_id: data.storeId,
@@ -105,7 +111,7 @@ export async function validateCartStock(
   const payload = result as Record<string, Json | undefined>;
   const policy = payload.policy;
   if (policy !== "allow" && policy !== "warn" && policy !== "block") {
-    return { ok: false, message: "TINDIO could not read this store's stock safeguard." };
+    return { ok: false, message: POS_CART_STOCK_SAFEGUARD_MESSAGE };
   }
 
   return {

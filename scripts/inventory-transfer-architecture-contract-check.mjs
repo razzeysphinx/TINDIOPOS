@@ -122,7 +122,6 @@ test(
         "approve_stock_request",
         "start_stock_request_picking",
         "dispatch_stock_request",
-        "receive_stock_request",
       ]
     ) {
       assert.match(
@@ -132,6 +131,9 @@ test(
         ),
       );
     }
+
+    assert.match(supplyChainActions, /supabase\.rpc\(POS_STOCK_REQUEST_RECEIPT_RPC/);
+    assert.match(supplyChainActions, /@tindio\/contracts\/stock-request-receipt/);
 
     assert.match(
       operationIntegrityMigration,

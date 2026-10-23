@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D47 COMPLETE; APPROVAL-CONTROL OWNERSHIP CERTIFIED**
+Status: **SLICE D48 COMPLETE; STOCK-OPERATION COMPATIBILITY CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D47 through Backend-owned approval request, manager approval, and status routes
+Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D48 through frozen cart stock validation and stock-request receipt compatibility
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -694,6 +694,14 @@ Database: **CANONICAL NEON UNCHANGED**
   state, and audit custody.
 - No schema, deployment, authentication provider, shift ownership, stock
   operation, client origin, or adjacent mutation changed.
+- Focused shared cart-stock and stock-request-receipt contracts now freeze both
+  final Web-owned POS v2 stock routes, permissions, bounds, messages, dynamic
+  identity, and exact RPC vocabulary.
+- The isolated D48 Backend oracle freezes validation precedence, assigned-store
+  custody, stock-policy result mapping, receipt projection, discrepancy rules,
+  database errors, and idempotent replay without network or database access.
+- Both Next.js stock routes remain authoritative. No Backend stock route or
+  runtime mode, schema, deployment, Auth provider, or client origin changed.
 
 ## Results
 
@@ -702,7 +710,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (739/739)** |
+| Backend behavior and contracts | **PASS (749/749)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -751,6 +759,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend shift-control ownership boundary | **PASS (5/5)** |
 | Backend approval-control compatibility boundary | **PASS (5/5)** |
 | Backend approval-control ownership/rollback boundary | **PASS (5/5)** |
+| Backend stock-operation compatibility boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -774,8 +783,8 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (236/236 automated commands)** |
-| Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
+| Static catalogue | **PASS (236/237 automated commands); 1 ENVIRONMENT-BLOCKED** |
+| Local Supabase/Docker source connectivity | **BLOCKED**; Docker CLI/daemon unavailable in this environment |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
 
@@ -837,14 +846,23 @@ deployment, credential, or live client cutover; Supabase remains the Auth
 issuer while the owned runtime sends database work only to Neon's external-JWT
 Data API. The audited post-D47 inventory retains 2 Web-owned POS v2 routes, so
 Phase D remains in progress.
+The D48 stock-operation slice adds focused platform-neutral contracts, Web
+adoption, a network/database-independent Backend oracle, ten behavior tests,
+and a five-gate architecture certification. Both final stock-operation Next.js
+routes remain authoritative; no Backend stock route, runtime mode, schema,
+provider setting, credential, deployment, or live client cutover was added.
+Database custody remains authoritative for negative-stock policy, open shift,
+made-to-order components, request/destination scope, received-only inventory,
+discrepancies, idempotent replay, and audit effects. The audited post-D48
+inventory still retains 2 Web-owned POS v2 routes, so Phase D remains in
+progress.
 
 ## Next gate
 
-Begin Slice D48 by freezing only cart stock validation and stock-request receipt
-compatibility across the final two Web-owned POS v2 routes. Preserve context/
-authentication ordering, dynamic request identity, assigned-store and
-destination custody, quantity bounds, exact database projections,
-idempotency/replay, response envelopes, and both Next.js routes as authority.
-Do not add a Backend stock route or runtime mode, and do not change existing
-Backend ownership, deployed client origins, schema, or authentication-provider
-ownership.
+Begin Slice D49 by moving only the two D48-frozen cart stock validation and
+stock-request receipt routes behind explicit Backend-owned/proxy boundaries.
+Preserve context-first authentication, dynamic request identity, assigned-store,
+open-shift, destination, quantity, discrepancy, exact RPC projection,
+idempotency/replay, database-error, and response-envelope parity through Neon's
+external-JWT Data API. Keep both Next.js routes as rollback and do not change
+deployed client origins, schema, or authentication-provider ownership.

@@ -91,7 +91,8 @@ test("direct transfer actions use the canonical transfer RPCs without client led
   assert.match(actions, /rpc\("approve_stock_request"/);
   assert.match(actions, /rpc\("start_stock_request_picking"/);
   assert.match(actions, /rpc\("dispatch_stock_request"/);
-  assert.match(actions, /rpc\("receive_stock_request"/);
+  assert.match(actions, /rpc\(POS_STOCK_REQUEST_RECEIPT_RPC/);
+  assert.match(actions, /@tindio\/contracts\/stock-request-receipt/);
   assert.match(legacyActions, /rpc\("create_direct_stock_transfer"/);
   assert.match(legacyActions, /rpc\(POS_TRANSFER_RECEIPT_RPC/);
   assert.match(legacyActions, /@tindio\/contracts\/transfer-receipt/);

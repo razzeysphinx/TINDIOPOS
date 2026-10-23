@@ -103,7 +103,8 @@ test("POS V2 transports consume shared current contracts", () => {
   assert.match(attendance, /posUuidSchema as storeSchema/);
   assert.match(transfer, /posTransferReceiptIdSchema/);
   assert.match(transfer, /@tindio\/contracts\/transfer-receipt/);
-  assert.match(stockRequest, /posUuidSchema as idSchema/);
+  assert.match(stockRequest, /posStockRequestReceiptIdSchema/);
+  assert.match(stockRequest, /@tindio\/contracts\/stock-request-receipt/);
 
   for (const route of [customers, modifiers, receipts, receiptDetail, attendance, transfer, stockRequest]) {
     assert.doesNotMatch(route, /from "zod"/);

@@ -36,6 +36,10 @@
       "types": "./src/shift-control.ts",
       "default": "./src/shift-control.ts"
     },
+    "./stock-request-receipt": {
+      "types": "./src/stock-request-receipt.ts",
+      "default": "./src/stock-request-receipt.ts"
+    },
     "./attendance": {
       "types": "./src/attendance.ts",
       "default": "./src/attendance.ts"

@@ -432,6 +432,17 @@ pending-request reuse, expiry, terminal-state, and audit authority. All three
 Next.js handlers remain available for rollback; deployment, client origins,
 schema, Auth ownership, shift ownership, and stock operations remain unchanged.
 
+The Slice D48 stock-operation compatibility oracle is network- and database-
+independent. It freezes cart stock validation and stock-request receipt across
+the final two Web-owned POS v2 routes: context-first authentication, dynamic
+request identity, permission and feature precedence, assigned-store and open-
+shift custody, quantity and discrepancy bounds, exact RPC projections,
+negative-stock policy and made-to-order component evaluation, received-only
+inventory effects, idempotent receipt replay, database error mapping, and exact
+response envelopes. Both Next.js routes remain authoritative; no Backend stock
+route or runtime mode was added, and existing Backend ownership, schema,
+deployment, client origins, and Auth ownership are unchanged.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

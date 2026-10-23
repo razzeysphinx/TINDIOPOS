@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — D47 COMPLETE; 41 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — D48 COMPLETE; 41 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -635,6 +635,20 @@ Status: **IN PROGRESS**
   origins, schema, and authentication-provider ownership remain unchanged.
   **IMPLEMENTED.**
 
+## Completed Slice D48: stock-operation compatibility
+
+- Freeze cart stock validation and stock-request receipt across the final two
+  Web-owned POS v2 routes, including context-first authentication, dynamic
+  request identity, permission/feature precedence, assigned-store, open-shift,
+  destination, quantity, discrepancy, and replay semantics. **IMPLEMENTED.**
+- Add focused platform-neutral cart-stock and stock-request-receipt contracts,
+  Web adoption, plus a network/database-independent Backend compatibility
+  oracle covering exact RPC projections, result mapping, and messages.
+  **IMPLEMENTED.**
+- Keep both Next.js routes authoritative and add no Backend stock route or
+  runtime mode. Existing Backend ownership, deployed client origins, schema,
+  and authentication-provider ownership remain unchanged. **IMPLEMENTED.**
+
 ## Remaining Phase D closure sequence
 
 The post-D47 route inventory has 2 Web-owned POS v2 routes without Backend
@@ -642,22 +656,20 @@ counterparts. Phase D is not complete until each group below has frozen
 compatibility evidence, an owned/proxy boundary, and a final route-inventory
 audit:
 
-- **D48:** cart stock validation and stock-request receipt compatibility
-  harness (2 routes).
 - **D49:** cart stock validation and stock-request receipt ownership (2 routes;
   compatibility frozen in D48).
 - **D50:** Phase D closure audit proving every supported POS v2 route has a
   Backend owner and Web rollback surface before beginning Neon Auth proof.
 
-## Next smallest safe slice: D48 stock-operation compatibility
+## Next smallest safe slice: D49 stock-operation ownership
 
-- Freeze only cart stock validation and stock-request receipt without moving
-  ownership, including context/auth ordering, dynamic request identity,
-  assigned-store and destination custody, quantity bounds, exact database
-  projections, idempotency/replay, and response envelopes.
-- Add a focused network/database-independent compatibility oracle and shared
-  platform-neutral contracts for those two routes.
-- Keep all existing Backend owners, both Next.js stock routes, deployed client
+- Move only the two D48-frozen cart stock validation and stock-request receipt
+  routes behind explicit Backend-owned/proxy boundaries.
+- Preserve context-first authentication, dynamic path identity, assigned-store,
+  open-shift, destination, quantity, discrepancy, exact RPC projection,
+  idempotency/replay, and response-envelope parity through Neon's external-JWT
+  Data API.
+- Keep both Next.js routes available as rollback and leave deployed client
   origins, schema, and authentication-provider ownership unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without

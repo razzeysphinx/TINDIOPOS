@@ -10,6 +10,16 @@ import {
   receiveStockTransferSchema,
   type TransferReceiptResult,
 } from "@tindio/contracts/transfer-receipt";
+import {
+  POS_STOCK_REQUEST_RECEIPT_DATABASE_MESSAGE,
+  POS_STOCK_REQUEST_RECEIPT_INPUT_MESSAGE,
+  POS_STOCK_REQUEST_RECEIPT_INVENTORY_DISABLED_MESSAGE,
+  POS_STOCK_REQUEST_RECEIPT_PERMISSION,
+  POS_STOCK_REQUEST_RECEIPT_PERMISSION_MESSAGE,
+  POS_STOCK_REQUEST_RECEIPT_RPC,
+  POS_STOCK_REQUEST_RECEIPT_SUCCESS_MESSAGE,
+  type StockRequestReceiptResult,
+} from "@tindio/contracts/stock-request-receipt";
 import { hasAllInventoryCapabilities } from "@/features/inventory/inventory-permissions";
 import { receiveStockRequestSchema } from "@/features/inventory/supply-chain-schema";
 import type { BusinessContext } from "@/lib/auth/dal";
@@ -47,7 +57,7 @@ function requestTransferDatabaseMessage(code: string | undefined, fallback: stri
 
 function canReceive(context: BusinessContext) {
   return context.features.inventory
-    && hasAllInventoryCapabilities(context, ["inventory.transfer.receive"]);
+    && hasAllInventoryCapabilities(context, [POS_STOCK_REQUEST_RECEIPT_PERMISSION]);
 }
 
 export async function receivePosStockTransfer({ context, input }: { context: BusinessContext; input: unknown }): Promise<TransferReceiptResult> {
@@ -76,14 +86,14 @@ export async function receivePosStockTransfer({ context, input }: { context: Bus
   return { ok: true, message: POS_TRANSFER_RECEIPT_SUCCESS_MESSAGE, data: { receiptId: data } };
 }
 
-export async function receivePosStockRequest({ context, input }: { context: BusinessContext; input: unknown }): Promise<PosTransferResult<{ stockRequestId: string }>> {
+export async function receivePosStockRequest({ context, input }: { context: BusinessContext; input: unknown }): Promise<StockRequestReceiptResult> {
   if (!canReceive(context)) {
-    return { ok: false, message: context.features.inventory ? "You do not have permission to receive stock transfers." : "Inventory is disabled for this business." };
+    return { ok: false, message: context.features.inventory ? POS_STOCK_REQUEST_RECEIPT_PERMISSION_MESSAGE : POS_STOCK_REQUEST_RECEIPT_INVENTORY_DISABLED_MESSAGE };
   }
   const parsed = receiveStockRequestSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Check the highlighted replenishment details and try again." };
+  if (!parsed.success) return { ok: false, message: POS_STOCK_REQUEST_RECEIPT_INPUT_MESSAGE };
   const supabase = await createBusinessContextClient(context);
-  const { data, error } = await supabase.rpc("receive_stock_request", {
+  const { data, error } = await supabase.rpc(POS_STOCK_REQUEST_RECEIPT_RPC, {
     target_organization_id: context.organization.id,
     target_stock_request_id: parsed.data.stockRequestId,
     target_note: parsed.data.note,
@@ -95,6 +105,6 @@ export async function receivePosStockRequest({ context, input }: { context: Busi
       discrepancy_note: line.discrepancyNote,
     })) as Json,
   });
-  if (error || !data) return { ok: false, message: requestTransferDatabaseMessage(error?.code, "TINDIO could not record this receipt.") };
-  return { ok: true, message: "Receipt recorded. Only the received quantity was added to stock.", data: { stockRequestId: data } };
+  if (error || !data) return { ok: false, message: requestTransferDatabaseMessage(error?.code, POS_STOCK_REQUEST_RECEIPT_DATABASE_MESSAGE) };
+  return { ok: true, message: POS_STOCK_REQUEST_RECEIPT_SUCCESS_MESSAGE, data: { stockRequestId: data } };
 }

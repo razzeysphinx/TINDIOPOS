@@ -33,7 +33,7 @@ test("receipt administration has focused platform-neutral shared contracts", asy
   }
 });
 
-test("Web actions retain context-first permissions, shared RPCs, and exact revalidation", async () => {
+test("Web actions retain context-first services, shared RPCs, and exact revalidation", async () => {
   const [action, schema, service] = await Promise.all([
     read("src/features/receipts/improvement-6-actions.ts"),
     read("src/features/receipts/improvement-6-schema.ts"),
@@ -44,21 +44,21 @@ test("Web actions retain context-first permissions, shared RPCs, and exact reval
   const settingsBody = action.slice(settingsStart, deliveryStart);
   const deliveryBody = action.slice(deliveryStart, action.indexOf("export async function linkSaleExchangeAction"));
   assert.ok(settingsStart >= 0 && deliveryStart > settingsStart);
-  assert.ok(settingsBody.indexOf("requireBusinessContext()") < settingsBody.indexOf("receiptSettingsSchema.safeParse(input)"));
-  assert.ok(settingsBody.indexOf("hasPermission(context, \"settings.manage\")") < settingsBody.indexOf("receiptSettingsSchema.safeParse(input)"));
-  assert.match(settingsBody, /supabase\.rpc\(POS_RECEIPT_SETTINGS_RPC/);
+  assert.ok(settingsBody.indexOf("requireBusinessContext()") < settingsBody.indexOf("updateReceiptSettings({ context, input })"));
   assert.match(settingsBody, /revalidatePath\("\/back-office\/receipt-settings"\)/);
   assert.ok(deliveryBody.indexOf("requireBusinessContext()") < deliveryBody.indexOf("queueReceiptDelivery({ context, input })"));
   assert.match(deliveryBody, /revalidatePath\("\/back-office\/receipts"\)/);
   assert.match(deliveryBody, /revalidatePath\(`\/back-office\/receipts\/\$\{receiptId\}`\)/);
   assert.match(schema, /@tindio\/contracts\/receipt-settings/);
   assert.match(schema, /@tindio\/contracts\/receipt-delivery/);
+  assert.ok(service.indexOf("hasPermission(context, \"settings.manage\")") < service.indexOf("receiptSettingsSchema.safeParse(input)"));
+  assert.match(service, /supabase\.rpc\(POS_RECEIPT_SETTINGS_RPC/);
   assert.ok(service.indexOf("hasPermission(context, \"receipts.reprint\")") < service.indexOf("receiptDeliverySchema.safeParse(input)"));
   assert.match(service, /supabase\.rpc\(POS_RECEIPT_DELIVERY_RPC/);
   assert.match(service, /receiptDeliverySuccessMessage\(result\)/);
 });
 
-test("Backend receipt-administration oracle remains network- and route-independent", async () => {
+test("Backend receipt-administration oracle remains network-independent beside owned routes", async () => {
   const oracle = await read("apps/backend/src/pos/receipt-administration-compatibility.ts");
   for (const value of [
     "RECEIPT_ADMINISTRATION_COMPATIBILITY_CONTRACT",
@@ -68,8 +68,8 @@ test("Backend receipt-administration oracle remains network- and route-independe
   assert.doesNotMatch(oracle, /fetch\(|createPosReadRuntime|createNeonDataApiFetch|@supabase|@neon|process\.env/);
   for (const path of [
     "apps/backend/api/pos/v2/receipt-settings.ts",
-    "apps/backend/api/pos/v2/receipts/delivery.ts",
-  ]) assert.equal(existsSync(new URL(`../${path}`, import.meta.url)), false);
+    "apps/backend/api/pos/v2/receipts/[receiptId]/delivery.ts",
+  ]) assert.equal(existsSync(new URL(`../${path}`, import.meta.url)), true);
 });
 
 test("database authority retains settings snapshots and delivery scope, replay, and immutable custody", async () => {
@@ -95,7 +95,7 @@ test("database authority retains settings snapshots and delivery scope, replay, 
   }
 });
 
-test("D40 adds no routes or modes and leaves adjacent mutation ownership unchanged", async () => {
+test("D40 contracts remain intact after D41 ownership and adjacent mutations stay unchanged", async () => {
   const [action, exchangeRoute, attendance, refund, backendReadme] = await Promise.all([
     read("src/features/receipts/improvement-6-actions.ts"),
     read("apps/backend/api/pos/v2/exchanges/link.ts"),
@@ -108,5 +108,5 @@ test("D40 adds no routes or modes and leaves adjacent mutation ownership unchang
   assert.match(action, /export async function queueReceiptDeliveryAction/);
   for (const mutation of [exchangeRoute, attendance, refund]) assert.match(mutation, /export async function POST/);
   assert.match(backendReadme, /Slice D40 receipt-administration compatibility oracle/);
-  assert.doesNotMatch(backendReadme, /TINDIO_RECEIPT_(?:SETTINGS|DELIVERY)_MODE/);
+  assert.match(backendReadme, /Slice D40 receipt-administration compatibility oracle/);
 });

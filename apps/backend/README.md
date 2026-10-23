@@ -87,6 +87,11 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
   `POST /api/pos/v2/attendance/clock-out` own context-first time-clock gates,
   assigned-store/employee PIN validation, request replay, open-register-shift
   protection, and audited time-entry effects through the same boundary.
+- `POST /api/pos/v2/receipt-settings` and
+  `POST /api/pos/v2/receipts/:receiptId/delivery` own context-first settings and
+  reprint permissions, bounded receipt-layout and recipient input, future-
+  receipt snapshot configuration, and idempotent immutable delivery-outbox
+  effects through the same boundary.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`,
@@ -108,7 +113,9 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_SYNC_PUSH_MODE=owned`, and
 `TINDIO_REFUND_MODE=owned`, and
 `TINDIO_TRANSFER_RECEIPT_MODE=owned`, and
-`TINDIO_ATTENDANCE_MUTATION_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_ATTENDANCE_MUTATION_MODE=owned`, and
+`TINDIO_RECEIPT_SETTINGS_MODE=owned` plus
+`TINDIO_RECEIPT_DELIVERY_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -342,6 +349,16 @@ error mapping, revalidation, and exact result messages. No Backend receipt-
 settings or delivery route or runtime mode exists; both Server Actions remain
 authoritative, and sale exchange, shift custody, client origins, and adjacent
 mutations remain unchanged.
+
+Slice D41 Backend-owned receipt administration uses those frozen contracts in
+two isolated owned commands and a shared allowlisted Web rollback proxy.
+Supabase verifies bearer claims while business context and both receipt RPCs
+use only Neon's external-JWT Data API. The database retains settings permission
+and future-snapshot custody plus receipt scope, active-employee custody, actor-
+and-payload replay, and immutable delivery-outbox effects. Both Server Actions
+and Web routes remain available for rollback; client origins, schema,
+deployment, authentication-provider ownership, sale exchange, shifts, and
+adjacent mutations remain unchanged.
 
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,

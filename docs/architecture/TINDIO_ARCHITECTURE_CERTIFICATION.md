@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D35 COMPLETE; BACKEND-OWNED TRANSFER RECEIPT CERTIFIED**
+Status: **SLICE D41 COMPLETE; BACKEND-OWNED RECEIPT ADMINISTRATION CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, Slices D1-D9 Backend-owned bootstrap/reference/catalogue/modifiers/customer-search/receipt-search/receipt-detail/attendance-employee/live-state reads with proxy rollback, the Slice D10 customer-display mutation compatibility boundary, Slice D11 Backend-owned customer-display update with proxy rollback, the Slice D12 favorite-tile mutation compatibility boundary, Slice D13 Backend-owned favorite-tile update with proxy rollback, the Slice D14 customer-creation mutation compatibility boundary, Slice D15 Backend-owned customer creation with proxy rollback, the Slice D16 open-ticket save mutation compatibility boundary, Slice D17 Backend-owned open-ticket save with proxy rollback, the Slice D18 open-ticket cancellation mutation compatibility boundary, Slice D19 Backend-owned open-ticket cancellation with proxy rollback, the Slice D20 open-ticket line-movement compatibility boundary, Slice D21 Backend-owned open-ticket line movement with proxy rollback, the Slice D22 open-ticket split compatibility boundary, Slice D23 Backend-owned open-ticket split with proxy rollback, the Slice D24 open-ticket merge compatibility boundary, Slice D25 Backend-owned open-ticket merge with proxy rollback, the Slice D26 checkout compatibility boundary, Slice D27 Backend-owned checkout with proxy rollback, the Slice D28 offline-checkout compatibility boundary, Slice D29 Backend-owned offline checkout with proxy rollback, the Slice D30 sync-push compatibility boundary, Slice D31 Backend-owned sync push with proxy rollback, the Slice D32 refund compatibility boundary, Slice D33 Backend-owned refund with proxy rollback, the Slice D34 transfer-receipt compatibility boundary, and Slice D35 Backend-owned transfer receipt with proxy rollback
+Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D41 through Backend-owned receipt settings and digital receipt delivery with Web rollback
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -638,6 +638,21 @@ Database: **CANONICAL NEON UNCHANGED**
   settings or delivery route or runtime mode, schema, deployment,
   authentication provider, sale exchange, shift custody, client origin, or
   adjacent mutation changed.
+- Backend `POST /api/pos/v2/receipt-settings` and
+  `POST /api/pos/v2/receipts/:receiptId/delivery` now own the seventeenth and
+  eighteenth bounded mutations while preserving both Server Actions and direct
+  Web routes as rollback surfaces.
+- The owned handlers preserve context-first authentication, settings/reprint
+  permission precedence, exact RPC projections, dynamic receipt identity,
+  actor-and-payload delivery replay, future-only receipt-layout snapshots,
+  immutable delivery-outbox custody, approved database errors, and exact result
+  messages.
+- Supabase verifies bearer claims while business context and both mutation RPCs
+  use only Neon's external-JWT Data API. The shared rollback proxy rejects
+  loops and forwards only allowlisted headers; cookies and ambient device
+  credentials do not cross the boundary. Client origins, schema, deployment,
+  authentication-provider ownership, sale exchange, shifts, and adjacent
+  mutations remain unchanged.
 
 ## Results
 
@@ -646,7 +661,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (618/618)** |
+| Backend behavior and contracts | **PASS (643/643)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -688,10 +703,11 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend sale-exchange compatibility boundary | **PASS (5/5)** |
 | Backend sale-exchange ownership/rollback boundary | **PASS (5/5)** |
 | Backend receipt-administration compatibility boundary | **PASS (5/5)** |
+| Backend receipt-administration ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
-| Next.js production build | **PASS (91 routes)** |
+| Next.js production build | **PASS (92 routes)** |
 | Android export | **PASS** |
 | Device contract compatibility | **PASS (3/3)** |
 | Sync-control contract compatibility | **PASS (3/3)** |
@@ -711,7 +727,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (229/229 automated commands)** |
+| Static catalogue | **PASS (230/230 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -744,12 +760,17 @@ and delivery contracts, an isolated compatibility oracle, and a certification
 gate. Both Next.js Server Actions remain authoritative; no Backend receipt-
 settings or delivery route, runtime mode, schema, credential, provider setting,
 deployment, or live client cutover was added.
+The D41 Backend receipt-administration boundary is also undeployed; both Server
+Actions and Web rollback routes remain intact. D41 adds no schema, credential,
+provider setting, deployment, or live client cutover. The audited post-D41
+inventory retains 16 Web-owned POS v2 routes, so Phase D remains in progress.
 
 ## Next gate
 
-Begin Slice D41 by moving only receipt-settings updates and digital-receipt
-queueing behind explicit Backend-owned/proxy boundaries. Preserve the complete
-D40 contract, both existing Server Actions as rollback, database authority,
-settings snapshots, immutable delivery outbox custody, deployed client origins,
-and authentication-provider ownership. Do not change sale exchange, shift
-custody, or adjacent mutations in that ownership slice.
+Begin Slice D42 by freezing device validation/enrollment and sync baseline,
+checkpoint, pull, resnapshot, and telemetry in focused platform-neutral
+contracts and network/database-independent Backend oracles. Preserve device,
+store, register, sequence/checkpoint, cursor, resnapshot, and telemetry custody.
+Do not create the remaining Backend device/sync routes or change receipt
+administration, shifts, approvals, stock operations, deployed client origins,
+or authentication-provider ownership in that compatibility slice.

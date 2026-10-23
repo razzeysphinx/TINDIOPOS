@@ -11,6 +11,15 @@ import {
   type ReceiptDeliveryResult,
 } from "@tindio/contracts/receipt-delivery";
 import {
+  POS_RECEIPT_SETTINGS_DATABASE_MESSAGE,
+  POS_RECEIPT_SETTINGS_INPUT_MESSAGE,
+  POS_RECEIPT_SETTINGS_PERMISSION_MESSAGE,
+  POS_RECEIPT_SETTINGS_RPC,
+  POS_RECEIPT_SETTINGS_SUCCESS_MESSAGE,
+  receiptSettingsSchema,
+  type ReceiptSettingsResult,
+} from "@tindio/contracts/receipt-settings";
+import {
   POS_REFUND_DATABASE_MESSAGE,
   POS_REFUND_DATABASE_PERMISSION_MESSAGE,
   POS_REFUND_IDEMPOTENCY_MESSAGE,
@@ -39,6 +48,50 @@ export type RefundSaleActionResult = RefundSaleResult;
 export type ReceiptImprovementActionResult =
   | { ok: true; message: string }
   | { ok: false; message: string };
+
+export async function updateReceiptSettings({
+  context,
+  input,
+}: {
+  context: BusinessContext;
+  input: unknown;
+}): Promise<ReceiptSettingsResult> {
+  if (!hasPermission(context, "settings.manage")) {
+    return { ok: false, message: POS_RECEIPT_SETTINGS_PERMISSION_MESSAGE };
+  }
+  const parsed = receiptSettingsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: POS_RECEIPT_SETTINGS_INPUT_MESSAGE };
+
+  const supabase = await createBusinessContextClient(context);
+  const { data, error } = await supabase.rpc(POS_RECEIPT_SETTINGS_RPC, {
+    target_organization_id: context.organization.id,
+    target_business_name: parsed.data.businessName,
+    target_business_address: parsed.data.businessAddress,
+    target_business_phone: parsed.data.businessPhone,
+    target_business_email: parsed.data.businessEmail,
+    target_business_tax_id: parsed.data.businessTaxId,
+    target_business_website: parsed.data.businessWebsite,
+    target_header_message: parsed.data.headerMessage,
+    target_footer_message: parsed.data.footerMessage,
+    target_paper_width_mm: parsed.data.paperWidthMm,
+    target_show_store_address: parsed.data.showStoreAddress,
+    target_show_store_phone: parsed.data.showStorePhone,
+    target_show_cashier: parsed.data.showCashier,
+    target_show_register: parsed.data.showRegister,
+    target_show_payment_details: parsed.data.showPaymentDetails,
+  });
+  if (error || !data) {
+    return {
+      ok: false,
+      message: receiptDatabaseMessage(
+        error?.code,
+        error?.message,
+        POS_RECEIPT_SETTINGS_DATABASE_MESSAGE,
+      ),
+    };
+  }
+  return { ok: true, message: POS_RECEIPT_SETTINGS_SUCCESS_MESSAGE };
+}
 
 export async function linkSaleExchange({
   context,

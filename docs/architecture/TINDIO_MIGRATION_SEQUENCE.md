@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — NINE READS AND THREE NON-FINANCIAL MUTATIONS OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — D41 COMPLETE; 27 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -533,16 +533,47 @@ Status: **IN PROGRESS**
   client origins, and authentication-provider ownership unchanged.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D41 receipt-settings and delivery ownership
+## Completed Slice D41: receipt-settings and delivery ownership
 
 - Move only receipt-settings updates and digital-receipt queueing behind
   explicit Backend-owned/proxy boundaries while preserving every frozen D40
   contract and both existing Server Actions as rollback.
+  **IMPLEMENTED.**
 - Preserve context-first authentication, permission gates, bounded inputs,
   receipt scope, actor-and-payload replay, settings snapshots, immutable
   delivery outbox custody, database authority, and exact result messages
   through Neon's external-JWT boundary.
+  **IMPLEMENTED.**
 - Keep sale exchange, shift custody, every other financial mutation, deployed
+  client origins, and authentication-provider ownership unchanged.
+  **IMPLEMENTED.**
+
+## Remaining Phase D closure sequence
+
+The post-D41 route inventory has 16 Web-owned POS v2 routes without Backend
+counterparts. Phase D is not complete until each group below has frozen
+compatibility evidence, an owned/proxy boundary, and a final route-inventory
+audit:
+
+- **D42-D43:** device validation/enrollment plus sync baseline, checkpoint,
+  pull, resnapshot, and telemetry compatibility then ownership (7 routes).
+- **D44-D45:** shift open, close, custody, and cash-movement compatibility then
+  ownership (4 routes).
+- **D46-D47:** approval request, approve, and status compatibility then
+  ownership (3 routes).
+- **D48-D49:** cart stock validation and stock-request receipt compatibility
+  then ownership (2 routes).
+- **D50:** Phase D closure audit proving every supported POS v2 route has a
+  Backend owner and Web rollback surface before beginning Neon Auth proof.
+
+## Next smallest safe slice: D42 device and sync compatibility harness
+
+- Freeze the seven existing device/sync routes without moving ownership,
+  including device/store/register scope, sequence/checkpoint and cursor rules,
+  resnapshot behavior, telemetry bounds, exact RPC projections, and responses.
+- Add focused platform-neutral contracts and network/database-independent
+  Backend oracles before creating the remaining Backend device/sync routes.
+- Keep receipt administration, shifts, approvals, stock operations, deployed
   client origins, and authentication-provider ownership unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without

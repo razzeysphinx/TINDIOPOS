@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+export const POS_RECEIPT_SETTINGS_PATH = "/api/pos/v2/receipt-settings" as const;
 export const POS_RECEIPT_SETTINGS_RPC = "update_receipt_settings" as const;
 export const POS_RECEIPT_SETTINGS_PERMISSION = "settings.manage" as const;
 export const POS_RECEIPT_SETTINGS_PERMISSION_DATABASE_CODE = "42501" as const;
@@ -9,6 +10,8 @@ export const POS_RECEIPT_SETTINGS_PERMISSION_MESSAGE =
   "You do not have permission to update receipt settings." as const;
 export const POS_RECEIPT_SETTINGS_INPUT_MESSAGE =
   "Check the receipt business information and layout values." as const;
+export const POS_RECEIPT_SETTINGS_REQUEST_INVALID_MESSAGE =
+  "The request data is invalid." as const;
 export const POS_RECEIPT_SETTINGS_DATABASE_PERMISSION_MESSAGE =
   "You do not have permission to perform this receipt action." as const;
 export const POS_RECEIPT_SETTINGS_DATABASE_MESSAGE =

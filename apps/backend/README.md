@@ -403,6 +403,17 @@ authority. All four Next.js handlers remain available for rollback; deployment,
 client origins, schema, Auth ownership, approvals, and stock operations remain
 unchanged.
 
+The Slice D46 approval-control compatibility oracle is network- and database-
+independent. It freezes approval request, manager-PIN approval, and request
+status across three Next.js routes: context-first authentication, dynamic path
+identity, supported operations, reason and credential bounds, exact RPC and
+status-query projections, approval-rule and store scope, requester/approver
+separation, PIN lockout-safe errors, pending-request reuse, expiry conversion,
+terminal states, audit effects, and exact response messages. All three Web
+routes remain authoritative; no Backend approval route or runtime mode was
+added, and shift ownership, stock operations, schema, deployment, client
+origins, and Auth ownership are unchanged.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

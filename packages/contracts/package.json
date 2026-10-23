@@ -40,6 +40,10 @@
       "types": "./src/attendance.ts",
       "default": "./src/attendance.ts"
     },
+    "./approval-control": {
+      "types": "./src/approval-control.ts",
+      "default": "./src/approval-control.ts"
+    },
     "./attendance-mutation": {
       "types": "./src/attendance-mutation.ts",
       "default": "./src/attendance-mutation.ts"

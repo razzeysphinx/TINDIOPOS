@@ -8,6 +8,7 @@ export * from "./business";
 export * from "./checkout";
 export * from "./device";
 export * from "./attendance";
+export * from "./approval-control";
 export * from "./attendance-mutation";
 export * from "./cart";
 export * from "./customer-display";

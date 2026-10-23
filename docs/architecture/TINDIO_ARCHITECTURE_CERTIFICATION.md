@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D45 COMPLETE; BACKEND SHIFT CONTROL CERTIFIED**
+Status: **SLICE D46 COMPLETE; APPROVAL-CONTROL COMPATIBILITY CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D45 through Backend-owned shift open, close, custody, and cash movement
+Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D46 through frozen approval request, manager approval, and status compatibility
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -688,7 +688,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (698/698)** |
+| Backend behavior and contracts | **PASS (708/708)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -735,6 +735,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend device/sync-control ownership/rollback boundary | **PASS (5/5)** |
 | Backend shift-control compatibility boundary | **PASS (5/5)** |
 | Backend shift-control ownership boundary | **PASS (5/5)** |
+| Backend approval-control compatibility boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -758,7 +759,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (234/234 automated commands)** |
+| Static catalogue | **PASS (235/235 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -809,12 +810,19 @@ no schema, provider setting, deployment, or live client cutover; it forwards
 device credentials only for open, close, and custody RPCs whose database checks
 require them. The audited post-D45 inventory retains 5 Web-owned POS v2 routes,
 so Phase D remains in progress.
+The D46 approval-control slice adds only focused shared contracts, Web schema
+adoption, an isolated compatibility oracle, and a certification gate. All three
+Next.js approval routes remain authoritative; no Backend approval route,
+runtime mode, schema, provider setting, deployment, or live client cutover was
+added. The audited post-D46 inventory therefore still retains 5 Web-owned POS
+v2 routes and Phase D remains in progress.
 
 ## Next gate
 
-Begin Slice D46 by freezing approval request, approve, and status behavior
-without moving ownership. Preserve context-first authorization, permission
-precedence, request and actor custody, expiry and decision state, exact RPC
-projections, database effects, response envelopes, and all three authoritative
-Next.js routes. Do not change shift ownership, stock operations, deployed client
-origins, schema, or authentication-provider ownership.
+Begin Slice D47 by moving only the three D46-frozen approval request, manager-
+PIN approval, and status routes behind explicit Backend-owned/proxy boundaries.
+Preserve context-first authorization, dynamic path identity, request/actor/store
+custody, expiry and decision state, PIN lockout-safe errors, exact RPC/query
+projections, response envelopes, and every Next.js route as rollback. Do not
+change shift ownership, stock operations, deployed client origins, schema, or
+authentication-provider ownership.

@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — D45 COMPLETE; 38 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — D46 COMPLETE; 38 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -605,6 +605,20 @@ Status: **IN PROGRESS**
   client origins, and Supabase authentication-provider ownership unchanged.
   **IMPLEMENTED.**
 
+## Completed Slice D46: approval-control compatibility harness
+
+- Freeze approval request, manager-PIN approval, and status without moving
+  ownership, including context-first authentication, dynamic request identity,
+  supported operations, bounded reasons and credentials, rule/store/requester/
+  approver custody, PIN lockout, pending-request reuse, expiry, terminal states,
+  exact database projections, and response envelopes. **IMPLEMENTED.**
+- Add focused platform-neutral approval-control contracts plus a network/
+  database-independent Backend oracle covering all three routes. **IMPLEMENTED.**
+- Keep all three Next.js routes authoritative and add no Backend approval route
+  or runtime mode. Shift ownership, stock operations, deployed client origins,
+  schema, and authentication-provider ownership remain unchanged.
+  **IMPLEMENTED.**
+
 ## Remaining Phase D closure sequence
 
 The post-D45 route inventory has 5 Web-owned POS v2 routes without Backend
@@ -612,21 +626,21 @@ counterparts. Phase D is not complete until each group below has frozen
 compatibility evidence, an owned/proxy boundary, and a final route-inventory
 audit:
 
-- **D46-D47:** approval request, approve, and status compatibility then
-  ownership (3 routes).
+- **D47:** approval request, approve, and status ownership (3 routes;
+  compatibility frozen in D46).
 - **D48-D49:** cart stock validation and stock-request receipt compatibility
   then ownership (2 routes).
 - **D50:** Phase D closure audit proving every supported POS v2 route has a
   Backend owner and Web rollback surface before beginning Neon Auth proof.
 
-## Next smallest safe slice: D46 approval-control compatibility
+## Next smallest safe slice: D47 approval-control ownership
 
-- Freeze approval request, approve, and status behavior without moving
-  ownership: context-first authentication, permission precedence, request and
-  actor custody, expiry and decision state, exact RPC projections, and response
-  envelopes.
-- Add a focused platform-neutral approval-control contract and isolated Backend
-  oracle while retaining all three Next.js routes as authoritative.
+- Move only the three D46-frozen approval routes behind explicit Backend-owned/
+  proxy boundaries while preserving their Next.js routes as rollback.
+- Preserve context-first authentication, dynamic path identity, operation and
+  credential bounds, request/actor/store custody, expiry and decision state,
+  exact RPC/query projections, PIN lockout-safe errors, and response envelopes
+  through Neon's external-JWT boundary.
 - Keep shift ownership, stock operations, deployed client origins, schema, and
   authentication-provider ownership unchanged.
 

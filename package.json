@@ -78,6 +78,7 @@
     "test:architecture-backend-receipt-administration-compatibility": "pnpm backend:test && node --test scripts/architecture-backend-receipt-administration-compatibility-check.mjs",
     "test:architecture-backend-receipt-administration": "pnpm backend:test && node --test scripts/architecture-backend-receipt-administration-ownership-check.mjs",
     "test:architecture-backend-device-sync-compatibility": "pnpm backend:test && node --test scripts/architecture-backend-device-sync-compatibility-check.mjs",
+    "test:architecture-backend-device-sync": "pnpm backend:test && node --test scripts/architecture-backend-device-sync-ownership-check.mjs",
     "test:phase-06-native-foundation": "node --test scripts/phase-06-native-foundation-check.mjs",
     "test:phase-06-provider-neutral-device-runtime": "node --test scripts/phase-06-provider-neutral-device-runtime-check.mjs",
     "test:phase-06-device-enrollment": "node --test scripts/phase-06-device-enrollment-check.mjs",

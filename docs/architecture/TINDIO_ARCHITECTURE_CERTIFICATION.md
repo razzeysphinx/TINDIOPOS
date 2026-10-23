@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D42 COMPLETE; DEVICE AND SYNC-CONTROL COMPATIBILITY CERTIFIED**
+Status: **SLICE D43 COMPLETE; DEVICE AND SYNC-CONTROL OWNERSHIP CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D42 through frozen device validation/enrollment and sync-control compatibility
+Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D43 through Backend-owned device validation/enrollment and sync control
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -662,10 +662,14 @@ Database: **CANONICAL NEON UNCHANGED**
   safe checkpoint/revision handling, retained-cursor expiry, authoritative
   resnapshot scope, employee-bound telemetry, and exact telemetry projection
   without network or database access.
-- All seven existing Next.js routes remain authoritative. No Backend device or
-  sync-control route or runtime mode, schema, deployment, authentication
-  provider, receipt administration, shift, approval, stock operation, client
-  origin, or adjacent mutation changed.
+- Backend now owns all seven frozen device/sync POST paths through one isolated
+  command boundary and one allowlisted rollback proxy; the existing Next.js
+  handlers remain intact.
+- Supabase continues to verify bearer claims while business context and all
+  device/sync RPCs use Neon's external-JWT Data API. Device credentials are
+  attached only to the RPC clients that enforce device custody.
+- No schema, deployment, authentication provider, shift, approval, stock
+  operation, client origin, or adjacent mutation changed.
 
 ## Results
 
@@ -674,7 +678,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (653/653)** |
+| Backend behavior and contracts | **PASS (670/670)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -718,6 +722,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend receipt-administration compatibility boundary | **PASS (5/5)** |
 | Backend receipt-administration ownership/rollback boundary | **PASS (5/5)** |
 | Backend device/sync-control compatibility boundary | **PASS (5/5)** |
+| Backend device/sync-control ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -741,7 +746,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (231/231 automated commands)** |
+| Static catalogue | **PASS (232/232 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -778,20 +783,20 @@ The D41 Backend receipt-administration boundary is also undeployed; both Server
 Actions and Web rollback routes remain intact. D41 adds no schema, credential,
 provider setting, deployment, or live client cutover. The audited post-D41
 inventory retains 16 Web-owned POS v2 routes, so Phase D remains in progress.
-The D42 device/sync-control slice adds only shared contract vocabulary, Web
-adoption, an isolated compatibility oracle, and a certification gate. All seven
-Next.js routes remain authoritative; no Backend device/sync route, runtime
-mode, schema, credential, provider setting, deployment, or live client cutover
-was added. The audited post-D42 inventory therefore still retains 16 Web-owned
-POS v2 routes and Phase D remains in progress.
+The D42 device/sync-control slice added only shared contract vocabulary, Web
+adoption, an isolated compatibility oracle, and a certification gate. The D43
+Backend boundary is undeployed and all seven Web rollback routes remain intact.
+D43 adds no schema, provider setting, deployment, or live client cutover; it
+forwards validated device credentials only to database RPCs whose custody
+checks require them. The audited post-D43 inventory retains 9 Web-owned POS v2
+routes, so Phase D remains in progress.
 
 ## Next gate
 
-Begin Slice D43 by moving only the seven D42-frozen device validation,
-enrollment, baseline, checkpoint, pull, resnapshot, and telemetry routes behind
-explicit Backend-owned/proxy boundaries. Preserve context-first authorization,
-device/store/register custody, sequence/checkpoint and cursor behavior,
-resnapshot scope, telemetry bounds, exact RPC projections, response envelopes,
-and every existing Next.js route as rollback. Do not change receipt
-administration, shifts, approvals, stock operations, deployed client origins,
-schema, or authentication-provider ownership.
+Begin Slice D44 by freezing shift open, close, custody, and cash-movement
+behavior in focused shared contracts and an isolated Backend compatibility
+oracle without moving route ownership. Preserve context-first authorization,
+permission and store/register/employee custody, money bounds, idempotency,
+database effects, and exact response envelopes. Do not change approvals, stock
+operations, deployed client origins, schema, or authentication-provider
+ownership.

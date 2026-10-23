@@ -371,6 +371,16 @@ added, Mobile keeps its current API origin, and receipt administration, shifts,
 approvals, stock operations, schema, and authentication-provider ownership are
 unchanged.
 
+Slice D43 Backend-owned device and sync control uses that frozen contract in
+seven isolated POST handlers with one shared allowlisted Web rollback proxy.
+Supabase verifies bearer claims while business context and device/sync RPCs
+use only Neon's external-JWT Data API; validated device credentials are
+forwarded only for RPCs whose database custody checks require them. The
+database retains organization, employee, device, store, register, checkpoint,
+retention, resnapshot, and telemetry authority. All seven Next.js handlers
+remain available for rollback, client origins are unchanged, and shifts,
+approvals, stock operations, schema, and deployment remain untouched.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

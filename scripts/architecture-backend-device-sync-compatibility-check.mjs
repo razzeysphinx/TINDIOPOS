@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -56,7 +55,7 @@ test("all seven Web routes retain context-first authority and shared contracts",
   assert.ok(validationBody.indexOf("input.organizationId!==context.organization.id") < validationBody.indexOf("createBusinessContextClient"));
 });
 
-test("Backend oracle is isolated and no device or sync-control route owns traffic yet", async () => {
+test("Backend oracle remains isolated after device and sync-control ownership", async () => {
   const oracle = await read("apps/backend/src/pos/device-sync-compatibility.ts");
   for (const value of [
     "DEVICE_SYNC_COMPATIBILITY_CONTRACT", "validateDeviceRequest", "mapDeviceValidationResult",
@@ -65,12 +64,9 @@ test("Backend oracle is isolated and no device or sync-control route owns traffi
     "validateSyncTelemetry", "toSyncTelemetryRpcArguments",
   ]) assert.match(oracle, new RegExp(`\\b${value}\\b`));
   assert.doesNotMatch(oracle, /fetch\(|createPosReadRuntime|createNeonDataApiFetch|@supabase|@neon|process\.env/);
-  for (const path of [
-    "apps/backend/api/pos/v2/device.ts", "apps/backend/api/pos/v2/device/enroll.ts",
-    "apps/backend/api/pos/v2/sync/baseline.ts", "apps/backend/api/pos/v2/sync/checkpoint.ts",
-    "apps/backend/api/pos/v2/sync/pull.ts", "apps/backend/api/pos/v2/sync/resnapshot.ts",
-    "apps/backend/api/pos/v2/sync/telemetry.ts",
-  ]) assert.equal(existsSync(new URL(`../${path}`, import.meta.url)), false, `${path} must wait for D43`);
+  const service = await read("apps/backend/src/pos/device-sync-service.ts");
+  assert.match(service, /mode === ["']proxy["']/);
+  assert.match(service, /handleOwnedDeviceSync/);
 });
 
 test("database authority preserves device, checkpoint, cursor, resnapshot, and telemetry custody", async () => {

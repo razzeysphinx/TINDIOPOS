@@ -92,6 +92,12 @@ This workspace is the independent TINDIO HTTP backend boundary. It uses the Web
   reprint permissions, bounded receipt-layout and recipient input, future-
   receipt snapshot configuration, and idempotent immutable delivery-outbox
   effects through the same boundary.
+- `POST /api/pos/v2/approvals/request`,
+  `POST /api/pos/v2/approvals/:approvalRequestId/approve`, and
+  `GET /api/pos/v2/approvals/:approvalRequestId` own context-first approval
+  preparation, manager-PIN authorization, and organization-scoped status reads
+  through the same boundary while database functions and RLS retain rule,
+  requester/approver, store, expiry, lockout, and audit authority.
 
 The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_REFERENCE_READ_MODE=owned`, `TINDIO_CATALOG_READ_MODE=owned`,
@@ -115,7 +121,9 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_TRANSFER_RECEIPT_MODE=owned`, and
 `TINDIO_ATTENDANCE_MUTATION_MODE=owned`, and
 `TINDIO_RECEIPT_SETTINGS_MODE=owned` plus
-`TINDIO_RECEIPT_DELIVERY_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_RECEIPT_DELIVERY_MODE=owned`, `TINDIO_DEVICE_SYNC_MODE=owned`,
+`TINDIO_SHIFT_CONTROL_MODE=owned`, and
+`TINDIO_APPROVAL_CONTROL_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -413,6 +421,16 @@ terminal states, audit effects, and exact response messages. All three Web
 routes remain authoritative; no Backend approval route or runtime mode was
 added, and shift ownership, stock operations, schema, deployment, client
 origins, and Auth ownership are unchanged.
+
+Slice D47 Backend-owned approval control uses that frozen contract in three
+isolated handlers with one method-aware, allowlisted Web rollback proxy.
+Supabase verifies bearer claims while business context, approval request and
+manager-approval RPCs, and organization-scoped status reads use only Neon's
+external-JWT Data API. The database retains approval-rule, requesting employee,
+store/register, requester/approver separation, manager permission, PIN lockout,
+pending-request reuse, expiry, terminal-state, and audit authority. All three
+Next.js handlers remain available for rollback; deployment, client origins,
+schema, Auth ownership, shift ownership, and stock operations remain unchanged.
 
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,

@@ -29,11 +29,11 @@ test("all three Web routes retain context-first authority and shared schemas", a
   for (const marker of ["request_manager_approval", "approve_manager_approval", '.from("approval_requests")', '.select("status, expires_at")', ".maybeSingle()", "Date.now()"] ) assert.ok(service.includes(marker), `missing ${marker}`);
 });
 
-test("Backend approval oracle is isolated and ownership waits for D47", async () => {
+test("Backend approval oracle remains isolated beside D47 ownership", async () => {
   const oracle = await read("apps/backend/src/pos/approval-control-compatibility.ts");
   for (const value of ["APPROVAL_CONTROL_COMPATIBILITY_CONTRACT", "validateApprovalRequest", "mapApprovalRequestResult", "validateApprovalApprove", "mapApprovalApproveResult", "validateApprovalStatus", "mapApprovalStatusResult"]) assert.match(oracle, new RegExp(`\\b${value}\\b`));
   assert.doesNotMatch(oracle, /fetch\(|createNeonDataApiFetch|@supabase|@neon|process\.env/);
-  for (const path of ["request.ts", "[approvalRequestId].ts", "[approvalRequestId]/approve.ts"]) assert.equal(existsSync(new URL(`../apps/backend/api/pos/v2/approvals/${path}`, import.meta.url)), false, `${path} must wait for D47`);
+  for (const path of ["request.ts", "[approvalRequestId].ts", "[approvalRequestId]/approve.ts"]) assert.equal(existsSync(new URL(`../apps/backend/api/pos/v2/approvals/${path}`, import.meta.url)), true, `${path} must be owned in D47`);
 });
 
 test("database authority retains approval rule, actor, store, expiry, PIN, and audit custody", async () => {

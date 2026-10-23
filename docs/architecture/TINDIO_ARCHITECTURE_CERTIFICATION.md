@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D48 COMPLETE; STOCK-OPERATION COMPATIBILITY CERTIFIED**
+Status: **SLICE D49 COMPLETE; STOCK-OPERATION OWNERSHIP CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D48 through frozen cart stock validation and stock-request receipt compatibility
+Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D49 through Backend-owned cart stock validation and stock-request receipt
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -702,6 +702,15 @@ Database: **CANONICAL NEON UNCHANGED**
   database errors, and idempotent replay without network or database access.
 - Both Next.js stock routes remain authoritative. No Backend stock route or
   runtime mode, schema, deployment, Auth provider, or client origin changed.
+- Backend now owns both frozen stock-operation routes through isolated POST
+  handlers and one exact-path, method-aware Web rollback proxy. Both existing
+  Next.js handlers remain intact.
+- Supabase continues to verify bearer claims while business context, cart stock
+  validation, and stock-request receipt use only Neon's external-JWT Data API.
+  Database functions and RLS retain negative-stock, open-shift, component,
+  request/destination, received-only inventory, replay, and audit custody.
+- No schema, deployment, authentication provider, client origin, or adjacent
+  mutation changed.
 
 ## Results
 
@@ -710,7 +719,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (749/749)** |
+| Backend behavior and contracts | **PASS (776/776)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -760,6 +769,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend approval-control compatibility boundary | **PASS (5/5)** |
 | Backend approval-control ownership/rollback boundary | **PASS (5/5)** |
 | Backend stock-operation compatibility boundary | **PASS (5/5)** |
+| Backend stock-operation ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -783,7 +793,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (236/237 automated commands); 1 ENVIRONMENT-BLOCKED** |
+| Static catalogue | **PASS (237/238 automated commands); 1 ENVIRONMENT-BLOCKED** |
 | Local Supabase/Docker source connectivity | **BLOCKED**; Docker CLI/daemon unavailable in this environment |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -856,13 +866,19 @@ made-to-order components, request/destination scope, received-only inventory,
 discrepancies, idempotent replay, and audit effects. The audited post-D48
 inventory still retains 2 Web-owned POS v2 routes, so Phase D remains in
 progress.
+The D49 Backend stock-operation boundary is undeployed and both Next.js
+rollback routes remain intact. D49 adds no schema, provider setting,
+deployment, credential, or live client cutover; Supabase remains the Auth
+issuer while the owned runtime sends database work only to Neon's external-JWT
+Data API. The audited post-D49 inventory retains 0 Web-owned POS v2 routes
+without Backend counterparts. Phase D remains in progress only until the D50
+closure audit certifies the complete owner and rollback inventory.
 
 ## Next gate
 
-Begin Slice D49 by moving only the two D48-frozen cart stock validation and
-stock-request receipt routes behind explicit Backend-owned/proxy boundaries.
-Preserve context-first authentication, dynamic request identity, assigned-store,
-open-shift, destination, quantity, discrepancy, exact RPC projection,
-idempotency/replay, database-error, and response-envelope parity through Neon's
-external-JWT Data API. Keep both Next.js routes as rollback and do not change
-deployed client origins, schema, or authentication-provider ownership.
+Begin Slice D50 with a Phase D closure audit. Enumerate every supported POS v2
+route and prove that it has a Backend owner and intact Web rollback surface;
+verify every mode and proxy is explicit, method-aware, allowlisted, and cannot
+forward unsupported routes or ambient credentials. Freeze that inventory before
+the separately gated Phase E Neon Auth proof. Do not deploy or cut over a client
+origin.

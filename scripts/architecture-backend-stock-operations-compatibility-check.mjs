@@ -26,13 +26,13 @@ test("both Web routes retain context-first authority and shared contracts", asyn
   assert.match(schema, /@tindio\/contracts\/stock-request-receipt/);
 });
 
-test("Backend stock oracle stays isolated and D48 creates no owned route or runtime mode", async () => {
+test("Backend stock oracle remains isolated beside D49 ownership", async () => {
   const oracle = await read("apps/backend/src/pos/stock-operations-compatibility.ts");
   for (const value of ["STOCK_OPERATIONS_COMPATIBILITY_CONTRACT", "validateCartStockOperation", "mapCartStockValidationResult", "validateStockRequestReceipt", "mapStockRequestReceiptResult"]) assert.match(oracle, new RegExp(`\\b${value}\\b`));
   assert.doesNotMatch(oracle, /fetch\(|createNeonDataApiFetch|@supabase|@neon|process\.env/);
-  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/cart/validate-stock.ts", import.meta.url)), false);
-  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/stock-requests/[stockRequestId]/receive.ts", import.meta.url)), false);
-  assert.equal(existsSync(new URL("../apps/backend/src/pos/stock-operations-runtime.ts", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/cart/validate-stock.ts", import.meta.url)), true);
+  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/stock-requests/[stockRequestId]/receive.ts", import.meta.url)), true);
+  assert.equal(existsSync(new URL("../apps/backend/src/pos/stock-operations-runtime.ts", import.meta.url)), true);
 });
 
 test("database authority retains stock policy, shift, destination, replay, discrepancy, and audit custody", async () => {
@@ -42,7 +42,7 @@ test("database authority retains stock policy, shift, destination, replay, discr
   assert.ok(baseline.includes('grant all on function "public"."receive_stock_request"'));
 });
 
-test("D47 ownership remains while both final stock routes stay in Web", async () => {
+test("D47 ownership and both stock Web rollback routes remain", async () => {
   for (const path of ["request.ts", "[approvalRequestId].ts", "[approvalRequestId]/approve.ts"]) assert.equal(existsSync(new URL(`../apps/backend/api/pos/v2/approvals/${path}`, import.meta.url)), true);
   for (const path of ["src/app/api/pos/v2/cart/validate-stock/route.ts", "src/app/api/pos/v2/stock-requests/[stockRequestId]/receive/route.ts"]) assert.match(await read(path), /getPosV2BusinessContext/);
   assert.match(await read("apps/backend/README.md"), /Slice D48 stock-operation compatibility oracle/);

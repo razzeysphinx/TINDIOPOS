@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — D48 COMPLETE; 41 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — D49 COMPLETE; 43 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -649,28 +649,39 @@ Status: **IN PROGRESS**
   runtime mode. Existing Backend ownership, deployed client origins, schema,
   and authentication-provider ownership remain unchanged. **IMPLEMENTED.**
 
+## Completed Slice D49: stock-operation ownership
+
+- Add Backend-owned POST handlers for cart stock validation and stock-request
+  receipt behind an explicit owned/proxy service boundary and a method-aware,
+  exact-path rollback proxy. **IMPLEMENTED.**
+- Continue using Supabase to verify bearer claims while business context and
+  both stock RPCs use only Neon's external-JWT Data API. Preserve context-first
+  authentication, dynamic request identity, assigned-store, open-shift,
+  destination, quantity, discrepancy, exact RPC projection, database-error,
+  and idempotent-replay parity. **IMPLEMENTED.**
+- Keep both Next.js stock routes available for rollback. Database functions and
+  RLS retain policy, custody, inventory-effect, and audit authority; no schema,
+  deployment, client origin, or authentication provider changed.
+  **IMPLEMENTED.**
+
 ## Remaining Phase D closure sequence
 
-The post-D47 route inventory has 2 Web-owned POS v2 routes without Backend
-counterparts. Phase D is not complete until each group below has frozen
-compatibility evidence, an owned/proxy boundary, and a final route-inventory
-audit:
+The post-D49 route inventory has 0 Web-owned POS v2 routes without Backend
+counterparts. Phase D is not complete until the final route-inventory and
+rollback audit is certified:
 
-- **D49:** cart stock validation and stock-request receipt ownership (2 routes;
-  compatibility frozen in D48).
 - **D50:** Phase D closure audit proving every supported POS v2 route has a
   Backend owner and Web rollback surface before beginning Neon Auth proof.
 
-## Next smallest safe slice: D49 stock-operation ownership
+## Next smallest safe slice: D50 Phase D closure audit
 
-- Move only the two D48-frozen cart stock validation and stock-request receipt
-  routes behind explicit Backend-owned/proxy boundaries.
-- Preserve context-first authentication, dynamic path identity, assigned-store,
-  open-shift, destination, quantity, discrepancy, exact RPC projection,
-  idempotency/replay, and response-envelope parity through Neon's external-JWT
-  Data API.
-- Keep both Next.js routes available as rollback and leave deployed client
-  origins, schema, and authentication-provider ownership unchanged.
+- Enumerate every supported POS v2 route and prove it has a Backend owner and
+  an intact Web rollback surface.
+- Verify every Backend mode and proxy remains explicit, method-aware,
+  allowlisted, and incapable of forwarding an unsupported route or ambient
+  credential.
+- Freeze the completed Phase D inventory before beginning the separately gated
+  Phase E Neon Auth proof. Do not deploy or cut over a client origin.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

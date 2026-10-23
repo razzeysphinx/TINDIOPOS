@@ -14,6 +14,7 @@ import {
 } from "@tindio/contracts/checkout";
 import {
   POS_STOCK_REQUEST_RECEIPT_DATABASE_MESSAGE,
+  POS_STOCK_REQUEST_RECEIPT_ID_INVALID_MESSAGE,
   POS_STOCK_REQUEST_RECEIPT_INPUT_MESSAGE,
   POS_STOCK_REQUEST_RECEIPT_INVENTORY_DISABLED_MESSAGE,
   POS_STOCK_REQUEST_RECEIPT_PATH_PATTERN,
@@ -21,6 +22,7 @@ import {
   POS_STOCK_REQUEST_RECEIPT_PERMISSION_MESSAGE,
   POS_STOCK_REQUEST_RECEIPT_RPC,
   POS_STOCK_REQUEST_RECEIPT_SUCCESS_MESSAGE,
+  posStockRequestReceiptIdSchema,
   receiveStockRequestSchema,
   type ReceiveStockRequestValues,
   type StockRequestReceiptResult,
@@ -137,6 +139,13 @@ export function mapCartStockValidationResult(
 
 export function stockRequestIdFromReceiptPath(pathname: string): string | null {
   return POS_STOCK_REQUEST_RECEIPT_PATH_PATTERN.exec(pathname)?.[1] ?? null;
+}
+
+export function validateStockRequestReceiptId(stockRequestId: unknown) {
+  const parsed = posStockRequestReceiptIdSchema.safeParse(stockRequestId);
+  return parsed.success
+    ? { ok: true as const, stockRequestId: parsed.data }
+    : { ok: false as const, status: 400 as const, result: { ok: false as const, message: POS_STOCK_REQUEST_RECEIPT_ID_INVALID_MESSAGE } };
 }
 
 export function validateStockRequestReceipt(

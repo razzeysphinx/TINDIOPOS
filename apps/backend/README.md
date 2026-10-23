@@ -443,6 +443,15 @@ response envelopes. Both Next.js routes remain authoritative; no Backend stock
 route or runtime mode was added, and existing Backend ownership, schema,
 deployment, client origins, and Auth ownership are unchanged.
 
+Slice D49 Backend-owned stock operations give those two frozen routes explicit
+ownership through isolated POST handlers and one method-aware, exact-path Web
+rollback proxy. Supabase verifies bearer claims while business context, cart
+validation, and request receipt use only Neon's external-JWT Data API. Database
+functions and RLS retain negative-stock policy, open-shift, component,
+request/destination, received-only inventory, idempotent replay, discrepancy,
+and audit custody. Both Next.js handlers remain available for rollback; no
+schema, deployment, client origin, Auth provider, or adjacent mutation changed.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

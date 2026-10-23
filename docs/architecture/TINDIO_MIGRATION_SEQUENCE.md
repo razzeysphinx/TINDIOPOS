@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — D41 COMPLETE; 27 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — D42 COMPLETE; 27 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -548,15 +548,30 @@ Status: **IN PROGRESS**
   client origins, and authentication-provider ownership unchanged.
   **IMPLEMENTED.**
 
+## Completed Slice D42: device and sync-control compatibility harness
+
+- Freeze device validation/enrollment plus sync baseline, checkpoint, pull,
+  resnapshot, and telemetry without moving ownership, including context-first
+  authentication, permissions, organization/employee/device/store/register
+  custody, request bounds, exact RPC projections, cursor expiry, resnapshot
+  scope, telemetry defaults, and response envelopes. **IMPLEMENTED.**
+- Extend the focused platform-neutral device and sync-control contracts and add
+  a network/database-independent Backend oracle covering all seven routes.
+  **IMPLEMENTED.**
+- Keep all seven Next.js routes authoritative and add no Backend device/sync
+  route or runtime mode. Receipt administration, shifts, approvals, stock
+  operations, deployed client origins, schema, and authentication-provider
+  ownership remain unchanged. **IMPLEMENTED.**
+
 ## Remaining Phase D closure sequence
 
-The post-D41 route inventory has 16 Web-owned POS v2 routes without Backend
+The post-D42 route inventory has 16 Web-owned POS v2 routes without Backend
 counterparts. Phase D is not complete until each group below has frozen
 compatibility evidence, an owned/proxy boundary, and a final route-inventory
 audit:
 
-- **D42-D43:** device validation/enrollment plus sync baseline, checkpoint,
-  pull, resnapshot, and telemetry compatibility then ownership (7 routes).
+- **D43:** device validation/enrollment plus sync baseline, checkpoint, pull,
+  resnapshot, and telemetry ownership (7 routes; compatibility frozen in D42).
 - **D44-D45:** shift open, close, custody, and cash-movement compatibility then
   ownership (4 routes).
 - **D46-D47:** approval request, approve, and status compatibility then
@@ -566,13 +581,13 @@ audit:
 - **D50:** Phase D closure audit proving every supported POS v2 route has a
   Backend owner and Web rollback surface before beginning Neon Auth proof.
 
-## Next smallest safe slice: D42 device and sync compatibility harness
+## Next smallest safe slice: D43 device and sync-control ownership
 
-- Freeze the seven existing device/sync routes without moving ownership,
-  including device/store/register scope, sequence/checkpoint and cursor rules,
-  resnapshot behavior, telemetry bounds, exact RPC projections, and responses.
-- Add focused platform-neutral contracts and network/database-independent
-  Backend oracles before creating the remaining Backend device/sync routes.
+- Move only the seven D42-frozen device/sync routes behind explicit Backend-
+  owned/proxy boundaries while preserving their Next.js routes as rollback.
+- Preserve context-first authentication, device/store/register custody,
+  sequence/checkpoint and cursor rules, resnapshot behavior, telemetry bounds,
+  exact RPC projections, response envelopes, and Neon's external-JWT boundary.
 - Keep receipt administration, shifts, approvals, stock operations, deployed
   client origins, and authentication-provider ownership unchanged.
 

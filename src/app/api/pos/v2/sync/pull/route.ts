@@ -1,4 +1,16 @@
 import { NextResponse } from "next/server";
+import {
+  POS_SYNC_CATALOG_RPC,
+  POS_SYNC_CHANGE_WINDOW_RPC,
+  POS_SYNC_CUSTOMER_RPC,
+  POS_SYNC_DEVICE_REJECTED_MESSAGE,
+  POS_SYNC_PULL_DEFAULT_LIMIT,
+  POS_SYNC_PULL_INVALID_MESSAGE,
+  POS_SYNC_PULL_UNAVAILABLE_MESSAGE,
+  POS_SYNC_REFERENCE_RPC,
+  POS_SYNC_RETENTION_RPC,
+  POS_SYNC_VERSION,
+} from "@tindio/contracts/sync-control";
 import type { PosCatalogDelta, PosCustomerDelta, PosReferenceV2Response, PosSyncCursorExpiredResponse, PosSyncPullResponse } from "@/contracts/pos";
 import { syncPullBodySchema, validatedSyncDevice } from "@/features/offline/pos-v2-sync-service";
 import { getPosV2BusinessContext } from "@/lib/auth/pos-v2-business-context";
@@ -12,13 +24,13 @@ export async function POST(request: Request) {
   const resolved = await getPosV2BusinessContext(request);
   if (!resolved.ok) return resolved.response;
   const parsed = syncPullBodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ ok: false, message: "Invalid sync pull request." }, { status: 400, headers });
+  if (!parsed.success) return NextResponse.json({ ok: false, message: POS_SYNC_PULL_INVALID_MESSAGE }, { status: 400, headers });
 
   try {
     const checked = await validatedSyncDevice(resolved.context, parsed.data);
-    if (!checked) return NextResponse.json({ ok: false, message: "POS device validation failed." }, { status: 403, headers });
+    if (!checked) return NextResponse.json({ ok: false, message: POS_SYNC_DEVICE_REJECTED_MESSAGE }, { status: 403, headers });
 
-    const retentionAnswer = await checked.database.rpc("get_pos_sync_retention_state", {
+    const retentionAnswer = await checked.database.rpc(POS_SYNC_RETENTION_RPC, {
       target_organization_id: resolved.context.organization.id,
       target_device_id: checked.device.deviceId,
     });
@@ -31,7 +43,7 @@ export async function POST(request: Request) {
     if (parsed.data.cursor < retainedAfterRevision) {
       const expired: PosSyncCursorExpiredResponse = {
         ok: false,
-        version: 1,
+        version: POS_SYNC_VERSION,
         code: "SYNC_CURSOR_EXPIRED",
         organizationId: resolved.context.organization.id,
         deviceId: checked.device.deviceId,
@@ -43,8 +55,8 @@ export async function POST(request: Request) {
       return NextResponse.json(expired, { status: 409, headers });
     }
 
-    const limit = parsed.data.limit ?? 100;
-    const window = await checked.database.rpc("get_pos_sync_change_window", {
+    const limit = parsed.data.limit ?? POS_SYNC_PULL_DEFAULT_LIMIT;
+    const window = await checked.database.rpc(POS_SYNC_CHANGE_WINDOW_RPC, {
       target_organization_id: resolved.context.organization.id,
       target_device_id: checked.device.deviceId,
       target_after_revision: parsed.data.cursor,
@@ -60,7 +72,7 @@ export async function POST(request: Request) {
     const catalog: PosCatalogDelta[] = [];
     for (const productId of catalogIds) {
       const revision = Math.max(...consumed.filter((row) => row.domain === "CATALOG" && row.entity_id === productId).map((row) => row.revision));
-      const answer = await checked.database.rpc("get_pos_catalog_product_v2", { target_organization_id: resolved.context.organization.id, target_store_id: checked.device.storeId, target_product_id: productId });
+      const answer = await checked.database.rpc(POS_SYNC_CATALOG_RPC, { target_organization_id: resolved.context.organization.id, target_store_id: checked.device.storeId, target_product_id: productId });
       const value = jsonRpcValue<{ items?: PosCatalogDelta["items"] }>(answer.data);
       if (answer.error || !value || !Array.isArray(value.items)) throw new Error(`catalog delta unavailable: ${answer.error?.message ?? "invalid payload"}`);
       catalog.push({ revision, productId, storeId: checked.device.storeId, items: value.items });
@@ -68,7 +80,7 @@ export async function POST(request: Request) {
     const customers: PosCustomerDelta[] = [];
     for (const customerId of customerIds) {
       const revision = Math.max(...consumed.filter((row) => row.domain === "CUSTOMER" && row.entity_id === customerId).map((row) => row.revision));
-      const answer = await checked.database.rpc("get_pos_sync_customer", { target_organization_id: resolved.context.organization.id, target_device_id: checked.device.deviceId, target_customer_id: customerId });
+      const answer = await checked.database.rpc(POS_SYNC_CUSTOMER_RPC, { target_organization_id: resolved.context.organization.id, target_device_id: checked.device.deviceId, target_customer_id: customerId });
       const value = jsonRpcValue<{ customer?: PosCustomerDelta["customer"] }>(answer.data);
       if (answer.error || !value) throw new Error(`customer delta unavailable: ${answer.error?.message ?? "invalid payload"}`);
       customers.push({ revision, customerId, customer: value.customer ?? null });
@@ -76,14 +88,14 @@ export async function POST(request: Request) {
     const referenceRows = consumed.filter((row) => row.domain === "REFERENCE");
     const deviceRow = consumed.some((row) => row.domain === "DEVICE" && row.entity_id === checked.device.deviceId);
     const reference = referenceRows.length ? await (async () => {
-      const answer = await checked.database.rpc("get_pos_reference_bundle_v2", { target_organization_id: resolved.context.organization.id });
+      const answer = await checked.database.rpc(POS_SYNC_REFERENCE_RPC, { target_organization_id: resolved.context.organization.id });
       const snapshot = jsonRpcValue<PosReferenceV2Response>(answer.data);
       if (answer.error || !snapshot) throw new Error(`reference unavailable: ${answer.error?.message ?? "invalid payload"}`);
       return { revision: Math.max(...referenceRows.map((row) => row.revision)), snapshot };
     })() : null;
     const body: PosSyncPullResponse = {
       ok: true,
-      version: 1,
+      version: POS_SYNC_VERSION,
       organizationId: resolved.context.organization.id,
       deviceId: checked.device.deviceId,
       storeId: checked.device.storeId,
@@ -109,6 +121,6 @@ export async function POST(request: Request) {
     return NextResponse.json(body, { headers });
   } catch (error) {
     console.error("POS sync pull failed", { message: error instanceof Error ? error.message : "unknown error" });
-    return NextResponse.json({ ok: false, message: "TINDIO could not pull cloud changes." }, { status: 503, headers });
+    return NextResponse.json({ ok: false, message: POS_SYNC_PULL_UNAVAILABLE_MESSAGE }, { status: 503, headers });
   }
 }

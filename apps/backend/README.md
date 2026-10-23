@@ -360,6 +360,17 @@ and Web routes remain available for rollback; client origins, schema,
 deployment, authentication-provider ownership, sale exchange, shifts, and
 adjacent mutations remain unchanged.
 
+The Slice D42 device and sync-control compatibility oracle is network- and
+database-independent. It freezes device validation/enrollment plus sync
+baseline, checkpoint, pull, resnapshot, and telemetry: context-first
+authentication, permission precedence, organization/employee/device/store/
+register custody, bounded cursors and telemetry, exact RPC projections,
+retention expiry, authoritative resnapshot scope, and response envelopes. All
+seven Next.js routes remain authoritative; no Backend route or runtime mode was
+added, Mobile keeps its current API origin, and receipt administration, shifts,
+approvals, stock operations, schema, and authentication-provider ownership are
+unchanged.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

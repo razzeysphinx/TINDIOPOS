@@ -1,4 +1,12 @@
 import { NextResponse } from "next/server";
+import {
+  POS_DEVICE_ACCESS_MESSAGE,
+  POS_DEVICE_ACCESS_PERMISSION,
+  POS_DEVICE_INVALID_MESSAGE,
+  POS_DEVICE_REJECTED_MESSAGE,
+  POS_DEVICE_UNAVAILABLE_MESSAGE,
+  POS_DEVICE_VALIDATION_RPC,
+} from "@tindio/contracts/device";
 
 import { posDeviceValidationSchema } from "@/features/devices/device-schema";
 import { hasPermission } from "@/lib/auth/dal";
@@ -11,20 +19,20 @@ export async function POST(request: Request) {
   const resolved = await getPosV2BusinessContext(request);
   if (!resolved.ok) return resolved.response;
   const context = resolved.context;
-  if (!hasPermission(context, "pos.access")) {
-    return NextResponse.json({ ok: false, message: "POS access is not permitted." }, { status: 403, headers });
+  if (!hasPermission(context, POS_DEVICE_ACCESS_PERMISSION)) {
+    return NextResponse.json({ ok: false, message: POS_DEVICE_ACCESS_MESSAGE }, { status: 403, headers });
   }
 
   const input = posDeviceValidationSchema.safeParse(await request.json().catch(() => null));
   if (!input.success || input.data.organizationId !== context.organization.id) {
-    return NextResponse.json({ ok: false, message: "The POS device request is invalid." }, { status: 400, headers });
+    return NextResponse.json({ ok: false, message: POS_DEVICE_INVALID_MESSAGE }, { status: 400, headers });
   }
 
   try {
     const database = await createBusinessContextClient(context) as unknown as {
       rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: Array<Record<string, unknown>> | null; error: { code?: string; message?: string } | null }>;
     };
-    const { data, error } = await database.rpc("validate_pos_device", {
+    const { data, error } = await database.rpc(POS_DEVICE_VALIDATION_RPC, {
       target_organization_id: context.organization.id,
       target_device_id: input.data.device.deviceId,
       target_secret: input.data.device.secret,
@@ -33,7 +41,7 @@ export async function POST(request: Request) {
     const device = data?.[0];
     if (error || !device) {
       return NextResponse.json(
-        { ok: false, message: "This POS device is not active for your assigned store." },
+        { ok: false, message: POS_DEVICE_REJECTED_MESSAGE },
         { status: 403, headers },
       );
     }
@@ -50,6 +58,6 @@ export async function POST(request: Request) {
       },
     }, { headers });
   } catch {
-    return NextResponse.json({ ok: false, message: "TINDIO could not verify this POS device." }, { status: 503, headers });
+    return NextResponse.json({ ok: false, message: POS_DEVICE_UNAVAILABLE_MESSAGE }, { status: 503, headers });
   }
 }

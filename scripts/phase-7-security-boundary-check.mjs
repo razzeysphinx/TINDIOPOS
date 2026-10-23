@@ -31,6 +31,7 @@ const [
   businessProfileActions,
   deviceActions,
   deviceRoute,
+  deviceContract,
   advancedSalesActions,
   posPage,
   posV2CoreRoute,
@@ -76,6 +77,7 @@ const [
   source("../src/features/business-profile/actions.ts"),
   source("../src/features/devices/actions.ts"),
   source("../src/app/api/pos/v2/device/route.ts"),
+  source("../packages/contracts/src/device.ts"),
   source("../src/features/advanced-sales/actions.ts"),
   source("../src/app/(pos)/pos/page.tsx"),
   source("../src/app/api/pos/v2/bootstrap/route.ts"),
@@ -212,7 +214,8 @@ test("sensitive server actions require a business context and their established 
 test("device validation rejects a caller-supplied organization that differs from the active workspace", () => {
   assert.match(deviceRoute, /input\.data\.organizationId !== context\.organization\.id/);
   assert.match(deviceRoute, /target_organization_id: context\.organization\.id/);
-  assert.match(deviceRoute, /\.rpc\("validate_pos_device"/);
+  assert.match(deviceRoute, /\.rpc\(POS_DEVICE_VALIDATION_RPC/);
+  assert.match(deviceContract, /POS_DEVICE_VALIDATION_RPC\s*=\s*"validate_pos_device"/);
 });
 
 test("every authenticated export and offline API has its capability or service authorization boundary", () => {

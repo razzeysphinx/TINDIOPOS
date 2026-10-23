@@ -1,5 +1,24 @@
 import { z } from "zod";
 
+export const POS_DEVICE_VALIDATION_PATH = "/api/pos/v2/device" as const;
+export const POS_DEVICE_ENROLLMENT_PATH = "/api/pos/v2/device/enroll" as const;
+export const POS_DEVICE_VALIDATION_RPC = "validate_pos_device" as const;
+export const POS_DEVICE_ENROLLMENT_RPC = "register_pos_device" as const;
+export const POS_DEVICE_ACCESS_PERMISSION = "pos.access" as const;
+export const POS_DEVICE_MANAGEMENT_PERMISSION = "devices.manage" as const;
+
+export const POS_DEVICE_ACCESS_MESSAGE = "POS access is not permitted." as const;
+export const POS_DEVICE_INVALID_MESSAGE = "The POS device request is invalid." as const;
+export const POS_DEVICE_REJECTED_MESSAGE = "This POS device is not active for your assigned store." as const;
+export const POS_DEVICE_UNAVAILABLE_MESSAGE = "TINDIO could not verify this POS device." as const;
+export const POS_DEVICE_MANAGEMENT_MESSAGE = "Device-management permission is required." as const;
+export const POS_DEVICE_ENROLLMENT_INVALID_MESSAGE = "The device enrollment request is invalid." as const;
+export const POS_DEVICE_ENROLLMENT_PERMISSION_MESSAGE = "You do not have permission to enroll this POS device." as const;
+export const POS_DEVICE_ENROLLMENT_SCOPE_MESSAGE = "Choose a valid active store and register." as const;
+export const POS_DEVICE_ENROLLMENT_DUPLICATE_MESSAGE = "This POS device is already registered." as const;
+export const POS_DEVICE_ENROLLMENT_CONFIRMATION_MESSAGE = "TINDIO could not confirm the new POS device." as const;
+export const POS_DEVICE_ENROLLMENT_UNAVAILABLE_MESSAGE = "TINDIO could not enroll this POS device." as const;
+
 export const posDeviceCredentialSchema = z.object({
   deviceId: z.uuid(),
   secret: z.string().regex(/^[0-9a-fA-F]{64}$/),
@@ -58,6 +77,17 @@ export type PosDeviceBinding = {
 export type PosDeviceValidationResponse =
   | { ok: true; device: PosDeviceBinding }
   | { ok: false; message: string };
+
+export type PosDeviceDatabaseRow = {
+  device_id: unknown;
+  store_id: unknown;
+  register_id: unknown;
+  device_name?: unknown;
+  name?: unknown;
+  app_version?: unknown;
+  last_seen_at?: unknown;
+  status?: unknown;
+};
 
 export type PosDeviceSequenceStatus =
   | "ACCEPTED"

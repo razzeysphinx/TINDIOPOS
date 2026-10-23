@@ -36,16 +36,18 @@ test("sync push has a focused platform-neutral shared contract", async () => {
 });
 
 test("Web sync push retains context, ordered identity checks, device validation, and offline processing", async () => {
-  const [route, service] = await Promise.all([
+  const [route, service, syncControl] = await Promise.all([
     read("src/app/api/pos/v2/sync/push/route.ts"),
     read("src/features/offline/pos-v2-sync-service.ts"),
+    read("packages/contracts/src/sync-control.ts"),
   ]);
 
   assert.match(route, /export async function POST/);
   assert.doesNotMatch(route, /export async function (?:GET|PUT|PATCH|DELETE)/);
   assert.ok(route.indexOf("getPosV2BusinessContext(request)") < route.indexOf("request.json()"));
   assert.match(service, /syncPushBodySchema=posSyncPushRequestSchema/);
-  assert.match(service, /\.rpc\("validate_pos_device"/);
+  assert.match(service, /\.rpc\(POS_SYNC_DEVICE_RPC/);
+  assert.match(syncControl, /POS_SYNC_DEVICE_RPC\s*=\s*"validate_pos_device"/);
   assert.match(route, /event\.offline\.deviceId!==parsed\.data\.device\.deviceId/);
   assert.match(route, /event\.offline\.deviceSequence<=last/);
   assert.match(route, /ids\.has\(event\.eventId\)/);

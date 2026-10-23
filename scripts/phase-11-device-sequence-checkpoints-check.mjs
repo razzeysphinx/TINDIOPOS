@@ -12,6 +12,7 @@ test("Phase 11 device sequence checkpoints contract", () => {
   const route = read("src/app/api/pos/v2/offline-checkout/route.ts");
   const service = read("src/features/offline/pos-v2-offline-checkout-service.ts");
   const checkpointRoute = read("src/app/api/pos/v2/sync/checkpoint/route.ts");
+  const syncContract = read("packages/contracts/src/sync-control.ts");
   const status = read("apps/mobile/app/(app)/sync-status.tsx");
   const cache = read("apps/mobile/src/db/cache-admin.ts");
 
@@ -22,7 +23,8 @@ test("Phase 11 device sequence checkpoints contract", () => {
   assert.match(route, /processPosV2OfflineCheckout/);
   assert.ok(service.indexOf("const reservation=await reserve") < service.indexOf("const result=await completeCheckout"));
   assert.ok(service.includes("retryable:true") && service.includes("finalize_pos_device_sequence"));
-  assert.ok(checkpointRoute.includes("validate_pos_device") && checkpointRoute.includes("get_pos_device_sync_checkpoint"));
+  assert.ok(checkpointRoute.includes("POS_SYNC_DEVICE_RPC") && checkpointRoute.includes("POS_SYNC_CHECKPOINT_RPC"));
+  assert.ok(syncContract.includes('POS_SYNC_DEVICE_RPC = "validate_pos_device"') && syncContract.includes('POS_SYNC_CHECKPOINT_RPC = "get_pos_device_sync_checkpoint"'));
   assert.ok(status.includes("PHASE 11 DEVICE SEQUENCE") && status.includes("Refresh Server Checkpoint"));
   assert.ok(cache.includes("device_sync_state"));
   assert.doesNotMatch(migration, /payload hash|delta[_ ]sync|pull cursor/i);

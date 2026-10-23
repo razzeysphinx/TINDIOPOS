@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { POS_SYNC_DEVICE_REJECTED_MESSAGE, POS_SYNC_RESNAPSHOT_INVALID_MESSAGE, POS_SYNC_RESNAPSHOT_RPC, POS_SYNC_RESNAPSHOT_UNAVAILABLE_MESSAGE, POS_SYNC_VERSION } from "@tindio/contracts/sync-control";
 import type { PosReferenceV2Response, PosSyncResnapshotResponse } from "@/contracts/pos";
 import { syncDeviceBodySchema, validatedSyncDevice } from "@/features/offline/pos-v2-sync-service";
 import { getPosV2BusinessContext } from "@/lib/auth/pos-v2-business-context";
@@ -11,12 +12,12 @@ export async function POST(request: Request) {
   const resolved = await getPosV2BusinessContext(request);
   if (!resolved.ok) return resolved.response;
   const parsed = syncDeviceBodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ ok: false, message: "Invalid sync resnapshot request." }, { status: 400, headers });
+  if (!parsed.success) return NextResponse.json({ ok: false, message: POS_SYNC_RESNAPSHOT_INVALID_MESSAGE }, { status: 400, headers });
 
   try {
     const checked = await validatedSyncDevice(resolved.context, parsed.data);
-    if (!checked) return NextResponse.json({ ok: false, message: "POS device validation failed." }, { status: 403, headers });
-    const answer = await checked.database.rpc("get_pos_sync_resnapshot_v1", {
+    if (!checked) return NextResponse.json({ ok: false, message: POS_SYNC_DEVICE_REJECTED_MESSAGE }, { status: 403, headers });
+    const answer = await checked.database.rpc(POS_SYNC_RESNAPSHOT_RPC, {
       target_organization_id: resolved.context.organization.id,
       target_device_id: checked.device.deviceId,
     });
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
     const body: PosSyncResnapshotResponse = {
       ...snapshot,
       ok: true,
-      version: 1,
+      version: POS_SYNC_VERSION,
       serverRevision: Number(snapshot.serverRevision),
       retainedAfterRevision: Number(snapshot.retainedAfterRevision),
       reference: snapshot.reference as PosReferenceV2Response,
@@ -38,6 +39,6 @@ export async function POST(request: Request) {
     return NextResponse.json(body, { headers });
   } catch (error) {
     console.error("POS sync resnapshot failed", { message: error instanceof Error ? error.message : "unknown error" });
-    return NextResponse.json({ ok: false, message: "TINDIO could not rebuild the local cache." }, { status: 503, headers });
+    return NextResponse.json({ ok: false, message: POS_SYNC_RESNAPSHOT_UNAVAILABLE_MESSAGE }, { status: 503, headers });
   }
 }

@@ -28,6 +28,10 @@
       "types": "./src/sync-push.ts",
       "default": "./src/sync-push.ts"
     },
+    "./sync-control": {
+      "types": "./src/sync-control.ts",
+      "default": "./src/sync-control.ts"
+    },
     "./attendance": {
       "types": "./src/attendance.ts",
       "default": "./src/attendance.ts"

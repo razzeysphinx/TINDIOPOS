@@ -1,49 +1,26 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-
-import { posDeviceValidationSchema } from "@/features/devices/device-schema";
+import {
+  POS_SYNC_DEVICE_REJECTED_MESSAGE,
+  POS_SYNC_TELEMETRY_INVALID_MESSAGE,
+  POS_SYNC_TELEMETRY_RPC,
+  POS_SYNC_TELEMETRY_UNAVAILABLE_MESSAGE,
+  posSyncTelemetryRequestSchema,
+} from "@tindio/contracts/sync-control";
 import { validatedSyncDevice } from "@/features/offline/pos-v2-sync-service";
 import { getPosV2BusinessContext } from "@/lib/auth/pos-v2-business-context";
 
 const headers = { "Cache-Control": "private, no-store" };
-const connectionModeSchema = z.enum(["CLOUD_ONLINE", "STORE_LOCAL", "DEVICE_ISOLATED", "RECOVERING", "SYNC_REVIEW"]);
-const localDatabaseHealthSchema = z.enum(["HEALTHY", "CHECK_REQUIRED", "UNAVAILABLE", "UNKNOWN"]);
-const telemetrySchema = posDeviceValidationSchema.extend({
-  employeeId: z.uuid(),
-  employeeName: z.string().trim().min(1).max(160),
-  connectionMode: connectionModeSchema,
-  lastSuccessfulSyncAt: z.iso.datetime().nullable(),
-  deviceCheckpoint: z.number().int().min(0),
-  serverCheckpoint: z.number().int().min(0),
-  queueDepth: z.number().int().min(0),
-  conflictCount: z.number().int().min(0),
-  failedCount: z.number().int().min(0),
-  offlineSince: z.iso.datetime().nullable(),
-  crashCount: z.number().int().min(0).default(0),
-  crashWindowStartedAt: z.iso.datetime().nullable().default(null),
-  lastCrashAt: z.iso.datetime().nullable().default(null),
-  anrCount: z.number().int().min(0).default(0),
-  lastAnrAt: z.iso.datetime().nullable().default(null),
-  apiAverageLatencyMs: z.number().int().min(0).default(0),
-  apiMaxLatencyMs: z.number().int().min(0).default(0),
-  apiFailureCount: z.number().int().min(0).default(0),
-  syncAverageLatencyMs: z.number().int().min(0).default(0),
-  syncMaxLatencyMs: z.number().int().min(0).default(0),
-  localDatabaseHealth: localDatabaseHealthSchema.default("UNKNOWN"),
-  localSchemaVersion: z.number().int().min(0).default(0),
-});
-
 export async function POST(request: Request) {
   const resolved = await getPosV2BusinessContext(request);
   if (!resolved.ok) return resolved.response;
-  const parsed = telemetrySchema.safeParse(await request.json().catch(() => null));
+  const parsed = posSyncTelemetryRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success || parsed.data.organizationId !== resolved.context.organization.id || parsed.data.employeeId !== resolved.context.employee.id) {
-    return NextResponse.json({ ok: false, message: "The POS telemetry request is invalid." }, { status: 400, headers });
+    return NextResponse.json({ ok: false, message: POS_SYNC_TELEMETRY_INVALID_MESSAGE }, { status: 400, headers });
   }
   try {
     const checked = await validatedSyncDevice(resolved.context, parsed.data);
-    if (!checked) return NextResponse.json({ ok: false, message: "POS device validation failed." }, { status: 403, headers });
-    const report = await checked.database.rpc("report_pos_device_sync_telemetry", {
+    if (!checked) return NextResponse.json({ ok: false, message: POS_SYNC_DEVICE_REJECTED_MESSAGE }, { status: 403, headers });
+    const report = await checked.database.rpc(POS_SYNC_TELEMETRY_RPC, {
       target_organization_id: resolved.context.organization.id,
       target_device_id: checked.device.deviceId,
       target_store_id: checked.device.storeId,
@@ -75,6 +52,6 @@ export async function POST(request: Request) {
     if (report.error) throw new Error(report.error.message);
     return NextResponse.json({ ok: true, deviceId: checked.device.deviceId, heartbeatAt: report.data?.[0]?.heartbeat_at ?? new Date().toISOString() }, { headers });
   } catch {
-    return NextResponse.json({ ok: false, message: "TINDIO could not record sync telemetry." }, { status: 503, headers });
+    return NextResponse.json({ ok: false, message: POS_SYNC_TELEMETRY_UNAVAILABLE_MESSAGE }, { status: 503, headers });
   }
 }

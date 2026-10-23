@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — D49 COMPLETE; 43 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **PHASE D COMPLETE; 43 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -664,24 +664,30 @@ Status: **IN PROGRESS**
   deployment, client origin, or authentication provider changed.
   **IMPLEMENTED.**
 
-## Remaining Phase D closure sequence
+## Completed Slice D50: Phase D closure audit
 
-The post-D49 route inventory has 0 Web-owned POS v2 routes without Backend
-counterparts. Phase D is not complete until the final route-inventory and
-rollback audit is certified:
+- Freeze a machine-readable inventory of all 43 supported POS v2 routes under
+  29 explicit ownership boundaries, including exact path, HTTP method, runtime
+  mode, rollback service/proxy pair, and focused ownership gate.
+  **IMPLEMENTED.**
+- Derive both Web and Backend route inventories from the filesystem and require
+  exact equality with the frozen ledger. Reject missing, extra, method-drifted,
+  broadly proxied, ambient-credential, or undocumented routes. **IMPLEMENTED.**
+- Certify that every Backend mode defaults to `owned`, every Web handler remains
+  available for rollback, and Phase D closes with no schema, deployment, Auth
+  provider, or client-origin change. **IMPLEMENTED.**
 
-- **D50:** Phase D closure audit proving every supported POS v2 route has a
-  Backend owner and Web rollback surface before beginning Neon Auth proof.
+The post-D50 inventory has 0 Web-owned POS v2 routes without Backend
+counterparts. Phase D is complete.
 
-## Next smallest safe slice: D50 Phase D closure audit
+## Next phase gate: Phase E prerequisite assessment
 
-- Enumerate every supported POS v2 route and prove it has a Backend owner and
-  an intact Web rollback surface.
-- Verify every Backend mode and proxy remains explicit, method-aware,
-  allowlisted, and incapable of forwarding an unsupported route or ambient
-  credential.
-- Freeze the completed Phase D inventory before beginning the separately gated
-  Phase E Neon Auth proof. Do not deploy or cut over a client origin.
+- Confirm the required Neon Auth capability, project access, non-production
+  branch, and owner approvals before any provider configuration.
+- Define the isolated synthetic-user 13-flow proof, including Web, Mobile, RLS,
+  refresh, revocation, and rollback evidence.
+- Keep Supabase Auth active and do not export/import real accounts, migrate
+  passwords, rotate credentials, deploy, or cut over clients during planning.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

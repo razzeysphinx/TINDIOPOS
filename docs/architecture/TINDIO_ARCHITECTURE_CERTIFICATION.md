@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D49 COMPLETE; STOCK-OPERATION OWNERSHIP CERTIFIED**
+Status: **SLICE D50 COMPLETE; PHASE D CLOSURE CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D49 through Backend-owned cart stock validation and stock-request receipt
+Certified scope: Phase 0, Slices B1-B2, Slice C, and completed Phase D (Slices D1-D50) with all 43 supported POS v2 routes Backend-owned and Web rollback preserved
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -711,6 +711,15 @@ Database: **CANONICAL NEON UNCHANGED**
   request/destination, received-only inventory, replay, and audit custody.
 - No schema, deployment, authentication provider, client origin, or adjacent
   mutation changed.
+- The D50 machine-readable route ledger freezes all 43 supported POS v2 routes
+  under 29 explicit ownership boundaries with exact methods, owned-by-default
+  runtime modes, rollback services/proxies, and focused ownership gates.
+- Filesystem-derived Web and Backend inventories match the ledger exactly. No
+  Web-only, Backend-only, missing, extra, or method-drifted POS v2 route remains.
+- Every rollback proxy remains method-aware and allowlisted without ambient
+  cookie or device-secret forwarding. All Web handlers remain intact.
+- Phase D closes without schema, deployment, Auth provider, credential, client
+  origin, or live cutover changes.
 
 ## Results
 
@@ -770,6 +779,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend approval-control ownership/rollback boundary | **PASS (5/5)** |
 | Backend stock-operation compatibility boundary | **PASS (5/5)** |
 | Backend stock-operation ownership/rollback boundary | **PASS (5/5)** |
+| Phase D complete route/owner/rollback inventory | **PASS (7/7)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -793,7 +803,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (237/238 automated commands); 1 ENVIRONMENT-BLOCKED** |
+| Static catalogue | **PASS (238/239 automated commands); 1 ENVIRONMENT-BLOCKED** |
 | Local Supabase/Docker source connectivity | **BLOCKED**; Docker CLI/daemon unavailable in this environment |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -873,12 +883,17 @@ issuer while the owned runtime sends database work only to Neon's external-JWT
 Data API. The audited post-D49 inventory retains 0 Web-owned POS v2 routes
 without Backend counterparts. Phase D remains in progress only until the D50
 closure audit certifies the complete owner and rollback inventory.
+The D50 closure audit adds only a machine-readable inventory and deterministic
+architecture certification. All 43 supported POS v2 Web routes have exact
+Backend counterparts across 29 owned-by-default boundaries, and every Web
+rollback handler remains intact. No schema, deployment, Auth provider,
+credential, client origin, or live cutover changed. Phase D is complete.
 
 ## Next gate
 
-Begin Slice D50 with a Phase D closure audit. Enumerate every supported POS v2
-route and prove that it has a Backend owner and intact Web rollback surface;
-verify every mode and proxy is explicit, method-aware, allowlisted, and cannot
-forward unsupported routes or ambient credentials. Freeze that inventory before
-the separately gated Phase E Neon Auth proof. Do not deploy or cut over a client
-origin.
+Begin only the Phase E prerequisite assessment: confirm Neon Auth capability,
+non-production branch access, and owner approvals, then define the isolated
+synthetic-user 13-flow proof across Web, Mobile, RLS, refresh, revocation, and
+rollback. Keep Supabase Auth active. Do not configure production Auth,
+export/import real accounts, migrate passwords, rotate credentials, deploy, or
+cut over a client origin without the mandatory approvals.

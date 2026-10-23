@@ -123,7 +123,8 @@ The default `TINDIO_BOOTSTRAP_READ_MODE=owned`,
 `TINDIO_RECEIPT_SETTINGS_MODE=owned` plus
 `TINDIO_RECEIPT_DELIVERY_MODE=owned`, `TINDIO_DEVICE_SYNC_MODE=owned`,
 `TINDIO_SHIFT_CONTROL_MODE=owned`, and
-`TINDIO_APPROVAL_CONTROL_MODE=owned` paths require `SUPABASE_URL`,
+`TINDIO_APPROVAL_CONTROL_MODE=owned`, and
+`TINDIO_STOCK_OPERATIONS_MODE=owned` paths require `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, and `NEON_DATA_API_URL`.
 Supabase Auth remains the current identity issuer; database traffic is
 rewritten only to Neon and the Supabase publishable key is removed at that
@@ -451,6 +452,15 @@ functions and RLS retain negative-stock policy, open-shift, component,
 request/destination, received-only inventory, idempotent replay, discrepancy,
 and audit custody. Both Next.js handlers remain available for rollback; no
 schema, deployment, client origin, Auth provider, or adjacent mutation changed.
+
+Slice D50 Phase D closure freezes the complete machine-readable inventory of 43
+supported POS v2 routes across 29 ownership boundaries. The certification
+derives both route trees from the filesystem, matches exact HTTP methods, and
+requires every mode to default to `owned`, every service to retain an explicit
+rollback choice, every proxy to stay method-aware and allowlisted, and every
+focused ownership gate to remain executable. All Web rollback handlers remain
+intact. Phase D closes without a schema, deployment, Auth provider, credential,
+client-origin, or live-cutover change.
 
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,

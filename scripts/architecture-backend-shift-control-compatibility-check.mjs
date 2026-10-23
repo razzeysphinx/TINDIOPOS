@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -33,13 +32,12 @@ test("all four Web routes retain context-first authority and the shared contract
   for (const rpc of ["open_register_shift", "close_register_shift_mobile", "acquire_pos_shift_custody", "record_cash_movement"]) assert.ok(service.includes(rpc));
 });
 
-test("Backend shift oracle is isolated and ownership waits for D45", async () => {
+test("Backend shift oracle remains isolated beside D45 ownership", async () => {
   const oracle = await read("apps/backend/src/pos/shift-control-compatibility.ts");
   for (const value of ["SHIFT_CONTROL_COMPATIBILITY_CONTRACT", "validateOpenShift", "mapOpenShiftResult", "validateMobileCloseShift", "mapMobileCloseShiftResult", "validateShiftCustody", "mapShiftCustodyResult", "validateCashMovement", "mapCashMovementResult"]) assert.match(oracle, new RegExp(`\\b${value}\\b`));
   assert.doesNotMatch(oracle, /fetch\(|createNeonDataApiFetch|@supabase|@neon|process\.env/);
-  for (const path of ["open.ts", "close.ts", "custody.ts", "cash-movement.ts"]) {
-    assert.equal(existsSync(new URL(`../apps/backend/api/pos/v2/shifts/${path}`, import.meta.url)), false, `${path} must wait for D45`);
-  }
+  const routes = await Promise.all(["open.ts", "close.ts", "custody.ts", "cash-movement.ts"].map((path) => read(`apps/backend/api/pos/v2/shifts/${path}`)));
+  for (const source of routes) assert.match(source, /TINDIO_SHIFT_CONTROL_MODE/);
 });
 
 test("database authority retains shift, employee, device, checkpoint, cash, and replay custody", async () => {

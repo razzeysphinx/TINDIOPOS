@@ -392,6 +392,17 @@ no Backend shift route or runtime mode was added, and approvals, stock
 operations, schema, deployment, client origins, and Auth ownership are
 unchanged.
 
+Slice D45 Backend-owned shift control uses that frozen contract in four
+isolated POST handlers with one shared allowlisted Web rollback proxy. Supabase
+verifies bearer claims while business context and all shift-control RPCs use
+only Neon's external-JWT Data API; device credentials are forwarded only for
+open, close, and custody operations whose database checks require them. The
+database retains organization, employee, device, store, register, shift,
+checkpoint, finalization-token, cash calculation, approval, and idempotency
+authority. All four Next.js handlers remain available for rollback; deployment,
+client origins, schema, Auth ownership, approvals, and stock operations remain
+unchanged.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

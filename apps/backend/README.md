@@ -324,6 +324,15 @@ exact result messages. No Backend exchange route or runtime mode exists; the
 Server Action remains authoritative, and receipt settings, receipt delivery,
 shift custody, client origins, and adjacent mutations remain unchanged.
 
+Slice D39 Backend-owned sale exchange uses that frozen contract in an isolated
+owned command and an allowlisted Web rollback proxy. Supabase verifies the
+bearer while business context and `link_sale_exchange` traffic use only Neon's
+external-JWT Data API. The database retains completed refund/replacement-sale
+custody, active employee and store checks, actor-and-payload replay, uniqueness,
+immutable source transactions, and audit effects. The existing Server Action
+and new Web route share the direct Web service for rollback; client origins are
+unchanged, and receipt settings/delivery plus adjacent mutations remain in Web.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

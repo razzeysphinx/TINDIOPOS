@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+export const POS_SALE_EXCHANGE_PATH = "/api/pos/v2/exchanges/link" as const;
 export const POS_SALE_EXCHANGE_RPC = "link_sale_exchange" as const;
 export const POS_SALE_EXCHANGE_PERMISSIONS = ["sales.refund", "sales.create"] as const;
 export const POS_SALE_EXCHANGE_PERMISSION_DATABASE_CODE = "42501" as const;
@@ -9,6 +10,8 @@ export const POS_SALE_EXCHANGE_NOT_FOUND_DATABASE_CODE = "P0002" as const;
 
 export const POS_SALE_EXCHANGE_PERMISSION_MESSAGE =
   "Sales and refund permission are required to record an exchange." as const;
+export const POS_SALE_EXCHANGE_REQUEST_INVALID_MESSAGE =
+  "The request data is invalid." as const;
 export const POS_SALE_EXCHANGE_INPUT_MESSAGE =
   "Choose a completed return and enter a valid replacement receipt number." as const;
 export const POS_SALE_EXCHANGE_DATABASE_PERMISSION_MESSAGE =

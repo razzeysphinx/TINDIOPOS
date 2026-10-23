@@ -11,6 +11,15 @@ import {
   type RefundSaleResult,
   type RefundSaleValues,
 } from "@tindio/contracts/refund";
+import {
+  POS_SALE_EXCHANGE_DATABASE_MESSAGE,
+  POS_SALE_EXCHANGE_INPUT_MESSAGE,
+  POS_SALE_EXCHANGE_PERMISSION_MESSAGE,
+  POS_SALE_EXCHANGE_RPC,
+  saleExchangeSchema,
+  saleExchangeSuccessMessage,
+  type SaleExchangeResult,
+} from "@tindio/contracts/sale-exchange";
 import { receiptDeliverySchema } from "@/features/receipts/improvement-6-schema";
 import { hasPermission, type BusinessContext } from "@/lib/auth/dal";
 import type { Json } from "@/lib/supabase/database.types";
@@ -21,6 +30,41 @@ export type RefundSaleActionResult = RefundSaleResult;
 export type ReceiptImprovementActionResult =
   | { ok: true; message: string }
   | { ok: false; message: string };
+
+export async function linkSaleExchange({
+  context,
+  input,
+}: {
+  context: BusinessContext;
+  input: unknown;
+}): Promise<SaleExchangeResult> {
+  if (!hasPermission(context, "sales.refund") || !hasPermission(context, "sales.create")) {
+    return { ok: false, message: POS_SALE_EXCHANGE_PERMISSION_MESSAGE };
+  }
+
+  const parsed = saleExchangeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: POS_SALE_EXCHANGE_INPUT_MESSAGE };
+
+  const supabase = await createBusinessContextClient(context);
+  const { data, error } = await supabase.rpc(POS_SALE_EXCHANGE_RPC, {
+    target_organization_id: context.organization.id,
+    target_refund_id: parsed.data.refundId,
+    target_replacement_receipt_number: parsed.data.replacementReceiptNumber,
+    target_idempotency_key: parsed.data.idempotencyKey,
+  });
+  const result = data?.[0];
+  if (error || !result) {
+    return {
+      ok: false,
+      message: receiptDatabaseMessage(
+        error?.code,
+        error?.message,
+        POS_SALE_EXCHANGE_DATABASE_MESSAGE,
+      ),
+    };
+  }
+  return { ok: true, message: saleExchangeSuccessMessage(result) };
+}
 
 function refundDatabaseMessage(code: string | undefined, message: string | undefined) {
   if (code === "42501") return POS_REFUND_DATABASE_PERMISSION_MESSAGE;

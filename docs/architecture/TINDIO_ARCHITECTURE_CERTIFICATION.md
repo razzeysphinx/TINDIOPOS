@@ -611,6 +611,20 @@ Database: **CANONICAL NEON UNCHANGED**
 - The existing Next.js Server Action remains authoritative. No Backend exchange
   route or runtime mode, schema, deployment, authentication provider, receipt
   settings/delivery, shift custody, client origin, or adjacent mutation changed.
+- Backend `POST /api/pos/v2/exchanges/link` now owns the sixteenth bounded
+  mutation while preserving the existing Server Action and direct Web route as
+  rollback surfaces.
+- The owned handler preserves context-first claim and business authorization,
+  both sales permissions before action validation, exact RPC projection,
+  completed refund/replacement identities, actor-and-payload replay, immutable
+  source transactions, approved database-error detail, and exact result
+  messages.
+- Supabase verifies bearer claims while business context and sale-exchange RPC
+  traffic use only Neon's external-JWT Data API. The rollback proxy rejects
+  loops and forwards only allowlisted headers; cookies and ambient device
+  credentials do not cross the boundary. Client origins, schema, deployment,
+  authentication-provider ownership, receipt settings/delivery, shift custody,
+  and adjacent mutations remain unchanged.
 
 ## Results
 
@@ -619,7 +633,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (589/589)** |
+| Backend behavior and contracts | **PASS (608/608)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -659,10 +673,11 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend attendance mutation compatibility boundary | **PASS (5/5)** |
 | Backend attendance mutation ownership/rollback boundary | **PASS (5/5)** |
 | Backend sale-exchange compatibility boundary | **PASS (5/5)** |
+| Backend sale-exchange ownership/rollback boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 2 PRE-EXISTING WARNINGS** |
-| Next.js production build | **PASS (90 routes)** |
+| Next.js production build | **PASS (91 routes)** |
 | Android export | **PASS** |
 | Device contract compatibility | **PASS (3/3)** |
 | Sync-control contract compatibility | **PASS (3/3)** |
@@ -682,7 +697,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (227/227 automated commands)** |
+| Static catalogue | **PASS (228/228 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -707,15 +722,17 @@ setting, deployment, or live client cutover. D38 adds only a shared sale-
 exchange contract, isolated compatibility oracle, and certification gate; the
 Next.js Server Action remains authoritative and no Backend exchange route,
 runtime mode, schema, credential, provider setting, deployment, or live client
-cutover was added.
+cutover was added. The D39 Backend sale-exchange boundary is also undeployed;
+the Server Action and Web rollback route remain intact. D39 adds no schema,
+credential, provider setting, deployment, or live client cutover.
 
 ## Next gate
 
-Begin Slice D39 by moving only sale-exchange linking behind an explicit Backend-
-owned/proxy boundary while preserving every frozen D38 contract and the current
-Next.js Server Action as rollback. Preserve context-first authentication, both
-sales permissions, completed refund/replacement identities, actor-and-payload
-replay, immutable source transactions, database authority, and exact result
-messages through Neon's external-JWT boundary. Do not change receipt settings/
-delivery, shift custody, adjacent mutations, deployed client origins, or
-authentication-provider ownership.
+Begin Slice D40 by freezing only `updateReceiptSettingsAction` and
+`queueReceiptDeliveryAction` in focused platform-neutral contracts and network/
+database-independent Backend oracles. Preserve permissions, bounded settings
+and recipient inputs, receipt identity, idempotency, database effects, error
+mapping, revalidation, and exact result messages. Do not create Backend receipt-
+settings or delivery routes or change sale exchange, shift custody, adjacent
+mutations, deployed client origins, or authentication-provider ownership in
+that compatibility slice.

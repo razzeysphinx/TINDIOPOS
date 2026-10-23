@@ -3,20 +3,11 @@
 import { revalidatePath } from "next/cache";
 
 import {
-  POS_SALE_EXCHANGE_DATABASE_MESSAGE,
-  POS_SALE_EXCHANGE_INPUT_MESSAGE,
-  POS_SALE_EXCHANGE_PERMISSION_MESSAGE,
-  POS_SALE_EXCHANGE_RPC,
-  saleExchangeSuccessMessage,
-} from "@tindio/contracts/sale-exchange";
-
-import {
   receiptSettingsSchema,
-  saleExchangeSchema,
 } from "@/features/receipts/improvement-6-schema";
 import { hasPermission, requireBusinessContext } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
-import { queueReceiptDelivery } from "@/features/receipts/service";
+import { linkSaleExchange, queueReceiptDelivery } from "@/features/receipts/service";
 
 export type ReceiptImprovementActionResult =
   | { ok: true; message: string }
@@ -100,39 +91,10 @@ export async function linkSaleExchangeAction(
   input: unknown,
 ): Promise<ReceiptImprovementActionResult> {
   const context = await requireBusinessContext();
-  if (!hasPermission(context, "sales.refund") || !hasPermission(context, "sales.create")) {
-    return { ok: false, message: POS_SALE_EXCHANGE_PERMISSION_MESSAGE };
-  }
-
-  const parsed = saleExchangeSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, message: POS_SALE_EXCHANGE_INPUT_MESSAGE };
-  }
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc(POS_SALE_EXCHANGE_RPC, {
-    target_organization_id: context.organization.id,
-    target_refund_id: parsed.data.refundId,
-    target_replacement_receipt_number: parsed.data.replacementReceiptNumber,
-    target_idempotency_key: parsed.data.idempotencyKey,
-  });
-  const result = data?.[0];
-
-  if (error || !result) {
-    return {
-      ok: false,
-      message: receiptDatabaseMessage(
-        error?.code,
-        error?.message,
-        POS_SALE_EXCHANGE_DATABASE_MESSAGE,
-      ),
-    };
-  }
+  const result = await linkSaleExchange({ context, input });
+  if (!result.ok) return result;
 
   revalidatePath("/back-office/receipts");
   revalidatePath("/back-office/receipts/[receiptId]", "page");
-  return {
-    ok: true,
-    message: saleExchangeSuccessMessage(result),
-  };
+  return result;
 }

@@ -505,17 +505,30 @@ Status: **IN PROGRESS**
   deployed client origins, and authentication-provider ownership unchanged.
   **IMPLEMENTED.**
 
-## Next smallest safe slice: D39 sale-exchange ownership
+## Completed Slice D39: sale-exchange ownership
 
 - Move only sale-exchange linking behind an explicit Backend-owned/proxy
   boundary while preserving every frozen D38 contract and the existing Server
-  Action as rollback.
+  Action as rollback. **IMPLEMENTED.**
 - Preserve context-first authentication, both sales permissions, completed
   refund/replacement identities, actor-and-payload replay, immutable source
   transactions, database authority, and exact result messages through Neon's
-  external-JWT boundary.
+  external-JWT boundary. **IMPLEMENTED.**
 - Keep receipt settings/delivery, shift custody, every other financial mutation,
   deployed client origins, and authentication-provider ownership unchanged.
+  **IMPLEMENTED.**
+
+## Next smallest safe slice: D40 receipt-settings and delivery compatibility harness
+
+- Inventory and freeze only `updateReceiptSettingsAction` and
+  `queueReceiptDeliveryAction`, including permissions, bounded settings and
+  recipient inputs, receipt identity, idempotency, database effects, error
+  mapping, revalidation, and exact result messages.
+- Add focused platform-neutral contracts and network/database-independent
+  Backend oracles before creating any Backend receipt-settings or delivery
+  route or moving ownership.
+- Keep sale exchange, shift custody, every other financial mutation, deployed
+  client origins, and authentication-provider ownership unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

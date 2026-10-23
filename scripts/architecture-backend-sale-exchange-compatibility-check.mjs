@@ -22,7 +22,7 @@ test("sale exchange has a focused platform-neutral shared contract", async () =>
   assert.equal(manifest.exports["./sale-exchange"].types, "./src/sale-exchange.ts");
   assert.match(index, /export \* from "\.\/sale-exchange"/);
   for (const value of [
-    "POS_SALE_EXCHANGE_RPC", "POS_SALE_EXCHANGE_PERMISSIONS", "saleExchangeSchema",
+    "POS_SALE_EXCHANGE_PATH", "POS_SALE_EXCHANGE_RPC", "POS_SALE_EXCHANGE_PERMISSIONS", "saleExchangeSchema",
     "SaleExchangeValues", "SaleExchangeDatabaseRow", "SaleExchangeResult",
     "saleExchangeSuccessMessage",
   ]) assert.match(contract, new RegExp(`\\b${value}\\b`));
@@ -31,30 +31,31 @@ test("sale exchange has a focused platform-neutral shared contract", async () =>
 });
 
 test("Web action retains context-first permissions, shared validation, RPC, and revalidation", async () => {
-  const [action, schema] = await Promise.all([
+  const [action, schema, service] = await Promise.all([
     read("src/features/receipts/improvement-6-actions.ts"),
     read("src/features/receipts/improvement-6-schema.ts"),
+    read("src/features/receipts/service.ts"),
   ]);
   const start = action.indexOf("export async function linkSaleExchangeAction");
   const body = action.slice(start);
   assert.ok(start >= 0);
-  assert.ok(body.indexOf("requireBusinessContext()") < body.indexOf("hasPermission(context, \"sales.refund\")"));
-  assert.ok(body.indexOf("hasPermission(context, \"sales.create\")") < body.indexOf("saleExchangeSchema.safeParse(input)"));
+  assert.ok(body.indexOf("requireBusinessContext()") < body.indexOf("linkSaleExchange({ context, input })"));
   assert.match(schema, /@tindio\/contracts\/sale-exchange/);
-  assert.match(body, /supabase\.rpc\(POS_SALE_EXCHANGE_RPC/);
-  assert.match(body, /saleExchangeSuccessMessage\(result\)/);
+  assert.ok(service.indexOf("hasPermission(context, \"sales.create\")") < service.indexOf("saleExchangeSchema.safeParse(input)"));
+  assert.match(service, /supabase\.rpc\(POS_SALE_EXCHANGE_RPC/);
+  assert.match(service, /saleExchangeSuccessMessage\(result\)/);
   assert.match(body, /revalidatePath\("\/back-office\/receipts"\)/);
   assert.match(body, /revalidatePath\("\/back-office\/receipts\/\[receiptId\]", "page"\)/);
 });
 
-test("Backend sale-exchange oracle remains network-independent without an exchange route", async () => {
+test("Backend sale-exchange oracle remains network-independent beside the owned route", async () => {
   const oracle = await read("apps/backend/src/pos/sale-exchange-compatibility.ts");
   for (const value of [
     "SALE_EXCHANGE_COMPATIBILITY_CONTRACT", "validateSaleExchange",
     "toSaleExchangeRpcArguments", "mapSaleExchangeRpcResult",
   ]) assert.match(oracle, new RegExp(`\\b${value}\\b`));
   assert.doesNotMatch(oracle, /fetch\(|createPosReadRuntime|createNeonDataApiFetch|@supabase|@neon|process\.env/);
-  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/exchanges", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../apps/backend/api/pos/v2/exchanges/link.ts", import.meta.url)), true);
 });
 
 test("database authority retains completed identities, actor custody, replay, uniqueness, and immutable linking", async () => {
@@ -77,14 +78,17 @@ test("database authority retains completed identities, actor custody, replay, un
   assert.match(baseline, /GRANT ALL ON FUNCTION "public"\."link_sale_exchange"[\s\S]+?TO "tindio_authenticated";/);
 });
 
-test("D38 keeps the Server Action authoritative and adjacent receipt boundaries unchanged", async () => {
-  const [action, settingsSchema, deliveryService, backendReadme] = await Promise.all([
+test("D38 contract remains intact after D39 ownership while adjacent receipt boundaries stay unchanged", async () => {
+  const [action, route, settingsSchema, deliveryService, backendReadme] = await Promise.all([
     read("src/features/receipts/improvement-6-actions.ts"),
+    read("src/app/api/pos/v2/exchanges/link/route.ts"),
     read("src/features/receipts/improvement-6-schema.ts"),
     read("src/features/receipts/service.ts"),
     read("apps/backend/README.md"),
   ]);
   assert.match(action, /^"use server";/);
+  assert.match(action, /linkSaleExchange\(\{ context, input \}\)/);
+  assert.match(route, /export async function POST/);
   assert.match(action, /export async function updateReceiptSettingsAction/);
   assert.match(action, /export async function queueReceiptDeliveryAction/);
   assert.match(settingsSchema, /export const receiptSettingsSchema/);

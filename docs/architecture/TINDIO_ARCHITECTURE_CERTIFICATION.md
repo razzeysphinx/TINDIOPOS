@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE D43 COMPLETE; DEVICE AND SYNC-CONTROL OWNERSHIP CERTIFIED**
+Status: **SLICE D44 COMPLETE; SHIFT-CONTROL COMPATIBILITY CERTIFIED**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D43 through Backend-owned device validation/enrollment and sync control
+Certified scope: Phase 0, Slices B1-B2, Slice C, and Slices D1-D44 through frozen shift open, close, custody, and cash-movement compatibility
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
@@ -670,6 +670,16 @@ Database: **CANONICAL NEON UNCHANGED**
   attached only to the RPC clients that enforce device custody.
 - No schema, deployment, authentication provider, shift, approval, stock
   operation, client origin, or adjacent mutation changed.
+- Focused `@tindio/contracts/shift-control` exports now freeze all four shift
+  paths, permissions, RPC vocabulary, bounded inputs, device custody, the
+  legacy HTTP 426 upgrade envelope, and response messages.
+- The isolated Backend shift oracle freezes permission and validation
+  precedence, exact RPC projections, cash conversion, database error mapping,
+  checkpoint/finalization custody, approval fallback, replay, and cash-summary
+  semantics without network or database access.
+- All four existing Next.js shift routes remain authoritative. No Backend shift
+  route or runtime mode, schema, deployment, Auth provider, client origin,
+  approval route, stock route, or adjacent mutation changed.
 
 ## Results
 
@@ -678,7 +688,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Architecture foundation | **PASS (3/3)** |
 | POS shared-contract compatibility | **PASS (7/7)** |
 | POS v1 retirement compatibility | **PASS (5/5)** |
-| Backend behavior and contracts | **PASS (670/670)** |
+| Backend behavior and contracts | **PASS (680/680)** |
 | Backend foundation boundary | **PASS (3/3)** |
 | Backend bootstrap ownership/rollback boundary | **PASS (5/5)** |
 | Backend reference ownership/rollback boundary | **PASS (5/5)** |
@@ -723,6 +733,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend receipt-administration ownership/rollback boundary | **PASS (5/5)** |
 | Backend device/sync-control compatibility boundary | **PASS (5/5)** |
 | Backend device/sync-control ownership/rollback boundary | **PASS (5/5)** |
+| Backend shift-control compatibility boundary | **PASS (5/5)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -746,7 +757,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Pricing/checkout-intent/outbox/offline-cart behavior | **PASS (39/39)** |
 | Device retirement custody | **PASS (4/4)** |
 | Sequence replay, delta resnapshot, and shift custody | **PASS (20/20)** |
-| Static catalogue | **PASS (232/232 automated commands)** |
+| Static catalogue | **PASS (233/233 automated commands)** |
 | Local Supabase/Docker source connectivity | **PASS** inside static catalogue |
 | Full local DB/pgTAP | **NOT_RUN**; no schema change in this slice |
 | Physical Android certification | **NOT_RUN**; prior evidence status preserved |
@@ -790,13 +801,20 @@ D43 adds no schema, provider setting, deployment, or live client cutover; it
 forwards validated device credentials only to database RPCs whose custody
 checks require them. The audited post-D43 inventory retains 9 Web-owned POS v2
 routes, so Phase D remains in progress.
+The D44 shift-control slice adds only focused shared contracts, Web facades, an
+isolated compatibility oracle, and a certification gate. All four Next.js shift
+routes remain authoritative; no Backend shift route, runtime mode, schema,
+provider setting, deployment, or live client cutover was added. The audited
+post-D44 inventory therefore still retains 9 Web-owned POS v2 routes and Phase
+D remains in progress.
 
 ## Next gate
 
-Begin Slice D44 by freezing shift open, close, custody, and cash-movement
-behavior in focused shared contracts and an isolated Backend compatibility
-oracle without moving route ownership. Preserve context-first authorization,
-permission and store/register/employee custody, money bounds, idempotency,
-database effects, and exact response envelopes. Do not change approvals, stock
-operations, deployed client origins, schema, or authentication-provider
-ownership.
+Begin Slice D45 by moving only the four D44-frozen shift open, close, custody,
+and cash-movement routes behind explicit Backend-owned/proxy boundaries.
+Preserve context-first authorization, permission precedence, device/store/
+register/employee/shift custody, the legacy HTTP 426 upgrade response,
+checkpoint reconciliation, finalization-token replay, approval fallback,
+idempotency, database effects, exact response envelopes, and every Next.js
+route as rollback. Do not change approvals, stock operations, deployed client
+origins, schema, or authentication-provider ownership.

@@ -32,6 +32,10 @@
       "types": "./src/sync-control.ts",
       "default": "./src/sync-control.ts"
     },
+    "./shift-control": {
+      "types": "./src/shift-control.ts",
+      "default": "./src/shift-control.ts"
+    },
     "./attendance": {
       "types": "./src/attendance.ts",
       "default": "./src/attendance.ts"
@@ -75,6 +79,10 @@
     "./pos-data": {
       "types": "./src/pos-data.ts",
       "default": "./src/pos-data.ts"
+    },
+    "./pos-operations": {
+      "types": "./src/pos-operations.ts",
+      "default": "./src/pos-operations.ts"
     },
     "./pos-runtime": {
       "types": "./src/pos-runtime.ts",

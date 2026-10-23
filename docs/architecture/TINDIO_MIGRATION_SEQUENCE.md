@@ -9,7 +9,7 @@ Status: **IN PROGRESS**
 | B2 | Extract platform-neutral POS contract leaves and remove Mobile relative Web imports | **IMPLEMENTED** | Backend/Web/Mobile contract tests; unchanged wire format |
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
-| D | Progressive Backend extraction, mutations last | **IN PROGRESS — D43 COMPLETE; 34 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
+| D | Progressive Backend extraction, mutations last | **IN PROGRESS — D44 COMPLETE; 34 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **OWNER/PROVIDER PREREQUISITES** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
@@ -576,6 +576,21 @@ Status: **IN PROGRESS**
 - Keep shifts, approvals, stock operations, schema, deployment, client origins,
   and Supabase authentication-provider ownership unchanged. **IMPLEMENTED.**
 
+## Completed Slice D44: shift-control compatibility harness
+
+- Freeze shift open, mobile-safe close, offline custody acquisition, and cash
+  movement without moving ownership, including context-first authentication,
+  permission precedence, organization/employee/device/store/register/shift
+  custody, money and note bounds, checkpoint reconciliation, finalization-token
+  replay, approval fallback, and exact response envelopes. **IMPLEMENTED.**
+- Add focused platform-neutral shift-control contracts plus a network/database-
+  independent Backend oracle covering all four routes and the HTTP 426 legacy-
+  client upgrade contract. **IMPLEMENTED.**
+- Keep all four Next.js routes authoritative and add no Backend shift route or
+  runtime mode. Device/sync ownership, approvals, stock operations, deployed
+  client origins, schema, and authentication-provider ownership remain
+  unchanged. **IMPLEMENTED.**
+
 ## Remaining Phase D closure sequence
 
 The post-D43 route inventory has 9 Web-owned POS v2 routes without Backend
@@ -583,8 +598,8 @@ counterparts. Phase D is not complete until each group below has frozen
 compatibility evidence, an owned/proxy boundary, and a final route-inventory
 audit:
 
-- **D44-D45:** shift open, close, custody, and cash-movement compatibility then
-  ownership (4 routes).
+- **D45:** shift open, close, custody, and cash-movement ownership (4 routes;
+  compatibility frozen in D44).
 - **D46-D47:** approval request, approve, and status compatibility then
   ownership (3 routes).
 - **D48-D49:** cart stock validation and stock-request receipt compatibility
@@ -592,17 +607,17 @@ audit:
 - **D50:** Phase D closure audit proving every supported POS v2 route has a
   Backend owner and Web rollback surface before beginning Neon Auth proof.
 
-## Next smallest safe slice: D44 shift compatibility
+## Next smallest safe slice: D45 shift-control ownership
 
-- Freeze shift open, close, custody, and cash-movement behavior without moving
-  ownership, including context-first authorization, permission and store/
-  register/employee custody, money bounds, idempotency, database effects, and
-  exact response envelopes.
-- Add focused platform-neutral shift contracts and a network/database-
-  independent Backend compatibility oracle before any ownership move.
-- Keep all four shift routes authoritative in Next.js and leave approvals,
-  stock operations, deployed client origins, schema, and authentication-
-  provider ownership unchanged.
+- Move only the four D44-frozen shift routes behind explicit Backend-owned/
+  proxy boundaries while preserving their Next.js routes as rollback.
+- Preserve context-first authentication, permission precedence, device/store/
+  register/employee/shift custody, the HTTP 426 upgrade response, reconciled
+  checkpoint and finalization-token rules, approval fallback, idempotency,
+  exact RPC projections, and response envelopes through Neon's external-JWT
+  boundary.
+- Keep device/sync ownership, approvals, stock operations, deployed client
+  origins, schema, and authentication-provider ownership unchanged.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

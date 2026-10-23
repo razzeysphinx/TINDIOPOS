@@ -381,6 +381,17 @@ retention, resnapshot, and telemetry authority. All seven Next.js handlers
 remain available for rollback, client origins are unchanged, and shifts,
 approvals, stock operations, schema, and deployment remain untouched.
 
+The Slice D44 shift-control compatibility oracle is network- and database-
+independent. It freezes shift open, mobile-safe close, offline custody
+acquisition, and cash movement across four Next.js routes: context-first
+authentication, permission precedence, device/store/register/employee/shift
+custody, the legacy-client HTTP 426 upgrade contract, reconciled checkpoint and
+finalization-token rules, permission-or-approval cash movement, idempotency,
+cash summaries, and exact messages. All four Web routes remain authoritative;
+no Backend shift route or runtime mode was added, and approvals, stock
+operations, schema, deployment, client origins, and Auth ownership are
+unchanged.
+
 No financial, custody, attendance, or offline-replayed mutation outside the
 explicitly listed Backend-owned commands, authentication provider, deployment,
 or client API origin has moved. Clients continue using the existing Next.js

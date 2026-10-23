@@ -1,20 +1,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import ts from "typescript";
 
-async function loadTypeScriptModule(file) {
-  const output = ts.transpileModule(readFileSync(file, "utf8"), {
-    compilerOptions: {
-      module: ts.ModuleKind.ES2022,
-      target: ts.ScriptTarget.ES2022,
-    },
-    fileName: file,
-  }).outputText;
-
-  return import(
-    `data:text/javascript;base64,${Buffer.from(output).toString("base64")}`
+async function loadShiftCloseCompatibility() {
+  const facade = readFileSync(
+    "src/features/shifts/mobile-shift-close-compatibility.ts",
+    "utf8",
   );
+  assert.match(facade, /from "@tindio\/contracts\/shift-control"/);
+  return import("@tindio/contracts/shift-control");
 }
 
 const legacyClose = {
@@ -24,9 +18,7 @@ const legacyClose = {
 };
 
 test("A43 audit-baseline shift close receives a safe upgrade decision", async () => {
-  const compatibility = await loadTypeScriptModule(
-    "src/features/shifts/mobile-shift-close-compatibility.ts",
-  );
+  const compatibility = await loadShiftCloseCompatibility();
   const result = compatibility.legacyMobileShiftCloseUpgrade(
     legacyClose,
   );
@@ -47,9 +39,7 @@ test("A43 audit-baseline shift close receives a safe upgrade decision", async ()
 });
 
 test("A43 current and malformed partial close bodies do not impersonate the old client", async () => {
-  const compatibility = await loadTypeScriptModule(
-    "src/features/shifts/mobile-shift-close-compatibility.ts",
-  );
+  const compatibility = await loadShiftCloseCompatibility();
   const device = {
     deviceId: "22222222-2222-4222-8222-222222222222",
     secret: "a".repeat(64),

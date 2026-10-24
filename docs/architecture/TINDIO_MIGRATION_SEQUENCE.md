@@ -10,7 +10,7 @@ Status: **IN PROGRESS**
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
 | D | Progressive Backend extraction, mutations last | **PHASE D COMPLETE; 43 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
-| E | Isolated synthetic Neon Auth proof on a non-production branch | **E4 COMPLETE — 3/13 FLOWS PASS; SUPABASE DEFAULT** | Remaining Web refresh/recovery, Backend, Mobile, RLS, and rollback proof |
+| E | Isolated synthetic Neon Auth proof on a non-production branch | **E5 COMPLETE — 5/13 FLOWS PASS; SUPABASE DEFAULT** | Remaining Web lifecycle, Mobile, adversarial RLS, and rollback proof |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
 | H | Controlled production cutover | **OWNER APPROVAL REQUIRED** | Monitoring, rollback, supported clients, tenant/financial proof |
@@ -745,12 +745,28 @@ counterparts. Phase D is complete.
 - Kept `E-AUTH-04` and the other nine unexecuted flows `NOT_RUN`; navigation
   persistence alone is not refresh proof. **IMPLEMENTED.**
 
-## Next smallest safe slice: E5 server claims and Data API identity
+## Completed Slice E5: isolated Backend claims and Data API identity
 
-- Add an isolated Neon bearer verifier to the Backend provider boundary.
-- Prove protected-route acceptance/denial for `E-AUTH-05`.
-- Exercise valid JWT identity and allowed RLS access for `E-AUTH-11` without
-  writing merchant data or redirecting a deployed client.
+- Pinned `jose` in the Backend and added a Managed Neon Auth verifier behind
+  explicit local, non-production, non-deployed guards. Supabase remains the
+  default for all existing routes. **IMPLEMENTED.**
+- Added a no-store proof route that returns only normalized claims and rejects
+  missing bearers, invalid signatures, unauthenticated roles, and invalid
+  provider configuration. **IMPLEMENTED.**
+- Directly proved valid JWT acceptance and tampered-token denial in the built
+  Backend, promoting `E-AUTH-05`. **IMPLEMENTED.**
+- Directly proved Data API rejection of the tampered JWT and authenticated-role
+  access to `current_profile_id()` with a null result, promoting `E-AUTH-11`
+  without creating a merchant profile. **IMPLEMENTED.**
+- Signed out the passing synthetic session and kept account secrets, JWTs,
+  cookies, environment values, deployments, and client origins out of the
+  repository. Five of 13 flows pass; eight remain `NOT_RUN`. **IMPLEMENTED.**
+
+## Next smallest safe slice: E6 Web lifecycle proof
+
+- Prove branch-local email verification for `E-AUTH-02`.
+- Force access-token/session refresh and prove continuity for `E-AUTH-04`.
+- Prove password reset and recovery confirmation for `E-AUTH-07`.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

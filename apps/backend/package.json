@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.112.3",
-    "@tindio/contracts": "workspace:*"
+    "@tindio/contracts": "workspace:*",
+    "jose": "6.2.5"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

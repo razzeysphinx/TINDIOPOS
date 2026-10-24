@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE E3 COMPLETE; PROVIDER-NEUTRAL AUTH BOUNDARY ACTIVE**
+Status: **SLICE E5 COMPLETE; 5/13 ISOLATED AUTH FLOWS PASS**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and Phase E Slices E1-E3 through provider-neutral Auth contracts with Supabase-only runtime selection
+Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and Phase E Slices E1-E5 through isolated Web, Backend, and Data API Neon Auth proof with Supabase still the default
 
 Retained Phase D certification: **SLICE D50 COMPLETE; PHASE D CLOSURE CERTIFIED**
 
@@ -807,6 +807,8 @@ Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
 | Phase E Neon Auth prerequisite boundary | **PASS (6/6)** |
 | Phase E isolated Auth environment boundary | **PASS (6/6)** |
 | Phase E provider-neutral Auth contract boundary | **PASS (7/7)** |
+| Phase E isolated Neon Web boundary | **PASS (3/3 FLOWS)** |
+| Phase E isolated Backend/Data API boundary | **PASS (2/2 FLOWS)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -947,8 +949,22 @@ the other ten flows remain `NOT_RUN`. Supabase remains the default, and no
 deployed configuration, local environment file, canonical Neon context, real
 identity, or merchant row changed.
 
+E5 pins `jose` in the Backend and extends the provider-neutral bearer verifier
+with a Managed Neon Auth path available only under explicit local,
+non-production, non-deployed proof guards. The built Backend directly denied a
+missing bearer and tampered JWT, accepted a valid EdDSA JWT through the remote
+JWKS, and returned only normalized identity fields. The Neon Data API denied
+the tampered JWT and allowed the valid JWT to call the authenticated-only
+`current_profile_id()` RPC; its null result proves that no merchant profile was
+created. The passing synthetic session was signed out. The matrix now records
+`PASS` for `E-AUTH-05` and `E-AUTH-11`, bringing Phase E to 5/13 passed and
+eight `NOT_RUN`. Supabase remains the default, and no deployed configuration,
+client origin, environment file, canonical Neon context, real identity, or
+merchant row changed.
+
 ## Next gate
 
-Begin E5 with isolated Backend claim verification and valid JWT/Data API RLS
-proof for `E-AUTH-05` and `E-AUTH-11`. Keep Supabase as the default, do not
-redirect deployed clients, and promote neither flow without direct evidence.
+Begin E6 with branch-local Web email verification, forced session refresh, and
+password reset/recovery proof for `E-AUTH-02`, `E-AUTH-04`, and `E-AUTH-07`.
+Keep Supabase as the default, keep redirects local to the disposable proof
+environment, and promote no flow without direct evidence.

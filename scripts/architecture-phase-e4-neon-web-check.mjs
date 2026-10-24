@@ -64,11 +64,9 @@ test("E4 pins the official SDK without changing deployment configuration", async
   assert.equal(parsed.scripts["test:architecture-phase-e4-neon-web"], "node --test scripts/architecture-phase-e4-neon-web-check.mjs");
   assert.equal(parsed.scripts["certify:phase-e4:neon-web"], "node scripts/phase-e4-neon-web-proof.mjs");
   assert.match(gitignore, /\.env\*/);
-  assert.deepEqual(
-    matrix.flows.filter(({ status }) => status === "PASS").map(({ id }) => id),
-    ["E-AUTH-01", "E-AUTH-03", "E-AUTH-06"],
-  );
-  assert.equal(matrix.flows.filter(({ status }) => status === "NOT_RUN").length, 10);
+  for (const id of ["E-AUTH-01", "E-AUTH-03", "E-AUTH-06"]) {
+    assert.equal(matrix.flows.find((flow) => flow.id === id)?.status, "PASS");
+  }
   assert.deepEqual(evidence.promotedFlows, ["E-AUTH-01", "E-AUTH-03", "E-AUTH-06"]);
   assert.equal(evidence.environment.supabaseRemainsDefault, true);
   assert.equal(evidence.environment.deployedConfigurationChanged, false);

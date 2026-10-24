@@ -1,0 +1,39 @@
+{
+  "phase": "E",
+  "slice": "E5",
+  "status": "PASS",
+  "executedAt": "2026-10-24T08:38:52.326Z",
+  "runId": "1792831132326-a9367399",
+  "environment": {
+    "kind": "LOCAL_ONLY_DISPOSABLE_NEON_BRANCH",
+    "authEndpointHost": "ep-round-sound-b5q9r8vr.neonauth.c-7.us-east-2.aws.neon.tech",
+    "dataApiEndpointHost": "ep-round-sound-b5q9r8vr.apirest.c-7.us-east-2.aws.neon.tech",
+    "syntheticEmail": "phase-e5-1792831132326-a9367399@auth-proof.tindio.invalid",
+    "realUsersImported": 0,
+    "merchantRowsWritten": 0,
+    "deployedConfigurationChanged": false,
+    "localEnvironmentFileChanged": false,
+    "canonicalNeonContextChanged": false,
+    "supabaseRemainsDefault": true
+  },
+  "evidence": {
+    "missingBearerDenied": true,
+    "invalidSignatureDeniedByBackend": true,
+    "validJwtAcceptedByBackend": true,
+    "normalizedSubjectMatchedAuthUser": true,
+    "invalidSignatureDeniedByDataApi": true,
+    "authenticatedOnlyIdentityRpcAllowed": true,
+    "merchantProfileRemainedAbsent": true,
+    "tokenExcludedFromProofResponse": true,
+    "syntheticSessionSignedOut": true
+  },
+  "promotedFlows": ["E-AUTH-05", "E-AUTH-11"],
+  "cumulativePassedFlows": ["E-AUTH-01", "E-AUTH-03", "E-AUTH-05", "E-AUTH-06", "E-AUTH-11"],
+  "notRunFlows": ["E-AUTH-02", "E-AUTH-04", "E-AUTH-07", "E-AUTH-08", "E-AUTH-09", "E-AUTH-10", "E-AUTH-12", "E-AUTH-13"],
+  "notes": [
+    "The Backend proof route and Neon provider selection are available only behind explicit local, non-production, non-Vercel guards.",
+    "The authenticated-only current_profile_id RPC returned null, proving the synthetic Auth identity had no merchant profile mapping while still crossing the Data API role boundary.",
+    "Bounded diagnostic retries created only @auth-proof.tindio.invalid identities in the disposable branch; no real identity or merchant row was introduced.",
+    "The generated password, session cookie, and JWT were held in memory and were not logged or committed. The passing run explicitly signed out its synthetic session."
+  ]
+}

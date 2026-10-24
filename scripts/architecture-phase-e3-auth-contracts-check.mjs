@@ -52,14 +52,16 @@ test("E3 Web clients retain the Supabase default after the guarded E4 extension"
   assert.match(browser, /process\.env\.NEXT_PUBLIC_TINDIO_AUTH_PROVIDER/);
 });
 
-test("E3 Backend reads verify bearer tokens through the normalized adapter", async () => {
+test("E3 Backend reads retain the normalized adapter after the guarded E5 extension", async () => {
   const [provider, runtime] = await Promise.all([
     read("apps/backend/src/auth/provider.ts"),
     read("apps/backend/src/pos/pos-read-runtime.ts"),
   ]);
   assert.match(provider, /createBackendAuthTokenVerifier/);
   assert.match(provider, /client\.auth\.getClaims\(token\)/);
-  assert.match(provider, /resolveTindioAuthProvider\(configuredProvider, \["supabase"\]\)/);
+  assert.match(provider, /neonProofEnabled\(environment\)/);
+  assert.match(provider, /\? \["supabase", "neon"\]/);
+  assert.match(provider, /: \["supabase"\]/);
   assert.match(runtime, /authVerifier\.verifyAccessToken\(token\)/);
   assert.doesNotMatch(runtime, /authClient\.auth\.getClaims/);
 });
@@ -102,7 +104,7 @@ test("E3 documentation and package surfaces are executable", async () => {
   ]);
   assert.match(handoff, /E3 COMPLETE/);
   assert.match(migration, /Completed Slice E3/);
-  assert.match(certification, /SLICE E3 COMPLETE/);
+  assert.match(certification, /Phase E Slices E1-E5/);
   assert.match(packageJson, /test:architecture-phase-e3-auth-contracts/);
   assert.match(contractsPackage, /"\.\/auth"/);
 });

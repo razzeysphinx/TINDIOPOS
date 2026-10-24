@@ -1,0 +1,77 @@
+{
+  "phase": "E",
+  "slice": "E2",
+  "status": "PASS",
+  "provisionedAt": "2026-10-24T04:31:53Z",
+  "strategy": "DEDICATED_EMPTY_PROJECT_WITH_EXPIRING_CHILD_BRANCH",
+  "sourceDataCopied": false,
+  "project": {
+    "id": "billowing-night-36088699",
+    "name": "TINDIO PHASE E AUTH PROOF TEMP 2026-10-24",
+    "region": "aws-us-east-2",
+    "postgresMajor": 18,
+    "temporary": true,
+    "manualDeletionRequiredAfterPhaseE": true
+  },
+  "branch": {
+    "id": "br-spring-shape-b5qliuku",
+    "name": "phase-e2-auth-proof",
+    "parentId": "br-round-star-b5kk3j7o",
+    "default": false,
+    "protected": false,
+    "expiresAt": "2026-10-31T04:30:00Z"
+  },
+  "auth": {
+    "provider": "better_auth",
+    "baseUrl": "https://ep-round-sound-b5q9r8vr.neonauth.c-7.us-east-2.aws.neon.tech/neondb/auth",
+    "localhostAllowed": true,
+    "syntheticEmailDomain": "auth-proof.tindio.invalid",
+    "syntheticUserCount": 1,
+    "otherUserCount": 0,
+    "realUsersImported": 0,
+    "passwordsImported": 0
+  },
+  "dataApi": {
+    "status": "active",
+    "schemaRefreshedAt": "2026-10-24T04:58:51Z",
+    "authProvider": "neon_auth",
+    "url": "https://ep-round-sound-b5q9r8vr.apirest.c-7.us-east-2.aws.neon.tech/neondb/rest/v1",
+    "exposedSchemas": ["public"],
+    "anonymousRole": "anonymous",
+    "defaultGrantsAdded": false
+  },
+  "canonicalInstall": {
+    "baselineSha256": "b3a0fd6bac3f670b251680698c315e229eff940e05fc1370f5f392b198d50a87",
+    "migrationCount": 18,
+    "publicTables": 101,
+    "privateTables": 10,
+    "publicFunctions": 214,
+    "publicPolicies": 149,
+    "unvalidatedForeignKeys": 0,
+    "permissionReferenceRows": 65,
+    "providerRoleMappings": 3,
+    "authUserIdPresent": true,
+    "authJwtPresent": true,
+    "identityAdapterPresent": true,
+    "latestMigrationPresent": true
+  },
+  "businessData": {
+    "organizationRows": 0,
+    "profileRows": 0,
+    "merchantDataImported": false
+  },
+  "applicationImpact": {
+    "webOriginChanged": false,
+    "mobileOriginChanged": false,
+    "backendOriginChanged": false,
+    "deploymentChanged": false,
+    "localEnvChanged": false,
+    "neonContextChanged": false,
+    "supabaseAuthRemainsActive": true
+  },
+  "proof": {
+    "requiredFlowCount": 13,
+    "flowsExecuted": 0,
+    "allFlowsRemainNotRun": true
+  }
+}

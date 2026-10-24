@@ -87,6 +87,7 @@
     "test:architecture-backend-stock-operations": "pnpm backend:test && node --test scripts/architecture-backend-stock-operations-ownership-check.mjs",
     "test:architecture-phase-d-closure": "node --test scripts/architecture-phase-d-closure-check.mjs",
     "test:architecture-phase-e-auth-prerequisites": "node --test scripts/architecture-phase-e-auth-prerequisites-check.mjs",
+    "test:architecture-phase-e2-auth-environment": "node --test scripts/architecture-phase-e2-auth-environment-check.mjs",
     "test:phase-06-native-foundation": "node --test scripts/phase-06-native-foundation-check.mjs",
     "test:phase-06-provider-neutral-device-runtime": "node --test scripts/phase-06-provider-neutral-device-runtime-check.mjs",
     "test:phase-06-device-enrollment": "node --test scripts/phase-06-device-enrollment-check.mjs",

@@ -9,7 +9,8 @@ Status: **NOT READY — OWNER APPROVAL REQUIRED AT CUTOVER**
 - [x] Current Supabase Auth/Web/Mobile dependency inventory recorded.
 - [x] Phase E provider capability, account/region access, linked-branch status,
       and 13-flow synthetic proof requirements assessed read-only.
-- [ ] Disposable Neon branch and synthetic Auth environment approved.
+- [x] Disposable Neon branch and synthetic Auth environment approved and
+      provisioned; application proof remains `NOT_RUN`.
 - [ ] Password reset/account-claim or OAuth reauthentication policy approved;
       existing Supabase password hashes are not treated as portable.
 - [ ] Expo/React Native session persistence and refresh proof path approved.

@@ -10,7 +10,7 @@ Status: **IN PROGRESS**
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
 | D | Progressive Backend extraction, mutations last | **PHASE D COMPLETE; 43 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
-| E | Isolated synthetic Neon Auth proof on a non-production branch | **E1 COMPLETE — PROVISIONING BLOCKED ON OWNER DECISIONS** | Required 13-flow proof including Mobile, RLS, revocation |
+| E | Isolated synthetic Neon Auth proof on a non-production branch | **E2 COMPLETE — ENVIRONMENT READY; 13 FLOWS NOT RUN** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
 | H | Controlled production cutover | **OWNER APPROVAL REQUIRED** | Monitoring, rollback, supported clients, tenant/financial proof |
@@ -696,15 +696,32 @@ counterparts. Phase D is complete.
   password continuity, synthetic email/domains, Mobile runtime proof, and
   rollback authority. **IMPLEMENTED.**
 
-## Next smallest safe slice: E2 isolated environment provisioning
+## Completed Slice E2: isolated environment provisioning
 
-- First obtain explicit approval for all five decisions recorded in
-  `TINDIO_PHASE_E_NEON_AUTH_PREREQUISITES.md`.
-- Create one expiring, non-production branch from a proven synthetic-only,
-  schema-only, or anonymized source; enable Managed Better Auth only there.
-- Record its branch-scoped Auth/Data API endpoints and trusted local/preview
-  domains without changing existing Web, Mobile, Backend, or deployment origins.
-- Stop before application integration or any real-user import.
+- Created dedicated empty Neon project `billowing-night-36088699` after the
+  legacy recovery project safely rejected schema-only branching. No recovery or
+  production data was copied. **IMPLEMENTED.**
+- Created expiring child branch `br-spring-shape-b5qliuku`, enabled Managed
+  Better Auth and Data API with `neon_auth` only there, and retained localhost
+  as the only proof redirect class. **IMPLEMENTED.**
+- Installed the manifest-backed canonical baseline, all 18 ordered migrations,
+  and provider-neutral identity/role adapters. Independent checks found zero
+  organizations, profiles, and unvalidated foreign keys. **IMPLEMENTED.**
+- Created exactly one `.invalid` synthetic identity without a password and
+  preserved Supabase Auth, application origins, deployment configuration,
+  local environment files, and the canonical Neon context. **IMPLEMENTED.**
+- Recorded automatic child-branch expiry at `2026-10-31T04:30:00Z` and the
+  required manual deletion of the temporary project after Phase E. All 13
+  application proof flows remain `NOT_RUN`. **IMPLEMENTED.**
+
+## Next smallest safe slice: E3 provider-neutral Auth contracts
+
+- Define provider-neutral identity, session, token, and error contracts without
+  replacing current Supabase runtime ownership.
+- Add adapters behind explicit, fail-closed runtime selection; default all
+  deployed and local application paths to the existing Supabase provider.
+- Keep the E2 endpoints out of checked-in application configuration and stop
+  before executing or promoting any of the 13 proof flows.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

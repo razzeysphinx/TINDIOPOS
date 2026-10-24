@@ -1,10 +1,17 @@
 # TINDIO Phase E Neon Auth prerequisites
 
-Status: **E1 COMPLETE — PROVISIONING NOT APPROVED**
+Status: **E1 COMPLETE — E2 ISOLATED PROVISIONING COMPLETE**
 
 Assessment date: 2026-10-23
 
-This assessment authorizes no provider mutation. Supabase Auth remains active,
+E2 resolution: on 2026-10-24 the owner approved a dedicated temporary Neon
+project after the legacy recovery project rejected schema-only branching. The
+isolated child branch, Managed Better Auth, Data API, canonical schema, and one
+synthetic `.invalid` identity are now provisioned as recorded in
+`TINDIO_PHASE_E2_NEON_AUTH_ENVIRONMENT.md`. This E1 document retains the
+original pre-provisioning findings and decision criteria as historical evidence.
+
+At E1, this assessment authorized no provider mutation. Supabase Auth remains active,
 the Neon Data API continues to verify Supabase JWTs, and no application origin,
 credential, account, session, schema, or deployment changed.
 
@@ -27,7 +34,7 @@ Official provider references used for this assessment:
 - [Auth production checklist](https://neon.com/docs/auth/production-checklist)
 - [Neon branching](https://neon.com/docs/introduction/branching)
 
-## Decisions required before provisioning
+## Decisions required before provisioning (E1 historical gate)
 
 1. **Disposable branch approval.** Approve a new expiring, non-production branch
    and confirm its parent contains synthetic data only. If that cannot be

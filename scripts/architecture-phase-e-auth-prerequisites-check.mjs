@@ -17,9 +17,9 @@ test("E1 freezes exactly thirteen synthetic-only Auth proof flows", () => {
   assert.ok(matrix.flows.every((flow) => flow.status === "NOT_RUN"));
 });
 
-test("E1 records the provider and branch facts without claiming provisioning", async () => {
+test("E1 retains its original provider and branch findings after E2", async () => {
   const source = await read("docs/architecture/TINDIO_PHASE_E_NEON_AUTH_PREREQUISITES.md");
-  for (const marker of ["PROVISIONING NOT APPROVED", "divine-sound-41148108", "br-snowy-heart-b5nf6q3n", "aws-us-east-2", "Neon Auth is not configured for this branch", "CLI 4.14.3"]) assert.ok(source.includes(marker), `missing ${marker}`);
+  for (const marker of ["E2 ISOLATED PROVISIONING COMPLETE", "divine-sound-41148108", "br-snowy-heart-b5nf6q3n", "aws-us-east-2", "Neon Auth is not configured for this branch", "CLI 4.14.3"]) assert.ok(source.includes(marker), `missing ${marker}`);
 });
 
 test("E1 preserves Supabase Auth and external-JWT Data API configuration", async () => {
@@ -56,9 +56,9 @@ test("E1 fails closed on branch, password, email, Mobile, and rollback decisions
   assert.match(source, /Do not create the branch, enable Neon Auth/);
 });
 
-test("E1 is an executable prerequisite gate and not provider-cutover evidence", async () => {
+test("E1 remains an executable historical gate without provider-cutover evidence", async () => {
   const packageJson = JSON.parse(await read("package.json"));
   assert.match(packageJson.scripts["test:architecture-phase-e-auth-prerequisites"], /architecture-phase-e-auth-prerequisites-check\.mjs/);
-  assert.match(await read("docs/architecture/TINDIO_MIGRATION_SEQUENCE.md"), /E1 COMPLETE — PROVISIONING BLOCKED ON OWNER DECISIONS/);
-  assert.match(await read("docs/architecture/TINDIO_ARCHITECTURE_CERTIFICATION.md"), /SLICE E1 COMPLETE; NEON AUTH PREREQUISITES ASSESSED/);
+  assert.match(await read("docs/architecture/TINDIO_MIGRATION_SEQUENCE.md"), /Completed Slice E1: Neon Auth prerequisite assessment/);
+  assert.match(await read("docs/architecture/TINDIO_ARCHITECTURE_CERTIFICATION.md"), /The E1 prerequisite assessment used only repository inspection/);
 });

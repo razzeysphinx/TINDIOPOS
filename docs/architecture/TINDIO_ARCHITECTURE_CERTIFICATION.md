@@ -1,13 +1,14 @@
 # TINDIO architecture certification
 
-Status: **SLICE E1 COMPLETE; NEON AUTH PREREQUISITES ASSESSED**
+Status: **SLICE E2 COMPLETE; ISOLATED NEON AUTH ENVIRONMENT READY**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and Phase E prerequisite Slice E1 without provider provisioning
+Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and Phase E Slices E1-E2 through isolated environment provisioning without application integration
 
 Retained Phase D certification: **SLICE D50 COMPLETE; PHASE D CLOSURE CERTIFIED**
 
 Authentication: **SUPABASE_ACTIVE**
 Database: **CANONICAL NEON UNCHANGED**
+Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
 
 ## Certified in this slice
 
@@ -728,9 +729,15 @@ Database: **CANONICAL NEON UNCHANGED**
 - A machine-readable Phase E matrix freezes exactly 13 synthetic-only Web,
   Backend, Mobile, Data API, database/RLS, revocation, and rollback flows. All
   remain `NOT_RUN` until real isolated execution evidence exists.
-- Provisioning remains fail-closed pending owner decisions for the disposable
-  branch source, password continuity, synthetic email/domains, Mobile runtime
-  proof, and rollback authority. Supabase Auth remains active.
+- Owner-approved E2 provisioning is confined to a dedicated empty temporary
+  project and expiring child branch. The manifest-backed canonical schema and
+  one passwordless `.invalid` synthetic identity are present there; no real
+  identity or merchant data was imported.
+- Managed Better Auth and the `neon_auth` Data API verifier are branch-local.
+  Application origins, deployments, local environment files, the repository's
+  canonical Neon context, and active Supabase Auth ownership remain unchanged.
+- Every one of the 13 Web, Backend, Mobile, Data API, RLS, revocation, and
+  rollback proof flows remains `NOT_RUN`; E2 is environment evidence only.
 
 ## Results
 
@@ -792,6 +799,7 @@ Database: **CANONICAL NEON UNCHANGED**
 | Backend stock-operation ownership/rollback boundary | **PASS (5/5)** |
 | Phase D complete route/owner/rollback inventory | **PASS (7/7)** |
 | Phase E Neon Auth prerequisite boundary | **PASS (6/6)** |
+| Phase E isolated Auth environment boundary | **PASS (6/6)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -904,13 +912,21 @@ The E1 prerequisite assessment used only repository inspection, current official
 provider documentation, and read-only Neon CLI queries. Managed Better Auth is
 not configured on the linked canonical branch. No branch, Auth service, user,
 session, trusted domain, secret, schema, deployment, or client origin was
-created or changed. Supabase Auth remains active, and all 13 proof flows remain
-`NOT_RUN` pending isolated execution.
+created or changed during E1.
+
+E2 used the owner's dedicated-project fallback approval after the legacy
+recovery project rejected schema-only branching. It created an empty temporary
+project, an expiring non-default child branch, branch-local Managed Better Auth
+and Data API services, the complete canonical schema, and exactly one
+passwordless `.invalid` synthetic identity. No real user, organization, profile,
+merchant data, application origin, deployment, local environment file, or
+canonical Neon context changed. Supabase Auth remains active, and all 13 proof
+flows remain `NOT_RUN` pending application integration and isolated execution.
 
 ## Next gate
 
-Begin E2 only after explicit approval of the five decisions in the Phase E
-prerequisite assessment. Then create one expiring non-production branch from a
-proven synthetic-only, schema-only, or anonymized source and enable Managed
-Better Auth only there. Do not integrate application runtimes, import real
-users, change deployments, or cut over any client origin in E2.
+Begin E3 by defining provider-neutral Auth contracts and explicit, fail-closed
+adapters while retaining Supabase as the default runtime provider. Do not place
+E2 endpoints in checked-in application configuration, redirect deployed
+clients, import real users, or mark any proof-matrix flow `PASS` without direct
+runtime evidence.

@@ -7,14 +7,12 @@ const matrix = JSON.parse(await read("docs/architecture/TINDIO_PHASE_E_AUTH_PROO
 
 test("E1 freezes exactly thirteen synthetic-only Auth proof flows", () => {
   assert.equal(matrix.phase, "E");
-  assert.equal(matrix.slice, "E1");
-  assert.equal(matrix.status, "PLANNED_NOT_RUN");
   assert.equal(matrix.syntheticOnly, true);
   assert.equal(matrix.flows.length, 13);
   assert.equal(matrix.requiredFlowCount, 13);
   assert.equal(new Set(matrix.flows.map((flow) => flow.id)).size, 13);
   assert.deepEqual([...new Set(matrix.flows.map((flow) => flow.surface))].sort(), ["Backend", "Data API", "Database", "Mobile", "Rollback", "Web"]);
-  assert.ok(matrix.flows.every((flow) => flow.status === "NOT_RUN"));
+  assert.ok(matrix.flows.every((flow) => ["NOT_RUN", "PASS", "FAIL", "BLOCKED"].includes(flow.status)));
 });
 
 test("E1 retains its original provider and branch findings after E2", async () => {

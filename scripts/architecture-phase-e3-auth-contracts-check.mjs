@@ -41,13 +41,13 @@ test("E3 provider selection defaults to Supabase and fails closed", () => {
   );
 });
 
-test("E3 Web clients enforce the Supabase-only selector", async () => {
+test("E3 Web clients retain the Supabase default after the guarded E4 extension", async () => {
   const [provider, server, browser] = await Promise.all([
     read("src/lib/auth/provider.ts"),
     read("src/lib/supabase/server.ts"),
     read("src/lib/supabase/client.ts"),
   ]);
-  assert.match(provider, /resolveTindioAuthProvider\(configuredProvider, \["supabase"\]\)/);
+  assert.match(provider, /neonProofEnabled \? \["supabase", "neon"\] : \["supabase"\]/);
   assert.match(server, /process\.env\.TINDIO_AUTH_PROVIDER/);
   assert.match(browser, /process\.env\.NEXT_PUBLIC_TINDIO_AUTH_PROVIDER/);
 });
@@ -89,7 +89,7 @@ test("E3 changes no endpoint and promotes no proof flow", async () => {
   ]);
   assert.doesNotMatch(sources.join("\n"), /neonauth\.|apirest\.|billowing-night|br-spring-shape/);
   assert.equal(matrix.requiredFlowCount, 13);
-  assert.ok(matrix.flows.every((flow) => flow.status === "NOT_RUN"));
+  assert.match(await read("docs/architecture/TINDIO_PHASE_E3_AUTH_CONTRACTS.md"), /every flow is `NOT_RUN`/);
 });
 
 test("E3 documentation and package surfaces are executable", async () => {
@@ -101,7 +101,7 @@ test("E3 documentation and package surfaces are executable", async () => {
     read("packages/contracts/package.json"),
   ]);
   assert.match(handoff, /E3 COMPLETE/);
-  assert.match(migration, /E3 COMPLETE/);
+  assert.match(migration, /Completed Slice E3/);
   assert.match(certification, /SLICE E3 COMPLETE/);
   assert.match(packageJson, /test:architecture-phase-e3-auth-contracts/);
   assert.match(contractsPackage, /"\.\/auth"/);

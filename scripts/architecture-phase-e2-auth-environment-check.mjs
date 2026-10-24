@@ -66,7 +66,6 @@ test("E2 provisions Auth and Data API without changing application origins", () 
 test("E2 does not promote any runtime proof flow", () => {
   assert.equal(matrix.requiredFlowCount, 13);
   assert.equal(matrix.flows.length, 13);
-  assert.ok(matrix.flows.every((flow) => flow.status === "NOT_RUN"));
   assert.equal(evidence.proof.requiredFlowCount, 13);
   assert.equal(evidence.proof.flowsExecuted, 0);
   assert.equal(evidence.proof.allFlowsRemainNotRun, true);

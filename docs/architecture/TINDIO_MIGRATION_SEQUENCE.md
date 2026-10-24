@@ -10,7 +10,7 @@ Status: **IN PROGRESS**
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
 | D | Progressive Backend extraction, mutations last | **PHASE D COMPLETE; 43 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
-| E | Isolated synthetic Neon Auth proof on a non-production branch | **E3 COMPLETE — SUPABASE DEFAULT; NEON ADAPTER DISABLED** | Required 13-flow proof including Mobile, RLS, revocation |
+| E | Isolated synthetic Neon Auth proof on a non-production branch | **E4 COMPLETE — 3/13 FLOWS PASS; SUPABASE DEFAULT** | Remaining Web refresh/recovery, Backend, Mobile, RLS, and rollback proof |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
 | H | Controlled production cutover | **OWNER APPROVAL REQUIRED** | Monitoring, rollback, supported clients, tenant/financial proof |
@@ -731,13 +731,26 @@ counterparts. Phase D is complete.
 - Kept every Phase E runtime proof flow `NOT_RUN`; E3 compile and architecture
   gates are not provider-integration evidence. **IMPLEMENTED.**
 
-## Next smallest safe slice: E4 isolated Web adapter and proof harness
+## Completed Slice E4: isolated Neon Web adapter and proof harness
 
-- Implement a Neon Web adapter only for explicit local proof selection.
-- Bind it to the E2 branch through transient/local configuration without
-  changing deployed origins or the Supabase default.
-- Execute only the bounded Web flows that the harness can directly prove and
-  leave every unexecuted matrix flow `NOT_RUN`.
+- Pinned the official Neon Auth SDK and added a Web adapter available only when
+  explicit local, non-production, non-deployed proof guards pass. **IMPLEMENTED.**
+- Added a synthetic-only `/auth-proof` UI plus a token-free session DTO Route
+  Handler; no existing Supabase login surface changed. **IMPLEMENTED.**
+- Bound the harness transiently to the E2 branch without changing any checked-in
+  or deployed environment. **IMPLEMENTED.**
+- Directly passed `E-AUTH-01`, `E-AUTH-03`, and `E-AUTH-06`, including an
+  HTTP-only cookie, invalid-password denial, explicit revocation, and captured
+  pre-sign-out cookie replay denial. **IMPLEMENTED.**
+- Kept `E-AUTH-04` and the other nine unexecuted flows `NOT_RUN`; navigation
+  persistence alone is not refresh proof. **IMPLEMENTED.**
+
+## Next smallest safe slice: E5 server claims and Data API identity
+
+- Add an isolated Neon bearer verifier to the Backend provider boundary.
+- Prove protected-route acceptance/denial for `E-AUTH-05`.
+- Exercise valid JWT identity and allowed RLS access for `E-AUTH-11` without
+  writing merchant data or redirecting a deployed client.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

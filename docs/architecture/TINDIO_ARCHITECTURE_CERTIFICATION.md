@@ -938,9 +938,17 @@ normalizes verified claims without changing the handler-facing envelope. No
 Neon SDK, application endpoint, credential, deployment, cookie, SecureStore
 key, or proof-matrix status changed.
 
+E4 pins the official Neon Auth SDK and adds a synthetic-only Web proof surface
+behind explicit local, non-production, non-deployed guards. The live browser
+proof passed signup, valid/invalid password sign-in, HTTP-only cookie session
+establishment, explicit sign-out revocation, and captured-cookie replay denial.
+The matrix now records `PASS` for `E-AUTH-01`, `E-AUTH-03`, and `E-AUTH-06`;
+the other ten flows remain `NOT_RUN`. Supabase remains the default, and no
+deployed configuration, local environment file, canonical Neon context, real
+identity, or merchant row changed.
+
 ## Next gate
 
-Begin E4 with a local-only Neon Web adapter and proof harness bound to the E2
-branch through transient configuration. Keep Supabase as the default, do not
-redirect deployed clients or import real users, and promote only matrix flows
-backed by direct isolated runtime evidence.
+Begin E5 with isolated Backend claim verification and valid JWT/Data API RLS
+proof for `E-AUTH-05` and `E-AUTH-11`. Keep Supabase as the default, do not
+redirect deployed clients, and promote neither flow without direct evidence.

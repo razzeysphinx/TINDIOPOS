@@ -1,0 +1,33 @@
+{
+  "phase": "E",
+  "slice": "E4",
+  "status": "PASS",
+  "executedAt": "2026-10-24T05:57:47.549Z",
+  "runId": "1792821467549-18a460f9",
+  "environment": {
+    "kind": "LOCAL_ONLY_DISPOSABLE_NEON_BRANCH",
+    "endpointHost": "ep-round-sound-b5q9r8vr.neonauth.c-7.us-east-2.aws.neon.tech",
+    "syntheticEmail": "phase-e4-1792821467549-18a460f9@auth-proof.tindio.invalid",
+    "realUsersImported": 0,
+    "deployedConfigurationChanged": false,
+    "localEnvironmentFileChanged": false,
+    "canonicalNeonContextChanged": false,
+    "supabaseRemainsDefault": true
+  },
+  "evidence": {
+    "signupEstablishedSession": true,
+    "httpOnlyCookieObserved": true,
+    "sessionSurvivedNavigation": true,
+    "invalidPasswordDenied": true,
+    "validPasswordAccepted": true,
+    "signOutClearedSession": true,
+    "revokedCookieReplayDenied": true
+  },
+  "promotedFlows": ["E-AUTH-01", "E-AUTH-03", "E-AUTH-06"],
+  "notRunFlows": ["E-AUTH-02", "E-AUTH-04", "E-AUTH-05", "E-AUTH-07", "E-AUTH-08", "E-AUTH-09", "E-AUTH-10", "E-AUTH-11", "E-AUTH-12", "E-AUTH-13"],
+  "notes": [
+    "Session persistence was observed across navigation, but token refresh was not forced; E-AUTH-04 remains NOT_RUN.",
+    "Diagnostic reruns created only additional @auth-proof.tindio.invalid identities in the disposable branch; no real identity or merchant row was introduced.",
+    "The proof password and cookie secret were generated in memory and were not logged or committed."
+  ]
+}

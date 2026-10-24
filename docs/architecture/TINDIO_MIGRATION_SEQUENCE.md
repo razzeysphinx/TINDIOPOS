@@ -11,7 +11,7 @@ Status: **IN PROGRESS**
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
 | D | Progressive Backend extraction, mutations last | **PHASE D COMPLETE; 43 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **PHASE E COMPLETE — ALL 6 PLANNED SLICES; 13/13 FLOWS PASS** | Proceed to Phase F identity inventory/dry-run mapping only |
-| F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
+| F | Identity inventory, deterministic mapping, dry-run tooling | **F1 PARTIAL — CANONICAL AGGREGATES + DRY-RUN TOOL COMPLETE; AUTH EXPORT REQUIRED** | All Auth users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
 | H | Controlled production cutover | **OWNER APPROVAL REQUIRED** | Monitoring, rollback, supported clients, tenant/financial proof |
 | I | Remove active Supabase runtime dependencies | **PLANNED** | Zero supported-client dependency; separate decommission approval |
@@ -811,6 +811,18 @@ counterparts. Phase D is complete.
 - Build deterministic mapping and exception reports without importing users.
 - Stop for owner approval before any real-user import, password migration,
   production cutover, credential rotation, or provider decommission.
+
+## Phase F1: canonical identity inventory and dry-run mapper
+
+- Captured a read-only, PII-free aggregate inventory of canonical profiles,
+  provider links, employee state, and duplicate/missing mapping risks.
+  **IMPLEMENTED.**
+- Added a deterministic, no-write mapper that preserves stable profile identity,
+  pseudonymizes output, blocks ambiguity/conflicts, and always requires account
+  claim or password reset instead of hash migration. **IMPLEMENTED.**
+- Confirmed current credentials cannot enumerate Supabase Auth users: the CLI
+  has no management token and no service-role credential is present. **BLOCKED
+  PENDING TEMPORARY READ-ONLY AUTH EXPORT/AUTHORIZATION.**
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

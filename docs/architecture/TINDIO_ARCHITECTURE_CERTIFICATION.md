@@ -1,6 +1,6 @@
 # TINDIO architecture certification
 
-Status: **PHASE E COMPLETE; ALL 6 PLANNED SLICES AND 13/13 AUTH FLOWS PASS**
+Status: **PHASE E COMPLETE; PHASE F1 PARTIAL PENDING AUTH EXPORT**
 
 Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and all six planned Phase E slices through isolated Web, Backend, Mobile, adversarial Data API/RLS, revocation, and Supabase rollback proof
 
@@ -812,6 +812,7 @@ Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
 | Phase E isolated Web lifecycle boundary | **PASS (3/3 FLOWS)** |
 | Phase E planned E5 Mobile Auth/custody boundary | **PASS (3/3 FLOWS)** |
 | Phase E planned E6 adversarial RLS/rollback boundary | **PASS (2/2 FLOWS)** |
+| Phase F1 canonical identity inventory/dry-run boundary | **PASS (3/3); AUTH DIRECTORY RECONCILIATION BLOCKED** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -1003,3 +1004,11 @@ preserved device, SQLite, receipt, and outbox custody. `E-AUTH-12` and
 Proceed to Phase F identity inventory and deterministic dry-run mapping. Do not
 import real users, migrate passwords, cut over production, rotate credentials,
 or decommission Supabase without the existing explicit owner stop points.
+
+F1 captured PII-free canonical aggregates: two profiles, two Supabase links,
+zero unmapped profiles, zero multi-provider profiles, zero duplicate normalized
+emails, two active employees, and two organizations. The no-write mapper now
+preserves stable profiles, pseudonymizes output, blocks ambiguity/conflicts, and
+requires account claim/password reset instead of hash migration. Full Auth-user
+reconciliation remains blocked because no Supabase management token or service-
+role credential is available; public credentials cannot enumerate Auth users.

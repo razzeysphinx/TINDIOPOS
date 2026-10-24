@@ -1,0 +1,33 @@
+{
+  "phase": "F",
+  "slice": "F1",
+  "status": "PARTIAL_READY_FOR_AUTH_EXPORT",
+  "capturedAt": "2026-10-24T19:40:00+08:00",
+  "mode": "READ_ONLY_AGGREGATE",
+  "canonicalAggregate": {
+    "profiles": 2,
+    "identityLinks": 2,
+    "supabaseLinks": 2,
+    "neonLinks": 0,
+    "profilesWithoutLinks": 0,
+    "profilesWithMultipleProviders": 0,
+    "duplicateNormalizedEmails": 0,
+    "employees": 2,
+    "activeEmployees": 2,
+    "organizations": 2
+  },
+  "supabaseAuthInventory": {
+    "status": "BLOCKED_MISSING_MANAGEMENT_CREDENTIAL",
+    "reason": "The Supabase CLI has no access token and no service-role credential is available. Public Auth credentials cannot enumerate users.",
+    "usersEnumerated": 0,
+    "mutationAttempted": false
+  },
+  "safety": {
+    "emailsRecorded": false,
+    "subjectsRecorded": false,
+    "passwordHashesRead": false,
+    "identityLinksWritten": 0,
+    "usersImported": 0,
+    "merchantRowsWritten": 0
+  }
+}

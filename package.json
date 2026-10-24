@@ -94,6 +94,8 @@
     "test:architecture-phase-e6-neon-web-lifecycle": "node --test scripts/architecture-phase-e6-neon-web-lifecycle-check.mjs",
     "test:architecture-phase-e-mobile-auth": "node --test scripts/architecture-phase-e-mobile-auth-check.mjs",
     "test:architecture-phase-e-closure": "node --test scripts/architecture-phase-e-closure-check.mjs",
+    "test:architecture-phase-f1-identity-inventory": "node --test scripts/architecture-phase-f1-identity-inventory-check.mjs",
+    "phase-f:identity-dry-run": "node scripts/phase-f-identity-mapping-dry-run.mjs",
     "certify:phase-e4:neon-web": "node scripts/phase-e4-neon-web-proof.mjs",
     "certify:phase-e5:neon-backend": "pnpm backend:build && node scripts/phase-e5-neon-backend-proof.mjs",
     "certify:phase-e6:neon-web-lifecycle": "node scripts/phase-e6-neon-web-lifecycle-proof.mjs",

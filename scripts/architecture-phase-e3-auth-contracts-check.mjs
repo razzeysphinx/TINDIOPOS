@@ -104,7 +104,10 @@ test("E3 documentation and package surfaces are executable", async () => {
   ]);
   assert.match(handoff, /E3 COMPLETE/);
   assert.match(migration, /Completed Slice E3/);
-  assert.match(certification, /Phase E Slices E1-E5/);
+  assert.match(
+    certification,
+    /(?:Phase E Slices E1-E5|all six planned Phase E slices)/i,
+  );
   assert.match(packageJson, /test:architecture-phase-e3-auth-contracts/);
   assert.match(contractsPackage, /"\.\/auth"/);
 });

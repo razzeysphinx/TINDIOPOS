@@ -1,0 +1,31 @@
+{
+  "phase": "E",
+  "plannedSlice": "E6",
+  "status": "PASS",
+  "executedAt": "2026-10-24T19:33:00+08:00",
+  "environment": {
+    "kind": "EXISTING_PREPRODUCTION_TEST_IDENTITY_READ_ONLY",
+    "realUsersImported": 0,
+    "merchantRowsWritten": 0,
+    "identityMappingsChanged": 0,
+    "deploymentChanged": false,
+    "environmentFileChanged": false,
+    "supabaseRemainsDefault": true
+  },
+  "evidence": {
+    "webSelectorRestoredSupabaseDefault": true,
+    "mobileSelectorRestoredSupabaseDefault": true,
+    "webPasswordSessionEstablished": true,
+    "mobilePasswordSessionEstablished": true,
+    "sameSupabaseIdentityObservedAcrossSurfaces": true,
+    "supabaseJwtAcceptedByCanonicalNeonBoundary": true,
+    "canonicalBusinessProfileResolved": true,
+    "deviceIdentityPreserved": true,
+    "sqliteTransactionsPreserved": true,
+    "receiptSnapshotsPreserved": true,
+    "outboxCustodyPreserved": true,
+    "webSessionSignedOutLocally": true,
+    "mobileSessionSignedOutLocally": true
+  },
+  "promotedFlows": ["E-AUTH-13"]
+}

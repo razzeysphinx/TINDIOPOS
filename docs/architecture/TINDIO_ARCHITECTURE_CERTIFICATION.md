@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **PLANNED PHASE E SLICE E5 COMPLETE; 11/13 ISOLATED AUTH FLOWS PASS**
+Status: **PHASE E COMPLETE; ALL 6 PLANNED SLICES AND 13/13 AUTH FLOWS PASS**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and planned Phase E Slices E1-E5 through isolated Web, Backend, Data API, and Mobile Neon Auth proof with Supabase still the default
+Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and all six planned Phase E slices through isolated Web, Backend, Mobile, adversarial Data API/RLS, revocation, and Supabase rollback proof
 
 Retained Phase D certification: **SLICE D50 COMPLETE; PHASE D CLOSURE CERTIFIED**
 
@@ -811,6 +811,7 @@ Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
 | Phase E isolated Backend/Data API boundary | **PASS (2/2 FLOWS)** |
 | Phase E isolated Web lifecycle boundary | **PASS (3/3 FLOWS)** |
 | Phase E planned E5 Mobile Auth/custody boundary | **PASS (3/3 FLOWS)** |
+| Phase E planned E6 adversarial RLS/rollback boundary | **PASS (2/2 FLOWS)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -986,8 +987,19 @@ remained unchanged. The exact `.invalid` synthetic user was deleted and the
 branch Auth configuration restored. `E-AUTH-08`, `E-AUTH-09`, and `E-AUTH-10`
 now pass, bringing Phase E to 11/13 with two `NOT_RUN`.
 
+The planned E6 closure used a real Neon JWT and two short-lived synthetic
+tenants on the disposable branch to prove own-tenant access, cross-tenant and
+forged-header denial, malformed/tampered denial, cryptographic post-expiry
+rejection against the live JWKS, and application-level revocation replay
+denial. Cleanup left zero temporary rows, removed the synthetic user, and
+restored branch Auth configuration. A separate rollback proof restored the
+default Supabase selectors, established independent Web and Mobile sessions,
+resolved the existing test identity through the canonical Neon Data API, and
+preserved device, SQLite, receipt, and outbox custody. `E-AUTH-12` and
+`E-AUTH-13` now pass; Phase E is complete at 13/13.
+
 ## Next gate
 
-Finish the original Phase E plan with planned E6: adversarial Data API/RLS and
-revocation denial for `E-AUTH-12`, Supabase Web/Mobile rollback with preserved
-device custody for `E-AUTH-13`, and full 13-flow closure certification.
+Proceed to Phase F identity inventory and deterministic dry-run mapping. Do not
+import real users, migrate passwords, cut over production, rotate credentials,
+or decommission Supabase without the existing explicit owner stop points.

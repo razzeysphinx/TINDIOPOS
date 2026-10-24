@@ -143,8 +143,10 @@ test("original E5 evidence promotes only the three Mobile flows", async () => {
   const evidence = JSON.parse(evidenceSource);
   const packageJson = JSON.parse(packageSource);
   assert.equal(matrix.requiredFlowCount, 13);
-  assert.equal(matrix.passedFlowCount, 11);
-  assert.equal(matrix.flows.filter(({ status }) => status === "NOT_RUN").length, 2);
+  assert.ok(matrix.passedFlowCount >= 11);
+  for (const id of ["E-AUTH-08", "E-AUTH-09", "E-AUTH-10"]) {
+    assert.equal(matrix.flows.find((flow) => flow.id === id)?.status, "PASS");
+  }
   assert.deepEqual(evidence.promotedFlows, ["E-AUTH-08", "E-AUTH-09", "E-AUTH-10"]);
   assert.equal(evidence.evidence.syntheticUserRemoved, true);
   assert.equal(evidence.evidence.originalAuthConfigurationRestored, true);

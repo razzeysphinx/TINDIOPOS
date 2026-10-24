@@ -10,7 +10,7 @@ Status: **IN PROGRESS**
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
 | D | Progressive Backend extraction, mutations last | **PHASE D COMPLETE; 43 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
-| E | Isolated synthetic Neon Auth proof on a non-production branch | **PLANNED E5 COMPLETE — 11/13 FLOWS PASS; SUPABASE DEFAULT** | Final planned E6 adversarial RLS, revocation, rollback, and closure proof |
+| E | Isolated synthetic Neon Auth proof on a non-production branch | **PHASE E COMPLETE — ALL 6 PLANNED SLICES; 13/13 FLOWS PASS** | Proceed to Phase F identity inventory/dry-run mapping only |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
 | H | Controlled production cutover | **OWNER APPROVAL REQUIRED** | Monitoring, rollback, supported clients, tenant/financial proof |
@@ -792,14 +792,25 @@ counterparts. Phase D is complete.
 - Deleted the exact synthetic identity and restored the disposable branch Auth
   configuration. Eleven of 13 flows now pass. **IMPLEMENTED.**
 
-## Next and final planned Phase E slice: E6 closure
+## Completed planned Slice E6: adversarial authorization and rollback closure
 
-- Prove cross-tenant, forged-context, malformed, expired, and revoked identity
-  denial for `E-AUTH-12`.
-- Prove Supabase rollback restores Web and Mobile access without clearing device
-  custody for `E-AUTH-13`.
-- Run all Phase E architecture, type, build, Mobile custody, and repository
-  gates; close the 13-flow matrix without a deployment or provider cutover.
+- Directly proved own-tenant visibility plus cross-tenant and forged-context
+  denial with a real Neon JWT on the disposable Data API. **IMPLEMENTED.**
+- Proved malformed and tampered denial, real-JWT expiry rejection against the
+  live JWKS, and revoked identity replay resolving to no profile or RLS rows,
+  promoting `E-AUTH-12`. **IMPLEMENTED.**
+- Restored Supabase selection for independent Web and Mobile sessions, resolved
+  the existing test identity through canonical Neon, and preserved all device/
+  SQLite/receipt/outbox custody, promoting `E-AUTH-13`. **IMPLEMENTED.**
+- Removed all temporary branch rows and the synthetic user, restored branch
+  configuration, and closed the matrix at 13/13. **IMPLEMENTED.**
+
+## Next phase: F identity inventory and deterministic dry-run mapping
+
+- Inventory every current identity and business-profile relationship.
+- Build deterministic mapping and exception reports without importing users.
+- Stop for owner approval before any real-user import, password migration,
+  production cutover, credential rotation, or provider decommission.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

@@ -1,12 +1,12 @@
 {
   "phase": "E",
-  "slice": "PLANNED_E5",
-  "status": "IN_PROGRESS",
+  "slice": "PLANNED_E6",
+  "status": "COMPLETE",
   "syntheticOnly": true,
   "requiredFlowCount": 13,
-  "executedFlowCount": 11,
-  "passedFlowCount": 11,
-  "lastEvidence": "TINDIO_PHASE_E_PLANNED_E5_MOBILE_AUTH_PROOF.json",
+  "executedFlowCount": 13,
+  "passedFlowCount": 13,
+  "lastEvidence": "TINDIO_PHASE_E_PLANNED_E6_SUPABASE_ROLLBACK_PROOF.json",
   "flows": [
     { "id": "E-AUTH-01", "surface": "Web", "name": "Synthetic email/password sign-up", "status": "PASS", "evidence": "E4 local browser proof" },
     { "id": "E-AUTH-02", "surface": "Web", "name": "Email verification with branch-local redirect", "status": "PASS", "evidence": "E6 local browser and branch-auth proof" },
@@ -19,7 +19,7 @@
     { "id": "E-AUTH-09", "surface": "Mobile", "name": "Access-token expiry and bounded refresh recovery", "status": "PASS", "evidence": "planned E5 coalesced one-session/one-token refresh proof" },
     { "id": "E-AUTH-10", "surface": "Mobile", "name": "Sign-out preserves SQLite, device identity, receipt snapshots, and outbox custody", "status": "PASS", "evidence": "planned E5 Auth-only deletion and Mobile custody regression proof" },
     { "id": "E-AUTH-11", "surface": "Data API", "name": "Valid Neon Auth JWT resolves provider-neutral identity and allowed RLS access", "status": "PASS", "evidence": "E5 local Backend/Data API proof" },
-    { "id": "E-AUTH-12", "surface": "Database", "name": "Cross-tenant, forged-context, malformed, expired, and revoked identities fail closed", "status": "NOT_RUN" },
-    { "id": "E-AUTH-13", "surface": "Rollback", "name": "Supabase Auth rollback restores Web and Mobile access without clearing device custody", "status": "NOT_RUN" }
+    { "id": "E-AUTH-12", "surface": "Database", "name": "Cross-tenant, forged-context, malformed, expired, and revoked identities fail closed", "status": "PASS", "evidence": "planned E6 live disposable-branch adversarial Data API/RLS proof" },
+    { "id": "E-AUTH-13", "surface": "Rollback", "name": "Supabase Auth rollback restores Web and Mobile access without clearing device custody", "status": "PASS", "evidence": "planned E6 live Supabase Web/Mobile rollback and canonical identity proof" }
   ]
 }

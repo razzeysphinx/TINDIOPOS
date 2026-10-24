@@ -1,0 +1,34 @@
+{
+  "phase": "E",
+  "plannedSlice": "E6",
+  "status": "PASS",
+  "executedAt": "2026-10-24T19:30:44+08:00",
+  "runId": "1792841444554-fe9c1e65",
+  "environment": {
+    "kind": "LOCAL_ONLY_DISPOSABLE_NEON_BRANCH",
+    "syntheticEmail": "phase-e-rls-1792841444554-fe9c1e65@auth-proof.tindio.invalid",
+    "realUsersImported": 0,
+    "temporaryOrganizationsCreated": 2,
+    "temporaryProfilesCreated": 2,
+    "temporaryRowsRemaining": 0,
+    "deployedConfigurationChanged": false,
+    "canonicalNeonContextChanged": false,
+    "supabaseRemainsDefault": true
+  },
+  "evidence": {
+    "validJwtMappedToSyntheticProfile": true,
+    "ownTenantVisible": true,
+    "crossTenantFilterReturnedZeroRows": true,
+    "forgedOrganizationHeaderDidNotExpandScope": true,
+    "malformedJwtDenied": true,
+    "tamperedJwtDenied": true,
+    "realJwtRejectedAtCryptographicFutureExpiry": true,
+    "signedOutSessionRevoked": true,
+    "removedIdentityLinkResolvedNull": true,
+    "revokedIdentityRlsReturnedZeroRows": true,
+    "temporaryRowsRemaining": 0,
+    "syntheticUserRemoved": true,
+    "originalAuthConfigurationRestored": true
+  },
+  "promotedFlows": ["E-AUTH-12"]
+}

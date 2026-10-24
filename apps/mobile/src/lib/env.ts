@@ -13,6 +13,11 @@ const supabasePublishableKey =
     .EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
     ?.trim();
 
+const authProvider =
+  process.env
+    .EXPO_PUBLIC_TINDIO_AUTH_PROVIDER
+    ?.trim();
+
 if (
   !tindioApiUrl
   || !supabaseUrl
@@ -63,4 +68,6 @@ export const mobileEnvironment = {
     ),
 
   supabasePublishableKey,
+
+  authProvider,
 } as const;

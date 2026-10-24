@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE E2 COMPLETE; ISOLATED NEON AUTH ENVIRONMENT READY**
+Status: **SLICE E3 COMPLETE; PROVIDER-NEUTRAL AUTH BOUNDARY ACTIVE**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and Phase E Slices E1-E2 through isolated environment provisioning without application integration
+Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and Phase E Slices E1-E3 through provider-neutral Auth contracts with Supabase-only runtime selection
 
 Retained Phase D certification: **SLICE D50 COMPLETE; PHASE D CLOSURE CERTIFIED**
 
@@ -738,6 +738,12 @@ Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
   canonical Neon context, and active Supabase Auth ownership remain unchanged.
 - Every one of the 13 Web, Backend, Mobile, Data API, RLS, revocation, and
   rollback proof flows remains `NOT_RUN`; E2 is environment evidence only.
+- E3 adds the platform-neutral Auth contract and explicit selectors across Web,
+  Backend, and Mobile. Supabase is the sole enabled provider; Neon and unknown
+  selections fail before provider initialization.
+- Mobile session/token lifecycle and Backend POS reads consume normalized
+  adapters while retaining the existing SecureStore, bearer, claims-envelope,
+  cookie, endpoint, and deployment behavior.
 
 ## Results
 
@@ -800,6 +806,7 @@ Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
 | Phase D complete route/owner/rollback inventory | **PASS (7/7)** |
 | Phase E Neon Auth prerequisite boundary | **PASS (6/6)** |
 | Phase E isolated Auth environment boundary | **PASS (6/6)** |
+| Phase E provider-neutral Auth contract boundary | **PASS (7/7)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -923,10 +930,17 @@ merchant data, application origin, deployment, local environment file, or
 canonical Neon context changed. Supabase Auth remains active, and all 13 proof
 flows remain `NOT_RUN` pending application integration and isolated execution.
 
+E3 introduces `@tindio/contracts/auth` and Supabase adapters across Web,
+Backend, and Mobile. All selectors default to and allowlist only Supabase;
+selecting Neon or an unknown provider fails closed. Mobile now normalizes
+session lifecycle and bearer retrieval, and the shared Backend POS read runtime
+normalizes verified claims without changing the handler-facing envelope. No
+Neon SDK, application endpoint, credential, deployment, cookie, SecureStore
+key, or proof-matrix status changed.
+
 ## Next gate
 
-Begin E3 by defining provider-neutral Auth contracts and explicit, fail-closed
-adapters while retaining Supabase as the default runtime provider. Do not place
-E2 endpoints in checked-in application configuration, redirect deployed
-clients, import real users, or mark any proof-matrix flow `PASS` without direct
-runtime evidence.
+Begin E4 with a local-only Neon Web adapter and proof harness bound to the E2
+branch through transient configuration. Keep Supabase as the default, do not
+redirect deployed clients or import real users, and promote only matrix flows
+backed by direct isolated runtime evidence.

@@ -64,7 +64,7 @@ import {
   observeApiResponseBytes,
   recordApiCall,
 } from "../features/performance/performance-metrics";
-import { supabase } from "./supabase";
+import { mobileAuth } from "../features/session/auth-provider";
 import {
   fetchWithTimeout,
   PosApiRequestTimeoutError,
@@ -124,14 +124,14 @@ const endpoint = (pathname: string) =>
 
 async function token(refresh: boolean) {
   const result = refresh
-    ? await supabase.auth.refreshSession()
-    : await supabase.auth.getSession();
+    ? await mobileAuth.refreshSession()
+    : await mobileAuth.getSession();
 
-  if (result.error || !result.data.session) {
+  if (!result.ok || !result.value) {
     throw new TindioApiError("Sign in is required.", 401, "AUTH_REQUIRED", null);
   }
 
-  return result.data.session.access_token;
+  return result.value.accessToken;
 }
 
 export async function requestPosV2Raw(

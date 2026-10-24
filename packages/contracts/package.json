@@ -12,6 +12,10 @@
       "types": "./src/cart.ts",
       "default": "./src/cart.ts"
     },
+    "./auth": {
+      "types": "./src/auth.ts",
+      "default": "./src/auth.ts"
+    },
     "./checkout": {
       "types": "./src/checkout.ts",
       "default": "./src/checkout.ts"

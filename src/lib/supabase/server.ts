@@ -10,6 +10,7 @@ import {
 import {
   getDatabaseEnvironment,
 } from "@/lib/database/env";
+import { resolveWebAuthProvider } from "@/lib/auth/provider";
 import {
   createNeonDataApiFetch,
 } from "@/lib/database/neon-data-api-fetch";
@@ -28,6 +29,10 @@ export async function createClient(
     >;
   } = {},
 ) {
+  resolveWebAuthProvider(
+    process.env.TINDIO_AUTH_PROVIDER,
+  );
+
   const environment =
     getPublicEnvironment();
 

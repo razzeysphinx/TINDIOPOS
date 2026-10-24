@@ -10,7 +10,7 @@ Status: **IN PROGRESS**
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
 | D | Progressive Backend extraction, mutations last | **PHASE D COMPLETE; 43 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
-| E | Isolated synthetic Neon Auth proof on a non-production branch | **E2 COMPLETE — ENVIRONMENT READY; 13 FLOWS NOT RUN** | Required 13-flow proof including Mobile, RLS, revocation |
+| E | Isolated synthetic Neon Auth proof on a non-production branch | **E3 COMPLETE — SUPABASE DEFAULT; NEON ADAPTER DISABLED** | Required 13-flow proof including Mobile, RLS, revocation |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
 | H | Controlled production cutover | **OWNER APPROVAL REQUIRED** | Monitoring, rollback, supported clients, tenant/financial proof |
@@ -714,14 +714,30 @@ counterparts. Phase D is complete.
   required manual deletion of the temporary project after Phase E. All 13
   application proof flows remain `NOT_RUN`. **IMPLEMENTED.**
 
-## Next smallest safe slice: E3 provider-neutral Auth contracts
+## Completed Slice E3: provider-neutral Auth contracts
 
-- Define provider-neutral identity, session, token, and error contracts without
-  replacing current Supabase runtime ownership.
-- Add adapters behind explicit, fail-closed runtime selection; default all
-  deployed and local application paths to the existing Supabase provider.
-- Keep the E2 endpoints out of checked-in application configuration and stop
-  before executing or promoting any of the 13 proof flows.
+- Added platform-neutral provider, identity, session, credential, failure,
+  state-event, verified-claims, client-session, and bearer-verifier contracts
+  to `@tindio/contracts/auth`. **IMPLEMENTED.**
+- Added an explicit provider selector that defaults to Supabase and rejects
+  unknown or non-allowlisted providers. Every E3 runtime allowlists only
+  Supabase. **IMPLEMENTED.**
+- Gated Web server/browser client creation, moved Backend POS read verification
+  behind the normalized bearer adapter, and moved Mobile session/token lifecycle
+  behind the normalized client adapter. **IMPLEMENTED.**
+- Preserved current cookies, SecureStore persistence, bearer transport, database
+  claims envelope, endpoints, deployments, and Supabase provider ownership. No
+  Neon SDK or application endpoint was introduced. **IMPLEMENTED.**
+- Kept every Phase E runtime proof flow `NOT_RUN`; E3 compile and architecture
+  gates are not provider-integration evidence. **IMPLEMENTED.**
+
+## Next smallest safe slice: E4 isolated Web adapter and proof harness
+
+- Implement a Neon Web adapter only for explicit local proof selection.
+- Bind it to the E2 branch through transient/local configuration without
+  changing deployed origins or the Supabase default.
+- Execute only the bounded Web flows that the harness can directly prove and
+  leave every unexecuted matrix flow `NOT_RUN`.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

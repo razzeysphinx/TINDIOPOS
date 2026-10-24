@@ -73,8 +73,8 @@ Machine-readable evidence is in
 `TINDIO_PHASE_E2_NEON_AUTH_ENVIRONMENT.json`. The 13-flow Auth proof matrix is
 unchanged: every flow remains `NOT_RUN`.
 
-## Next slice
+## Subsequent slice
 
-E3 introduces provider-neutral Auth contracts/adapters behind explicit runtime
-selection. It must not point deployed clients at this environment or claim any
-of the 13 runtime flows as passing.
+E3 subsequently introduced provider-neutral Auth contracts/adapters behind
+explicit Supabase-only runtime selection. It did not point deployed clients at
+this environment or claim any of the 13 runtime flows as passing.

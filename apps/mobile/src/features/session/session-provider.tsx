@@ -1,4 +1,4 @@
-import type { Session } from "@supabase/supabase-js";
+import type { AuthSession } from "@tindio/contracts/auth";
 import {
   createContext,
   useCallback,
@@ -10,7 +10,7 @@ import {
 } from "react";
 import { AppState } from "react-native";
 import { fetchPosV2Core } from "../../lib/tindio-api";
-import { supabase } from "../../lib/supabase";
+import { mobileAuth } from "./auth-provider";
 import {
   clearOfflineAuthorizationGrant,
   offlineAuthorizationFailureMessage,
@@ -38,7 +38,7 @@ export type AccessMode =
   | "signed-out";
 
 type Value = {
-  session: Session | null;
+  session: AuthSession | null;
   loading: boolean;
   accessMode: AccessMode;
   offlineExpiresAt: string | null;
@@ -59,12 +59,12 @@ type Value = {
 
 const Context = createContext<Value | null>(null);
 
-function isUnexpired(session: Session | null) {
+function isUnexpired(session: AuthSession | null) {
   return Boolean(
     session
     && (
-      !session.expires_at
-      || session.expires_at * 1000 > Date.now()
+      !session.expiresAt
+      || Date.parse(session.expiresAt) > Date.now()
     ),
   );
 }
@@ -73,7 +73,7 @@ export function SessionProvider({
   children,
 }: PropsWithChildren) {
   const [session, setSession] =
-    useState<Session | null>(null);
+    useState<AuthSession | null>(null);
   const [loading, setLoading] =
     useState(true);
   const [accessMode, setAccessMode] =
@@ -134,12 +134,12 @@ export function SessionProvider({
     let active = true;
 
     const recoverSessionOnForeground = async () => {
-      const current = await supabase.auth.getSession();
-      let next = current.data.session;
+      const current = await mobileAuth.getSession();
+      let next = current.ok ? current.value : null;
 
       if (!isUnexpired(next)) {
-        const refreshed = await supabase.auth.refreshSession();
-        next = refreshed.error ? null : refreshed.data.session;
+        const refreshed = await mobileAuth.refreshSession();
+        next = refreshed.ok ? refreshed.value : null;
       }
 
       if (!active) return;
@@ -155,14 +155,18 @@ export function SessionProvider({
     };
 
     const start = async () => {
-      const { data } =
-        await supabase.auth.getSession();
+      const result =
+        await mobileAuth.getSession();
+
+      const next = result.ok
+        ? result.value
+        : null;
 
       if (!active) return;
 
-      setSession(data.session);
+      setSession(next);
 
-      if (isUnexpired(data.session)) {
+      if (isUnexpired(next)) {
         setAccessMode("online");
         setOfflineExpiresAt(null);
         setOfflineRestrictionReason(null);
@@ -179,8 +183,8 @@ export function SessionProvider({
       0,
     );
 
-    const auth =
-      supabase.auth.onAuthStateChange(
+    const unsubscribe =
+      mobileAuth.onAuthStateChange(
         (_event, next) => {
           setSession(next);
 
@@ -195,28 +199,28 @@ export function SessionProvider({
 
           setLoading(false);
         },
-      ).data.subscription;
+      );
 
     const app = AppState.addEventListener(
       "change",
       (state) => {
         if (state === "active") {
-          supabase.auth.startAutoRefresh();
+          mobileAuth.startAutoRefresh();
           void recoverSessionOnForeground();
         } else {
-          supabase.auth.stopAutoRefresh();
+          mobileAuth.stopAutoRefresh();
         }
       },
     );
 
-    supabase.auth.startAutoRefresh();
+    mobileAuth.startAutoRefresh();
 
     return () => {
       active = false;
       clearTimeout(timer);
-      auth.unsubscribe();
+      unsubscribe();
       app.remove();
-      supabase.auth.stopAutoRefresh();
+      mobileAuth.stopAutoRefresh();
     };
   }, [applyOfflineReadiness]);
 
@@ -226,15 +230,12 @@ export function SessionProvider({
       password: string,
     ): Promise<Result> => {
       const result =
-        await supabase.auth.signInWithPassword({
+        await mobileAuth.signInWithPassword({
           email: email.trim(),
           password,
         });
 
-      if (
-        result.error
-        || !result.data.session
-      ) {
+      if (!result.ok) {
         return {
           ok: false,
           message:
@@ -244,14 +245,14 @@ export function SessionProvider({
 
       try {
         await fetchPosV2Core();
-        setSession(result.data.session);
+        setSession(result.value);
         setAccessMode("online");
         setOfflineExpiresAt(null);
         setOfflineRestrictionReason(null);
         setOfflineAuthorizationState("PREPARATION_REQUIRED");
         return { ok: true };
       } catch {
-        await supabase.auth.signOut();
+        await mobileAuth.signOut();
 
         return {
           ok: false,
@@ -276,7 +277,7 @@ export function SessionProvider({
       }
 
       await clearOfflineAuthorizationGrant();
-      await supabase.auth.signOut();
+      await mobileAuth.signOut();
 
       setSession(null);
       setAccessMode("signed-out");
@@ -293,11 +294,11 @@ export function SessionProvider({
       password: string,
       organizationId: string,
     ): Promise<Result> => {
-      const result = await supabase.auth.signInWithPassword({
+      const result = await mobileAuth.signInWithPassword({
         email: email.trim(),
         password,
       });
-      if (result.error || !result.data.session) {
+      if (!result.ok) {
         return { ok: false, message: "Email or password is incorrect." };
       }
 
@@ -306,14 +307,14 @@ export function SessionProvider({
         if (core.core.organization.id !== organizationId) {
           throw new Error("ORGANIZATION_MISMATCH");
         }
-        setSession(result.data.session);
+        setSession(result.value);
         setAccessMode("online");
         setOfflineExpiresAt(null);
         setOfflineRestrictionReason(null);
         setOfflineAuthorizationState("PREPARATION_REQUIRED");
         return { ok: true };
       } catch {
-        await supabase.auth.signOut();
+        await mobileAuth.signOut();
         await applyOfflineReadiness();
         return {
           ok: false,

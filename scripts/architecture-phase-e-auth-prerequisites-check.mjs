@@ -37,16 +37,21 @@ test("E1 keeps current Web, Mobile, and Backend Supabase session paths intact", 
     read("src/lib/supabase/client.ts"),
     read("apps/mobile/src/lib/supabase.ts"),
     read("apps/mobile/src/features/session/session-provider.tsx"),
+    read("apps/mobile/src/features/session/auth-provider.ts"),
     read("apps/backend/src/pos/bootstrap-runtime.ts"),
     read("apps/backend/src/pos/pos-read-runtime.ts"),
+    read("apps/backend/src/auth/provider.ts"),
   ]);
   assert.match(sources[0], /createServerClient/);
   assert.match(sources[1], /createBrowserClient/);
   assert.match(sources[2], /@supabase\/supabase-js/);
-  assert.match(sources[3], /signInWithPassword/);
-  assert.match(sources[3], /refreshSession/);
-  assert.match(sources[4], /verifyClaims:\s*runtime\.verifyClaims/);
-  assert.match(sources[5], /getClaims/);
+  assert.match(sources[3], /mobileAuth\.signInWithPassword/);
+  assert.match(sources[3], /mobileAuth\.refreshSession/);
+  assert.match(sources[4], /supabase\.auth\.signInWithPassword/);
+  assert.match(sources[4], /supabase\.auth\.refreshSession/);
+  assert.match(sources[5], /verifyClaims:\s*runtime\.verifyClaims/);
+  assert.match(sources[6], /authVerifier\.verifyAccessToken/);
+  assert.match(sources[7], /client\.auth\.getClaims/);
 });
 
 test("E1 fails closed on branch, password, email, Mobile, and rollback decisions", async () => {

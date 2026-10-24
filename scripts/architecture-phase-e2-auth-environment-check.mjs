@@ -84,8 +84,8 @@ test("E2 documentation preserves production and cleanup stop points", async () =
   ]);
   assert.match(handoff, /manual project deletion is required/i);
   assert.match(handoff, /every flow remains `NOT_RUN`/);
-  assert.match(migration, /E2 COMPLETE/);
-  assert.match(certification, /SLICE E2 COMPLETE/);
+  assert.match(migration, /Completed Slice E2: isolated environment provisioning/);
+  assert.match(certification, /E2 used the owner's dedicated-project fallback approval/);
   assert.match(cutover, /Disposable Neon branch and synthetic Auth environment approved/);
   assert.match(neonConfig, /authProvider:\s*["']external["']/);
   assert.match(neonConfig, /supabaseJwksUrl/);

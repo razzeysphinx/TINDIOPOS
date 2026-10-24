@@ -11,6 +11,8 @@ Status: **NOT READY — OWNER APPROVAL REQUIRED AT CUTOVER**
       and 13-flow synthetic proof requirements assessed read-only.
 - [x] Disposable Neon branch and synthetic Auth environment approved and
       provisioned; application proof remains `NOT_RUN`.
+- [x] Provider-neutral Auth contracts and fail-closed Web, Backend, and Mobile
+      Supabase adapters certified; Neon runtime selection remains disabled.
 - [ ] Password reset/account-claim or OAuth reauthentication policy approved;
       existing Supabase password hashes are not treated as portable.
 - [ ] Expo/React Native session persistence and refresh proof path approved.

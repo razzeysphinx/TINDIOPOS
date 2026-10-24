@@ -3,7 +3,9 @@
 Platform-neutral, versioned contracts shared by TINDIO Web, Mobile, and the
 future dedicated Backend application.
 
-The package currently owns the stable POS API version identifier plus the
+The package currently owns the stable POS API version identifier, the
+provider-neutral Auth provider, identity, session, token-verification, failure,
+and fail-closed runtime-selection contracts, plus the
 provider-neutral device credential, enrollment, validation, request-header,
 binding, and sequence/checkpoint contracts. It also owns the independent sync
 domain, baseline, cursor-expiry, device-delta, catalogue/customer/reference-data,

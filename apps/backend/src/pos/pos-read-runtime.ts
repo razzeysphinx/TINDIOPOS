@@ -1,8 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 
+import { createBackendAuthTokenVerifier } from "../auth/provider.js";
 import { createNeonDataApiFetch } from "../database/neon-data-api-fetch.js";
 
 export type PosReadEnvironment = {
+  TINDIO_AUTH_PROVIDER?: string;
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
   NEON_DATA_API_URL?: string;
@@ -67,15 +69,9 @@ export function createPosReadRuntime({
     throw new Error("SUPABASE_PUBLISHABLE_KEY is required");
   }
 
-  const authClient = createClient(supabaseUrl, publishableKey, {
-    auth: {
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-      persistSession: false,
-    },
-    global: {
-      fetch: fetchImpl,
-    },
+  const authVerifier = createBackendAuthTokenVerifier({
+    environment,
+    fetchImpl,
   });
   const databaseFetch = createNeonDataApiFetch({
     supabaseUrl,
@@ -100,7 +96,26 @@ export function createPosReadRuntime({
   );
 
   return {
-    verifyClaims: async (token: string) => authClient.auth.getClaims(token),
+    verifyClaims: async (token: string) => {
+      const result = await authVerifier.verifyAccessToken(token);
+
+      if (!result.ok) {
+        return {
+          data: null,
+          error: Object.assign(
+            new Error(result.error.message),
+            result.error.status === null
+              ? {}
+              : { status: result.error.status },
+          ),
+        };
+      }
+
+      return {
+        data: { claims: result.value.raw },
+        error: null,
+      };
+    },
     findOpenShift: async (
       token: string,
       organizationId: string,

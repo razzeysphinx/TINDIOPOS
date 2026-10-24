@@ -15,7 +15,15 @@ export default async function NeonAuthProofPage({
 }: {
   searchParams: Promise<{
     error?: string;
-    event?: "signed-in" | "signed-out" | "signed-up";
+    event?:
+      | "email-verified"
+      | "password-reset"
+      | "recovery-requested"
+      | "signed-in"
+      | "signed-out"
+      | "signed-up"
+      | "verification-required"
+      | "verification-requested";
   }>;
 }) {
   await connection();

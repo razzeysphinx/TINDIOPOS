@@ -24,6 +24,9 @@ export function getNeonWebProofConfiguration(
 ) {
   const baseUrl = environment.NEON_AUTH_BASE_URL?.trim();
   const cookieSecret = environment.NEON_AUTH_COOKIE_SECRET?.trim();
+  const sessionDataTtl = Number(
+    environment.TINDIO_AUTH_PROOF_SESSION_DATA_TTL ?? "1",
+  );
 
   try {
     const provider = resolveWebAuthProvider(
@@ -43,6 +46,9 @@ export function getNeonWebProofConfiguration(
       || !baseUrl
       || !cookieSecret
       || cookieSecret.length < 32
+      || !Number.isInteger(sessionDataTtl)
+      || sessionDataTtl < 1
+      || sessionDataTtl > 60
     ) {
       throw new NeonWebProofConfigurationError();
     }
@@ -54,8 +60,35 @@ export function getNeonWebProofConfiguration(
   return {
     baseUrl,
     cookieSecret,
+    sessionDataTtl,
     syntheticEmailSuffix: SYNTHETIC_EMAIL_SUFFIX,
   } as const;
+}
+
+export function getNeonWebProofOrigin(
+  environment: NodeJS.ProcessEnv = process.env,
+) {
+  const rawOrigin = environment.TINDIO_AUTH_PROOF_ORIGIN?.trim();
+
+  try {
+    if (!rawOrigin) throw new NeonWebProofConfigurationError();
+    const origin = new URL(rawOrigin);
+    if (
+      origin.protocol !== "http:"
+      || !["localhost", "127.0.0.1"].includes(origin.hostname)
+      || origin.username
+      || origin.password
+      || origin.pathname !== "/"
+      || origin.search
+      || origin.hash
+    ) {
+      throw new NeonWebProofConfigurationError();
+    }
+    return origin.origin;
+  } catch (error) {
+    if (error instanceof NeonWebProofConfigurationError) throw error;
+    throw new NeonWebProofConfigurationError();
+  }
 }
 
 export function createNeonWebProofAuth(
@@ -68,9 +101,7 @@ export function createNeonWebProofAuth(
     cookies: {
       secret: configuration.cookieSecret,
       sameSite: "strict",
-      // Keep the proof cache at the SDK's minimum positive TTL so revocation
-      // is revalidated within one bounded second.
-      sessionDataTtl: 1,
+      sessionDataTtl: configuration.sessionDataTtl,
     },
     logLevel: "warn",
   });

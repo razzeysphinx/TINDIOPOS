@@ -1,0 +1,49 @@
+{
+  "phase": "E",
+  "slice": "E6",
+  "status": "PASS",
+  "executedAt": "2026-10-24T09:21:50.105Z",
+  "runId": "1792833710105-a596a0b8",
+  "environment": {
+    "kind": "LOCAL_ONLY_DISPOSABLE_NEON_BRANCH",
+    "syntheticEmail": "phase-e6-1792833710105-a596a0b8@auth-proof.tindio.invalid",
+    "verificationMethod": "otp",
+    "recoveryRedirectClass": "localhost",
+    "realUsersImported": 0,
+    "merchantRowsWritten": 0,
+    "deployedConfigurationChanged": false,
+    "localEnvironmentFileChanged": false,
+    "canonicalNeonContextChanged": false,
+    "supabaseRemainsDefault": true
+  },
+  "evidence": {
+    "signupRequiredVerification": true,
+    "branchLocalVerificationChallengeObserved": true,
+    "emailVerificationAccepted": true,
+    "verifiedSessionEstablished": true,
+    "localhostRecoveryRedirectConfigured": true,
+    "httpOnlySessionCookiesObserved": true,
+    "sessionDataCookieRemoved": true,
+    "sessionTokenPreserved": true,
+    "sessionDataCookieRefreshed": true,
+    "sessionSurvivedForcedRefresh": true,
+    "passwordResetRequested": true,
+    "branchLocalRecoveryChallengeObserved": true,
+    "passwordResetAccepted": true,
+    "oldPasswordDenied": true,
+    "newPasswordAccepted": true,
+    "sessionSignedOut": true,
+    "originalAuthConfigurationRestored": true,
+    "strayCanonicalSyntheticIdentitiesRemoved": 4,
+    "strayCanonicalSyntheticIdentityCountAfterCleanup": 0
+  },
+  "promotedFlows": ["E-AUTH-02", "E-AUTH-04", "E-AUTH-07"],
+  "cumulativePassedFlows": ["E-AUTH-01", "E-AUTH-02", "E-AUTH-03", "E-AUTH-04", "E-AUTH-05", "E-AUTH-06", "E-AUTH-07", "E-AUTH-11"],
+  "notRunFlows": ["E-AUTH-08", "E-AUTH-09", "E-AUTH-10", "E-AUTH-12", "E-AUTH-13"],
+  "notes": [
+    "The proof used only reserved @auth-proof.tindio.invalid identities and restored the disposable branch email/password configuration exactly in a finally block.",
+    "The six-digit synthetic OTP was matched locally against its branch-stored SHA-256 value; the OTP, password, recovery token, session token, and cookies were never logged or committed.",
+    "The refresh proof deleted only the HTTP-only session_data cache cookie, preserved the HTTP-only session_token, and observed the Route Handler remint the cache while retaining the verified session.",
+    "An early local environment mismatch created four unmapped E6 synthetic identities on the canonical Auth branch. The audit found zero provider-neutral identity mappings, removed exactly those four identities, and verified a zero remaining count. No real identity or merchant row changed."
+  ]
+}

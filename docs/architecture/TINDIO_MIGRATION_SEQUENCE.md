@@ -10,7 +10,7 @@ Status: **IN PROGRESS**
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
 | D | Progressive Backend extraction, mutations last | **PHASE D COMPLETE; 43 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
-| E | Isolated synthetic Neon Auth proof on a non-production branch | **E5 COMPLETE — 5/13 FLOWS PASS; SUPABASE DEFAULT** | Remaining Web lifecycle, Mobile, adversarial RLS, and rollback proof |
+| E | Isolated synthetic Neon Auth proof on a non-production branch | **E6 COMPLETE — 8/13 FLOWS PASS; SUPABASE DEFAULT** | Remaining Mobile, adversarial RLS, and rollback proof |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
 | H | Controlled production cutover | **OWNER APPROVAL REQUIRED** | Monitoring, rollback, supported clients, tenant/financial proof |
@@ -762,11 +762,27 @@ counterparts. Phase D is complete.
   cookies, environment values, deployments, and client origins out of the
   repository. Five of 13 flows pass; eight remain `NOT_RUN`. **IMPLEMENTED.**
 
-## Next smallest safe slice: E6 Web lifecycle proof
+## Completed Slice E6: isolated Web lifecycle proof
 
-- Prove branch-local email verification for `E-AUTH-02`.
-- Force access-token/session refresh and prove continuity for `E-AUTH-04`.
-- Prove password reset and recovery confirmation for `E-AUTH-07`.
+- Added explicit synthetic verification and recovery UI/actions plus a no-store
+  session route that forwards the SDK's HTTP-only cache cookie. **IMPLEMENTED.**
+- Directly proved branch-local OTP verification and verified-session creation,
+  promoting `E-AUTH-02`. **IMPLEMENTED.**
+- Deleted only `session_data`, preserved `session_token`, observed cache remint,
+  and retained the session, promoting `E-AUTH-04`. **IMPLEMENTED.**
+- Directly proved recovery request, reset completion, old-password denial, and
+  new-password acceptance, promoting `E-AUTH-07`. **IMPLEMENTED.**
+- Restored the branch Auth configuration exactly, retained Supabase as default,
+  and left five of 13 flows `NOT_RUN`. **IMPLEMENTED.**
+- Removed four unmapped synthetic E6 identities created on the canonical Auth
+  branch during diagnosis and verified zero remained. **IMPLEMENTED.**
+
+## Next smallest safe slice: E7 Mobile lifecycle proof
+
+- Prove fresh Expo sign-in and secure session persistence for `E-AUTH-08`.
+- Force access-token expiry and bounded refresh recovery for `E-AUTH-09`.
+- Prove sign-out preserves SQLite, device identity, receipt snapshots, and
+  outbox custody for `E-AUTH-10`.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

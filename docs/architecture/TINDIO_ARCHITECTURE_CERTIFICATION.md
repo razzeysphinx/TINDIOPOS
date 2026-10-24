@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE E5 COMPLETE; 5/13 ISOLATED AUTH FLOWS PASS**
+Status: **SLICE E6 COMPLETE; 8/13 ISOLATED AUTH FLOWS PASS**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and Phase E Slices E1-E5 through isolated Web, Backend, and Data API Neon Auth proof with Supabase still the default
+Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and Phase E Slices E1-E6 through isolated Web lifecycle, Backend, and Data API Neon Auth proof with Supabase still the default
 
 Retained Phase D certification: **SLICE D50 COMPLETE; PHASE D CLOSURE CERTIFIED**
 
@@ -809,6 +809,7 @@ Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
 | Phase E provider-neutral Auth contract boundary | **PASS (7/7)** |
 | Phase E isolated Neon Web boundary | **PASS (3/3 FLOWS)** |
 | Phase E isolated Backend/Data API boundary | **PASS (2/2 FLOWS)** |
+| Phase E isolated Web lifecycle boundary | **PASS (3/3 FLOWS)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -962,9 +963,19 @@ eight `NOT_RUN`. Supabase remains the default, and no deployed configuration,
 client origin, environment file, canonical Neon context, real identity, or
 merchant row changed.
 
+E6 adds explicit email verification and password recovery actions plus a
+no-store session Route Handler that forwards the SDK's HTTP-only session cache.
+The live browser proof verified a branch-local OTP, a verified session, forced
+`session_data` deletion/remint with `session_token` preserved, password reset,
+old-password denial, new-password acceptance, sign-out, and exact restoration
+of the temporary branch Auth configuration. `E-AUTH-02`, `E-AUTH-04`, and
+`E-AUTH-07` now pass, bringing Phase E to 8/13 with five `NOT_RUN`. Four
+unmapped E6 synthetic identities created on the canonical Auth branch during
+diagnosis were removed after a zero-mapping audit; the remaining count is zero.
+No real identity or merchant row changed, and Supabase remains the default.
+
 ## Next gate
 
-Begin E6 with branch-local Web email verification, forced session refresh, and
-password reset/recovery proof for `E-AUTH-02`, `E-AUTH-04`, and `E-AUTH-07`.
-Keep Supabase as the default, keep redirects local to the disposable proof
-environment, and promote no flow without direct evidence.
+Begin E7 with Mobile secure-session, bounded-refresh, and sign-out custody proof
+for `E-AUTH-08`, `E-AUTH-09`, and `E-AUTH-10`. Promote no flow without direct
+device/runtime evidence.

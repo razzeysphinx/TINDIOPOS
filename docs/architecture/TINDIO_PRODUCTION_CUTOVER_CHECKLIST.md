@@ -10,7 +10,7 @@ Status: **NOT READY — OWNER APPROVAL REQUIRED AT CUTOVER**
 - [x] Phase E provider capability, account/region access, linked-branch status,
       and 13-flow synthetic proof requirements assessed read-only.
 - [x] Disposable Neon branch and synthetic Auth environment approved and
-      provisioned; five bounded Web/Backend/Data API flows now pass and eight
+      provisioned; eight bounded Web/Backend/Data API flows now pass and five
       remain `NOT_RUN`.
 - [x] Provider-neutral Auth contracts and fail-closed Web, Backend, and Mobile
       Supabase adapters certified; Neon selection is confined to guarded local

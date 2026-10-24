@@ -1,0 +1,20 @@
+{
+  "phase": "F3",
+  "status": "PASS",
+  "scope": "PROVIDER_NEUTRAL_CONTRACT_AND_GUARD_COMPATIBILITY",
+  "verified": {
+    "supabaseDefault": true,
+    "unknownProviderFailsClosed": true,
+    "webNeonSelectionGuarded": true,
+    "backendNeonSelectionGuarded": true,
+    "mobileNeonSelectionGuarded": true,
+    "backendClaimsNormalizeToSharedContract": true,
+    "mobileSessionNormalizesToSharedContract": true,
+    "mobileLifecycleEventsCompatible": true,
+    "consumerSurfacesUseAdapters": true
+  },
+  "supabaseRemainsDefault": true,
+  "productionNeonAuthEnabled": false,
+  "productionUsersWritten": 0,
+  "identityLinksWritten": 0
+}

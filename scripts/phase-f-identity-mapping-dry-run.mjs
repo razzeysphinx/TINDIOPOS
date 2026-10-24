@@ -10,6 +10,11 @@ function fingerprint(value) {
   return createHash("sha256").update(value).digest("hex").slice(0, 16);
 }
 
+function compareByReference(left, right) {
+  return left.reference.localeCompare(right.reference)
+    || (left.code ?? "").localeCompare(right.code ?? "");
+}
+
 function indexUnique(values, key, issueCode, issues) {
   const index = new Map();
   for (const value of values) {
@@ -64,6 +69,17 @@ export function buildIdentityMappingDryRun(input) {
     }
   }
 
+  for (const [profileId, links] of linksByProfile) {
+    for (const provider of ["supabase", "neon"]) {
+      if (links.filter((link) => link.provider === provider).length > 1) {
+        issues.push({
+          code: "PROFILE_HAS_MULTIPLE_PROVIDER_SUBJECTS",
+          reference: fingerprint(`${provider}:${profileId}`),
+        });
+      }
+    }
+  }
+
   const records = [];
   for (const user of supabaseUsers) {
     const reference = fingerprint(`supabase:${user.id}`);
@@ -72,6 +88,12 @@ export function buildIdentityMappingDryRun(input) {
     let profile = existingLink ? profileById.get(existingLink.profileId) : null;
     let status = "BLOCKED";
     let reason = "NO_STABLE_PROFILE_MATCH";
+
+    const accountState = user.disabled === true
+      ? "DISABLED"
+      : user.invitedAt && !user.emailConfirmedAt
+        ? "INVITATION_PENDING"
+        : "ACTIVE_OR_UNSPECIFIED";
 
     if (existingLink && profile) {
       status = "ACCOUNTED_FOR";
@@ -104,14 +126,36 @@ export function buildIdentityMappingDryRun(input) {
       reason = "DUPLICATE_NEON_EMAIL";
     }
 
+    if (accountState !== "ACTIVE_OR_UNSPECIFIED" && status !== "BLOCKED") {
+      status = "REVIEW_REQUIRED";
+      reason = accountState === "DISABLED"
+        ? "DISABLED_SOURCE_ACCOUNT_REVIEW"
+        : "PENDING_INVITATION_REVIEW";
+      neonAction = "NO_ACTION_UNTIL_OWNER_REVIEW";
+    }
+
     records.push({
       reference,
       profileReference: profile ? fingerprint(`profile:${profile.id}`) : null,
+      accountState,
       status,
       reason,
       neonAction,
       passwordAction: "RESET_REQUIRED_NO_HASH_MIGRATION",
     });
+  }
+
+
+  for (const user of neonUsers) {
+    const email = normalizedEmail(user.email);
+    const link = linksByProviderSubject.get(`neon:${user.id}`);
+    const sourceMatches = email ? supabaseByEmail.get(email) ?? [] : [];
+    if (!link && sourceMatches.length === 0) {
+      issues.push({
+        code: "NEON_ACCOUNT_WITHOUT_SOURCE_OR_LINK",
+        reference: fingerprint(`neon:${user.id}`),
+      });
+    }
   }
 
   for (const profile of profiles) {
@@ -126,11 +170,14 @@ export function buildIdentityMappingDryRun(input) {
     }
   }
 
+  records.sort(compareByReference);
+  issues.sort(compareByReference);
   const counts = records.reduce((result, record) => {
     result[record.status] = (result[record.status] ?? 0) + 1;
     return result;
   }, {});
   return {
+    schemaVersion: "tindio.identity-migration-dry-run.v1",
     mode: "DRY_RUN_NO_WRITES",
     inputs: {
       supabaseUsers: supabaseById.size,
@@ -140,6 +187,19 @@ export function buildIdentityMappingDryRun(input) {
     },
     counts,
     issueCount: issues.length,
+    decision:
+      records.some(({ status }) => status === "BLOCKED") || issues.length > 0
+        ? "BLOCKED"
+        : records.some(({ status }) => status === "REVIEW_REQUIRED")
+          ? "OWNER_REVIEW_REQUIRED"
+          : "READY_FOR_OWNER_REVIEW",
+    safety: {
+      identityLinkWrites: 0,
+      providerUserWrites: 0,
+      passwordHashesRead: 0,
+      passwordHashesMigrated: 0,
+      rawIdentityValuesEmitted: 0,
+    },
     records,
     issues,
   };

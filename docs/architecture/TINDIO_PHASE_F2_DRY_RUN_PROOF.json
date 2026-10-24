@@ -1,0 +1,18 @@
+{
+  "phase": "F2",
+  "status": "PASS",
+  "mode": "OFFLINE_SYNTHETIC_NO_WRITES",
+  "properties": {
+    "deterministicAcrossInputOrder": true,
+    "stableProfileAuthorityPreserved": true,
+    "rawIdentityValuesEmitted": false,
+    "ambiguousMappingsBlocked": true,
+    "disabledAndPendingInvitationsRequireReview": true,
+    "orphanNeonAccountsReported": true
+  },
+  "productionUsersWritten": 0,
+  "identityLinksWritten": 0,
+  "passwordHashesRead": 0,
+  "passwordHashesMigrated": 0,
+  "productionCutoverAuthorized": false
+}

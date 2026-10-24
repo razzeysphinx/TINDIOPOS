@@ -24,7 +24,12 @@ test("F1 dry run preserves stable profiles and never migrates password hashes", 
   assert.equal(report.mode, "DRY_RUN_NO_WRITES");
   assert.equal(report.counts.ACCOUNTED_FOR, 1);
   assert.equal(report.counts.REVIEW_REQUIRED, 1);
-  assert.equal(report.records[0].neonAction, "PROPOSE_LINK_AFTER_OWNER_REVIEW");
+  assert.equal(
+    report.records.some(
+      ({ neonAction }) => neonAction === "PROPOSE_LINK_AFTER_OWNER_REVIEW",
+    ),
+    true,
+  );
   assert.equal(report.records.every(({ passwordAction }) => passwordAction === "RESET_REQUIRED_NO_HASH_MIGRATION"), true);
   assert.doesNotMatch(JSON.stringify(report), /Owner@Tindio|owner@tindio|unlinked@tindio/);
 });

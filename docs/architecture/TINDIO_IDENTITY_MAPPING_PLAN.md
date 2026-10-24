@@ -1,6 +1,6 @@
 # TINDIO identity mapping plan
 
-Status: **PHASE F1 PARTIAL — CANONICAL INVENTORY COMPLETE; AUTH EXPORT REQUIRED**
+Status: **F1 PARTIAL; F2-F3 COMPLETE; F4 PREPARED — AUTH EXPORT AND OWNER APPROVAL REQUIRED**
 
 Phase F maps provider identities to existing stable TINDIO profiles. It does not
 replace profile UUIDs, employee relationships, organization membership, roles,
@@ -44,6 +44,35 @@ pnpm phase-f:identity-dry-run -- --input C:\secure\tindio-identity-inventory.jso
 
 The input must remain outside Git. The report must be reviewed without adding
 raw identity data to repository artifacts.
+
+## F2 COMPLETE: deterministic migration rehearsal
+
+The offline mapper is now a versioned migration rehearsal. It produces the same
+pseudonymous report regardless of input ordering, classifies disabled and
+invitation-only source accounts for owner review, detects orphan target
+accounts, and blocks duplicate provider subjects or multiple same-provider
+subjects attached to one stable profile. Its machine-readable safety envelope
+records zero provider-user writes, identity-link writes, password-hash reads,
+password-hash migrations, and raw identity values emitted.
+
+F2 used synthetic fixtures only. It did not claim that the unavailable full
+Supabase Auth directory had been reconciled.
+
+## F3 COMPLETE: provider compatibility
+
+Provider compatibility tests now verify the shared session and verified-claims
+contracts across the guarded Neon Web, Backend, and Mobile paths. Supabase
+remains the default, unknown providers fail closed, production Neon selection
+remains disabled, Backend claims normalize to the shared contract, Mobile
+session/lifecycle behavior remains compatible, and application consumers retain
+the provider-neutral adapter boundary.
+
+## F4 PREPARED: cutover decision package
+
+`TINDIO_PHASE_F_CUTOVER_READINESS.json` records the completed evidence, every
+open production gate, and the operations prohibited before approval. Its current
+decision is `DO_NOT_CUT_OVER`. Preparing this package is complete; executing a
+production cutover is neither part of F4 preparation nor authorized.
 
 ## Remaining inventory boundary
 

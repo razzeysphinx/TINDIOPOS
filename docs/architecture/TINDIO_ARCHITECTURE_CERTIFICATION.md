@@ -1,6 +1,6 @@
 # TINDIO architecture certification
 
-Status: **PHASE E COMPLETE; PHASE F1 PARTIAL PENDING AUTH EXPORT**
+Status: **PHASE F2 AND F3 COMPLETE; F4 PREPARED; F1 AUTH RECONCILIATION PENDING**
 
 Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and all six planned Phase E slices through isolated Web, Backend, Mobile, adversarial Data API/RLS, revocation, and Supabase rollback proof
 
@@ -1012,3 +1012,16 @@ preserves stable profiles, pseudonymizes output, blocks ambiguity/conflicts, and
 requires account claim/password reset instead of hash migration. Full Auth-user
 reconciliation remains blocked because no Supabase management token or service-
 role credential is available; public credentials cannot enumerate Auth users.
+
+F2 upgraded the mapper into a deterministic, versioned, PII-free migration
+rehearsal with explicit no-write guarantees and blocked/review classifications
+for identity ambiguity, disabled users, pending invitations, and orphan target
+accounts. F3 certified provider selection guards, normalized Backend claims,
+normalized Mobile sessions/events, and provider-neutral application consumers;
+Supabase remains the runtime default and production Neon Auth remains disabled.
+
+F4 prepared the machine-readable cutover decision package. The decision remains
+`DO_NOT_CUT_OVER`: F1 needs an authorized Supabase Auth directory inventory,
+and mapping review, account-claim policy, production email configuration,
+supported-client certification, rollback operations, and explicit owner
+approval remain open.

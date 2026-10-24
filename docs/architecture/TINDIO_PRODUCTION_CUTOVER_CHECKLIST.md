@@ -18,10 +18,12 @@ Status: **NOT READY — OWNER APPROVAL REQUIRED AT CUTOVER**
       runtimes.
 - [ ] Password reset/account-claim or OAuth reauthentication policy approved;
       existing Supabase password hashes are not treated as portable.
-- [ ] Expo/React Native session persistence and refresh proof path approved.
+- [x] Expo/React Native isolated session persistence and refresh proof passed;
+      production enablement remains separately gated.
 - [ ] Current Neon Auth Web, server, Mobile, Data API, RLS, rate-limit, email,
       reset, verification, revocation, and account-import behavior proven.
-- [ ] Identity mapping and collision policy reviewed.
+- [x] Identity mapping and collision policy encoded and synthetically certified;
+      owner review of the authorized full-directory report remains pending.
 - [ ] Password continuity or secure reset/claim process approved.
 - [ ] Rollback window, backup, monitoring, and support runbook approved.
 
@@ -38,8 +40,10 @@ Status: **NOT READY — OWNER APPROVAL REQUIRED AT CUTOVER**
 
 ## Security and financial gates
 
-- [ ] Invalid, expired, revoked, malformed, and forged identities are denied.
-- [ ] Cross-organization/store access and forged context headers are denied.
+- [x] Invalid, expired, revoked, malformed, and forged identities are denied in
+      the isolated Phase E proof environment.
+- [x] Cross-organization/store access and forged context headers are denied in
+      the isolated Phase E proof environment.
 - [ ] Neon Auth claim subject/email/audience/issuer/signature/rotation semantics
       match the provider adapter and RLS tests.
 - [ ] One checkout/retry produces one sale/payment/receipt/stock effect.

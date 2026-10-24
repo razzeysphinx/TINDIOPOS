@@ -824,6 +824,34 @@ counterparts. Phase D is complete.
   has no management token and no service-role credential is present. **BLOCKED
   PENDING TEMPORARY READ-ONLY AUTH EXPORT/AUTHORIZATION.**
 
+## Phase F2: deterministic no-write user migration rehearsal
+
+- Versioned the mapper output and made records/issues deterministic across
+  source ordering. **IMPLEMENTED.**
+- Added fail-closed classifications for disabled/invited source accounts,
+  duplicate provider subjects, multiple same-provider profile links, orphan
+  target accounts, and conflicting stable-profile mappings. **IMPLEMENTED.**
+- Certified that the rehearsal emits pseudonymous references only and performs
+  zero account, identity-link, or password-hash writes. **IMPLEMENTED.**
+
+## Phase F3: provider compatibility certification
+
+- Certified Supabase default/fallback behavior and fail-closed unknown-provider
+  selection across the shared, Web, Backend, and Mobile boundaries.
+  **IMPLEMENTED.**
+- Certified guarded Neon claims/session normalization and consumer use of the
+  provider-neutral contracts without enabling production Neon Auth.
+  **IMPLEMENTED.**
+
+## Phase F4: cutover readiness package
+
+- Recorded completed evidence, open production gates, prohibited operations,
+  and the explicit `DO_NOT_CUT_OVER` decision in a machine-readable artifact.
+  **PREPARED; OWNER APPROVAL NOT GRANTED.**
+- Production user import, identity-link writes, password reset campaigns,
+  provider enablement, live client cutover, credential rotation, and Supabase
+  decommission remain prohibited. **STOP GATE ACTIVE.**
+
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.
 

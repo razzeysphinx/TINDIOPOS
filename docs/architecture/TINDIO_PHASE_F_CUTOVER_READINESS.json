@@ -1,0 +1,32 @@
+{
+  "phase": "F4",
+  "status": "PREPARED_STOP_REQUIRED",
+  "decision": "DO_NOT_CUT_OVER",
+  "generatedFromRepositoryEvidence": true,
+  "completedEvidence": [
+    "phase_e_13_of_13_auth_flows",
+    "phase_f1_canonical_aggregate_inventory",
+    "phase_f2_deterministic_no_write_rehearsal",
+    "phase_f3_provider_contract_compatibility"
+  ],
+  "openGates": [
+    "authorized_full_supabase_auth_directory_reconciliation",
+    "identity_mapping_and_collision_report_owner_review",
+    "password_reset_or_account_claim_policy_owner_approval",
+    "production_email_verification_and_delivery_configuration",
+    "supported_web_and_mobile_release_certification",
+    "rollback_monitoring_and_support_runbook_approval",
+    "explicit_owner_approval_for_production_cutover"
+  ],
+  "prohibitedUntilApproval": [
+    "real_user_import_or_creation",
+    "identity_link_writes",
+    "password_reset_campaign",
+    "production_neon_auth_enablement",
+    "live_client_cutover",
+    "credential_rotation",
+    "supabase_decommission"
+  ],
+  "productionChangesMade": false,
+  "ownerApprovalRecorded": false
+}

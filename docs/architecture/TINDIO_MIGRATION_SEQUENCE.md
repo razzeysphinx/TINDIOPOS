@@ -12,7 +12,7 @@ Status: **IN PROGRESS**
 | D | Progressive Backend extraction, mutations last | **PHASE D COMPLETE; 43 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
 | E | Isolated synthetic Neon Auth proof on a non-production branch | **PHASE E COMPLETE — ALL 6 PLANNED SLICES; 13/13 FLOWS PASS** | Proceed to Phase F identity inventory/dry-run mapping only |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **F1 PARTIAL — CANONICAL AGGREGATES + DRY-RUN TOOL COMPLETE; AUTH EXPORT REQUIRED** | All Auth users accounted for; no privilege drift; no real import |
-| G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
+| G | Web and Mobile dual-transition Auth migration | **IN PROGRESS — WEB BLOCKED; MOBILE TRANSITION FOUNDATION IMPLEMENTED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
 | H | Controlled production cutover | **OWNER APPROVAL REQUIRED** | Monitoring, rollback, supported clients, tenant/financial proof |
 | I | Remove active Supabase runtime dependencies | **PLANNED** | Zero supported-client dependency; separate decommission approval |
 | J | Performance measurement, cleanup, independent CI/CD | **PLANNED** | Evidence-based optimization and final certification |
@@ -851,6 +851,24 @@ counterparts. Phase D is complete.
 - Production user import, identity-link writes, password reset campaigns,
   provider enablement, live client cutover, credential rotation, and Supabase
   decommission remain prohibited. **STOP GATE ACTIVE.**
+
+## Phase G1: Web activation gate
+
+- Audited the production Web sign-in, proxy, DAL, and profile-resolution path.
+  Enabling Neon before F1 Auth-directory reconciliation could attach or create
+  the wrong canonical profile. **BLOCKED; SUPABASE REMAINS DEFAULT.**
+
+## Phase G2: Mobile in-place Auth transition foundation
+
+- Pinned the current Supabase SecureStore key, added non-destructive legacy and
+  Neon session inspection, and made Neon reauthentication explicit when only a
+  legacy session exists. **IMPLEMENTED.**
+- Provider verification is recorded only after Backend identity/tenant proof;
+  sign-out retains the financial-custody gate. Legacy-session retirement has no
+  deletion implementation and additionally requires explicit owner approval.
+  **IMPLEMENTED; NO PRODUCTION ACTIVATION.**
+- Physical installed-app upgrade and offline custody preservation remain the
+  next required Phase G certification. **PENDING.**
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

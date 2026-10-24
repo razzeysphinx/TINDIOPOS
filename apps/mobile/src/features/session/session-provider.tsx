@@ -12,6 +12,14 @@ import { AppState } from "react-native";
 import { fetchPosV2Core } from "../../lib/tindio-api";
 import { mobileAuth } from "./auth-provider";
 import {
+  inspectMobileAuthTransition,
+  recordVerifiedMobileAuthProvider,
+  type MobileAuthTransitionState,
+} from "./auth-transition";
+import { secureStorage } from "../../lib/secure-storage";
+import { SUPABASE_MOBILE_AUTH_STORAGE_KEY } from "../../lib/supabase";
+import { NEON_MOBILE_AUTH_COOKIE_KEY } from "./auth-storage-keys";
+import {
   clearOfflineAuthorizationGrant,
   offlineAuthorizationFailureMessage,
   readOfflineAuthorizationGrant,
@@ -44,6 +52,7 @@ type Value = {
   offlineExpiresAt: string | null;
   offlineRestrictionReason: string | null;
   offlineAuthorizationState: OfflineAuthorizationLifecycleState;
+  authTransitionState: MobileAuthTransitionState;
   signIn(
     email: string,
     password: string,
@@ -84,6 +93,18 @@ export function SessionProvider({
     useState<string | null>(null);
   const [offlineAuthorizationState, setOfflineAuthorizationState] =
     useState<OfflineAuthorizationLifecycleState>("PREPARATION_REQUIRED");
+  const [authTransitionState, setAuthTransitionState] =
+    useState<MobileAuthTransitionState>("SIGN_IN_REQUIRED");
+
+  const refreshAuthTransition = useCallback(async () => {
+    const snapshot = await inspectMobileAuthTransition({
+      neonStorageKey: NEON_MOBILE_AUTH_COOKIE_KEY,
+      storage: secureStorage,
+      supabaseStorageKey: SUPABASE_MOBILE_AUTH_STORAGE_KEY,
+      targetProvider: mobileAuth.provider,
+    });
+    setAuthTransitionState(snapshot.state);
+  }, []);
 
   const applyOfflineReadiness =
     useCallback(async () => {
@@ -155,6 +176,7 @@ export function SessionProvider({
     };
 
     const start = async () => {
+      await refreshAuthTransition();
       const result =
         await mobileAuth.getSession();
 
@@ -197,6 +219,8 @@ export function SessionProvider({
             void applyOfflineReadiness();
           }
 
+          void refreshAuthTransition();
+
           setLoading(false);
         },
       );
@@ -222,7 +246,7 @@ export function SessionProvider({
       app.remove();
       mobileAuth.stopAutoRefresh();
     };
-  }, [applyOfflineReadiness]);
+  }, [applyOfflineReadiness, refreshAuthTransition]);
 
   const signIn = useCallback(
     async (
@@ -245,6 +269,11 @@ export function SessionProvider({
 
       try {
         await fetchPosV2Core();
+        await recordVerifiedMobileAuthProvider({
+          provider: mobileAuth.provider,
+          storage: secureStorage,
+        });
+        await refreshAuthTransition();
         setSession(result.value);
         setAccessMode("online");
         setOfflineExpiresAt(null);
@@ -261,7 +290,7 @@ export function SessionProvider({
         };
       }
     },
-    [],
+    [refreshAuthTransition],
   );
 
   const signOut =
@@ -278,6 +307,7 @@ export function SessionProvider({
 
       await clearOfflineAuthorizationGrant();
       await mobileAuth.signOut();
+      await refreshAuthTransition();
 
       setSession(null);
       setAccessMode("signed-out");
@@ -286,7 +316,7 @@ export function SessionProvider({
       setOfflineAuthorizationState("PREPARATION_REQUIRED");
 
       return { ok: true };
-    }, []);
+    }, [refreshAuthTransition]);
 
   const reauthenticate = useCallback(
     async (
@@ -307,6 +337,11 @@ export function SessionProvider({
         if (core.core.organization.id !== organizationId) {
           throw new Error("ORGANIZATION_MISMATCH");
         }
+        await recordVerifiedMobileAuthProvider({
+          provider: mobileAuth.provider,
+          storage: secureStorage,
+        });
+        await refreshAuthTransition();
         setSession(result.value);
         setAccessMode("online");
         setOfflineExpiresAt(null);
@@ -322,7 +357,7 @@ export function SessionProvider({
         };
       }
     },
-    [applyOfflineReadiness],
+    [applyOfflineReadiness, refreshAuthTransition],
   );
 
   const value = useMemo(
@@ -333,6 +368,7 @@ export function SessionProvider({
       offlineExpiresAt,
       offlineRestrictionReason,
       offlineAuthorizationState,
+      authTransitionState,
       signIn,
       reauthenticate,
       signOut,
@@ -345,6 +381,7 @@ export function SessionProvider({
       offlineExpiresAt,
       offlineRestrictionReason,
       offlineAuthorizationState,
+      authTransitionState,
       signIn,
       reauthenticate,
       signOut,

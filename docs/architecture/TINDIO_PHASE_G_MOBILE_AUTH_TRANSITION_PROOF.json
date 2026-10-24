@@ -1,0 +1,27 @@
+{
+  "phase": "G2",
+  "status": "MOBILE_TRANSITION_FOUNDATION_IMPLEMENTED",
+  "productionChangesMade": false,
+  "runtimeDefault": "supabase",
+  "webActivation": {
+    "status": "BLOCKED_BY_F1_IDENTITY_RECONCILIATION",
+    "reason": "Every legacy Auth-directory identity must map to exactly one stable TINDIO profile before Web activation."
+  },
+  "mobile": {
+    "existingSupabaseStorageKeyPreserved": true,
+    "legacyAndNeonSessionsDetectedSeparately": true,
+    "providerMarkedOnlyAfterBackendIdentityVerification": true,
+    "signOutCustodyGateRetained": true,
+    "sqliteResetImplemented": false,
+    "deviceReenrollmentImplemented": false,
+    "offlineCustodyMutationImplemented": false
+  },
+  "legacySessionDeletionImplemented": false,
+  "retirementRequires": [
+    "active_neon_session",
+    "verified_active_identity",
+    "releasable_transaction_custody",
+    "explicit_owner_approval"
+  ],
+  "remainingGate": "PHYSICAL_IN_PLACE_UPGRADE_AND_OFFLINE_CUSTODY_CERTIFICATION"
+}

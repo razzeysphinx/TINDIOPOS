@@ -813,6 +813,7 @@ Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
 | Phase E planned E5 Mobile Auth/custody boundary | **PASS (3/3 FLOWS)** |
 | Phase E planned E6 adversarial RLS/rollback boundary | **PASS (2/2 FLOWS)** |
 | Phase F1 canonical identity inventory/dry-run boundary | **PASS (3/3); AUTH DIRECTORY RECONCILIATION BLOCKED** |
+| Phase G2 Mobile Auth transition foundation | **PASS (3/3); PHYSICAL UPGRADE PROOF PENDING** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -1019,6 +1020,14 @@ for identity ambiguity, disabled users, pending invitations, and orphan target
 accounts. F3 certified provider selection guards, normalized Backend claims,
 normalized Mobile sessions/events, and provider-neutral application consumers;
 Supabase remains the runtime default and production Neon Auth remains disabled.
+
+Phase G Web activation is blocked by the unresolved F1 Auth-directory mapping
+gate. The Mobile transition foundation now preserves the existing Supabase
+SecureStore key, detects the old and new sessions independently, records a
+provider only after Backend identity verification, and retains the existing
+transaction-custody sign-out gate. It implements no legacy-session deletion,
+SQLite reset, or device reenrollment. Physical in-place upgrade and offline
+custody certification remain pending; no production Auth setting changed.
 
 F4 prepared the machine-readable cutover decision package. The decision remains
 `DO_NOT_CUT_OVER`: F1 needs an authorized Supabase Auth directory inventory,

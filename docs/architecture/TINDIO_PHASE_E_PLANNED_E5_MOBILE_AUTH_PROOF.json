@@ -1,0 +1,36 @@
+{
+  "phase": "E",
+  "plannedSlice": "E5",
+  "status": "PASS",
+  "executedAt": "2026-10-24T19:22:49+08:00",
+  "runId": "1792840969518-9d5aa458",
+  "environment": {
+    "kind": "LOCAL_ONLY_DISPOSABLE_NEON_BRANCH",
+    "syntheticEmail": "phase-e-mobile-1792840969518-9d5aa458@auth-proof.tindio.invalid",
+    "realUsersImported": 0,
+    "merchantRowsWritten": 0,
+    "deployedConfigurationChanged": false,
+    "localEnvironmentFileChanged": false,
+    "supabaseRemainsDefault": true
+  },
+  "evidence": {
+    "freshPasswordSignInSucceeded": true,
+    "neonJwtIssued": true,
+    "secureSessionCookiePersisted": true,
+    "simulatedAppRelaunchRestoredSession": true,
+    "concurrentRefreshCallsCoalesced": true,
+    "refreshRequestBound": { "getSession": 1, "token": 1 },
+    "signOutClearedOnlyNeonAuthCookie": true,
+    "deviceIdentityPreserved": true,
+    "offlineGrantPreservedByAuthAdapter": true,
+    "sqliteTransactionCustodyPreserved": true,
+    "receiptSnapshotsPreserved": true,
+    "outboxRowsPreserved": true,
+    "signedOutSessionDenied": true,
+    "syntheticUserRemoved": true,
+    "originalAuthConfigurationRestored": true
+  },
+  "promotedFlows": ["E-AUTH-08", "E-AUTH-09", "E-AUTH-10"],
+  "cumulativePassedFlows": ["E-AUTH-01", "E-AUTH-02", "E-AUTH-03", "E-AUTH-04", "E-AUTH-05", "E-AUTH-06", "E-AUTH-07", "E-AUTH-08", "E-AUTH-09", "E-AUTH-10", "E-AUTH-11"],
+  "notRunFlows": ["E-AUTH-12", "E-AUTH-13"]
+}

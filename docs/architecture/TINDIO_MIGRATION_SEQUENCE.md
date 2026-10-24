@@ -10,7 +10,7 @@ Status: **IN PROGRESS**
 | B3 | Decide and perform root Web to `apps/web/` move | **DEFERRED** | Dedicated Vercel, alias, public asset, Playwright, env, and script proof |
 | C | Create real `apps/backend/` and extract first read-only endpoint | **IMPLEMENTED** | Independent health/build/test plus dual-route compatibility |
 | D | Progressive Backend extraction, mutations last | **PHASE D COMPLETE; 43 ROUTES BACKEND-OWNED** | Financial/idempotency/offline replay equivalence |
-| E | Isolated synthetic Neon Auth proof on a non-production branch | **E6 COMPLETE — 8/13 FLOWS PASS; SUPABASE DEFAULT** | Remaining Mobile, adversarial RLS, and rollback proof |
+| E | Isolated synthetic Neon Auth proof on a non-production branch | **PLANNED E5 COMPLETE — 11/13 FLOWS PASS; SUPABASE DEFAULT** | Final planned E6 adversarial RLS, revocation, rollback, and closure proof |
 | F | Identity inventory, deterministic mapping, dry-run tooling | **PLANNED** | All users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **PLANNED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
 | H | Controlled production cutover | **OWNER APPROVAL REQUIRED** | Monitoring, rollback, supported clients, tenant/financial proof |
@@ -777,12 +777,29 @@ counterparts. Phase D is complete.
 - Removed four unmapped synthetic E6 identities created on the canonical Auth
   branch during diagnosis and verified zero remained. **IMPLEMENTED.**
 
-## Next smallest safe slice: E7 Mobile lifecycle proof
+## Completed planned Slice E5: Mobile Auth and custody proof
 
-- Prove fresh Expo sign-in and secure session persistence for `E-AUTH-08`.
-- Force access-token expiry and bounded refresh recovery for `E-AUTH-09`.
-- Prove sign-out preserves SQLite, device identity, receipt snapshots, and
-  outbox custody for `E-AUTH-10`.
+- Added a local-only, non-production Neon Mobile adapter with a managed Auth URL
+  and localhost-origin guard while retaining Supabase as default. **IMPLEMENTED.**
+- Directly proved fresh password sign-in, JWT issue, dedicated SecureStore
+  cookie persistence, and relaunch restoration for `E-AUTH-08`. **IMPLEMENTED.**
+- Coalesced concurrent refresh into exactly one session and one token request,
+  preserving the existing one-refresh/one-retry API bound for `E-AUTH-09`.
+  **IMPLEMENTED.**
+- Proved Auth sign-out removes only the Neon cookie while device identity,
+  SQLite transactions, receipt snapshots, and outbox custody remain unchanged,
+  promoting `E-AUTH-10`. **IMPLEMENTED.**
+- Deleted the exact synthetic identity and restored the disposable branch Auth
+  configuration. Eleven of 13 flows now pass. **IMPLEMENTED.**
+
+## Next and final planned Phase E slice: E6 closure
+
+- Prove cross-tenant, forged-context, malformed, expired, and revoked identity
+  denial for `E-AUTH-12`.
+- Prove Supabase rollback restores Web and Mobile access without clearing device
+  custody for `E-AUTH-13`.
+- Run all Phase E architecture, type, build, Mobile custody, and repository
+  gates; close the 13-flow matrix without a deployment or provider cutover.
 
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.

@@ -10,6 +10,11 @@ import {
 
 import { mobileEnvironment } from "../../lib/env";
 import { supabase } from "../../lib/supabase";
+import { secureStorage } from "../../lib/secure-storage";
+import {
+  createNeonMobileAuth,
+  neonMobileProofEnabled,
+} from "./neon-mobile-auth";
 
 type MobileAuthSessionAdapter = AuthSessionAdapter & {
   startAutoRefresh(): void;
@@ -79,12 +84,20 @@ function event(value: string): AuthStateEvent {
   }
 }
 
+const neonProofEnabled = neonMobileProofEnabled({
+  provider: mobileEnvironment.authProvider,
+  proofMode: mobileEnvironment.authProofMode,
+  baseUrl: mobileEnvironment.neonAuthBaseUrl,
+  origin: mobileEnvironment.authProofOrigin,
+  productionBuild: process.env.EAS_BUILD_PROFILE === "production",
+});
+
 const provider = resolveTindioAuthProvider(
   mobileEnvironment.authProvider,
-  ["supabase"],
+  neonProofEnabled ? ["supabase", "neon"] : ["supabase"],
 );
 
-export const mobileAuth: MobileAuthSessionAdapter = {
+const supabaseMobileAuth: MobileAuthSessionAdapter = {
   provider,
 
   async getSession() {
@@ -145,3 +158,11 @@ export const mobileAuth: MobileAuthSessionAdapter = {
     supabase.auth.stopAutoRefresh();
   },
 };
+
+export const mobileAuth: MobileAuthSessionAdapter = provider === "neon"
+  ? createNeonMobileAuth({
+      baseUrl: mobileEnvironment.neonAuthBaseUrl!,
+      origin: mobileEnvironment.authProofOrigin!,
+      storage: secureStorage,
+    })
+  : supabaseMobileAuth;

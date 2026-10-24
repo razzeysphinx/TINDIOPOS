@@ -1,8 +1,8 @@
 # TINDIO architecture certification
 
-Status: **SLICE E6 COMPLETE; 8/13 ISOLATED AUTH FLOWS PASS**
+Status: **PLANNED PHASE E SLICE E5 COMPLETE; 11/13 ISOLATED AUTH FLOWS PASS**
 
-Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and Phase E Slices E1-E6 through isolated Web lifecycle, Backend, and Data API Neon Auth proof with Supabase still the default
+Certified scope: Phase 0, Slices B1-B2, Slice C, completed Phase D (Slices D1-D50), and planned Phase E Slices E1-E5 through isolated Web, Backend, Data API, and Mobile Neon Auth proof with Supabase still the default
 
 Retained Phase D certification: **SLICE D50 COMPLETE; PHASE D CLOSURE CERTIFIED**
 
@@ -810,6 +810,7 @@ Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
 | Phase E isolated Neon Web boundary | **PASS (3/3 FLOWS)** |
 | Phase E isolated Backend/Data API boundary | **PASS (2/2 FLOWS)** |
 | Phase E isolated Web lifecycle boundary | **PASS (3/3 FLOWS)** |
+| Phase E planned E5 Mobile Auth/custody boundary | **PASS (3/3 FLOWS)** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -974,8 +975,19 @@ unmapped E6 synthetic identities created on the canonical Auth branch during
 diagnosis were removed after a zero-mapping audit; the remaining count is zero.
 No real identity or merchant row changed, and Supabase remains the default.
 
+The planned Phase E E5 slice adds a native provider-neutral Neon Auth adapter
+behind explicit local, non-production, managed-endpoint, and localhost-origin
+guards. A live disposable-branch proof established fresh password sign-in,
+Neon JWT issue, dedicated SecureStore cookie persistence, adapter recreation
+and session recovery, and a concurrent-refresh bound of one session plus one
+token request. Sign-out removed only the Neon Auth cookie while device identity,
+offline grant, SQLite transaction custody, receipt snapshots, and outbox rows
+remained unchanged. The exact `.invalid` synthetic user was deleted and the
+branch Auth configuration restored. `E-AUTH-08`, `E-AUTH-09`, and `E-AUTH-10`
+now pass, bringing Phase E to 11/13 with two `NOT_RUN`.
+
 ## Next gate
 
-Begin E7 with Mobile secure-session, bounded-refresh, and sign-out custody proof
-for `E-AUTH-08`, `E-AUTH-09`, and `E-AUTH-10`. Promote no flow without direct
-device/runtime evidence.
+Finish the original Phase E plan with planned E6: adversarial Data API/RLS and
+revocation denial for `E-AUTH-12`, Supabase Web/Mobile rollback with preserved
+device custody for `E-AUTH-13`, and full 13-flow closure certification.

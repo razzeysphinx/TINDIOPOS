@@ -45,7 +45,7 @@ test("E6 harness restores branch configuration and directly proves three lifecyc
   assert.doesNotMatch(harness, /insert\s+into|update\s+(?:profiles|organizations)|delete\s+from/i);
 });
 
-test("E6 evidence promotes three Web flows and retains five unexecuted gates", async () => {
+test("E6 evidence retains its three Web promotions in the cumulative matrix", async () => {
   const [packageSource, matrixSource, evidenceSource] = await Promise.all([
     read("package.json"),
     read("docs/architecture/TINDIO_PHASE_E_AUTH_PROOF_MATRIX.json"),
@@ -59,9 +59,11 @@ test("E6 evidence promotes three Web flows and retains five unexecuted gates", a
     packageJson.scripts["certify:phase-e6:neon-web-lifecycle"],
     "node scripts/phase-e6-neon-web-lifecycle-proof.mjs",
   );
-  assert.equal(matrix.executedFlowCount, 8);
-  assert.equal(matrix.passedFlowCount, 8);
-  assert.equal(matrix.flows.filter(({ status }) => status === "NOT_RUN").length, 5);
+  assert.ok(matrix.executedFlowCount >= 8);
+  assert.ok(matrix.passedFlowCount >= 8);
+  for (const id of ["E-AUTH-02", "E-AUTH-04", "E-AUTH-07"]) {
+    assert.equal(matrix.flows.find((flow) => flow.id === id)?.status, "PASS");
+  }
   assert.deepEqual(evidence.promotedFlows, ["E-AUTH-02", "E-AUTH-04", "E-AUTH-07"]);
   assert.equal(evidence.environment.supabaseRemainsDefault, true);
   assert.equal(evidence.environment.deployedConfigurationChanged, false);

@@ -18,6 +18,21 @@ const authProvider =
     .EXPO_PUBLIC_TINDIO_AUTH_PROVIDER
     ?.trim();
 
+const authProofMode =
+  process.env
+    .EXPO_PUBLIC_TINDIO_AUTH_PROOF_MODE
+    ?.trim();
+
+const neonAuthBaseUrl =
+  process.env
+    .EXPO_PUBLIC_NEON_AUTH_BASE_URL
+    ?.trim();
+
+const authProofOrigin =
+  process.env
+    .EXPO_PUBLIC_TINDIO_AUTH_PROOF_ORIGIN
+    ?.trim();
+
 if (
   !tindioApiUrl
   || !supabaseUrl
@@ -70,4 +85,10 @@ export const mobileEnvironment = {
   supabasePublishableKey,
 
   authProvider,
+
+  authProofMode,
+
+  neonAuthBaseUrl,
+
+  authProofOrigin,
 } as const;

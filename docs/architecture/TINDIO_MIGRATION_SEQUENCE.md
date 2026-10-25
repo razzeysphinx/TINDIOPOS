@@ -936,6 +936,15 @@ separate compatibility evidence and approval.
   have zero tolerance and force rollback. Numerical availability/latency
   thresholds remain owner-ratification gates. **NOT APPROVED; NO GO.**
 
+## Phase H4: rollback runbook and rehearsal evaluator
+
+- Added a deterministic fail-closed evaluator for rehearsal readiness and
+  outcome completeness plus the ordered selector/session/custody rollback
+  procedure. **IMPLEMENTED; SYNTHETIC CHECKS PASS.**
+- Retained the Phase E isolated Supabase rollback pass. Production-like
+  rehearsal remains blocked by H1, named authority, owner approval, and an
+  approved release candidate/cohort. **NOT RUN; NO GO.**
+
 ## Mandatory stop points
 
 Stop for explicit approval before production Neon Auth enablement, real account

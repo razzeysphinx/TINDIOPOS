@@ -1,0 +1,41 @@
+{
+  "phase": "H4",
+  "status": "EVALUATOR_AND_RUNBOOK_IMPLEMENTED_PRODUCTION_REHEARSAL_BLOCKED",
+  "productionChangesMade": false,
+  "isolatedSupabaseRollbackEvidence": {
+    "reference": "TINDIO_PHASE_E_PLANNED_E6_SUPABASE_ROLLBACK_PROOF.json",
+    "status": "PASS"
+  },
+  "productionRollbackRehearsal": {
+    "status": "NOT_RUN",
+    "blockedBy": [
+      "H1_PRODUCTION_READINESS_NO_GO",
+      "ROLLBACK_AUTHORITY_NOT_NAMED",
+      "OWNER_APPROVAL_NOT_RECORDED",
+      "NO_APPROVED_RELEASE_CANDIDATE_OR_COHORT"
+    ]
+  },
+  "orderedProcedure": [
+    "declare_incident_freeze_promotion_and_timestamp",
+    "stop_new_neon_auth_traffic",
+    "restore_web_and_backend_supabase_selectors",
+    "reopen_supported_client_compatibility_window",
+    "verify_web_backend_and_mobile_access",
+    "preserve_neon_sessions_and_logs_for_forensics",
+    "preserve_device_offline_sqlite_outbox_and_receipt_custody",
+    "reconcile_identity_financial_and_inventory_effects",
+    "hold_all_forward_promotion",
+    "publish_sanitized_operator_and_support_status"
+  ],
+  "destructiveActionsProhibited": [
+    "delete_neon_accounts_or_sessions",
+    "delete_supabase_accounts_or_sessions",
+    "clear_mobile_secure_store",
+    "clear_mobile_sqlite",
+    "unenroll_devices",
+    "discard_outbox_events",
+    "rewrite_financial_history"
+  ],
+  "productionRehearsalPassed": false,
+  "decision": "NO_GO"
+}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { getLocalSchemaVersion } from "../../src/db/database";
 import { useBusinessContext } from "../../src/features/business/use-business-context";
 import { armAppUpgradeProof, verifyAppUpgradeProof } from "../../src/features/runtime/app-upgrade-proof";
+import { useSession } from "../../src/features/session/session-provider";
 import { TindioButton } from "../../src/ui/tindio-button";
 import { TindioCard } from "../../src/ui/tindio-card";
 import { TindioFeedback } from "../../src/ui/tindio-feedback";
@@ -12,6 +13,7 @@ import { TindioKeyValue, TindioWorkspaceHeader } from "../../src/ui/tindio-works
 
 export default function ProductionReadinessScreen() {
   const { data } = useBusinessContext();
+  const { authTransitionState } = useSession();
   const organizationId = data?.core.organization.id;
   const [message, setMessage] = useState("Not checked");
   const [busy, setBusy] = useState<"arm" | "verify" | "schema" | null>(null);
@@ -21,7 +23,8 @@ export default function ProductionReadinessScreen() {
     setBusy("arm");
     try {
       const proof = await armAppUpgradeProof(organizationId);
-      setMessage(`Upgrade proof armed: ${proof.events.length} unsynced event(s), schema ${proof.schemaVersion}.`);
+      const receipts = proof.events.filter((event) => event.receiptContentDigest).length;
+      setMessage(`Upgrade proof armed: ${proof.events.length} unsynced event(s), ${receipts} receipt(s), ${proof.deviceSequences.length} sequence checkpoint(s), Auth ${proof.auth.state}, schema ${proof.schemaVersion}.`);
     } finally { setBusy(null); }
   };
   const verify = async () => {
@@ -30,7 +33,7 @@ export default function ProductionReadinessScreen() {
     try {
       const result = await verifyAppUpgradeProof(organizationId);
       if (!result.ok) { setMessage(`Upgrade proof failed: ${result.reason}${result.eventId ? ` / ${result.eventId}` : ""}.`); return; }
-      setMessage(`Upgrade proof passed: ${result.proof.events.length} event(s) preserved, schema ${result.proof.schemaVersion} to ${result.currentSchemaVersion}.`);
+      setMessage(`Upgrade proof passed: Auth ${result.currentAuthState}; session, enrollment, offline grant, ${result.proof.events.length} event(s), receipts, and sequence checkpoints preserved; schema ${result.proof.schemaVersion} to ${result.currentSchemaVersion}.`);
     } finally { setBusy(null); }
   };
   const showSchema = async () => {
@@ -47,8 +50,9 @@ export default function ProductionReadinessScreen() {
         <TindioKeyValue label="App version" value={Application.nativeApplicationVersion ?? "DEV"} />
         <TindioKeyValue label="Build version" value={Application.nativeBuildVersion ?? "DEV"} />
         <TindioKeyValue label="Update channel" value="Signed Google Play binary" />
+        <TindioKeyValue label="Auth transition" value={authTransitionState.replaceAll("_", " ")} />
       </TindioCard>
-      <TindioFeedback description="App updates must preserve every locally accepted unsynced transaction. These controls inspect that guarantee without clearing custody." kind="review" title="Upgrade custody proof" />
+      <TindioFeedback description="App updates must preserve Auth-session continuity, device enrollment, offline authorization, locally accepted transactions, immutable receipts, and sequence checkpoints. These controls inspect that guarantee without clearing custody or displaying secrets." kind="review" title="Upgrade custody proof" />
       <TindioButton busy={busy === "arm"} disabled={!organizationId} onPress={() => void arm()}>Arm upgrade preservation proof</TindioButton>
       <TindioButton busy={busy === "verify"} disabled={!organizationId} onPress={() => void verify()} variant="secondary">Verify upgrade preservation proof</TindioButton>
       <TindioButton busy={busy === "schema"} onPress={() => void showSchema()} variant="secondary">Show SQLite schema version</TindioButton>

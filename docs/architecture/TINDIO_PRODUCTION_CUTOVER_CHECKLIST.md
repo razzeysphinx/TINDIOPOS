@@ -36,6 +36,8 @@ Status: **NOT READY — OWNER APPROVAL REQUIRED AT CUTOVER**
 - [ ] Mobile fresh install and in-place upgrade tests pass without clearing data.
 - [ ] Existing device enrollment, SQLite, receipt snapshots, offline grants,
       pending outbox, stable operation IDs, and sequence checkpoints survive.
+      Phase G3 verification is implemented; the physical run is blocked until
+      an authorized device and same-signer baseline/successor APK pair exist.
 - [ ] Old supported clients have an explicit compatibility or forced-upgrade path.
 
 ## Security and financial gates

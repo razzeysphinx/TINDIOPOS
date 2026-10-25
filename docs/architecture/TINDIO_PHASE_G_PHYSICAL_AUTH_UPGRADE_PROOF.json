@@ -1,0 +1,37 @@
+{
+  "phase": "G3",
+  "status": "BLOCKED_EXTERNAL_DEVICE_REQUIRED",
+  "observedOn": "2026-10-25",
+  "harnessImplemented": true,
+  "preflightImplemented": true,
+  "adbAvailable": true,
+  "authorizedDeviceCount": 0,
+  "phaseGBaselineArtifactProvided": false,
+  "phaseGSuccessorArtifactProvided": false,
+  "physicalCertificationPassed": false,
+  "productionChangesMade": false,
+  "runtimeDefault": "supabase",
+  "coveredByHarness": [
+    "legacy_supabase_session_presence",
+    "neon_session_presence",
+    "device_enrollment_scope",
+    "offline_authorization_scope",
+    "unresolved_transaction_identity_and_content",
+    "immutable_receipt_content",
+    "device_sequence_checkpoints"
+  ],
+  "prohibitedShortcuts": [
+    "uninstall",
+    "app_data_clear",
+    "sqlite_reset",
+    "secure_store_clear",
+    "logout",
+    "device_reenrollment"
+  ],
+  "priorPhysicalCustodyEvidence": {
+    "reference": "MOB-10 A42",
+    "status": "PASS",
+    "phaseGAuthTransitionCoverage": false
+  },
+  "remainingGate": "AUTHORIZED_ANDROID_DEVICE_AND_SAME_SIGNER_PHASE_G_APK_PAIR"
+}

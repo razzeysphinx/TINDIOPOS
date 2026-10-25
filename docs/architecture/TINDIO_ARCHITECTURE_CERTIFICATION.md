@@ -814,6 +814,7 @@ Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
 | Phase E planned E6 adversarial RLS/rollback boundary | **PASS (2/2 FLOWS)** |
 | Phase F1 canonical identity inventory/dry-run boundary | **PASS (3/3); AUTH DIRECTORY RECONCILIATION BLOCKED** |
 | Phase G2 Mobile Auth transition foundation | **PASS (3/3); PHYSICAL UPGRADE PROOF PENDING** |
+| Phase G3 Auth/offline-custody upgrade harness | **PASS (3/3); PHYSICAL RUN BLOCKED — NO DEVICE/APK PAIR** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -1028,6 +1029,13 @@ provider only after Backend identity verification, and retains the existing
 transaction-custody sign-out gate. It implements no legacy-session deletion,
 SQLite reset, or device reenrollment. Physical in-place upgrade and offline
 custody certification remain pending; no production Auth setting changed.
+
+G3 extends the real on-device upgrade proof to Auth-session presence, device
+enrollment, offline authorization, immutable receipts, and sequence checkpoints
+in addition to unresolved transaction identity/content. Its support UI and
+fail-closed preflight are implemented. ADB was available on 2026-10-25 but no
+authorized device or same-signer Phase G APK pair was present, so this is not a
+physical PASS and the production cutover checklist remains open.
 
 F4 prepared the machine-readable cutover decision package. The decision remains
 `DO_NOT_CUT_OVER`: F1 needs an authorized Supabase Auth directory inventory,

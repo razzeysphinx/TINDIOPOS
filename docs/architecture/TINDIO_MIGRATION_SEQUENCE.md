@@ -870,6 +870,17 @@ counterparts. Phase D is complete.
 - Physical installed-app upgrade and offline custody preservation remain the
   next required Phase G certification. **PENDING.**
 
+## Phase G3: physical Auth and offline-custody upgrade harness
+
+- Extended the existing on-device upgrade proof across legacy/new session
+  presence, enrollment, offline authorization, unresolved events, immutable
+  receipts, and device sequence checkpoints without persisting secrets.
+  **IMPLEMENTED.**
+- Added a fail-closed physical preflight and exact same-signer `adb install -r`
+  campaign procedure. **IMPLEMENTED.**
+- ADB is available, but no authorized Android device or Phase G baseline/
+  successor APK pair was present on 2026-10-25. **PHYSICAL PASS BLOCKED.**
+
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.
 

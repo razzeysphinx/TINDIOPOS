@@ -6,6 +6,7 @@ export type TindioPosApiVersion =
 
 export * from "./business";
 export * from "./auth";
+export * from "./auth-client-compatibility";
 export * from "./checkout";
 export * from "./device";
 export * from "./attendance";

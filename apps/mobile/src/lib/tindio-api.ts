@@ -1,5 +1,7 @@
 import "react-native-url-polyfill/auto";
 
+import Constants from "expo-constants";
+
 import type {
   AttendanceEmployeesResult,
   CheckoutSaleActionResult,
@@ -32,6 +34,14 @@ import type {
   PosCustomerCreationResult,
 } from "@tindio/contracts";
 import { POS_CHECKOUT_PATH } from "@tindio/contracts/checkout";
+import {
+  TINDIO_AUTH_PROVIDER_HEADER,
+  TINDIO_CLIENT_CAPABILITIES_HEADER,
+  TINDIO_CLIENT_VERSION_HEADER,
+  TINDIO_CURRENT_AUTH_CLIENT_CAPABILITIES,
+  serializeAuthClientCapabilities,
+  type AuthClientUpgradeRequiredResponse,
+} from "@tindio/contracts/auth-client-compatibility";
 import {
   POS_ATTENDANCE_CLOCK_IN_PATH,
   POS_ATTENDANCE_CLOCK_OUT_PATH,
@@ -73,6 +83,10 @@ import {
 const ORGANIZATION_HEADER = "x-tindio-organization-id";
 const STORE_HEADER = "x-tindio-store-id";
 const REGISTER_HEADER = "x-tindio-register-id";
+const MOBILE_CLIENT_VERSION = Constants.expoConfig?.version ?? "unknown";
+const MOBILE_CLIENT_CAPABILITIES = serializeAuthClientCapabilities(
+  TINDIO_CURRENT_AUTH_CLIENT_CAPABILITIES,
+);
 
 export type BasicActionResult =
   | { ok: true; message: string }
@@ -97,6 +111,24 @@ export class TindioApiError extends Error {
     super(message);
     this.name = "TindioApiError";
   }
+}
+
+export class TindioClientUpgradeRequiredError extends TindioApiError {
+  constructor(
+    message: string,
+    readonly requiredCapability: string,
+    readonly preservesRecovery: true,
+    requestId: string | null,
+  ) {
+    super(message, 426, "POS_CLIENT_UPGRADE_REQUIRED", requestId);
+    this.name = "TindioClientUpgradeRequiredError";
+  }
+}
+
+export function isClientUpgradeRequired(
+  error: unknown,
+): error is TindioClientUpgradeRequiredError {
+  return error instanceof TindioClientUpgradeRequiredError;
 }
 
 function retryAfterMs(response: Response) {
@@ -151,6 +183,9 @@ export async function requestPosV2Raw(
     const headers = new Headers({
       Accept: "application/json",
       Authorization: `Bearer ${await token(false)}`,
+      [TINDIO_CLIENT_VERSION_HEADER]: MOBILE_CLIENT_VERSION,
+      [TINDIO_CLIENT_CAPABILITIES_HEADER]: MOBILE_CLIENT_CAPABILITIES,
+      [TINDIO_AUTH_PROVIDER_HEADER]: mobileAuth.provider,
     });
 
     if (organizationId) headers.set(ORGANIZATION_HEADER, organizationId);
@@ -206,6 +241,19 @@ async function request(
   const response = await requestPosV2Raw(pathname, options);
 
   if (!response.ok) {
+    if (response.status === 426) {
+      const payload = await response.clone().json().catch(() => null) as
+        AuthClientUpgradeRequiredResponse | null;
+      if (payload?.code === "POS_CLIENT_UPGRADE_REQUIRED" && payload.preservesRecovery) {
+        throw new TindioClientUpgradeRequiredError(
+          payload.message,
+          payload.requiredCapability,
+          true,
+          response.headers.get("x-tindio-request-id"),
+        );
+      }
+    }
+
     throw new TindioApiError(
       `HTTP_${response.status}`,
       response.status,

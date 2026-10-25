@@ -16,6 +16,10 @@
       "types": "./src/auth.ts",
       "default": "./src/auth.ts"
     },
+    "./auth-client-compatibility": {
+      "types": "./src/auth-client-compatibility.ts",
+      "default": "./src/auth-client-compatibility.ts"
+    },
     "./checkout": {
       "types": "./src/checkout.ts",
       "default": "./src/checkout.ts"

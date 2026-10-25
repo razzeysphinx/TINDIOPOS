@@ -1,0 +1,66 @@
+# TINDIO deferred completion register
+
+Status: **ACTIVE — OPEN ITEMS ARE NOT PASSES**  
+Established: **2026-10-25**  
+Branch: **TINDIO-PREPRODUCTION**
+
+## Purpose and control rule
+
+This is the consolidated record of work that must be completed later because
+it requires production authority, real identities, external services, signed
+artifacts, physical hardware, an observation window, or explicit owner
+approval. Finishing an implementation phase does not waive an item here.
+
+Every item remains open until its named evidence exists, is dated, identifies
+the tested release/environment, and receives the required approval. Automated
+source checks may support an item but cannot replace physical, production, or
+owner evidence. No agent may mark an item complete merely because a later
+phase has started or finished.
+
+## Auth migration and client transition
+
+| ID | Required later work | Current state | Completion evidence |
+| --- | --- | --- | --- |
+| F1-01 | Obtain an authorized full Supabase Auth-directory export and reconcile it with canonical profiles. | `BLOCKED_EXTERNAL` | Pseudonymous aggregate report, collision disposition, zero unresolved identities, owner review. |
+| F1-02 | Approve the password reset/account-claim and OAuth reauthentication policy. | `OWNER_DECISION_REQUIRED` | Signed policy plus rehearsed user/support procedure. |
+| G1-01 | Activate and certify Neon Auth for Web only after F1 reconciliation. | `BLOCKED_BY_F1` | All Web lifecycle flows pass against the approved target and production-like email/OAuth configuration. |
+| G3-01 | Run the same-signer Android in-place Auth/offline-custody upgrade. | `BLOCKED_EXTERNAL` | Authorized physical device, baseline and successor APKs, retained session/enrollment/SQLite/outbox/receipts/grants/checkpoints. |
+| G4-01 | Run fresh-install, supported-old-client, forced-upgrade, and provider-rollback campaigns. | `BLOCKED_RELEASE_CANDIDATE` | Dated signed-build evidence proving 426 messaging, no new unsafe sales, and preserved recovery/session custody. |
+| G4-02 | Approve the supported-client window and minimum version/capability policy. | `OWNER_DECISION_REQUIRED` | Version population report, merchant communication/support plan, staged enforcement approval. |
+| G4-03 | Configure production Neon Auth trusted domains, application identity, SMTP, verification, and OAuth credentials; disable localhost allowances. | `NOT_AUTHORIZED` | Reviewed production configuration and live delivery/redirect evidence. |
+
+## Cutover, observation, and retirement
+
+| ID | Required later work | Current state | Completion evidence |
+| --- | --- | --- | --- |
+| H-01 | Approve the production cutover package, maintenance/freeze window, named operators, monitoring, support, and rollback runbook. | `OWNER_APPROVAL_REQUIRED` | Signed go/no-go record and successful rehearsal. |
+| H-02 | Execute controlled identity import/account claim and production client rollout. | `PROHIBITED_UNTIL_H01` | Auditable identity mapping, canary results, error/latency/Auth metrics, reconciliation report. |
+| H-03 | Observe production through the approved rollback window with no unresolved financial/Auth incident. | `NOT_STARTED` | Dated dashboards, incident ledger, support review, owner exit approval. |
+| I-01 | Close the legacy client window only after supported-client adoption and custody reconciliation. | `NOT_STARTED` | Active-version report, zero unresolved blocked-device custody, approved enforcement change. |
+| I-02 | Remove inactive Supabase SDK/env/webhook/redirect/job dependencies. | `NOT_STARTED` | Dependency inventory reaches zero for approved scope and rollback window is closed. |
+| I-03 | Decommission or delete Supabase resources. | `SEPARATE_DESTRUCTIVE_APPROVAL_REQUIRED` | Verified backups/archive, retention approval, explicit named-owner authorization, post-action audit. |
+| J-01 | Run final performance, security, accessibility, disaster-recovery, CI/CD, and end-to-end release certification. | `NOT_STARTED` | Exact release candidate passes the full certification catalogue with archived evidence. |
+
+## Mobile, hardware, Play, and business gates
+
+The detailed case-level source of truth remains
+`docs/mobile-program/MOB_10_DEFERRED_EVIDENCE_REGISTER.md`. It includes the
+multi-terminal cases A34/A35, HID scanner A37, printer A38, Store Hub A39/A40,
+Play reviewer/public-policy/release cases A46-A48, accessibility/device case
+A49, and the conditional payment case A41. Those cases are incorporated here
+by reference and retain their existing status and scope restrictions.
+
+## Maintenance protocol
+
+When an item becomes executable:
+
+1. Record the exact environment, release identifier, operator, and date.
+2. Attach non-secret logs/screenshots/reports and link the governing runbook.
+3. Record pass, fail, or blocked honestly; never convert `NOT_RUN` to `PASS`.
+4. Obtain the named owner approval when the row requires it.
+5. Update this register, the production cutover checklist, and architecture
+   certification in the same reviewed change.
+
+Until every applicable row is closed, TINDIO must not be represented as having
+completed production Auth cutover, provider retirement, or final release
+certification.

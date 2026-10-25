@@ -26,6 +26,7 @@ import {
 } from "../../db/receipt-cache";
 import {
   fetchPosV2Core,
+  isClientUpgradeRequired,
   isExplicitAuthorizationDenial,
 } from "../../lib/tindio-api";
 import {
@@ -381,6 +382,9 @@ export function BusinessContextProvider({
             setError(
               "TINDIO requires online authorization.",
             );
+          } else if (isClientUpgradeRequired(caught)) {
+            await loadOffline();
+            setError(caught.message);
           } else if (!(await loadOffline())) {
             setError(
               "TINDIO could not load this business context.",

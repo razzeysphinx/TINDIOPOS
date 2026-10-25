@@ -38,7 +38,9 @@ Status: **NOT READY — OWNER APPROVAL REQUIRED AT CUTOVER**
       pending outbox, stable operation IDs, and sequence checkpoints survive.
       Phase G3 verification is implemented; the physical run is blocked until
       an authorized device and same-signer baseline/successor APK pair exist.
-- [ ] Old supported clients have an explicit compatibility or forced-upgrade path.
+- [x] Old supported clients have an explicit compatibility or forced-upgrade
+      contract; physical release-candidate evidence remains open in the
+      deferred completion register.
 
 ## Security and financial gates
 

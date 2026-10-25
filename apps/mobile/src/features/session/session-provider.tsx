@@ -9,7 +9,10 @@ import {
   type PropsWithChildren,
 } from "react";
 import { AppState } from "react-native";
-import { fetchPosV2Core } from "../../lib/tindio-api";
+import {
+  fetchPosV2Core,
+  isClientUpgradeRequired,
+} from "../../lib/tindio-api";
 import { mobileAuth } from "./auth-provider";
 import {
   inspectMobileAuthTransition,
@@ -280,7 +283,13 @@ export function SessionProvider({
         setOfflineRestrictionReason(null);
         setOfflineAuthorizationState("PREPARATION_REQUIRED");
         return { ok: true };
-      } catch {
+      } catch (error) {
+        if (isClientUpgradeRequired(error)) {
+          setSession(result.value);
+          await applyOfflineReadiness();
+          return { ok: false, message: error.message };
+        }
+
         await mobileAuth.signOut();
 
         return {
@@ -290,7 +299,7 @@ export function SessionProvider({
         };
       }
     },
-    [refreshAuthTransition],
+    [applyOfflineReadiness, refreshAuthTransition],
   );
 
   const signOut =
@@ -348,7 +357,13 @@ export function SessionProvider({
         setOfflineRestrictionReason(null);
         setOfflineAuthorizationState("PREPARATION_REQUIRED");
         return { ok: true };
-      } catch {
+      } catch (error) {
+        if (isClientUpgradeRequired(error)) {
+          setSession(result.value);
+          await applyOfflineReadiness();
+          return { ok: false, message: error.message };
+        }
+
         await mobileAuth.signOut();
         await applyOfflineReadiness();
         return {

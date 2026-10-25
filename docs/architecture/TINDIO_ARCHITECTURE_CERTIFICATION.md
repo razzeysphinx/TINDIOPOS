@@ -815,6 +815,7 @@ Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
 | Phase F1 canonical identity inventory/dry-run boundary | **PASS (3/3); AUTH DIRECTORY RECONCILIATION BLOCKED** |
 | Phase G2 Mobile Auth transition foundation | **PASS (3/3); PHYSICAL UPGRADE PROOF PENDING** |
 | Phase G3 Auth/offline-custody upgrade harness | **PASS (3/3); PHYSICAL RUN BLOCKED — NO DEVICE/APK PAIR** |
+| Phase G4 supported-client/forced-upgrade boundary | **PASS (6/6); PHYSICAL RELEASE CAMPAIGN PENDING** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |

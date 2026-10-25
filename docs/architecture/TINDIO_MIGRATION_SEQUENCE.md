@@ -881,6 +881,19 @@ counterparts. Phase D is complete.
 - ADB is available, but no authorized Android device or Phase G baseline/
   successor APK pair was present on 2026-10-25. **PHYSICAL PASS BLOCKED.**
 
+## Phase G4: supported-client and forced-upgrade boundary
+
+- Added a provider-neutral client capability/version contract with explicit
+  Supabase compatibility, dual-transition, and Neon-required decisions.
+  **IMPLEMENTED.**
+- Mobile requests now declare version, Auth provider, and transition/custody
+  capabilities. Structured forced-upgrade responses preserve the provider
+  session, offline readiness, and recovery custody instead of signing out.
+  **IMPLEMENTED.**
+- Production enforcement remains disabled. Physical fresh-install, old-client,
+  forced-upgrade, in-place-upgrade, and rollback evidence is retained in the
+  deferred completion register. **EXTERNAL EVIDENCE PENDING.**
+
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.
 

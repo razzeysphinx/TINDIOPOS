@@ -827,6 +827,11 @@ Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
 | Phase I3 ordered removal manifest | **PASS (3/3); NOT EXECUTED** |
 | Phase I4 evidence archive/backup readiness | **PASS (2/2); EXTERNAL BACKUP OPEN** |
 | Phase I5 decommission decision | **PASS (4/4); DO NOT DECOMMISSION** |
+| Phase J1 performance baseline | **PASS (3/3); LIVE MEASUREMENT DEFERRED** |
+| Phase J2 query optimization | **PASS (3/3); REQUEST-LOCAL COALESCING** |
+| Phase J3 directory cleanup | **PASS (4/4); NO SOURCE/HISTORY DELETION** |
+| Phase J4 independent CI | **PASS (3/3); HOSTED RUN PENDING** |
+| Phase J5 release readiness | **PASS (4/4); RELEASE NO GO** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -1075,3 +1080,11 @@ decommission decision. The package decision is `DO_NOT_DECOMMISSION`: active
 Supabase dependencies remain, the supported-client and observation windows are
 open, external backup/restore is unverified, and owner approval is absent. No
 Supabase dependency or hosted resource was removed or changed.
+
+Phase J repository work is complete across five ordered slices: performance
+baseline, request-local query coalescing, directory ownership cleanup,
+independent CI, and release-readiness assessment. Local workspace, Backend,
+Mobile, lint, build, structure, and Phase J checks pass. The release decision
+remains `RELEASE_NO_GO` until the exact release candidate completes hosted CI,
+browser/migration/restore, production and physical evidence, H/I gates, and
+explicit owner approval.

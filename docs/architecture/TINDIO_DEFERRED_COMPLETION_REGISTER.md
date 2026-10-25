@@ -44,7 +44,7 @@ H production execution is not authorized.
 | I-01 | Close the legacy client window only after supported-client adoption and custody reconciliation. | `GATE_PREPARED_NOT_SATISFIED` | Active-version report, zero unresolved blocked-device custody, approved enforcement change. |
 | I-02 | Remove inactive Supabase SDK/env/webhook/redirect/job dependencies. | `INVENTORIED_PLAN_ONLY_NOT_EXECUTED` | Dependency inventory reaches zero for approved scope and rollback window is closed. |
 | I-03 | Decommission or delete Supabase resources. | `DO_NOT_DECOMMISSION_SEPARATE_DESTRUCTIVE_APPROVAL_REQUIRED` | Verified backups/archive, retention approval, explicit named-owner authorization, post-action audit. |
-| J-01 | Run final performance, security, accessibility, disaster-recovery, CI/CD, and end-to-end release certification. | `NOT_STARTED` | Exact release candidate passes the full certification catalogue with archived evidence. |
+| J-01 | Run final performance, security, accessibility, disaster-recovery, CI/CD, and end-to-end release certification. | `REPOSITORY_PACKAGE_COMPLETE_EXTERNAL_EVIDENCE_OPEN` | Exact release candidate passes the full certification catalogue with archived evidence. |
 
 ## Mobile, hardware, Play, and business gates
 

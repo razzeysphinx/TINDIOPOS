@@ -26,5 +26,5 @@ test("J1 baseline remains a valid lower-risk reference after later slices", asyn
 
 test("J1 preserves the open production performance evidence gate", async () => {
   const deferred = await read("docs/architecture/TINDIO_DEFERRED_COMPLETION_REGISTER.md");
-  assert.match(deferred, /J-01[\s\S]*NOT_STARTED/);
+  assert.match(deferred, /J-01[\s\S]*REPOSITORY_PACKAGE_COMPLETE_EXTERNAL_EVIDENCE_OPEN/);
 });

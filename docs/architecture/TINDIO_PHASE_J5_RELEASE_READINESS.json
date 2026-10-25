@@ -1,0 +1,37 @@
+{
+  "phase": "J5",
+  "status": "PHASE_J_REPOSITORY_PACKAGE_COMPLETE_RELEASE_BLOCKED",
+  "decision": "RELEASE_NO_GO",
+  "repositoryReady": true,
+  "releaseReady": false,
+  "productionChangesMade": false,
+  "repositoryEvidence": {
+    "workspaceTypechecksPassed": true,
+    "backendTestsPassed": true,
+    "mobileLintHasNoErrors": true,
+    "rootLintHasNoErrors": true,
+    "webProductionBuildPassed": true,
+    "repositoryStructurePassed": true,
+    "phaseJChecksPassed": true
+  },
+  "observedResults": {
+    "backendTests": { "passed": 779, "failed": 0 },
+    "mobileLint": { "errors": 0, "warnings": 1 },
+    "rootLint": { "errors": 0, "warnings": 3 },
+    "webBuildRoutes": 92,
+    "repositoryStructureChecks": 7,
+    "phaseJChecksBeforeClosure": 13
+  },
+  "releaseEvidence": {
+    "exactReleaseCandidateIdentified": false,
+    "independentCiPassedOnExactCommit": false,
+    "browserEndToEndPassed": false,
+    "migrationAndRestoreRehearsalPassed": false,
+    "productionPerformanceSecurityAccessibilityPassed": false,
+    "physicalMobileCampaignPassed": false,
+    "phaseHProductionCutoverClosed": false,
+    "phaseIProviderRetirementDecisionClosed": false,
+    "explicitOwnerReleaseApproval": false
+  },
+  "nextAction": "COMPLETE_DEFERRED_PRODUCTION_PHYSICAL_CI_AND_OWNER_GATES_ON_AN_EXACT_RELEASE_CANDIDATE"
+}

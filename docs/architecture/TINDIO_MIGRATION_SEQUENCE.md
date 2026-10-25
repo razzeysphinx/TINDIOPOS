@@ -14,8 +14,8 @@ Status: **IN PROGRESS**
 | F | Identity inventory, deterministic mapping, dry-run tooling | **F1 PARTIAL — CANONICAL AGGREGATES + DRY-RUN TOOL COMPLETE; AUTH EXPORT REQUIRED** | All Auth users accounted for; no privilege drift; no real import |
 | G | Web and Mobile dual-transition Auth migration | **IN PROGRESS — WEB BLOCKED; MOBILE TRANSITION FOUNDATION IMPLEMENTED** | In-place Mobile upgrade preserves SQLite/outbox/device custody |
 | H | Controlled production cutover | **OWNER APPROVAL REQUIRED** | Monitoring, rollback, supported clients, tenant/financial proof |
-| I | Remove active Supabase runtime dependencies | **PLANNED** | Zero supported-client dependency; separate decommission approval |
-| J | Performance measurement, cleanup, independent CI/CD | **PLANNED** | Evidence-based optimization and final certification |
+| I | Remove active Supabase runtime dependencies | **REPOSITORY PACKAGE COMPLETE — DECOMMISSION BLOCKED** | Zero supported-client dependency; separate decommission approval |
+| J | Performance measurement, cleanup, independent CI/CD | **REPOSITORY PACKAGE COMPLETE — RELEASE BLOCKED** | Evidence-based optimization and final certification |
 
 ## Completed Slice C
 
@@ -1023,6 +1023,14 @@ separate compatibility evidence and approval.
   **IMPLEMENTED.**
 - Retained the Docker-backed baseline workflow and excluded deployment or
   production secrets. **COMPLEMENTARY CI; NO PRODUCTION CHANGE.**
+
+## Phase J5: release readiness and final certification
+
+- Passed local workspace typechecks, 779 Backend tests, zero-error lint, the
+  92-route Web build, repository structure, and Phase J checks. **REPOSITORY
+  PACKAGE COMPLETE.**
+- Hosted CI, exact-candidate browser/migration/restore, production and physical
+  evidence, H/I closure, and owner approval remain open. **RELEASE NO GO.**
 
 Stop for explicit approval before production Neon Auth enablement, real account
 export/import, password migration, credential rotation, deployed API-origin

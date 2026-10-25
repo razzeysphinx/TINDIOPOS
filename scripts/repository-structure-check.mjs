@@ -68,8 +68,11 @@ test("starter assets and starter mobile instructions do not return", () => {
 
 test("workflow and compatibility policy remain documented", () => {
   const workflows = tracked().filter((file) => file.startsWith(".github/workflows/"));
-  assert.deepEqual(workflows, [".github/workflows/tindio-baseline-certification.yml"]);
-  const workflow = read(workflows[0]);
+  assert.deepEqual(workflows, [
+    ".github/workflows/tindio-baseline-certification.yml",
+    ".github/workflows/tindio-independent-ci.yml",
+  ]);
+  const workflow = read(".github/workflows/tindio-baseline-certification.yml");
   assert.doesNotMatch(workflow, /recovery\/phase-(?:12|14)/);
   for (const marker of ["composite-production-concurrency-certification.mjs", "phase-14-migration-rehearsal.mjs", "phase-14-local-restore-drill.mjs", "certify:phase-02:bearer-auth", "git diff --check"]) assert.match(workflow, new RegExp(marker.replaceAll(".", "\\.")));
   const apiReadme = read("src/app/api/pos/README.md");

@@ -1,0 +1,26 @@
+{
+  "phase": "I5",
+  "status": "PHASE_I_REPOSITORY_PACKAGE_COMPLETE_DECOMMISSION_BLOCKED",
+  "decision": "DO_NOT_DECOMMISSION",
+  "repositorySlicesComplete": true,
+  "retirementGatePassed": false,
+  "dependenciesRemoved": false,
+  "supabaseProjectChanged": false,
+  "supabaseProjectDeleted": false,
+  "runtimeDefault": "supabase",
+  "sliceStatus": [
+    { "slice": "I1", "status": "INVENTORY_COMPLETE_ACTIVE_DEPENDENCIES_CONFIRMED" },
+    { "slice": "I2", "status": "GATE_IMPLEMENTED_NOT_SATISFIED" },
+    { "slice": "I3", "status": "REMOVAL_PLAN_COMPLETE_NOT_EXECUTED" },
+    { "slice": "I4", "status": "REPOSITORY_EVIDENCE_VERIFIED_EXTERNAL_BACKUP_OPEN" },
+    { "slice": "I5", "status": "CLOSURE_COMPLETE_DO_NOT_DECOMMISSION" }
+  ],
+  "approvalRecord": {
+    "ownerName": null,
+    "approvedAt": null,
+    "productionRelease": null,
+    "observationWindowEndedAt": null,
+    "backupIdentifier": null
+  },
+  "nextAction": "COMPLETE_DEFERRED_F_G_H_AND_I_PRODUCTION_EVIDENCE_THEN_REQUEST_SEPARATE_APPROVAL"
+}

@@ -822,6 +822,11 @@ Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
 | Phase H3 monitoring/support controls | **PASS (3/3); OWNER RATIFICATION PENDING** |
 | Phase H4 rollback evaluator/runbook | **PASS (4/4); PRODUCTION REHEARSAL NOT RUN** |
 | Phase H5 go/no-go package | **PASS (4/4); PRODUCTION EXECUTION BLOCKED** |
+| Phase I1 Supabase dependency inventory | **PASS (3/3); ACTIVE DEPENDENCIES CONFIRMED** |
+| Phase I2 retirement gate | **PASS (3/3); GATE NOT SATISFIED** |
+| Phase I3 ordered removal manifest | **PASS (3/3); NOT EXECUTED** |
+| Phase I4 evidence archive/backup readiness | **PASS (2/2); EXTERNAL BACKUP OPEN** |
+| Phase I5 decommission decision | **PASS (4/4); DO NOT DECOMMISSION** |
 | Workspace typecheck | **PASS** (Web + contracts + Backend + Mobile) |
 | Repository structure and Markdown links | **PASS (7/7)** |
 | ESLint | **PASS WITH 3 WARNINGS** (2 pre-existing source warnings; 1 generated Expo type warning) |
@@ -1063,3 +1068,10 @@ rollback evaluation, and the final go/no-go package. The package decision is
 `NO_GO`: no live authenticated traffic changed, no production-like rollback
 rehearsal passed, operators and owner approval are not recorded, Supabase
 remains default, and Phase I retirement is unauthorized.
+
+Phase I repository preparation is complete across five slices: dependency
+inventory, retirement gate, ordered removal manifest, evidence archive, and
+decommission decision. The package decision is `DO_NOT_DECOMMISSION`: active
+Supabase dependencies remain, the supported-client and observation windows are
+open, external backup/restore is unverified, and owner approval is absent. No
+Supabase dependency or hosted resource was removed or changed.

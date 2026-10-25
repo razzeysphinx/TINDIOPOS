@@ -986,6 +986,14 @@ separate compatibility evidence and approval.
 - Provider export, external backup, and restore drill require controlled live
   execution and remain unverified. **RETIREMENT BLOCKED.**
 
+## Phase I5: decommission decision and Phase I closure
+
+- Consolidated all five repository slices and the separate retirement
+  checklist. **REPOSITORY PACKAGE COMPLETE.**
+- Active dependencies, production evidence, backup/restore, observation, and
+  owner approval remain open. No hosted resource changed. **DO NOT
+  DECOMMISSION.**
+
 Stop for explicit approval before production Neon Auth enablement, real account
 export/import, password migration, credential rotation, deployed API-origin
 change, live client cutover, Supabase shutdown/deletion, or merchant-data writes

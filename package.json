@@ -114,6 +114,8 @@
     "test:architecture-phase-i2-retirement-gate": "node --test scripts/architecture-phase-i2-retirement-gate-check.mjs",
     "test:architecture-phase-i3-removal-manifest": "node --test scripts/architecture-phase-i3-removal-manifest-check.mjs",
     "test:architecture-phase-i4-archive-backup": "node --test scripts/architecture-phase-i4-archive-backup-check.mjs",
+    "test:architecture-phase-i5-decommission-decision": "node --test scripts/architecture-phase-i5-decommission-decision-check.mjs",
+    "test:architecture-phase-i": "pnpm test:architecture-phase-i1-supabase-inventory && pnpm test:architecture-phase-i2-retirement-gate && pnpm test:architecture-phase-i3-removal-manifest && pnpm test:architecture-phase-i4-archive-backup && pnpm test:architecture-phase-i5-decommission-decision",
     "preflight:phase-g:physical-upgrade": "node scripts/phase-g-physical-auth-upgrade-preflight.mjs",
     "phase-f:identity-dry-run": "node scripts/phase-f-identity-mapping-dry-run.mjs",
     "certify:phase-e4:neon-web": "node scripts/phase-e4-neon-web-proof.mjs",

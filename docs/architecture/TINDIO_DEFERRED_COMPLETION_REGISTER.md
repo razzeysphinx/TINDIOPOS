@@ -41,9 +41,9 @@ H production execution is not authorized.
 | H-01 | Approve the production cutover package, maintenance/freeze window, named operators, monitoring, support, and rollback runbook. | `PACKAGE_PREPARED_OWNER_APPROVAL_REQUIRED` | Signed go/no-go record and successful rehearsal. |
 | H-02 | Execute controlled identity import/account claim and production client rollout. | `PROHIBITED_UNTIL_H01` | Auditable identity mapping, canary results, error/latency/Auth metrics, reconciliation report. |
 | H-03 | Observe production through the approved rollback window with no unresolved financial/Auth incident. | `NOT_STARTED` | Dated dashboards, incident ledger, support review, owner exit approval. |
-| I-01 | Close the legacy client window only after supported-client adoption and custody reconciliation. | `NOT_STARTED` | Active-version report, zero unresolved blocked-device custody, approved enforcement change. |
-| I-02 | Remove inactive Supabase SDK/env/webhook/redirect/job dependencies. | `NOT_STARTED` | Dependency inventory reaches zero for approved scope and rollback window is closed. |
-| I-03 | Decommission or delete Supabase resources. | `SEPARATE_DESTRUCTIVE_APPROVAL_REQUIRED` | Verified backups/archive, retention approval, explicit named-owner authorization, post-action audit. |
+| I-01 | Close the legacy client window only after supported-client adoption and custody reconciliation. | `GATE_PREPARED_NOT_SATISFIED` | Active-version report, zero unresolved blocked-device custody, approved enforcement change. |
+| I-02 | Remove inactive Supabase SDK/env/webhook/redirect/job dependencies. | `INVENTORIED_PLAN_ONLY_NOT_EXECUTED` | Dependency inventory reaches zero for approved scope and rollback window is closed. |
+| I-03 | Decommission or delete Supabase resources. | `DO_NOT_DECOMMISSION_SEPARATE_DESTRUCTIVE_APPROVAL_REQUIRED` | Verified backups/archive, retention approval, explicit named-owner authorization, post-action audit. |
 | J-01 | Run final performance, security, accessibility, disaster-recovery, CI/CD, and end-to-end release certification. | `NOT_STARTED` | Exact release candidate passes the full certification catalogue with archived evidence. |
 
 ## Mobile, hardware, Play, and business gates

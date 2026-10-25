@@ -911,6 +911,15 @@ counterparts. Phase D is complete.
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.
 
+## Phase H1: production readiness inventory
+
+- Reconciled the isolated Auth evidence to 13/13 flows and explicitly retained
+  the distinction between synthetic feasibility and production proof.
+  **PREPARED.**
+- Recorded the canonical target, nine live configuration checks, six named
+  operator roles, all predecessor gates, and a fail-closed `NO_GO` decision.
+  **NOT READY; NO PRODUCTION CHANGE.**
+
 ## Mandatory stop points
 
 Stop for explicit approval before production Neon Auth enablement, real account

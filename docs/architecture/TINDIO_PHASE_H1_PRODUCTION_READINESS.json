@@ -1,0 +1,48 @@
+{
+  "phase": "H1",
+  "status": "PREPARED_NOT_READY",
+  "productionReadinessPassed": false,
+  "runtimeDefault": "supabase",
+  "productionChangesMade": false,
+  "canonicalTarget": {
+    "neonProject": "divine-sound-41148108",
+    "neonBranch": "br-snowy-heart-b5nf6q3n",
+    "database": "tindio_r6_recovery"
+  },
+  "verifiedRepositoryEvidence": [
+    "phase_e_13_of_13_isolated_auth_flows",
+    "phase_f_identity_mapping_and_no_write_rehearsal",
+    "phase_g_web_mobile_and_supported_client_boundaries",
+    "provider_neutral_web_backend_mobile_adapters"
+  ],
+  "productionConfigurationGates": [
+    { "id": "trusted_domains", "status": "NOT_VERIFIED" },
+    { "id": "localhost_disabled", "status": "NOT_VERIFIED" },
+    { "id": "application_name", "status": "NOT_VERIFIED" },
+    { "id": "smtp_delivery", "status": "NOT_VERIFIED" },
+    { "id": "email_verification", "status": "NOT_VERIFIED" },
+    { "id": "oauth_credentials_if_enabled", "status": "NOT_VERIFIED" },
+    { "id": "rate_limits", "status": "NOT_VERIFIED" },
+    { "id": "session_revocation", "status": "NOT_VERIFIED" },
+    { "id": "backup_and_restore_point", "status": "NOT_VERIFIED" }
+  ],
+  "operatorRoles": {
+    "cutoverCommander": null,
+    "identityOperator": null,
+    "applicationOperator": null,
+    "databaseObserver": null,
+    "supportLead": null,
+    "rollbackAuthority": null
+  },
+  "requiredPriorGateIds": [
+    "F1-01",
+    "F1-02",
+    "G1-01",
+    "G3-01",
+    "G4-01",
+    "G4-02",
+    "G4-03"
+  ],
+  "ownerApprovalRecorded": false,
+  "decision": "NO_GO"
+}

@@ -964,6 +964,14 @@ separate compatibility evidence and approval.
   dependency was removed and historical migrations remain preserved.
   **REMOVAL BLOCKED.**
 
+## Phase I2: provider retirement gate
+
+- Added a fail-closed twelve-condition retirement evaluator covering clients,
+  Auth, tenant isolation, finance, custody, backups, observation, and approval.
+  **IMPLEMENTED.**
+- Current repository evidence satisfies none of the production retirement
+  conditions. **DO NOT RETIRE.**
+
 Stop for explicit approval before production Neon Auth enablement, real account
 export/import, password migration, credential rotation, deployed API-origin
 change, live client cutover, Supabase shutdown/deletion, or merchant-data writes

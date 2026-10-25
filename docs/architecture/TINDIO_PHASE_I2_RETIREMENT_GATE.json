@@ -1,0 +1,14 @@
+{
+  "phase": "I2",
+  "status": "RETIREMENT_GATE_IMPLEMENTED_NOT_SATISFIED",
+  "decision": "DO_NOT_RETIRE",
+  "retirementAllowed": false,
+  "supportedClientWindowClosed": false,
+  "supabaseTokenAcceptanceCanEnd": false,
+  "observationWindowPassed": false,
+  "ownerDecommissionApproval": false,
+  "requirementsSatisfied": [],
+  "requirementsRequired": 12,
+  "runtimeDefault": "supabase",
+  "nextAction": "COMPLETE_PHASE_H_PRODUCTION_CUTOVER_AND_ALL_RETIREMENT_EVIDENCE"
+}

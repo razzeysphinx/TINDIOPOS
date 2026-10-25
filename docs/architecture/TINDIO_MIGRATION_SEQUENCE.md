@@ -1009,6 +1009,13 @@ separate compatibility evidence and approval.
 - Preserved authorization, bearer, tenant, and cache boundaries; no production
   configuration or data changed. **BEHAVIOR CONTRACT RETAINED.**
 
+## Phase J3: directory organization and cleanup
+
+- Documented canonical directory ownership and retained intentional root
+  infrastructure adjacency. **OWNERSHIP CERTIFIED.**
+- Hardened ignore boundaries for local package/device/temp output without
+  deleting developer files or historical evidence. **SAFE CLEANUP COMPLETE.**
+
 Stop for explicit approval before production Neon Auth enablement, real account
 export/import, password migration, credential rotation, deployed API-origin
 change, live client cutover, Supabase shutdown/deletion, or merchant-data writes

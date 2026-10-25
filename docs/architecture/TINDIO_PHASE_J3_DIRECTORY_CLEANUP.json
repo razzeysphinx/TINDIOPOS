@@ -1,0 +1,9 @@
+{
+  "phase": "J3",
+  "status": "DIRECTORY_OWNERSHIP_CERTIFIED_LOCAL_OUTPUT_BOUNDARIES_HARDENED",
+  "sourceDirectoriesMoved": [],
+  "historicalEvidenceDeleted": false,
+  "localGeneratedDirectoriesIgnored": [".tmp", ".tmp-adb-home", ".tmp-android-user", ".pnpm-store"],
+  "canonicalRoots": ["apps", "src", "packages", "database", "supabase", "scripts", "docs", "archive", "tests", "public"],
+  "infrastructureStableRootFiles": ["neon.ts", "hello.ts"]
+}

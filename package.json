@@ -119,6 +119,7 @@
     "test:architecture-phase-j1-performance-baseline": "node --test scripts/architecture-phase-j1-performance-baseline-check.mjs",
     "audit:phase-j1-performance-baseline": "node scripts/phase-j-performance-baseline.mjs",
     "test:architecture-phase-j2-query-optimization": "node --test scripts/architecture-phase-j2-query-optimization-check.mjs",
+    "test:architecture-phase-j3-directory-cleanup": "node --test scripts/architecture-phase-j3-directory-cleanup-check.mjs",
     "preflight:phase-g:physical-upgrade": "node scripts/phase-g-physical-auth-upgrade-preflight.mjs",
     "phase-f:identity-dry-run": "node scripts/phase-f-identity-mapping-dry-run.mjs",
     "certify:phase-e4:neon-web": "node scripts/phase-e4-neon-web-proof.mjs",

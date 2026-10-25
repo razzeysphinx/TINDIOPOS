@@ -50,6 +50,10 @@ supabase/.branches/
 
 # Local TINDIO safety/audit snapshots
 .tindio-pre-*
+/.tmp/
+/.tmp-adb-home/
+/.tmp-android-user/
+/.pnpm-store/
 
 # Local editor settings
 .vscode/

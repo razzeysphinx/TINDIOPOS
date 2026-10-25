@@ -20,7 +20,8 @@ test("Backend owns the bounded POS modifiers read", async () => {
   assert.match(service, /options\.mode \?\? ["']owned["']/);
   assert.match(owned, /handleOwnedPosModifiers/);
   assert.match(runtime, /get_pos_modifiers_v2/);
-  assert.match(sharedRuntime, /auth\.getClaims\(token\)/);
+  assert.match(sharedRuntime, /authVerifier\.verifyAccessToken\(token\)/);
+  assert.match(sharedRuntime, /createBackendAuthTokenVerifier/);
   assert.match(sharedRuntime, /createNeonDataApiFetch/);
   assert.match(environment, /^TINDIO_MODIFIERS_READ_MODE=owned$/m);
 });

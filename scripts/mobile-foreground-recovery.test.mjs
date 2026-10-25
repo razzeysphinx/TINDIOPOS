@@ -73,8 +73,8 @@ test("MOB-09 foreground recovery queues one trailing run when session state chan
   assert.match(businessSource, /AppState\.addEventListener\("change"/);
   assert.match(businessSource, /shouldReloadAfterAppStateChange[\s\S]*void reload/);
   assert.match(sessionSource, /recoverSessionOnForeground/);
-  assert.match(sessionSource, /supabase\.auth\.getSession\(\)/);
-  assert.match(sessionSource, /if \(!isUnexpired\(next\)\)[\s\S]*supabase\.auth\.refreshSession\(\)/);
+  assert.match(sessionSource, /mobileAuth\.getSession\(\)/);
+  assert.match(sessionSource, /if \(!isUnexpired\(next\)\)[\s\S]*mobileAuth\.refreshSession\(\)/);
   assert.match(sessionSource, /setAccessMode\("online"\)/);
   assert.match(sessionSource, /await applyOfflineReadiness\(\)/);
 });

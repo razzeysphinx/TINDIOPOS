@@ -21,7 +21,8 @@ test("Backend owns the bounded POS attendance-employee read", async () => {
   assert.match(owned, /handleOwnedPosAttendanceEmployees/);
   assert.match(runtime, /get_pos_bootstrap_core_v2/);
   assert.match(runtime, /get_attendance_employees/);
-  assert.match(sharedRuntime, /auth\.getClaims\(token\)/);
+  assert.match(sharedRuntime, /authVerifier\.verifyAccessToken\(token\)/);
+  assert.match(sharedRuntime, /createBackendAuthTokenVerifier/);
   assert.match(sharedRuntime, /createNeonDataApiFetch/);
   assert.match(environment, /^TINDIO_ATTENDANCE_EMPLOYEES_READ_MODE=owned$/m);
 });

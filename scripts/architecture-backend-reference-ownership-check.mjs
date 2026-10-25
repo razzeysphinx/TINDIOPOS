@@ -20,7 +20,8 @@ test("Backend owns the POS reference read", async () => {
   assert.match(service, /options\.mode \?\? ["']owned["']/);
   assert.match(owned, /handleOwnedPosReference/);
   assert.match(runtime, /get_pos_reference_bundle_v2/);
-  assert.match(sharedRuntime, /auth\.getClaims\(token\)/);
+  assert.match(sharedRuntime, /authVerifier\.verifyAccessToken\(token\)/);
+  assert.match(sharedRuntime, /createBackendAuthTokenVerifier/);
   assert.match(sharedRuntime, /createNeonDataApiFetch/);
   assert.match(environment, /^TINDIO_REFERENCE_READ_MODE=owned$/m);
 });

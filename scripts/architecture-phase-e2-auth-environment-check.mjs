@@ -72,13 +72,13 @@ test("E2 does not promote any runtime proof flow", () => {
 });
 
 test("E2 documentation preserves production and cleanup stop points", async () => {
-  const [handoff, migration, certification, cutover, neonConfig, neonContext, packageSource] = await Promise.all([
+  const [handoff, migration, certification, cutover, neonConfig, gitignore, packageSource] = await Promise.all([
     read("docs/architecture/TINDIO_PHASE_E2_NEON_AUTH_ENVIRONMENT.md"),
     read("docs/architecture/TINDIO_MIGRATION_SEQUENCE.md"),
     read("docs/architecture/TINDIO_ARCHITECTURE_CERTIFICATION.md"),
     read("docs/architecture/TINDIO_PRODUCTION_CUTOVER_CHECKLIST.md"),
     read("neon.ts"),
-    read(".neon"),
+    read(".gitignore"),
     read("package.json"),
   ]);
   assert.match(handoff, /manual project deletion is required/i);
@@ -88,7 +88,8 @@ test("E2 documentation preserves production and cleanup stop points", async () =
   assert.match(cutover, /Disposable Neon branch and synthetic Auth environment approved/);
   assert.match(neonConfig, /authProvider:\s*["']external["']/);
   assert.match(neonConfig, /supabaseJwksUrl/);
-  assert.match(neonContext, /divine-sound-41148108/);
+  assert.equal(evidence.project.id, "billowing-night-36088699");
+  assert.match(gitignore, /^\.neon$/m);
   assert.match(packageSource, /test:architecture-phase-e2-auth-environment/);
   assert.doesNotMatch(JSON.stringify(evidence), /secret_server_key|database_url/i);
 });

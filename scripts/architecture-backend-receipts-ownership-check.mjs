@@ -21,7 +21,8 @@ test("Backend owns the bounded POS receipt-search read", async () => {
   assert.match(owned, /handleOwnedPosReceipts/);
   assert.match(runtime, /get_pos_bootstrap_core_v2/);
   assert.match(runtime, /get_pos_receipt_history/);
-  assert.match(sharedRuntime, /auth\.getClaims\(token\)/);
+  assert.match(sharedRuntime, /authVerifier\.verifyAccessToken\(token\)/);
+  assert.match(sharedRuntime, /createBackendAuthTokenVerifier/);
   assert.match(sharedRuntime, /createNeonDataApiFetch/);
   assert.match(environment, /^TINDIO_RECEIPTS_READ_MODE=owned$/m);
 });

@@ -20,7 +20,8 @@ test("Backend owns the bounded POS live-state read", async () => {
   assert.match(service, /options\.mode \?\? ["']owned["']/);
   assert.match(owned, /handleOwnedPosLive/);
   assert.match(runtime, /get_pos_live_state_v2/);
-  assert.match(sharedRuntime, /auth\.getClaims\(token\)/);
+  assert.match(sharedRuntime, /authVerifier\.verifyAccessToken\(token\)/);
+  assert.match(sharedRuntime, /createBackendAuthTokenVerifier/);
   assert.match(sharedRuntime, /createNeonDataApiFetch/);
   assert.match(environment, /^TINDIO_LIVE_READ_MODE=owned$/m);
 });

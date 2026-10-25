@@ -20,7 +20,8 @@ test("Backend owns bootstrap authentication and Neon core loading", async () => 
   assert.match(route, /TINDIO_BOOTSTRAP_READ_MODE/);
   assert.match(service, /options\.mode \?\? ["']owned["']/);
   assert.match(owned, /Bearer \(\[\^\\s\]\+\)/);
-  assert.match(posReadRuntime, /auth\.getClaims\(token\)/);
+  assert.match(posReadRuntime, /authVerifier\.verifyAccessToken\(token\)/);
+  assert.match(posReadRuntime, /createBackendAuthTokenVerifier/);
   assert.match(runtime, /get_pos_bootstrap_core_v2/);
   assert.match(posReadRuntime, /createNeonDataApiFetch/);
   assert.match(environmentExample, /^TINDIO_BOOTSTRAP_READ_MODE=owned$/m);

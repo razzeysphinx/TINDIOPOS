@@ -21,7 +21,8 @@ test("Backend owns the immutable POS receipt-detail read", async () => {
   assert.match(owned, /handleOwnedPosReceiptDetail/);
   assert.match(runtime, /get_pos_bootstrap_core_v2/);
   assert.match(runtime, /get_pos_receipt_detail/);
-  assert.match(sharedRuntime, /auth\.getClaims\(token\)/);
+  assert.match(sharedRuntime, /authVerifier\.verifyAccessToken\(token\)/);
+  assert.match(sharedRuntime, /createBackendAuthTokenVerifier/);
   assert.match(sharedRuntime, /createNeonDataApiFetch/);
   assert.match(environment, /^TINDIO_RECEIPT_DETAIL_READ_MODE=owned$/m);
 });

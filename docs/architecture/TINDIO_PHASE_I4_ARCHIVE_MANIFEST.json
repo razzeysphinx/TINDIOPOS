@@ -1,0 +1,17 @@
+{
+  "phase": "I4",
+  "status": "REPOSITORY_EVIDENCE_HASHED_EXTERNAL_BACKUP_NOT_VERIFIED",
+  "algorithm": "sha256",
+  "artifacts": [
+    { "path": "docs/architecture/TINDIO_PHASE_H5_GO_NO_GO.json", "sha256": "4df28612a40c561a15dcd994d4b2d7b94ba9e39e442820ccd04d1d07319d65a3" },
+    { "path": "docs/architecture/TINDIO_PHASE_I1_SUPABASE_DEPENDENCY_INVENTORY.json", "sha256": "163478b057b5fb46d16ac08114cdcf8a3c47682367c2215f91a36b789936d1d1" },
+    { "path": "docs/architecture/TINDIO_PHASE_I2_RETIREMENT_GATE.json", "sha256": "94c24e176cf6b9861cecad65746071ee541f04eebc24d3540aa691837c689301" },
+    { "path": "docs/architecture/TINDIO_PHASE_I3_REMOVAL_MANIFEST.json", "sha256": "486a963c973203e2576adb66071d740d4bbd6ed41a645bdec6986d4811000075" }
+  ],
+  "repositoryEvidenceVerified": true,
+  "providerExportVerified": false,
+  "externalBackupVerified": false,
+  "restoreDrillPassed": false,
+  "containsSecrets": false,
+  "retirementAllowed": false
+}

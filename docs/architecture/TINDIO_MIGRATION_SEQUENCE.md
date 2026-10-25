@@ -979,6 +979,13 @@ separate compatibility evidence and approval.
 - Protected SQL migrations, archives, and certification evidence from deletion;
   hosted-project deletion is outside the manifest. **EVIDENCE PRESERVED.**
 
+## Phase I4: evidence archive and backup readiness
+
+- Hash-verified the controlling H5 decision and Phase I retirement artifacts
+  without storing secrets or merchant data. **REPOSITORY EVIDENCE VERIFIED.**
+- Provider export, external backup, and restore drill require controlled live
+  execution and remain unverified. **RETIREMENT BLOCKED.**
+
 Stop for explicit approval before production Neon Auth enablement, real account
 export/import, password migration, credential rotation, deployed API-origin
 change, live client cutover, Supabase shutdown/deletion, or merchant-data writes

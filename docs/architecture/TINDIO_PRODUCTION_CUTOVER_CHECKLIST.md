@@ -25,7 +25,9 @@ Status: **NOT READY — OWNER APPROVAL REQUIRED AT CUTOVER**
 - [x] Identity mapping and collision policy encoded and synthetically certified;
       owner review of the authorized full-directory report remains pending.
 - [ ] Password continuity or secure reset/claim process approved.
-- [ ] Rollback window, backup, monitoring, and support runbook approved.
+- [ ] Rollback window, backup, monitoring, and support runbook approved. Phase
+      H repository runbooks are prepared; owner ratification and production-
+      like rehearsal remain open.
 
 ## Application readiness
 
@@ -60,7 +62,8 @@ Status: **NOT READY — OWNER APPROVAL REQUIRED AT CUTOVER**
 ## Cutover and retirement
 
 - [ ] Explicit owner approval recorded for production provisioning/import.
-- [ ] Cutover maintenance/freeze procedure rehearsed.
+- [ ] Cutover maintenance/freeze procedure rehearsed. H2-H4 define the staged
+      procedure and isolated evaluator; production-like rehearsal is not run.
 - [ ] Account import or claim process produces a complete auditable mapping.
 - [ ] Production traffic and error monitoring show no unresolved dependency.
 - [ ] Rollback remains viable through the agreed observation window.

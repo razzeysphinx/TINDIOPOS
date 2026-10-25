@@ -38,7 +38,7 @@ H production execution is not authorized.
 
 | ID | Required later work | Current state | Completion evidence |
 | --- | --- | --- | --- |
-| H-01 | Approve the production cutover package, maintenance/freeze window, named operators, monitoring, support, and rollback runbook. | `OWNER_APPROVAL_REQUIRED` | Signed go/no-go record and successful rehearsal. |
+| H-01 | Approve the production cutover package, maintenance/freeze window, named operators, monitoring, support, and rollback runbook. | `PACKAGE_PREPARED_OWNER_APPROVAL_REQUIRED` | Signed go/no-go record and successful rehearsal. |
 | H-02 | Execute controlled identity import/account claim and production client rollout. | `PROHIBITED_UNTIL_H01` | Auditable identity mapping, canary results, error/latency/Auth metrics, reconciliation report. |
 | H-03 | Observe production through the approved rollback window with no unresolved financial/Auth incident. | `NOT_STARTED` | Dated dashboards, incident ledger, support review, owner exit approval. |
 | I-01 | Close the legacy client window only after supported-client adoption and custody reconciliation. | `NOT_STARTED` | Active-version report, zero unresolved blocked-device custody, approved enforcement change. |

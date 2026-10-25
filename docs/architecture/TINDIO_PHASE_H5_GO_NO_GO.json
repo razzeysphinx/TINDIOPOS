@@ -1,0 +1,43 @@
+{
+  "phase": "H5",
+  "status": "PHASE_H_REPOSITORY_PACKAGE_COMPLETE_PRODUCTION_EXECUTION_BLOCKED",
+  "decision": "NO_GO",
+  "productionCutoverAllowed": false,
+  "productionChangesMade": false,
+  "liveAuthenticatedTrafficObserved": false,
+  "productionRollbackRehearsalPassed": false,
+  "ownerApprovalRecorded": false,
+  "phaseIRetirementAllowed": false,
+  "sliceStatus": [
+    { "slice": "H1", "status": "PREPARED_NOT_READY" },
+    { "slice": "H2", "status": "CANARY_PLAN_PREPARED_H2_0_ONLY" },
+    { "slice": "H3", "status": "RUNBOOK_PREPARED_NOT_APPROVED" },
+    { "slice": "H4", "status": "EVALUATOR_IMPLEMENTED_PRODUCTION_REHEARSAL_NOT_RUN" },
+    { "slice": "H5", "status": "GO_NO_GO_PACKAGE_COMPLETE_NO_GO" }
+  ],
+  "blockingRequirements": [
+    "phaseFAndGExternalGatesClosed",
+    "productionAuthConfigurationVerified",
+    "allOperatorRolesNamed",
+    "identityMappingReviewedAndApproved",
+    "passwordClaimPolicyApproved",
+    "webProductionLifecyclePassed",
+    "mobileSignedBuildCampaignPassed",
+    "supportedClientPolicyApproved",
+    "monitoringThresholdsAndSupportApproved",
+    "backupAndRestorePointVerified",
+    "productionLikeRollbackRehearsalPassed",
+    "cutoverWindowApproved",
+    "explicitOwnerApprovalRecorded"
+  ],
+  "approvalRecord": {
+    "ownerName": null,
+    "approvedAt": null,
+    "releaseIdentifier": null,
+    "configurationIdentifier": null,
+    "cutoverWindow": null,
+    "rollbackWindowEndsAt": null
+  },
+  "nextAction": "SATISFY_DEFERRED_GATES_THEN_REEVALUATE_H5",
+  "runtimeDefault": "supabase"
+}

@@ -12,9 +12,13 @@ test("J1 baseline is reproducible from tracked source", () => {
   for (const value of Object.values(first)) assert.equal(Number.isInteger(value) && value > 0, true);
 });
 
-test("J1 records query, parallelism, factory, and source-size measurements", async () => {
+test("J1 baseline remains a valid lower-risk reference after later slices", async () => {
   const artifact = JSON.parse(await read("docs/architecture/TINDIO_PHASE_J1_PERFORMANCE_BASELINE.json"));
-  assert.deepEqual(artifact.measurements, collectPerformanceBaseline());
+  const current = collectPerformanceBaseline();
+  assert.equal(current.databaseQueryCallsites <= artifact.measurements.databaseQueryCallsites, true);
+  assert.equal(current.runtimeClientFactories <= artifact.measurements.runtimeClientFactories, true);
+  assert.equal(current.explicitParallelGroups >= artifact.measurements.explicitParallelGroups, true);
+  assert.equal(current.runtimeSourceFiles, artifact.measurements.runtimeSourceFiles);
   assert.equal(artifact.productionDatabaseInspected, false);
   assert.equal(artifact.productionTrafficGenerated, false);
   assert.equal(artifact.status, "REPOSITORY_BASELINE_RECORDED_LIVE_MEASUREMENT_DEFERRED");

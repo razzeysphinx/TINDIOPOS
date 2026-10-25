@@ -1,0 +1,10 @@
+{
+  "phase": "J4",
+  "status": "INDEPENDENT_CI_AND_FINAL_DOCUMENTATION_IMPLEMENTED",
+  "workflow": ".github/workflows/tindio-independent-ci.yml",
+  "independentJobs": ["contracts", "web", "backend", "mobile", "architecture"],
+  "productionSecretsRequired": false,
+  "productionDeploymentIncluded": false,
+  "baselineCertificationReplaced": false,
+  "branch": "TINDIO-PREPRODUCTION"
+}

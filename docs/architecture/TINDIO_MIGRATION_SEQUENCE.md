@@ -1016,6 +1016,14 @@ separate compatibility evidence and approval.
 - Hardened ignore boundaries for local package/device/temp output without
   deleting developer files or historical evidence. **SAFE CLEANUP COMPLETE.**
 
+## Phase J4: final documentation and independent CI/CD
+
+- Added isolated Contracts, Web, Backend, Mobile, and architecture CI jobs with
+  pinned tools, locked installs, read-only permissions, and timeouts.
+  **IMPLEMENTED.**
+- Retained the Docker-backed baseline workflow and excluded deployment or
+  production secrets. **COMPLEMENTARY CI; NO PRODUCTION CHANGE.**
+
 Stop for explicit approval before production Neon Auth enablement, real account
 export/import, password migration, credential rotation, deployed API-origin
 change, live client cutover, Supabase shutdown/deletion, or merchant-data writes

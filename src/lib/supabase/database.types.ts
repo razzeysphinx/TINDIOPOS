@@ -3273,8 +3273,8 @@ export type Database = {
           employee_id: string
           employee_name_snapshot: string
           failed_count: number
-          last_crash_at: string | null
           last_anr_at: string | null
+          last_crash_at: string | null
           last_heartbeat_at: string
           last_successful_sync_at: string | null
           local_database_health: string
@@ -3304,8 +3304,8 @@ export type Database = {
           employee_id: string
           employee_name_snapshot: string
           failed_count?: number
-          last_crash_at?: string | null
           last_anr_at?: string | null
+          last_crash_at?: string | null
           last_heartbeat_at?: string
           last_successful_sync_at?: string | null
           local_database_health?: string
@@ -3335,8 +3335,8 @@ export type Database = {
           employee_id?: string
           employee_name_snapshot?: string
           failed_count?: number
-          last_crash_at?: string | null
           last_anr_at?: string | null
+          last_crash_at?: string | null
           last_heartbeat_at?: string
           last_successful_sync_at?: string | null
           local_database_health?: string
@@ -3528,6 +3528,121 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "product_variants"
             referencedColumns: ["id", "product_id", "organization_id"]
+          },
+        ]
+      }
+      pos_operational_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by_employee_id: string | null
+          alert_type: string
+          assigned_employee_id: string
+          assigned_employee_name: string
+          created_at: string
+          device_id: string
+          diagnostic: Json
+          escalation_channel: string
+          first_detected_at: string
+          id: string
+          last_detected_at: string
+          occurrence_count: number
+          organization_id: string
+          register_id: string
+          resolved_at: string | null
+          runbook_key: string
+          severity: string
+          status: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by_employee_id?: string | null
+          alert_type: string
+          assigned_employee_id: string
+          assigned_employee_name: string
+          created_at?: string
+          device_id: string
+          diagnostic?: Json
+          escalation_channel: string
+          first_detected_at?: string
+          id?: string
+          last_detected_at?: string
+          occurrence_count?: number
+          organization_id: string
+          register_id: string
+          resolved_at?: string | null
+          runbook_key: string
+          severity: string
+          status?: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by_employee_id?: string | null
+          alert_type?: string
+          assigned_employee_id?: string
+          assigned_employee_name?: string
+          created_at?: string
+          device_id?: string
+          diagnostic?: Json
+          escalation_channel?: string
+          first_detected_at?: string
+          id?: string
+          last_detected_at?: string
+          occurrence_count?: number
+          organization_id?: string
+          register_id?: string
+          resolved_at?: string | null
+          runbook_key?: string
+          severity?: string
+          status?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_operational_alerts_acknowledger_fkey"
+            columns: ["acknowledged_by_employee_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "pos_operational_alerts_assignee_fkey"
+            columns: ["assigned_employee_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "pos_operational_alerts_device_fkey"
+            columns: ["device_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "pos_devices"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "pos_operational_alerts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_operational_alerts_register_fkey"
+            columns: ["register_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "registers"
+            referencedColumns: ["id", "organization_id"]
+          },
+          {
+            foreignKeyName: "pos_operational_alerts_store_fkey"
+            columns: ["store_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id", "organization_id"]
           },
         ]
       }
@@ -6517,6 +6632,23 @@ export type Database = {
         Args: { invitation_token_hash: string }
         Returns: string
       }
+      acknowledge_pos_operational_alert: {
+        Args: { target_alert_id: string; target_organization_id: string }
+        Returns: {
+          acknowledged_at: string
+          alert_id: string
+          status: string
+        }[]
+      }
+      acquire_pos_shift_custody: {
+        Args: { target_organization_id: string; target_shift_id: string }
+        Returns: {
+          acquired_at: string
+          device_id: string
+          shift_id: string
+          state: string
+        }[]
+      }
       add_loyalty_card_stamp: {
         Args: {
           target_idempotency_key?: string
@@ -6845,6 +6977,25 @@ export type Database = {
           difference_minor: number
           expected_cash_minor: number
           shift_id: string
+        }[]
+      }
+      close_register_shift_mobile: {
+        Args: {
+          target_closing_note: string
+          target_counted_cash_minor: number
+          target_finalization_token: string
+          target_local_high_water: number
+          target_organization_id: string
+          target_shift_id: string
+        }
+        Returns: {
+          closed: boolean
+          closed_at: string
+          counted_cash_minor: number
+          difference_minor: number
+          expected_cash_minor: number
+          shift_id: string
+          was_replayed: boolean
         }[]
       }
       complete_organization_export: {
@@ -7788,6 +7939,17 @@ export type Database = {
         }
         Returns: Json
       }
+      get_pos_sync_resnapshot_v1: {
+        Args: { target_device_id: string; target_organization_id: string }
+        Returns: Json
+      }
+      get_pos_sync_retention_state: {
+        Args: { target_device_id: string; target_organization_id: string }
+        Returns: {
+          current_revision: number
+          retained_after_revision: number
+        }[]
+      }
       get_pos_sync_revision: {
         Args: { target_device_id: string; target_organization_id: string }
         Returns: {
@@ -7959,6 +8121,26 @@ export type Database = {
           replacement_receipt_number: number
           replacement_sale_id: string
           was_replayed: boolean
+        }[]
+      }
+      list_pos_operational_alerts: {
+        Args: { target_organization_id: string }
+        Returns: {
+          acknowledged_at: string
+          alert_id: string
+          alert_type: string
+          assigned_employee_name: string
+          device_id: string
+          diagnostic: Json
+          escalation_channel: string
+          first_detected_at: string
+          last_detected_at: string
+          occurrence_count: number
+          register_id: string
+          runbook_key: string
+          severity: string
+          status: string
+          store_id: string
         }[]
       }
       manage_organization_lifecycle: {
@@ -8214,8 +8396,8 @@ export type Database = {
           target_employee_id: string
           target_employee_name: string
           target_failed_count: number
-          target_last_crash_at?: string
           target_last_anr_at?: string
+          target_last_crash_at?: string
           target_last_successful_sync_at: string
           target_local_database_health?: string
           target_local_schema_version?: number
@@ -8271,6 +8453,22 @@ export type Database = {
         }
         Returns: string
       }
+      retire_pos_device: {
+        Args: {
+          target_custody_decision: string
+          target_device_id: string
+          target_loss_confirmation?: string
+          target_organization_id: string
+          target_reason: string
+        }
+        Returns: {
+          custody_decision: string
+          device_id: string
+          lost_custody_count: number
+          revoked_at: string
+          status: string
+        }[]
+      }
       return_to_supplier: {
         Args: {
           target_lines: Json
@@ -8298,22 +8496,6 @@ export type Database = {
         }
         Returns: {
           device_id: string
-          revoked_at: string
-          status: string
-        }[]
-      }
-      retire_pos_device: {
-        Args: {
-          target_custody_decision: string
-          target_device_id: string
-          target_loss_confirmation?: string
-          target_organization_id: string
-          target_reason: string
-        }
-        Returns: {
-          custody_decision: string
-          device_id: string
-          lost_custody_count: number
           revoked_at: string
           status: string
         }[]

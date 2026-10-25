@@ -920,6 +920,14 @@ separate compatibility evidence and approval.
   operator roles, all predecessor gates, and a fail-closed `NO_GO` decision.
   **NOT READY; NO PRODUCTION CHANGE.**
 
+## Phase H2: authenticated-traffic canary controls
+
+- Defined zero, 1%, 5%, 25%, and 100% stages with mandatory observation
+  windows, predecessor passage, reconciliation, monitoring, support, and
+  operator acknowledgement. **PREPARED; H2-0 ONLY.**
+- Every failed gate triggers `ROLLBACK_AND_HOLD`; no stage can promote on time
+  or traffic percentage alone. **NO LIVE TRAFFIC CHANGED.**
+
 ## Mandatory stop points
 
 Stop for explicit approval before production Neon Auth enablement, real account

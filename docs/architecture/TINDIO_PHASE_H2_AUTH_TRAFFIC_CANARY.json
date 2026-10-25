@@ -1,0 +1,46 @@
+{
+  "phase": "H2",
+  "status": "CANARY_PLAN_PREPARED_NOT_EXECUTED",
+  "liveTrafficChanged": false,
+  "productionChangesMade": false,
+  "requiredSurfaces": [
+    "web_session_lifecycle",
+    "backend_bearer_validation",
+    "mobile_fresh_install",
+    "mobile_in_place_upgrade",
+    "tenant_and_store_authorization",
+    "data_api_rls",
+    "offline_custody_recovery"
+  ],
+  "stages": [
+    { "id": "H2-0", "name": "preflight", "trafficPercent": 0, "minimumObservationMinutes": 0, "status": "PREPARED" },
+    { "id": "H2-1", "name": "named_internal_accounts", "trafficPercent": 1, "minimumObservationMinutes": 60, "status": "NOT_RUN" },
+    { "id": "H2-2", "name": "single_pilot_tenant", "trafficPercent": 5, "minimumObservationMinutes": 240, "status": "NOT_RUN" },
+    { "id": "H2-3", "name": "limited_cohort", "trafficPercent": 25, "minimumObservationMinutes": 1440, "status": "NOT_RUN" },
+    { "id": "H2-4", "name": "general_cutover", "trafficPercent": 100, "minimumObservationMinutes": 4320, "status": "NOT_RUN" }
+  ],
+  "stageEntryRequirements": [
+    "previous_stage_passed",
+    "named_operator_acknowledgements",
+    "current_backup_verified",
+    "rollback_command_verified",
+    "monitoring_dashboards_live",
+    "support_channel_staffed",
+    "zero_unresolved_severity_one_or_two_incidents",
+    "identity_and_financial_reconciliation_passed"
+  ],
+  "requiredEvidencePerStage": [
+    "release_and_configuration_identifier",
+    "start_and_end_timestamp",
+    "account_and_tenant_counts_without_personal_data",
+    "auth_success_failure_latency_and_revocation_metrics",
+    "tenant_denial_and_rls_results",
+    "financial_duplicate_effect_count",
+    "mobile_custody_and_sync_summary",
+    "incident_and_support_summary",
+    "operator_and_rollback_authority_signoff"
+  ],
+  "automaticActionOnFailedGate": "ROLLBACK_AND_HOLD",
+  "currentStage": "H2-0",
+  "decision": "NO_GO"
+}

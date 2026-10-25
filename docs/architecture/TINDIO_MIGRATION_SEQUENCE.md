@@ -894,6 +894,20 @@ counterparts. Phase D is complete.
   forced-upgrade, in-place-upgrade, and rollback evidence is retained in the
   deferred completion register. **EXTERNAL EVIDENCE PENDING.**
 
+## Phase G5: implementation closure and Phase H entry gate
+
+- Consolidated G1-G4 into a machine-readable closure artifact. Repository and
+  isolated implementation work is complete, while all external, physical, and
+  owner-controlled gates remain open. **IMPLEMENTATION CLOSED; EXTERNAL
+  CERTIFICATION OPEN.**
+- Phase H may begin with runbook drafting, evidence templates, monitoring and
+  support planning, and synthetic or isolated rehearsal only. Production Auth,
+  identity, domain, email, credential, client-window, traffic, and provider
+  retirement changes remain prohibited. **PLANNING/REHEARSAL ONLY.**
+- The F4 `DO_NOT_CUT_OVER` decision remains controlling, Supabase remains the
+  runtime default, and owner approval has not been recorded. **STOP GATE
+  ACTIVE.**
+
 Do not change a deployed API origin or route clients to the new Backend without
 separate compatibility evidence and approval.
 

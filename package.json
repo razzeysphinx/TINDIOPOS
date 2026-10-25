@@ -102,6 +102,8 @@
     "test:architecture-phase-g-mobile-auth-transition": "node --test scripts/architecture-phase-g-mobile-auth-transition-check.mjs",
     "test:architecture-phase-g-physical-upgrade": "node --test scripts/architecture-phase-g-physical-upgrade-check.mjs",
     "test:architecture-phase-g-client-compatibility": "node --test scripts/architecture-phase-g-client-compatibility-check.mjs",
+    "test:architecture-phase-g-closure": "node --test scripts/architecture-phase-g-closure-check.mjs",
+    "test:architecture-phase-g": "pnpm test:architecture-phase-g-mobile-auth-transition && pnpm test:architecture-phase-g-physical-upgrade && pnpm test:architecture-phase-g-client-compatibility && pnpm test:architecture-phase-g-closure",
     "preflight:phase-g:physical-upgrade": "node scripts/phase-g-physical-auth-upgrade-preflight.mjs",
     "phase-f:identity-dry-run": "node scripts/phase-f-identity-mapping-dry-run.mjs",
     "certify:phase-e4:neon-web": "node scripts/phase-e4-neon-web-proof.mjs",

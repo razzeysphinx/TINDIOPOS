@@ -41,6 +41,9 @@ Status: **NOT READY — OWNER APPROVAL REQUIRED AT CUTOVER**
 - [x] Old supported clients have an explicit compatibility or forced-upgrade
       contract; physical release-candidate evidence remains open in the
       deferred completion register.
+- [x] Phase G repository implementation is formally closed with every external
+      gate retained; Phase H entry is restricted to planning and isolated
+      rehearsal, and production cutover remains unauthorized.
 
 ## Security and financial gates
 

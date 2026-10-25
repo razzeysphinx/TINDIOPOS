@@ -1,0 +1,64 @@
+{
+  "phase": "G",
+  "status": "IMPLEMENTATION_CLOSED_EXTERNAL_CERTIFICATION_OPEN",
+  "decision": "ADVANCE_TO_PHASE_H_PLANNING_AND_REHEARSAL_ONLY",
+  "generatedFromRepositoryEvidence": true,
+  "implementationSlices": [
+    {
+      "slice": "G1",
+      "status": "GATE_EVALUATED_BLOCKED_BY_F1_IDENTITY_RECONCILIATION"
+    },
+    {
+      "slice": "G2",
+      "status": "MOBILE_TRANSITION_FOUNDATION_IMPLEMENTED"
+    },
+    {
+      "slice": "G3",
+      "status": "HARNESS_IMPLEMENTED_PHYSICAL_RUN_BLOCKED"
+    },
+    {
+      "slice": "G4",
+      "status": "CLIENT_COMPATIBILITY_BOUNDARY_IMPLEMENTED"
+    }
+  ],
+  "completedEvidence": [
+    "web_activation_gate_audit",
+    "mobile_non_destructive_auth_transition",
+    "physical_upgrade_fail_closed_harness",
+    "supported_client_and_forced_upgrade_contract",
+    "consolidated_deferred_completion_register"
+  ],
+  "openGateIds": [
+    "F1-01",
+    "F1-02",
+    "G1-01",
+    "G3-01",
+    "G4-01",
+    "G4-02",
+    "G4-03"
+  ],
+  "phaseHAllowedScope": [
+    "cutover_runbook_drafting",
+    "rollback_runbook_drafting",
+    "monitoring_and_support_plan_drafting",
+    "synthetic_or_isolated_rehearsal",
+    "go_no_go_evidence_template"
+  ],
+  "prohibitedUntilApproval": [
+    "real_user_import_or_creation",
+    "identity_link_writes",
+    "password_reset_campaign",
+    "production_neon_auth_enablement",
+    "production_trusted_domain_or_email_change",
+    "live_client_cutover",
+    "credential_rotation",
+    "supported_client_window_closure",
+    "supabase_dependency_removal",
+    "supabase_decommission"
+  ],
+  "runtimeDefault": "supabase",
+  "productionChangesMade": false,
+  "productionCutoverAllowed": false,
+  "ownerApprovalRecorded": false,
+  "deferredRegister": "docs/architecture/TINDIO_DEFERRED_COMPLETION_REGISTER.md"
+}

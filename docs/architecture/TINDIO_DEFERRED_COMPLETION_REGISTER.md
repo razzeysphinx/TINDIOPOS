@@ -17,6 +17,11 @@ source checks may support an item but cannot replace physical, production, or
 owner evidence. No agent may mark an item complete merely because a later
 phase has started or finished.
 
+Phase G repository implementation closed on 2026-10-25 under the decision
+`ADVANCE_TO_PHASE_H_PLANNING_AND_REHEARSAL_ONLY`. This changes none of the
+statuses below: the F4 `DO_NOT_CUT_OVER` decision remains controlling and Phase
+H production execution is not authorized.
+
 ## Auth migration and client transition
 
 | ID | Required later work | Current state | Completion evidence |

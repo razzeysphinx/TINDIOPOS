@@ -972,6 +972,13 @@ separate compatibility evidence and approval.
 - Current repository evidence satisfies none of the production retirement
   conditions. **DO NOT RETIRE.**
 
+## Phase I3: ordered removal manifest
+
+- Sequenced future Web, Mobile, Backend, deployment, and workspace removal with
+  surface-specific preconditions. **PLAN COMPLETE; NOT EXECUTED.**
+- Protected SQL migrations, archives, and certification evidence from deletion;
+  hosted-project deletion is outside the manifest. **EVIDENCE PRESERVED.**
+
 Stop for explicit approval before production Neon Auth enablement, real account
 export/import, password migration, credential rotation, deployed API-origin
 change, live client cutover, Supabase shutdown/deletion, or merchant-data writes

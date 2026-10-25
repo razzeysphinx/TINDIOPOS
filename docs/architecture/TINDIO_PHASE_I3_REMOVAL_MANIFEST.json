@@ -1,0 +1,15 @@
+{
+  "phase": "I3",
+  "status": "PLAN_COMPLETE_REMOVAL_NOT_EXECUTED",
+  "removalExecuted": false,
+  "orderedOperations": [
+    { "order": 1, "surface": "web", "targets": ["src/lib/supabase", "@supabase/ssr"], "precondition": "active Web release uses certified replacement Auth" },
+    { "order": 2, "surface": "mobile", "targets": ["apps/mobile/src/lib/supabase.ts", "@supabase/supabase-js", "legacy SecureStore session"], "precondition": "supported-client window closed and custody proof passed" },
+    { "order": 3, "surface": "backend", "targets": ["Supabase JWT/JWKS compatibility", "Supabase runtime clients"], "precondition": "no supported client presents Supabase tokens" },
+    { "order": 4, "surface": "deployment", "targets": ["Supabase public/server environment variables", "provider-specific CI checks"], "precondition": "all active deployments replaced and observed" },
+    { "order": 5, "surface": "workspace", "targets": ["Supabase runtime and CLI package dependencies"], "precondition": "replacement certification tooling exists" }
+  ],
+  "alwaysPreserve": ["supabase/migrations", "docs/archive", "architecture decision and certification evidence"],
+  "projectDeletionIncluded": false,
+  "currentDecision": "PLAN_ONLY_DO_NOT_EXECUTE"
+}

@@ -956,6 +956,14 @@ separate compatibility evidence and approval.
 
 ## Mandatory stop points
 
+## Phase I1: Supabase dependency inventory
+
+- Classified active Web, Mobile, Backend, package/configuration, transition, and
+  historical Supabase references. **INVENTORY COMPLETE.**
+- Supabase remains the runtime default under the H5 `NO_GO` decision. No active
+  dependency was removed and historical migrations remain preserved.
+  **REMOVAL BLOCKED.**
+
 Stop for explicit approval before production Neon Auth enablement, real account
 export/import, password migration, credential rotation, deployed API-origin
 change, live client cutover, Supabase shutdown/deletion, or merchant-data writes

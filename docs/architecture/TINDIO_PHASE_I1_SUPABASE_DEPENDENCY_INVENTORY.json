@@ -1,0 +1,16 @@
+{
+  "phase": "I1",
+  "status": "ACTIVE_DEPENDENCIES_CONFIRMED_REMOVAL_BLOCKED",
+  "runtimeDefault": "supabase",
+  "activeRuntimeDependency": true,
+  "retirementAllowed": false,
+  "surfaces": {
+    "web": ["src/lib/supabase/server.ts", "src/lib/supabase/client.ts", "src/lib/supabase/proxy.ts"],
+    "mobile": ["apps/mobile/src/lib/supabase.ts", "apps/mobile/src/features/session/auth-provider.ts"],
+    "backend": ["apps/backend/src/auth/provider.ts", "apps/backend/src/pos/*-runtime.ts"],
+    "buildAndConfiguration": ["package.json", "pnpm-lock.yaml", ".github/workflows/tindio-baseline-certification.yml"],
+    "historicalEvidence": ["supabase/migrations", "docs/archive"]
+  },
+  "classificationRule": "Remove only proven active dependencies after cutover; preserve migrations, audits, and historical evidence.",
+  "controllingEvidence": "docs/architecture/TINDIO_PHASE_H5_GO_NO_GO.json"
+}

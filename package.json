@@ -110,6 +110,7 @@
     "test:architecture-phase-h4-rollback-rehearsal": "node --test scripts/architecture-phase-h4-rollback-rehearsal-check.mjs",
     "test:architecture-phase-h5-go-no-go": "node --test scripts/architecture-phase-h5-go-no-go-check.mjs",
     "test:architecture-phase-h": "pnpm test:architecture-phase-h1-production-readiness && pnpm test:architecture-phase-h2-auth-traffic-canary && pnpm test:architecture-phase-h3-monitoring-support && pnpm test:architecture-phase-h4-rollback-rehearsal && pnpm test:architecture-phase-h5-go-no-go",
+    "test:architecture-phase-i1-supabase-inventory": "node --test scripts/architecture-phase-i1-supabase-dependency-inventory-check.mjs",
     "preflight:phase-g:physical-upgrade": "node scripts/phase-g-physical-auth-upgrade-preflight.mjs",
     "phase-f:identity-dry-run": "node scripts/phase-f-identity-mapping-dry-run.mjs",
     "certify:phase-e4:neon-web": "node scripts/phase-e4-neon-web-proof.mjs",

@@ -928,6 +928,14 @@ separate compatibility evidence and approval.
 - Every failed gate triggers `ROLLBACK_AND_HOLD`; no stage can promote on time
   or traffic percentage alone. **NO LIVE TRAFFIC CHANGED.**
 
+## Phase H3: monitoring, incident, and support controls
+
+- Defined correlated application, provider, database, Mobile, financial, and
+  support evidence with 15-minute through 72-hour windows. **PREPARED.**
+- Security, cross-tenant, identity, duplicate-finance, and lost-custody defects
+  have zero tolerance and force rollback. Numerical availability/latency
+  thresholds remain owner-ratification gates. **NOT APPROVED; NO GO.**
+
 ## Mandatory stop points
 
 Stop for explicit approval before production Neon Auth enablement, real account

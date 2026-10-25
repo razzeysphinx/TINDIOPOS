@@ -1,0 +1,47 @@
+{
+  "phase": "H3",
+  "status": "RUNBOOK_PREPARED_NOT_APPROVED",
+  "productionChangesMade": false,
+  "thresholdsRequireOwnerRatification": true,
+  "monitoringSources": [
+    "web_and_backend_structured_logs",
+    "auth_provider_events_and_dashboard",
+    "postgres_and_data_api_metrics",
+    "mobile_api_sync_and_crash_telemetry",
+    "financial_reconciliation_queries",
+    "support_incident_queue"
+  ],
+  "rollbackTriggers": [
+    { "id": "security_authorization_escape", "operator": ">", "value": 0, "severity": "SEV1" },
+    { "id": "cross_tenant_or_store_access", "operator": ">", "value": 0, "severity": "SEV1" },
+    { "id": "duplicate_financial_effects", "operator": ">", "value": 0, "severity": "SEV1" },
+    { "id": "lost_or_corrupted_offline_custody", "operator": ">", "value": 0, "severity": "SEV1" },
+    { "id": "unmapped_or_wrongly_mapped_identity", "operator": ">", "value": 0, "severity": "SEV1" },
+    { "id": "auth_success_rate_percent_15m", "operator": "<", "value": 98, "severity": "SEV2" },
+    { "id": "authenticated_api_5xx_rate_percent_15m", "operator": ">", "value": 1, "severity": "SEV2" },
+    { "id": "sign_in_p95_ms_15m", "operator": ">", "value": 3000, "severity": "SEV2" },
+    { "id": "unresolved_session_or_revocation_incidents", "operator": ">", "value": 0, "severity": "SEV2" }
+  ],
+  "responseObjectivesMinutes": {
+    "SEV1_acknowledge": 5,
+    "SEV1_rollback_start": 10,
+    "SEV2_acknowledge": 15,
+    "SEV2_rollback_or_hold_decision": 30,
+    "SEV3_acknowledge": 60
+  },
+  "requiredDashboardWindows": ["15m", "1h", "24h", "72h"],
+  "supportRequiredFields": [
+    "incident_id",
+    "first_observed_at",
+    "affected_surface_and_cohort",
+    "release_and_configuration_identifier",
+    "sanitized_identity_reference",
+    "custody_or_financial_risk",
+    "operator_owner",
+    "rollback_state",
+    "resolution_and_reconciliation_evidence"
+  ],
+  "secretAndPrivacyRule": "NO_TOKENS_COOKIES_PASSWORDS_OR_RAW_PERSONAL_DATA",
+  "runbookApproved": false,
+  "decision": "NO_GO"
+}

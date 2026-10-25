@@ -11,13 +11,13 @@ select ok((select relrowsecurity from pg_catalog.pg_class where oid = 'public.po
 select ok((select relrowsecurity from pg_catalog.pg_class where oid = 'private.pos_device_credentials'::regclass), 'device credential hashes use RLS');
 select ok(to_regprocedure('public.register_pos_device(uuid,uuid,uuid,uuid,text,text,text)') is not null, 'secure device registration function exists');
 select ok(to_regprocedure('public.change_pos_device_register(uuid,uuid,uuid,uuid)') is not null, 'secure register-binding change function exists');
-select ok(to_regprocedure('public.revoke_pos_device(uuid,uuid,text)') is not null, 'secure device revocation function exists');
+select ok(to_regprocedure('public.retire_pos_device(uuid,uuid,text,text,text)') is not null, 'custody-aware device retirement function exists');
 select ok(to_regprocedure('public.validate_pos_device(uuid,uuid,text,text)') is not null, 'POS device validation function exists');
 select ok(not has_table_privilege('authenticated', 'public.pos_devices', 'insert'), 'authenticated callers cannot directly register devices');
 select ok(not has_table_privilege('authenticated', 'public.pos_devices', 'update'), 'authenticated callers cannot directly change device bindings');
 select ok(not has_table_privilege('authenticated', 'private.pos_device_credentials', 'select'), 'authenticated callers cannot read device credential hashes');
 select ok(not has_function_privilege('anon', 'public.register_pos_device(uuid,uuid,uuid,uuid,text,text,text)', 'execute'), 'anonymous callers cannot register devices');
-select ok(not has_function_privilege('anon', 'public.revoke_pos_device(uuid,uuid,text)', 'execute'), 'anonymous callers cannot revoke devices');
+select ok(not has_function_privilege('anon', 'public.retire_pos_device(uuid,uuid,text,text,text)', 'execute'), 'anonymous callers cannot retire devices');
 
 insert into auth.users (id, email, raw_user_meta_data)
 values
@@ -154,23 +154,23 @@ select ok(
 
 select lives_ok(
   format(
-    $$select public.revoke_pos_device(%L, 'd1111111-1111-4111-8111-111111111111', 'Test revocation')$$,
+    $$select public.retire_pos_device(%L, 'd1111111-1111-4111-8111-111111111111', 'DEVICE_UNAVAILABLE_ACCEPT_BOUNDED_LOSS', 'Test device retirement', 'ACCEPT LOCAL-ONLY TRANSACTION LOSS')$$,
     (select organization_id from device_test_context)
   ),
-  'owner can revoke an active device'
+  'owner can retire an active device with an explicit custody decision'
 );
 select is(
   (select status from public.pos_devices where id = 'd1111111-1111-4111-8111-111111111111'),
   'revoked',
-  'revoked device cannot remain active'
+  'retired device cannot remain active'
 );
 select ok(
   exists (
     select 1 from public.audit_logs
     where organization_id = (select organization_id from device_test_context)
-      and event_type = 'DEVICE_REVOKED'
+      and event_type = 'DEVICE_RETIRED_WITH_CUSTODY_DECISION'
   ),
-  'device revocation is audited'
+  'device retirement custody decision is audited'
 );
 
 create or replace function pg_temp.revoked_device_is_rejected()

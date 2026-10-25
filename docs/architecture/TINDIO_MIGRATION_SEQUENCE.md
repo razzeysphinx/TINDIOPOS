@@ -1002,6 +1002,13 @@ separate compatibility evidence and approval.
 - Production query plans, traffic, and latency were not inspected or generated.
   **LIVE PERFORMANCE EVIDENCE DEFERRED.**
 
+## Phase J2: evidence-based query optimization
+
+- Reused request-scoped cached identity between verified-user and business-
+  context reads and overlapped independent session work. **IMPLEMENTED.**
+- Preserved authorization, bearer, tenant, and cache boundaries; no production
+  configuration or data changed. **BEHAVIOR CONTRACT RETAINED.**
+
 Stop for explicit approval before production Neon Auth enablement, real account
 export/import, password migration, credential rotation, deployed API-origin
 change, live client cutover, Supabase shutdown/deletion, or merchant-data writes

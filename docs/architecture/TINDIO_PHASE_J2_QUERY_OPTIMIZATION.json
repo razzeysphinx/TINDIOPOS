@@ -1,0 +1,11 @@
+{
+  "phase": "J2",
+  "status": "REQUEST_SCOPED_IDENTITY_QUERY_COALESCING_IMPLEMENTED",
+  "optimization": "Reuse React-cached verified identity in BusinessContext and overlap it with cookie-session resolution.",
+  "maxIdentityResolutionCallsEliminatedPerRender": 1,
+  "sequentialAuthStagesBefore": 2,
+  "parallelAuthStageGroupsAfter": 1,
+  "authorizationBehaviorChanged": false,
+  "crossRequestCachingIntroduced": false,
+  "productionChangesMade": false
+}

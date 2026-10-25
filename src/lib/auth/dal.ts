@@ -499,15 +499,26 @@ export async function loadBusinessContext({
 
 export const getBusinessContext = cache(
   async (): Promise<BusinessContext | null> => {
+    const userPromise =
+      getVerifiedUser();
+
     const cookieClient =
       await createClient();
 
-    const {
-      data: sessionData,
-      error: sessionError,
-    } =
-      await cookieClient.auth
+    const sessionPromise =
+      cookieClient.auth
         .getSession();
+
+    const [
+      user,
+      {
+        data: sessionData,
+        error: sessionError,
+      },
+    ] = await Promise.all([
+      userPromise,
+      sessionPromise,
+    ]);
 
     const accessToken =
       sessionData
@@ -518,6 +529,7 @@ export const getBusinessContext = cache(
     if (
       sessionError
       || !accessToken
+      || !user
     ) {
       return null;
     }
@@ -532,16 +544,6 @@ export const getBusinessContext = cache(
             authorizationHeader,
         },
       });
-
-    const user =
-      await resolveVerifiedUser(
-        supabase,
-        accessToken,
-      );
-
-    if (!user) {
-      return null;
-    }
 
     const cookieStore =
       await cookies();

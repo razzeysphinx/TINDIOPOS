@@ -60,7 +60,7 @@ test(
 
     assert.match(
       dal,
-      /resolveVerifiedUser\([\s\S]*supabase[\s\S]*accessToken/,
+      /userPromise[\s\S]*getVerifiedUser\(\)[\s\S]*Promise\.all/,
     );
 
     assert.match(
@@ -85,7 +85,7 @@ test(
 
     const verifyIndex =
       contextDefinition.indexOf(
-        "resolveVerifiedUser",
+        "getVerifiedUser",
       );
 
     const loadIndex =

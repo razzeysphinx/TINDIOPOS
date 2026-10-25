@@ -1,0 +1,17 @@
+{
+  "phase": "J1",
+  "status": "REPOSITORY_BASELINE_RECORDED_LIVE_MEASUREMENT_DEFERRED",
+  "measurements": {
+    "runtimeSourceFiles": 666,
+    "webSourceBytes": 2883874,
+    "backendSourceBytes": 586549,
+    "mobileSourceBytes": 477608,
+    "databaseQueryCallsites": 401,
+    "explicitParallelGroups": 55,
+    "runtimeClientFactories": 174
+  },
+  "productionDatabaseInspected": false,
+  "productionTrafficGenerated": false,
+  "measurementScope": "tracked Web, Backend, and Mobile runtime source",
+  "nextAction": "USE_BASELINE_FOR_J2_REGRESSION_GUARDS_AND_COLLECT_LIVE_EVIDENCE_ONLY_WITH_APPROVED_RELEASE"
+}

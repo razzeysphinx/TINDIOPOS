@@ -994,6 +994,14 @@ separate compatibility evidence and approval.
   owner approval remain open. No hosted resource changed. **DO NOT
   DECOMMISSION.**
 
+## Phase J1: performance baseline
+
+- Recorded deterministic runtime source volume, database-query callsites,
+  explicit parallel groups, and client factories for the tracked tree.
+  **REPOSITORY BASELINE COMPLETE.**
+- Production query plans, traffic, and latency were not inspected or generated.
+  **LIVE PERFORMANCE EVIDENCE DEFERRED.**
+
 Stop for explicit approval before production Neon Auth enablement, real account
 export/import, password migration, credential rotation, deployed API-origin
 change, live client cutover, Supabase shutdown/deletion, or merchant-data writes

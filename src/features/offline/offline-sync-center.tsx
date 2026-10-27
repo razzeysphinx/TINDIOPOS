@@ -66,7 +66,11 @@ export function OfflineSyncCenter({ events }: { events: OfflineSyncEventItem[] }
                     </div>
                     <p className="mt-2 text-sm text-muted-foreground">{event.storeName} · {event.registerName} · {event.deviceName ?? "Unmanaged browser"} · {event.employeeName}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">Attempt {event.attemptCount} · {new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(event.lastAttemptAt))}</p>
+                  <p className="text-xs text-muted-foreground">Attempt {event.attemptCount} · {new Intl.DateTimeFormat("en-PH", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                    timeZone: "Asia/Manila",
+                  }).format(new Date(event.lastAttemptAt))}</p>
                 </div>
                 {event.officialReceiptNumber !== null ? <p className="mt-3 text-sm text-primary">Confirmed as official receipt #{event.officialReceiptNumber}.</p> : null}
                 {event.conflictType ? <p className="mt-3 text-xs font-semibold tracking-wide text-destructive uppercase">{event.conflictType.replaceAll("_", " ")}</p> : null}

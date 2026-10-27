@@ -52,6 +52,28 @@ const bypass =
   process.env.VERCEL_AUTOMATION_BYPASS_SECRET
     ?.trim()
   || null;
+const vercelOidcToken =
+  process.env.VERCEL_OIDC_TOKEN
+    ?.trim()
+  || null;
+
+function addVercelProtectionHeaders(headers) {
+  if (bypass) {
+    headers.set(
+      "x-vercel-protection-bypass",
+      bypass,
+    );
+  }
+
+  if (vercelOidcToken) {
+    headers.set(
+      "x-vercel-trusted-oidc-idp-token",
+      vercelOidcToken,
+    );
+  }
+
+  return headers;
+}
 
 const auth =
   createClient(
@@ -105,12 +127,7 @@ for (
         "application/json",
     });
 
-  if (bypass) {
-    headers.set(
-      "x-vercel-protection-bypass",
-      bypass,
-    );
-  }
+  addVercelProtectionHeaders(headers);
 
   const response =
     await fetch(
@@ -178,20 +195,14 @@ const crossTenant =
       deployment,
     ),
     {
-      headers: {
+      headers: addVercelProtectionHeaders(new Headers({
         Authorization:
           `Bearer ${token}`,
         Accept:
           "application/json",
         "X-Tindio-Organization-Id":
           randomUUID(),
-        ...(bypass
-          ? {
-              "x-vercel-protection-bypass":
-                bypass,
-            }
-          : {}),
-      },
+      })),
     },
   );
 

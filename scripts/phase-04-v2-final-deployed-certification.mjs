@@ -45,6 +45,9 @@ const password =
 const vercelBypass =
   process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim()
   || null;
+const vercelOidcToken =
+  process.env.VERCEL_OIDC_TOKEN?.trim()
+  || null;
 const cutoverBypass = process.env.TINDIO_CUTOVER_BYPASS_SECRET?.trim() || null;
 
 function sleep(milliseconds) {
@@ -61,6 +64,12 @@ function protectedHeaders(initial = {}) {
     headers.set(
       "x-vercel-protection-bypass",
       vercelBypass,
+    );
+  }
+  if (vercelOidcToken) {
+    headers.set(
+      "x-vercel-trusted-oidc-idp-token",
+      vercelOidcToken,
     );
   }
   if (cutoverBypass) headers.set("x-tindio-cutover-bypass", cutoverBypass);
@@ -747,9 +756,11 @@ try {
   console.log("Mixed 5-endpoint concurrency: PASS 100/100");
   console.log("Final V2 API reliability: PASS 500/500");
   console.log(
-    vercelBypass
-      ? "Vercel protection bypass: ACTIVE"
-      : "Vercel protection bypass: NOT REQUIRED",
+    vercelOidcToken
+      ? "Vercel Trusted Sources OIDC: ACTIVE"
+      : vercelBypass
+        ? "Vercel protection bypass: ACTIVE"
+        : "Vercel protection authentication: NOT REQUIRED",
   );
   console.log(cutoverBypass ? "TINDIO cutover bypass: ACTIVE" : "TINDIO cutover bypass: NOT REQUIRED");
   console.log("PHASE 04F V2 FINAL DEPLOYED API CERTIFICATION: PASS");

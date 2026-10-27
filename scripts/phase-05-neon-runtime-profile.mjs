@@ -85,11 +85,15 @@ function deploymentUrl(deployment, pathname) {
   return new URL(pathname, deployment).toString();
 }
 
-function protectedHeaders(bypass, initial = {}) {
+function protectedHeaders(bypass, oidcToken, initial = {}) {
   const headers = new Headers(initial);
 
   if (bypass) {
     headers.set("x-vercel-protection-bypass", bypass);
+  }
+
+  if (oidcToken) {
+    headers.set("x-vercel-trusted-oidc-idp-token", oidcToken);
   }
 
   return headers;
@@ -312,14 +316,28 @@ async function signInBrowser({
   email,
   password,
   bypass,
+  oidcToken,
 }) {
-  const context = await browser.newContext({
-    extraHTTPHeaders: bypass
-      ? {
-          "x-vercel-protection-bypass": bypass,
-          "x-vercel-set-bypass-cookie": "true",
-        }
-      : {},
+  const context = await browser.newContext();
+  const deploymentHeaders = Object.fromEntries(
+    protectedHeaders(bypass, oidcToken),
+  );
+  if (bypass) {
+    deploymentHeaders["x-vercel-set-bypass-cookie"] = "true";
+  }
+  await context.route("**/*", async (route) => {
+    const request = route.request();
+    if (new URL(request.url()).origin !== deployment.origin) {
+      await route.continue();
+      return;
+    }
+
+    await route.continue({
+      headers: {
+        ...request.headers(),
+        ...deploymentHeaders,
+      },
+    });
   });
   const page = await context.newPage();
   const response = await page.goto(deploymentUrl(deployment, "/login"), {
@@ -347,6 +365,7 @@ async function measureBackOffice({
   email,
   password,
   bypass,
+  oidcToken,
 }) {
   const browser = await chromium.launch();
   let context;
@@ -358,6 +377,7 @@ async function measureBackOffice({
       email,
       password,
       bypass,
+      oidcToken,
     });
     context = session.context;
     const page = session.page;
@@ -430,6 +450,8 @@ async function measureBackOffice({
       pages,
       page_error_count: pageErrors.length,
       console_error_count: consoleErrors.length,
+      page_errors: [...new Set(pageErrors)].slice(0, 20),
+      console_errors: [...new Set(consoleErrors)].slice(0, 20),
     };
   } finally {
     await context?.close().catch(() => null);
@@ -444,6 +466,7 @@ const email = required("TINDIO_PHASE_05_TEST_EMAIL");
 const password = required("TINDIO_PHASE_05_TEST_PASSWORD");
 const databaseUrl = required("DATABASE_URL_UNPOOLED");
 const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() || null;
+const oidcToken = process.env.VERCEL_OIDC_TOKEN?.trim() || null;
 const databaseHost = new URL(databaseUrl).hostname.toLowerCase();
 
 if (!databaseHost.endsWith(".neon.tech") || databaseHost.includes("-pooler")) {
@@ -467,7 +490,11 @@ const report = {
   phase: "05B",
   kind: "measurement-only runtime and query cost profile",
   timeout_ms: REQUEST_TIMEOUT_MS,
-  protection_bypass: bypass ? "ACTIVE" : "NOT_REQUIRED",
+  deployment_protection: oidcToken
+    ? "TRUSTED_SOURCES_OIDC"
+    : bypass
+      ? "LEGACY_BYPASS"
+      : "NOT_REQUIRED",
   database_before: null,
   database_delta: null,
   connection_baseline: null,
@@ -503,7 +530,7 @@ try {
     {
       ...init,
       cache: "no-store",
-      headers: protectedHeaders(bypass, init.headers),
+      headers: protectedHeaders(bypass, oidcToken, init.headers),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     },
   );
@@ -594,6 +621,7 @@ try {
     email,
     password,
     bypass,
+    oidcToken,
   });
 } finally {
   const databaseAfter = readDatabaseSnapshot(databaseUrl);

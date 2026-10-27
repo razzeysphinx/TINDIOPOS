@@ -13,6 +13,11 @@ test("Phase 17 Slice 03 Sync Control Center UI", () => {
     "utf8",
   );
 
+  const offlineEvents = fs.readFileSync(
+    "src/features/offline/offline-sync-center.tsx",
+    "utf8",
+  );
+
   for (const marker of [
     "Sync Control Center 2.0",
     "pos_device_sync_telemetry",
@@ -48,5 +53,11 @@ test("Phase 17 Slice 03 Sync Control Center UI", () => {
     ui.includes("ATTENTION REQUIRED")
     && ui.includes("CHECK REQUIRED"),
     "sync problems must be visibly classified",
+  );
+
+  assert.match(
+    offlineEvents,
+    /timeZone:\s*["']Asia\/Manila["']/,
+    "offline outcome timestamps must use a fixed time zone so server and browser hydration text matches",
   );
 });

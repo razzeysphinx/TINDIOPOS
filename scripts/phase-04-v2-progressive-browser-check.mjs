@@ -37,6 +37,10 @@ const vercelBypass =
   process.env.VERCEL_AUTOMATION_BYPASS_SECRET
     ?.trim()
   || null;
+const vercelOidcToken =
+  process.env.VERCEL_OIDC_TOKEN
+    ?.trim()
+  || null;
 const cutoverBypass = process.env.TINDIO_CUTOVER_BYPASS_SECRET?.trim() || null;
 
 function certificationHeaders() {
@@ -44,6 +48,9 @@ function certificationHeaders() {
   if (vercelBypass) {
     headers["x-vercel-protection-bypass"] = vercelBypass;
     headers["x-vercel-set-bypass-cookie"] = "true";
+  }
+  if (vercelOidcToken) {
+    headers["x-vercel-trusted-oidc-idp-token"] = vercelOidcToken;
   }
   if (cutoverBypass) headers["x-tindio-cutover-bypass"] = cutoverBypass;
   return headers;
@@ -58,9 +65,22 @@ function endpoint(pathname) {
 
 async function signedInPage(browser) {
   const context =
-    await browser.newContext({
-      extraHTTPHeaders: certificationHeaders(),
+    await browser.newContext();
+  const protectedHeaders = certificationHeaders();
+  await context.route("**/*", async (route) => {
+    const request = route.request();
+    if (new URL(request.url()).origin !== deployment.origin) {
+      await route.continue();
+      return;
+    }
+
+    await route.continue({
+      headers: {
+        ...request.headers(),
+        ...protectedHeaders,
+      },
     });
+  });
   const page =
     await context.newPage();
   const response =

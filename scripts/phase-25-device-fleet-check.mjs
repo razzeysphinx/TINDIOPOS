@@ -44,4 +44,5 @@ test("Phase 25 native enrollment remains secure and self-generated", () => {
 
 test("Phase 25 fleet client does not mutate device tables directly", () => {
   assert.doesNotMatch(read("src/features/devices/device-manager.tsx"), /\.from\(["']pos_devices["']\)|UPDATE\s+pos_devices|INSERT\s+INTO\s+pos_devices/i, "fleet UI must use server actions rather than direct device table mutation");
+  assert.match(read("src/features/devices/device-manager.tsx"), /timeZone:\s*["']Asia\/Manila["']/, "fleet timestamps must use a fixed time zone so server and browser hydration text matches");
 });

@@ -14,7 +14,7 @@
     },
     {
       "slice": "G3",
-      "status": "HARNESS_IMPLEMENTED_PHYSICAL_RUN_BLOCKED"
+      "status": "PHYSICAL_AUTH_OFFLINE_CUSTODY_CERTIFIED"
     },
     {
       "slice": "G4",
@@ -25,6 +25,7 @@
     "web_activation_gate_audit",
     "mobile_non_destructive_auth_transition",
     "physical_upgrade_fail_closed_harness",
+    "physical_same_signer_auth_offline_custody_certification",
     "supported_client_and_forced_upgrade_contract",
     "consolidated_deferred_completion_register"
   ],
@@ -32,7 +33,6 @@
     "F1-01",
     "F1-02",
     "G1-01",
-    "G3-01",
     "G4-01",
     "G4-02",
     "G4-03"

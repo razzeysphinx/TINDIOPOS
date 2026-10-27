@@ -867,8 +867,8 @@ counterparts. Phase D is complete.
   sign-out retains the financial-custody gate. Legacy-session retirement has no
   deletion implementation and additionally requires explicit owner approval.
   **IMPLEMENTED; NO PRODUCTION ACTIVATION.**
-- Physical installed-app upgrade and offline custody preservation remain the
-  next required Phase G certification. **PENDING.**
+- Physical installed-app upgrade and offline custody preservation passed on
+  the authorized Android device on 2026-10-27. **PASS.**
 
 ## Phase G3: physical Auth and offline-custody upgrade harness
 
@@ -878,8 +878,10 @@ counterparts. Phase D is complete.
   **IMPLEMENTED.**
 - Added a fail-closed physical preflight and exact same-signer `adb install -r`
   campaign procedure. **IMPLEMENTED.**
-- ADB is available, but no authorized Android device or Phase G baseline/
-  successor APK pair was present on 2026-10-25. **PHYSICAL PASS BLOCKED.**
+- The authorized-device same-signer campaign preserved the active Auth session,
+  enrollment, offline grant, one unsynced event, immutable receipt, sequence
+  checkpoint, and SQLite schema 13 to 13 without uninstall, clear, logout, or
+  reenrollment shortcuts. **PHYSICAL PASS.**
 
 ## Phase G4: supported-client and forced-upgrade boundary
 

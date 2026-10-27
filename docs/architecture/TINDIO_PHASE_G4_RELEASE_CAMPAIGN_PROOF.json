@@ -1,0 +1,59 @@
+{
+  "phase": "G4-01",
+  "status": "IN_PROGRESS_PHYSICAL_CAMPAIGN",
+  "observedOn": "2026-10-27",
+  "sourceCommit": "0eebdcbccb20fe4da7782df8c644f08d1422bae2",
+  "preflightImplemented": true,
+  "physicalDeviceAvailable": true,
+  "physicalDeviceModel": "RMX2189",
+  "oldClientArtifact": {
+    "sha256": "C8032770207C2423284B6E4FCEF7347216F5C68124D1B82598050AABA7CC29A9",
+    "installedBaselineSnapshotSha256": "98137C48EB7C1600FEF2E9FBACF73EA4D8D2A1C7D8C32E9C6285CB15468013D0",
+    "packageName": "com.tindio.pos",
+    "versionName": "1.0.0",
+    "versionCode": 2
+  },
+  "releaseCandidateArtifact": {
+    "buildId": "cf275fef-d2f8-4f80-853e-766df693eeab",
+    "sha256": "674C1863CD6C901EF50B75A510671589AF2463ABDBEC9F70B0BCE5C375299088",
+    "packageName": "com.tindio.pos",
+    "versionName": "1.0.0",
+    "versionCode": 3,
+    "sourceCommit": "0eebdcbccb20fe4da7782df8c644f08d1422bae2"
+  },
+  "sameSignerVerified": true,
+  "differentArtifactHashesVerified": true,
+  "newerVersionCodeVerified": true,
+  "sameSignerInPlaceUpgradePassed": true,
+  "originalInstallIdentityPreserved": true,
+  "appDataInodePreserved": true,
+  "appDataInode": 933936,
+  "originalFirstInstallTime": "2026-10-17 11:41:08",
+  "version3InstallObservedAt": "2026-10-27 12:25:28",
+  "applicationLevelProofPassed": true,
+  "authSessionPreserved": true,
+  "deviceEnrollmentPreserved": true,
+  "offlineAuthorizationGrantPreserved": true,
+  "unsyncedEventsPreserved": true,
+  "immutableReceiptsPreserved": true,
+  "deviceSequenceCheckpointsPreserved": true,
+  "sqliteSchemaTransition": "13_TO_13",
+  "canceledWrongSignerBuildId": "0a8122ce-2f23-4daf-9e5d-f95b28ac1d10",
+  "wrongSignerArtifactProduced": false,
+  "blockers": [
+    "FRESH_INSTALL_REQUIRES_DISPOSABLE_TARGET_OR_EXPLICIT_DATA_RESET_APPROVAL",
+    "FORCED_UPGRADE_426_PHYSICAL_CAMPAIGN_NOT_RUN",
+    "PROVIDER_ROLLBACK_PHYSICAL_CAMPAIGN_NOT_RUN",
+    "SUPPORTED_CLIENT_WINDOW_POLICY_NOT_APPROVED"
+  ],
+  "campaignLegs": {
+    "freshInstall": "NOT_RUN",
+    "supportedOldClient": "PASS",
+    "forcedUpgrade426": "SOURCE_CERTIFIED_PHYSICAL_NOT_RUN",
+    "sameSignerInPlaceUpgrade": "PASS_VERSION_2_TO_3",
+    "providerRollback": "SOURCE_CERTIFIED_PHYSICAL_NOT_RUN"
+  },
+  "currentPhysicalAppDataPreserved": true,
+  "productionChangesMade": false,
+  "g4GateClosed": false
+}

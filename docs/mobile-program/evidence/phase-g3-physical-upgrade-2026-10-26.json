@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "campaign": "Phase G3 physical Auth and offline-custody in-place upgrade",
+  "observedOn": "2026-10-27",
+  "sourceCommit": "0eebdcbccb20fe4da7782df8c644f08d1422bae2",
+  "status": "PASS",
+  "physicalCertificationPassed": true,
+  "productionChangesMade": false,
+  "device": {
+    "manufacturer": "realme",
+    "model": "RMX2189",
+    "androidVersion": "11",
+    "sdk": 30,
+    "serialSha256Prefix": "63609cb7ee8085c7"
+  },
+  "artifacts": {
+    "baseline": {
+      "origin": "APK extracted from the installed authorized-device package before upgrade",
+      "package": "com.tindio.pos",
+      "versionName": "1.0.0",
+      "versionCode": 2,
+      "sha256": "98137C48EB7C1600FEF2E9FBACF73EA4D8D2A1C7D8C32E9C6285CB15468013D0"
+    },
+    "successor": {
+      "origin": "Isolated temporary EAS internal Preview build",
+      "package": "com.tindio.pos",
+      "versionName": "1.0.0",
+      "versionCode": 2,
+      "sha256": "2ED7690FE7170BA6F598A5D9FC578B31B76B221C4C9AA28D24BD900EA0130F6A",
+      "easProjectId": "1a27c03f-3300-4bb6-b07c-7b8762a29086",
+      "easBuildId": "7940f2c3-dc3e-47cf-a44b-0f973f85b9a4"
+    },
+    "correctedHttpsSuccessor": {
+      "origin": "Authorized isolated temporary EAS internal Preview build",
+      "package": "com.tindio.pos",
+      "versionName": "1.0.0",
+      "versionCode": 2,
+      "sha256": "55A4E2F25FAA090530C8E8FA788D1B0995AD89BB91AE79A81D3A59A5DB29E666",
+      "easProjectId": "1a27c03f-3300-4bb6-b07c-7b8762a29086",
+      "easBuildId": "bdb063a2-2af1-4cfa-b783-75df4af601e0",
+      "apiOrigin": "https://tindiopos-bc27yhvrf-razzeysphinx.vercel.app",
+      "exactReleaseCandidateCommit": true
+    },
+    "developmentProfileSuccessor": {
+      "origin": "Authorized isolated temporary EAS internal development-profile build",
+      "package": "com.tindio.pos",
+      "versionName": "1.0.0",
+      "versionCode": 2,
+      "sha256": "C8032770207C2423284B6E4FCEF7347216F5C68124D1B82598050AABA7CC29A9",
+      "easProjectId": "1a27c03f-3300-4bb6-b07c-7b8762a29086",
+      "easBuildId": "4881e00e-07a0-42ab-878d-593b9fcf6249",
+      "apiOrigin": "http://127.0.0.1:3000",
+      "developmentOnlyCleartext": true,
+      "exactReleaseCandidateCommit": true
+    }
+  },
+  "inPlaceUpgrade": {
+    "commandClass": "adb install -r",
+    "result": "PASS",
+    "firstInstallTimeBefore": "2026-10-17 11:41:08",
+    "firstInstallTimeAfter": "2026-10-17 11:41:08",
+    "lastUpdateTimeAfter": "2026-10-26 13:41:30",
+    "dataInodeBefore": "933936",
+    "dataInodeAfter": "933936",
+    "signatureMarkerBefore": "51ed3f60",
+    "signatureMarkerAfter": "51ed3f60",
+    "sameSignerConfirmed": true,
+    "appDataInodePreserved": true,
+    "originalInstallIdentityPreserved": true
+  },
+  "visibleRecoveryState": {
+    "beforeUpgrade": "Terminal readiness: EXPIRED / RECONNECT REQUIRED; accepted sales remain saved for recovery.",
+    "afterUpgrade": "Terminal readiness: EXPIRED / RECONNECT REQUIRED; accepted sales remain saved for recovery.",
+    "result": "PASS"
+  },
+  "correctedHttpsInPlaceUpgrade": {
+    "commandClass": "adb install -r",
+    "result": "PASS",
+    "firstInstallTimeBefore": "2026-10-17 11:41:08",
+    "firstInstallTimeAfter": "2026-10-17 11:41:08",
+    "lastUpdateTimeBefore": "2026-10-26 13:41:30",
+    "lastUpdateTimeAfter": "2026-10-26 19:49:40",
+    "dataInodeBefore": "933936",
+    "dataInodeAfter": "933936",
+    "signatureMarkerBefore": "51ed3f60",
+    "signatureMarkerAfter": "51ed3f60",
+    "sameSignerConfirmed": true,
+    "appDataInodePreserved": true,
+    "originalInstallIdentityPreserved": true,
+    "visibleRecoveryStatePreserved": true
+  },
+  "isolatedBackendCheck": {
+    "target": "isolated Neon staging branch through an exact-RC localhost bridge",
+    "authenticatedBootstrapStatus": 200,
+    "phoneBrowserReachability": "PASS",
+    "temporaryBridgeRemoved": true,
+    "localServerStopped": true
+  },
+  "blockedBoundary": {
+    "name": "mobile post-auth initialization against preserved state",
+    "evidence": "The synthetic account authenticated, then both the baseline and successor returned: This account could not open TINDIO POS.",
+    "diagnosedStage": "fetchPosV2Core",
+    "rootCause": "The successor embedded http://127.0.0.1:3000 while the generated Android application manifest set android:usesCleartextTraffic=false. Android therefore rejected the first protected bootstrap transport after authentication.",
+    "impact": "The baseline could not arm the G3 application-level proof, so active session, enrollment, offline grant, event, receipt, and sequence-checkpoint continuity were not certified.",
+    "prohibitedWorkaroundsNotUsed": [
+      "adb uninstall",
+      "pm clear",
+      "SQLite reset",
+      "SecureStore clear",
+      "logout as a migration shortcut",
+      "device reenrollment"
+    ]
+  },
+  "correctiveBuildTarget": {
+    "apiOrigin": "https://tindiopos-bc27yhvrf-razzeysphinx.vercel.app",
+    "deploymentState": "READY",
+    "sourceCommit": "0eebdcbccb20fe4da7782df8c644f08d1422bae2",
+    "anonymousBootstrapProbe": "AUTH_REQUIRED",
+    "stagingIsolation": "The TINDIO-PREPRODUCTION preview has a branch-specific NEON_DATA_API_URL override.",
+    "buildStatus": "BUILT_AND_INSTALLED_SAME_SIGNER",
+    "authenticationRetestStatus": "BLOCKED_BY_VERCEL_PREVIEW_PROTECTION",
+    "authenticationRetestEvidence": "Synthetic authentication completed, then the protected bootstrap failed. A plain request to the Preview API returned HTTP 302 to Vercel SSO; vercel curl with the authenticated CLI reached the application and returned AUTH_REQUIRED.",
+    "safeContinuation": "Build the existing development profile against http://127.0.0.1:3000, use ADB reverse to the isolated staging server, and preserve Vercel Deployment Protection."
+  },
+  "developmentProfileBuild": {
+    "authorized": true,
+    "easProjectId": "1a27c03f-3300-4bb6-b07c-7b8762a29086",
+    "easBuildId": "4881e00e-07a0-42ab-878d-593b9fcf6249",
+    "sourceCommit": "0eebdcbccb20fe4da7782df8c644f08d1422bae2",
+    "profile": "development",
+    "distribution": "INTERNAL",
+    "apiOrigin": "http://127.0.0.1:3000",
+    "status": "FINISHED",
+    "sha256": "C8032770207C2423284B6E4FCEF7347216F5C68124D1B82598050AABA7CC29A9",
+    "duplicateBuildsStarted": false
+  },
+  "developmentProfileInPlaceUpgrade": {
+    "commandClass": "adb install -r",
+    "result": "PASS",
+    "firstInstallTimeBefore": "2026-10-17 11:41:08",
+    "firstInstallTimeAfter": "2026-10-17 11:41:08",
+    "lastUpdateTimeAfter": "2026-10-27 11:37:29",
+    "dataInodeBefore": "933936",
+    "dataInodeAfter": "933936",
+    "signatureMarkerBefore": "51ed3f60",
+    "signatureMarkerAfter": "51ed3f60",
+    "sameSignerConfirmed": true,
+    "appDataInodePreserved": true,
+    "originalInstallIdentityPreserved": true
+  },
+  "applicationLevelProof": {
+    "result": "PASS",
+    "authStateBefore": "SUPABASE_ACTIVE",
+    "authStateAfter": "SUPABASE_ACTIVE",
+    "sessionPreserved": true,
+    "deviceEnrollmentPreserved": true,
+    "offlineAuthorizationGrantPreserved": true,
+    "unsyncedEventCount": 1,
+    "immutableReceiptCount": 1,
+    "deviceSequenceCheckpointCount": 1,
+    "sqliteSchemaBefore": 13,
+    "sqliteSchemaAfter": 13,
+    "prohibitedWorkaroundsUsed": false
+  },
+  "cleanup": {
+    "adbReverseRemoved": true,
+    "localStagingServerStopped": true,
+    "temporaryEasConfigRemoved": true,
+    "productionChanged": false
+  },
+  "nextRequiredEvidence": "None for G3. Proceed to the next open architecture gate."
+}

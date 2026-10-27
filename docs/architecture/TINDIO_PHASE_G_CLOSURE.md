@@ -2,7 +2,7 @@
 
 Status: **IMPLEMENTATION CLOSED; EXTERNAL CERTIFICATION OPEN**  
 Decision: **ADVANCE TO PHASE H PLANNING AND REHEARSAL ONLY**  
-Recorded: **2026-10-25**  
+Updated: **2026-10-27**
 Branch: **TINDIO-PREPRODUCTION**
 
 ## Closure decision
@@ -15,8 +15,9 @@ remains disabled, and the F4 `DO_NOT_CUT_OVER` decision remains controlling.
 G1 truthfully closed as an evaluated stop gate: Web activation cannot proceed
 until the authorized Auth-directory reconciliation maps every legacy identity
 to one canonical profile. G2 implemented the non-destructive Mobile session
-transition. G3 implemented the physical upgrade harness but cannot claim a
-physical pass without an authorized device and same-signer APK pair. G4 added
+transition. G3 now has an authorized-device same-signer physical PASS covering
+the Auth session, enrollment, offline grant, unsynced event, immutable receipt,
+sequence checkpoint, and SQLite schema without custody-clearing shortcuts. G4 added
 the supported-client and forced-upgrade boundary while leaving enforcement and
 signed-release campaigns gated.
 
@@ -45,4 +46,5 @@ recorded.
 - `pnpm test:architecture-phase-g`
 
 This closure changes no production service, identity, configuration, traffic,
-credential, database row, device enrollment, local database, or session.
+credential, or production database row. The authorized physical campaign used
+only isolated staging and preserved the enrolled device, local database, and session.

@@ -813,8 +813,8 @@ Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
 | Phase E planned E5 Mobile Auth/custody boundary | **PASS (3/3 FLOWS)** |
 | Phase E planned E6 adversarial RLS/rollback boundary | **PASS (2/2 FLOWS)** |
 | Phase F1 canonical identity inventory/dry-run boundary | **PASS (3/3); AUTH DIRECTORY RECONCILIATION BLOCKED** |
-| Phase G2 Mobile Auth transition foundation | **PASS (3/3); PHYSICAL UPGRADE PROOF PENDING** |
-| Phase G3 Auth/offline-custody upgrade harness | **PASS (3/3); PHYSICAL RUN BLOCKED — NO DEVICE/APK PAIR** |
+| Phase G2 Mobile Auth transition foundation | **PASS (3/3); PHYSICAL PROOF COMPLETED IN G3** |
+| Phase G3 Auth/offline-custody upgrade harness | **PASS (3/3); PHYSICAL SAME-SIGNER CUSTODY PASS** |
 | Phase G4 supported-client/forced-upgrade boundary | **PASS (6/6); PHYSICAL RELEASE CAMPAIGN PENDING** |
 | Phase G implementation closure | **PASS (4/4); PHASE H PLANNING/REHEARSAL ONLY** |
 | Phase H1 production-readiness inventory | **PASS (3/3); NO GO** |
@@ -1045,18 +1045,19 @@ SecureStore key, detects the old and new sessions independently, records a
 provider only after Backend identity verification, and retains the existing
 transaction-custody sign-out gate. It implements no legacy-session deletion,
 SQLite reset, or device reenrollment. Physical in-place upgrade and offline
-custody certification remain pending; no production Auth setting changed.
+custody certification passed on the authorized Android device; no production Auth setting changed.
 
 G3 extends the real on-device upgrade proof to Auth-session presence, device
 enrollment, offline authorization, immutable receipts, and sequence checkpoints
 in addition to unresolved transaction identity/content. Its support UI and
-fail-closed preflight are implemented. ADB was available on 2026-10-25 but no
-authorized device or same-signer Phase G APK pair was present, so this is not a
-physical PASS and the production cutover checklist remains open.
+fail-closed preflight are implemented. The 2026-10-27 same-signer campaign
+preserved the active Auth session, device enrollment, offline grant, one
+unsynced event, one immutable receipt, one sequence checkpoint, and SQLite
+schema 13 to 13. G3 is a physical PASS; the production cutover checklist remains open.
 
 G4 defines the supported-client compatibility modes and a structured forced-
 upgrade response while preserving provider sessions and offline recovery
-custody. The Phase G closure carries the unresolved F1, G1, G3, and G4 gates
+custody. The Phase G closure carries the unresolved F1, G1, and G4 gates
 into the deferred completion register and permits only Phase H documentation
 and isolated rehearsal. It does not supersede F4, authorize production Neon
 Auth, close the supported-client window, or retire Supabase.

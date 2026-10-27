@@ -24,7 +24,7 @@ test("Phase G closure carries every Auth and physical gate forward", async () =>
     read("docs/architecture/TINDIO_DEFERRED_COMPLETION_REGISTER.md"),
   ]);
   const closure = JSON.parse(closureSource);
-  const expected = ["F1-01", "F1-02", "G1-01", "G3-01", "G4-01", "G4-02", "G4-03"];
+  const expected = ["F1-01", "F1-02", "G1-01", "G4-01", "G4-02", "G4-03"];
 
   assert.deepEqual(closure.openGateIds, expected);
   for (const gate of expected) assert.match(deferred, new RegExp(`\\| ${gate.replace("-", "\\-")} \\|`));
@@ -37,7 +37,7 @@ test("Phase G closure carries every Auth and physical gate forward", async () =>
   ]) assert.ok(closure.prohibitedUntilApproval.includes(operation));
 });
 
-test("Phase G source evidence remains fail closed", async () => {
+test("Phase G source evidence closes G3 while production remains fail closed", async () => {
   const [transitionSource, physicalSource, f4Source] = await Promise.all([
     read("docs/architecture/TINDIO_PHASE_G_MOBILE_AUTH_TRANSITION_PROOF.json"),
     read("docs/architecture/TINDIO_PHASE_G_PHYSICAL_AUTH_UPGRADE_PROOF.json"),
@@ -50,7 +50,7 @@ test("Phase G source evidence remains fail closed", async () => {
   assert.equal(transition.runtimeDefault, "supabase");
   assert.equal(transition.webActivation.status, "BLOCKED_BY_F1_IDENTITY_RECONCILIATION");
   assert.equal(transition.legacySessionDeletionImplemented, false);
-  assert.equal(physical.physicalCertificationPassed, false);
+  assert.equal(physical.physicalCertificationPassed, true);
   assert.equal(physical.productionChangesMade, false);
   assert.equal(f4.decision, "DO_NOT_CUT_OVER");
 });

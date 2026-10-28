@@ -155,12 +155,12 @@ export function BusinessContextProvider({
     );
 
   const loadOffline =
-    useCallback(async () => {
+    useCallback(async (allowRestricted = false) => {
       const readiness =
         await evaluateOfflineReadiness();
 
       if (!readiness.ok) {
-        const restricted = offlineRestrictionReason
+        const restricted = allowRestricted || offlineRestrictionReason
           ? await evaluateRestrictedOfflineReadiness()
           : null;
 
@@ -383,7 +383,7 @@ export function BusinessContextProvider({
               "TINDIO requires online authorization.",
             );
           } else if (isClientUpgradeRequired(caught)) {
-            await loadOffline();
+            await loadOffline(true);
             setError(caught.message);
           } else if (!(await loadOffline())) {
             setError(

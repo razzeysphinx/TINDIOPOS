@@ -86,7 +86,8 @@ test("Phase G4 forced upgrades preserve provider sessions and offline custody", 
     assert.match(branch, /applyOfflineReadiness\(\)/);
     assert.doesNotMatch(branch, /mobileAuth\.signOut\(\)/);
   }
-  assert.match(business, /isClientUpgradeRequired\(caught\)[\s\S]*?loadOffline\(\)[\s\S]*?setError\(caught\.message\)/);
+  assert.match(business, /const restricted = allowRestricted \|\| offlineRestrictionReason[\s\S]*?evaluateRestrictedOfflineReadiness\(\)/);
+  assert.match(business, /loadOffline\(true\)[\s\S]*?setError\(caught\.message\)/);
   assert.match(home, /if \(!data\)/);
   assert.doesNotMatch(home, /if \(error \|\| !data\)/);
   assert.match(home, /error \? <TindioFeedback description=\{error\} kind="restriction" title="Update required"/);

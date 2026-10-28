@@ -1,6 +1,6 @@
 # Phase G4 physical release-candidate continuation — 2026-10-27
 
-Status: **PARTIAL PASS — IN-PLACE UPGRADE AND BINARY ROLLBACK PASS; EXTERNAL LEGS OPEN**
+Status: **PARTIAL PASS — UPGRADE, BINARY ROLLBACK, FRESH INSTALL, AND FORCED-UPGRADE RECOVERY PASS; EXTERNAL LEGS OPEN**
 
 ## Scope
 
@@ -117,9 +117,43 @@ back into `SYNC REVIEW` with the original review-required transaction still
 visible. The isolated server was stopped, its temporary Preview environment
 file was deleted, and the ADB reverse mapping was removed.
 
+## Forced-upgrade HTTP 426 campaign — 2026-10-28
+
+A localhost-only controlled response returned HTTP 426 with code
+`POS_CLIENT_UPGRADE_REQUIRED`, required capability
+`DUAL_AUTH_TRANSITION_V1`, `retryable: false`, and
+`preservesRecovery: true`. No staging or production minimum-version policy was
+activated.
+
+The first physical run exposed a real recovery defect: although Auth and local
+custody remained installed, the home screen collapsed an update restriction
+and unavailable business context into the generic `We couldn't open this
+register` screen. Version-code-5 commit
+`5eb5a0b1c6b8191c95a43071b961870545a91723` removed the first UI condition but
+proved that an expired offline grant still prevented the cached business
+snapshot from reaching the home screen.
+
+Commit `020975f2805ddc9998aea4e6bcd6e03926e41e99` corrected the 426-only recovery
+path. Its exact-source version-code-6 APK had SHA-256
+`48B0A549A4A60CAA3198187120EF726BEB1A23AF9CBC418C0BE2AD68FD82932C`, used the
+same development signer, targeted SDK 36, contained only `arm64-v8a`, passed APK
+Signature Scheme v2 verification, and passed ZIP alignment verification.
+
+Android accepted the in-place version 5 to 6 installation without uninstalling
+or clearing data. The first-install timestamp remained
+`2026-10-17 11:41:08`. Under the same HTTP 426 response, the physical app then
+displayed the preserved register workspace with `EXPIRED / RECONNECT REQUIRED`,
+`Using saved store data`, and a separate `Update required` restriction. New
+offline sales remained paused.
+
+`Sync & Recovery` remained reachable and truthfully reported `Needs review: 1`,
+`Offline readiness: EXPIRED`, and that existing receipts and unresolved
+transactions remained available. The review-required financial event was not
+retried, resolved, deleted, or settled. This passes the physical forced-upgrade
+recovery leg while leaving production policy activation out of scope.
+
 ## Remaining boundaries
 
-- Physical forced-upgrade HTTP 426 behavior is `NOT_RUN` for this APK pair.
 - Auth-provider selector rollback is `NOT_RUN` and remains separately gated.
 - External HID scanner and receipt-printer checks are `BLOCKED_NO_HARDWARE`.
 - Production signing, Play delivery, AAB qualification, and A48 remain

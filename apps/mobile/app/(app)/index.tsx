@@ -31,7 +31,7 @@ export default function MobileHomeScreen() {
 
   if (loading && !data) return <View accessibilityLabel="Loading register" style={styles.centeredState}><TindioProgressIndicator color={tindioTheme.color.brand.primary} label="Opening this register" /></View>;
 
-  if (error || !data) {
+  if (!data) {
     return <TindioScreen contentContainerStyle={styles.unavailableScreen} edges={[]}><TindioCard style={styles.unavailableCard}><Text style={styles.eyebrow}>TINDIO POS</Text><Text accessibilityRole="header" style={styles.stateTitle}>We couldn’t open this register</Text><TindioFeedback description={error ?? "Business context is unavailable. Check the connection, then try again. Saved transactions remain on this device."} kind="error" title="Register unavailable" /><TindioButton accessibilityLabel="Try opening the register again" onPress={() => void reload()}>Try again</TindioButton></TindioCard></TindioScreen>;
   }
 
@@ -52,6 +52,7 @@ export default function MobileHomeScreen() {
     <TindioScreen contentContainerStyle={[styles.screenContent, allowsColumns ? styles.screenContentTablet : null]} edges={[]} scroll testID="cashier-home-scroll">
       <CashierTerminalHeader connectionLabel={connectionLabel} employeeName={core.employee.name} organizationName={core.organization.name} readinessState={cashierReadinessState} />
       <CashierReadinessPanel expiresAt={offlineExpiresAt} state={cashierReadinessState} />
+      {error ? <TindioFeedback description={error} kind="restriction" title="Update required" /> : null}
       <View accessibilityLabel={`${viewportClass} cashier workspace`} style={[styles.workspace, allowsColumns ? styles.workspaceTablet : null]}>
         <View style={styles.primaryColumn}>
           {navigationSections.map((section) => {

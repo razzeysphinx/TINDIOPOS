@@ -77,6 +77,7 @@ test("Phase G4 mobile requests declare version, provider, and custody capabiliti
 test("Phase G4 forced upgrades preserve provider sessions and offline custody", () => {
   const session = read("apps/mobile/src/features/session/session-provider.tsx");
   const business = read("apps/mobile/src/features/business/business-context-provider.tsx");
+  const home = read("apps/mobile/app/(app)/index.tsx");
   const guardedBranches = session.match(/if \(isClientUpgradeRequired\(error\)\) \{[\s\S]*?return \{ ok: false, message: error\.message \};[\s\S]*?\}/g) ?? [];
 
   assert.equal(guardedBranches.length, 2);
@@ -86,6 +87,9 @@ test("Phase G4 forced upgrades preserve provider sessions and offline custody", 
     assert.doesNotMatch(branch, /mobileAuth\.signOut\(\)/);
   }
   assert.match(business, /isClientUpgradeRequired\(caught\)[\s\S]*?loadOffline\(\)[\s\S]*?setError\(caught\.message\)/);
+  assert.match(home, /if \(!data\)/);
+  assert.doesNotMatch(home, /if \(error \|\| !data\)/);
+  assert.match(home, /error \? <TindioFeedback description=\{error\} kind="restriction" title="Update required"/);
 });
 
 test("Phase G4 remains a non-activation slice", () => {

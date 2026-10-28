@@ -22,7 +22,7 @@ test("H1 fails closed on configuration, operators, and predecessor gates", async
   assert.equal(readiness.productionConfigurationGates.length, 9);
   assert.equal(readiness.productionConfigurationGates.every(({ status }) => status === "NOT_VERIFIED"), true);
   assert.equal(Object.values(readiness.operatorRoles).every((value) => value === null), true);
-  assert.deepEqual(readiness.requiredPriorGateIds, ["F1-01", "F1-02", "G1-01", "G3-01", "G4-01", "G4-02", "G4-03"]);
+  assert.deepEqual(readiness.requiredPriorGateIds, ["F1-01", "F1-02", "G1-01", "G4-02", "G4-03"]);
   assert.equal(readiness.ownerApprovalRecorded, false);
 });
 

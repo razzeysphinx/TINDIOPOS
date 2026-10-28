@@ -2,7 +2,7 @@
 
 Status: **IMPLEMENTATION CLOSED; EXTERNAL CERTIFICATION OPEN**  
 Decision: **ADVANCE TO PHASE H PLANNING AND REHEARSAL ONLY**  
-Updated: **2026-10-27**
+Updated: **2026-10-28**
 Branch: **TINDIO-PREPRODUCTION**
 
 ## Closure decision
@@ -17,9 +17,13 @@ until the authorized Auth-directory reconciliation maps every legacy identity
 to one canonical profile. G2 implemented the non-destructive Mobile session
 transition. G3 now has an authorized-device same-signer physical PASS covering
 the Auth session, enrollment, offline grant, unsynced event, immutable receipt,
-sequence checkpoint, and SQLite schema without custody-clearing shortcuts. G4 added
-the supported-client and forced-upgrade boundary while leaving enforcement and
-signed-release campaigns gated.
+sequence checkpoint, and SQLite schema without custody-clearing shortcuts. G4
+added the supported-client and forced-upgrade boundary and now has a complete
+local physical campaign: fresh install, supported old client, same-signer
+upgrade, binary rollback, controlled HTTP 426 recovery, and guarded
+Neon-to-Supabase selector rollback all passed without clearing custody.
+Production signing, client-window enforcement, and production Auth
+configuration remain gated.
 
 ## Phase H entry boundary
 

@@ -18,7 +18,7 @@
     },
     {
       "slice": "G4",
-      "status": "CLIENT_COMPATIBILITY_BOUNDARY_IMPLEMENTED"
+      "status": "CLIENT_COMPATIBILITY_AND_PHYSICAL_CAMPAIGN_CERTIFIED_PRODUCTION_GATED"
     }
   ],
   "completedEvidence": [
@@ -27,13 +27,13 @@
     "physical_upgrade_fail_closed_harness",
     "physical_same_signer_auth_offline_custody_certification",
     "supported_client_and_forced_upgrade_contract",
+    "physical_fresh_install_forced_upgrade_and_provider_rollback_campaign",
     "consolidated_deferred_completion_register"
   ],
   "openGateIds": [
     "F1-01",
     "F1-02",
     "G1-01",
-    "G4-01",
     "G4-02",
     "G4-03"
   ],

@@ -1,6 +1,6 @@
 # Phase G4 physical release-candidate continuation — 2026-10-27
 
-Status: **PARTIAL PASS — UPGRADE, BINARY ROLLBACK, FRESH INSTALL, AND FORCED-UPGRADE RECOVERY PASS; EXTERNAL LEGS OPEN**
+Status: **PHYSICAL CAMPAIGN PASS — EXTERNAL HARDWARE AND PRODUCTION RELEASE LEGS OPEN**
 
 ## Scope
 
@@ -152,12 +152,52 @@ transactions remained available. The review-required financial event was not
 retried, resolved, deleted, or settled. This passes the physical forced-upgrade
 recovery leg while leaving production policy activation out of scope.
 
+## Auth-provider selector rollback campaign — 2026-10-28
+
+The provider rollback used the same installed Owner profile and the same
+development signing certificate; it did not uninstall, clear data, sign out
+the legacy Supabase session, retry the held financial event, or change a
+deployed selector. Version-code-7 selected Neon only inside the guarded local
+proof configuration and used the existing isolated Phase E Neon Auth branch.
+Its APK SHA-256 was
+`BFE101A82635C7DE84408756CDECBBED2FE5F4EA9129E926C7208E702BF57515`.
+
+A temporary `.invalid` identity completed live password sign-in. Under the
+localhost-only HTTP 426 API boundary, the app stored the Neon provider session
+without gaining a mutation path. A cold restart restored that session,
+displayed the saved Certification Store/Register workspace, and reported
+`NEON ACTIVE`. Release Diagnostics then armed an upgrade proof containing both
+provider sessions, the enrolled device, expired offline grant, one unsynced
+event, one immutable receipt, one sequence checkpoint, and SQLite schema 13.
+
+Version-code-8 restored the Supabase selector. Its arm64 APK SHA-256 was
+`AE3B0BC553D39099F6F152D62ADC3E00E18F4C639EEED805ED68F233FA82610C`.
+Android accepted the in-place `6` to `7` to `8` sequence and retained the
+original first-install timestamp, `2026-10-17 11:41:08`. The original Supabase
+session resumed without credentials and Release Diagnostics reported
+`SUPABASE ACTIVE`.
+
+The built-in verifier then reported:
+
+> Upgrade proof passed: Auth SUPABASE_ACTIVE; session, enrollment, offline
+> grant, 1 event(s), receipts, and sequence checkpoints preserved; schema 13
+> to 13.
+
+Because the proof was armed while both the legacy Supabase session and Neon
+cookie were present, the verifier would have failed with
+`AUTH_SESSION_MISSING` if either had disappeared. This therefore proves the
+rollback preserved both provider sessions as well as financial custody. All
+temporary synthetic identities were removed, the encrypted local credential
+file was deleted, the app was stopped, the ADB reverse mapping was removed,
+and the controlled server was stopped.
+
 ## Remaining boundaries
 
-- Auth-provider selector rollback is `NOT_RUN` and remains separately gated.
 - External HID scanner and receipt-printer checks are `BLOCKED_NO_HARDWARE`.
 - Production signing, Play delivery, AAB qualification, and A48 remain
   `NOT_RUN`.
+- Production Auth activation, supported-client enforcement, and provider
+  retirement remain separately owner-gated and were not changed.
 - The review-required transaction was not retried, resolved, deleted, or
   financially settled by this campaign.
 

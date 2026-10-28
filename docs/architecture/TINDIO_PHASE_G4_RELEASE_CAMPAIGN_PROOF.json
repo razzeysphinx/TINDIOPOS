@@ -1,7 +1,7 @@
 {
   "phase": "G4-01",
-  "status": "IN_PROGRESS_PHYSICAL_CAMPAIGN",
-  "observedOn": "2026-10-27",
+  "status": "PASS_PHYSICAL_CAMPAIGN_POLICY_AND_PRODUCTION_OPEN",
+  "observedOn": "2026-10-27_THROUGH_2026-10-28",
   "sourceCommit": "0eebdcbccb20fe4da7782df8c644f08d1422bae2",
   "preflightImplemented": true,
   "physicalDeviceAvailable": true,
@@ -40,20 +40,43 @@
   "sqliteSchemaTransition": "13_TO_13",
   "canceledWrongSignerBuildId": "0a8122ce-2f23-4daf-9e5d-f95b28ac1d10",
   "wrongSignerArtifactProduced": false,
+  "completionRuntimeSourceCommit": "020975f2805ddc9998aea4e6bcd6e03926e41e99",
+  "providerRollback": {
+    "deviceModel": "RMX2189",
+    "versionTransition": "6_TO_7_TO_8",
+    "originalFirstInstallTimePreserved": "2026-10-17 11:41:08",
+    "sameDevelopmentSigner": true,
+    "neonArtifactSha256": "BFE101A82635C7DE84408756CDECBBED2FE5F4EA9129E926C7208E702BF57515",
+    "supabaseRollbackArtifactSha256": "AE3B0BC553D39099F6F152D62ADC3E00E18F4C639EEED805ED68F233FA82610C",
+    "neonLiveIsolatedSignIn": true,
+    "neonColdRestoreState": "NEON_ACTIVE",
+    "supabaseAutomaticRestoreState": "SUPABASE_ACTIVE",
+    "bothProviderSessionsPreserved": true,
+    "deviceEnrollmentPreserved": true,
+    "offlineAuthorizationGrantPreserved": true,
+    "unsyncedEventsPreserved": 1,
+    "immutableReceiptsPreserved": 1,
+    "sequenceCheckpointsPreserved": 1,
+    "sqliteSchemaTransition": "13_TO_13",
+    "financialRetryPerformed": false,
+    "applicationDataCleared": false,
+    "temporarySyntheticUsersRemoved": true,
+    "productionSelectorChanged": false,
+    "result": "PASS"
+  },
   "blockers": [
-    "FRESH_INSTALL_REQUIRES_DISPOSABLE_TARGET_OR_EXPLICIT_DATA_RESET_APPROVAL",
-    "FORCED_UPGRADE_426_PHYSICAL_CAMPAIGN_NOT_RUN",
-    "PROVIDER_ROLLBACK_PHYSICAL_CAMPAIGN_NOT_RUN",
-    "SUPPORTED_CLIENT_WINDOW_POLICY_NOT_APPROVED"
+    "SUPPORTED_CLIENT_WINDOW_POLICY_NOT_APPROVED",
+    "PRODUCTION_NEON_AUTH_CONFIGURATION_NOT_AUTHORIZED"
   ],
   "campaignLegs": {
-    "freshInstall": "NOT_RUN",
+    "freshInstall": "PASS_ISOLATED_TEMPORARY_ANDROID_USER",
     "supportedOldClient": "PASS",
-    "forcedUpgrade426": "SOURCE_CERTIFIED_PHYSICAL_NOT_RUN",
+    "forcedUpgrade426": "PASS_CONTROLLED_426_RECOVERY_REACHABLE",
     "sameSignerInPlaceUpgrade": "PASS_VERSION_2_TO_3",
-    "providerRollback": "SOURCE_CERTIFIED_PHYSICAL_NOT_RUN"
+    "providerRollback": "PASS_NEON_TO_SUPABASE_DUAL_SESSION_AND_CUSTODY_PRESERVED"
   },
   "currentPhysicalAppDataPreserved": true,
   "productionChangesMade": false,
+  "g4PhysicalCampaignClosed": true,
   "g4GateClosed": false
 }

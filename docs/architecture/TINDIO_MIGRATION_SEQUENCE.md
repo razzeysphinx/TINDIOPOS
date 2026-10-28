@@ -893,8 +893,10 @@ counterparts. Phase D is complete.
   session, offline readiness, and recovery custody instead of signing out.
   **IMPLEMENTED.**
 - Production enforcement remains disabled. Physical fresh-install, old-client,
-  forced-upgrade, in-place-upgrade, and rollback evidence is retained in the
-  deferred completion register. **EXTERNAL EVIDENCE PENDING.**
+  forced-upgrade, in-place-upgrade, binary rollback, and Neon-to-Supabase
+  selector rollback passed with both provider sessions and offline custody
+  preserved. Production signing and policy activation remain separately
+  gated. **PHYSICAL CAMPAIGN PASS; PRODUCTION ACTIVATION NOT AUTHORIZED.**
 
 ## Phase G5: implementation closure and Phase H entry gate
 

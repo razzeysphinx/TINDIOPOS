@@ -815,7 +815,7 @@ Isolated proof environment: **TEMPORARY NEON PROJECT; EXPIRING CHILD BRANCH**
 | Phase F1 canonical identity inventory/dry-run boundary | **PASS (3/3); AUTH DIRECTORY RECONCILIATION BLOCKED** |
 | Phase G2 Mobile Auth transition foundation | **PASS (3/3); PHYSICAL PROOF COMPLETED IN G3** |
 | Phase G3 Auth/offline-custody upgrade harness | **PASS (3/3); PHYSICAL SAME-SIGNER CUSTODY PASS** |
-| Phase G4 supported-client/forced-upgrade boundary | **PASS (6/6); PHYSICAL RELEASE CAMPAIGN PENDING** |
+| Phase G4 supported-client/forced-upgrade boundary | **PASS (6/6); PHYSICAL CAMPAIGN PASS, PRODUCTION ACTIVATION GATED** |
 | Phase G implementation closure | **PASS (4/4); PHASE H PLANNING/REHEARSAL ONLY** |
 | Phase H1 production-readiness inventory | **PASS (3/3); NO GO** |
 | Phase H2 authenticated-traffic canary controls | **PASS (3/3); H2-0 ONLY** |
@@ -1057,10 +1057,13 @@ schema 13 to 13. G3 is a physical PASS; the production cutover checklist remains
 
 G4 defines the supported-client compatibility modes and a structured forced-
 upgrade response while preserving provider sessions and offline recovery
-custody. The Phase G closure carries the unresolved F1, G1, and G4 gates
-into the deferred completion register and permits only Phase H documentation
-and isolated rehearsal. It does not supersede F4, authorize production Neon
-Auth, close the supported-client window, or retire Supabase.
+custody. Its physical campaign now passes fresh-install, old-client,
+same-signer upgrade, binary rollback, controlled HTTP 426, and guarded
+Neon-to-Supabase selector rollback evidence. The Phase G closure still carries
+the unresolved F1, G1, G4-02, and G4-03 gates into the deferred completion
+register and permits only Phase H documentation and isolated rehearsal. It
+does not supersede F4, authorize production Neon Auth, close the
+supported-client window, or retire Supabase.
 
 F4 prepared the machine-readable cutover decision package. The decision remains
 `DO_NOT_CUT_OVER`: F1 needs an authorized Supabase Auth directory inventory,

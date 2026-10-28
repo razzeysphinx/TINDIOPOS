@@ -31,9 +31,9 @@ test("G4 campaign preflight fails closed without tools and signed artifacts", ()
   assert.equal(report.destructiveApprovalRequired, true);
 });
 
-test("G4 evidence records the signed versioned upgrade without closing unrun campaign legs", async () => {
+test("G4 evidence closes the isolated physical campaign without activating production", async () => {
   const evidence = JSON.parse(await read("docs/architecture/TINDIO_PHASE_G4_RELEASE_CAMPAIGN_PROOF.json"));
-  assert.equal(evidence.status, "IN_PROGRESS_PHYSICAL_CAMPAIGN");
+  assert.equal(evidence.status, "PASS_PHYSICAL_CAMPAIGN_POLICY_AND_PRODUCTION_OPEN");
   assert.equal(evidence.sameSignerVerified, true);
   assert.equal(evidence.differentArtifactHashesVerified, true);
   assert.equal(evidence.newerVersionCodeVerified, true);
@@ -45,8 +45,20 @@ test("G4 evidence records the signed versioned upgrade without closing unrun cam
   assert.equal(evidence.sqliteSchemaTransition, "13_TO_13");
   assert.equal(evidence.campaignLegs.supportedOldClient, "PASS");
   assert.equal(evidence.campaignLegs.sameSignerInPlaceUpgrade, "PASS_VERSION_2_TO_3");
-  assert.ok(evidence.blockers.includes("FORCED_UPGRADE_426_PHYSICAL_CAMPAIGN_NOT_RUN"));
-  assert.ok(evidence.blockers.includes("PROVIDER_ROLLBACK_PHYSICAL_CAMPAIGN_NOT_RUN"));
+  assert.equal(evidence.campaignLegs.freshInstall, "PASS_ISOLATED_TEMPORARY_ANDROID_USER");
+  assert.equal(evidence.campaignLegs.forcedUpgrade426, "PASS_CONTROLLED_426_RECOVERY_REACHABLE");
+  assert.equal(
+    evidence.campaignLegs.providerRollback,
+    "PASS_NEON_TO_SUPABASE_DUAL_SESSION_AND_CUSTODY_PRESERVED",
+  );
+  assert.equal(evidence.providerRollback.neonColdRestoreState, "NEON_ACTIVE");
+  assert.equal(evidence.providerRollback.supabaseAutomaticRestoreState, "SUPABASE_ACTIVE");
+  assert.equal(evidence.providerRollback.bothProviderSessionsPreserved, true);
+  assert.equal(evidence.providerRollback.unsyncedEventsPreserved, 1);
+  assert.equal(evidence.providerRollback.sqliteSchemaTransition, "13_TO_13");
+  assert.equal(evidence.g4PhysicalCampaignClosed, true);
+  assert.ok(!evidence.blockers.includes("FORCED_UPGRADE_426_PHYSICAL_CAMPAIGN_NOT_RUN"));
+  assert.ok(!evidence.blockers.includes("PROVIDER_ROLLBACK_PHYSICAL_CAMPAIGN_NOT_RUN"));
   assert.equal(evidence.g4GateClosed, false);
   assert.equal(evidence.productionChangesMade, false);
 });

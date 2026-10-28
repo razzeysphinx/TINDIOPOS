@@ -24,7 +24,7 @@ test("Phase G closure carries every Auth and physical gate forward", async () =>
     read("docs/architecture/TINDIO_DEFERRED_COMPLETION_REGISTER.md"),
   ]);
   const closure = JSON.parse(closureSource);
-  const expected = ["F1-01", "F1-02", "G1-01", "G4-01", "G4-02", "G4-03"];
+  const expected = ["F1-01", "F1-02", "G1-01", "G4-02", "G4-03"];
 
   assert.deepEqual(closure.openGateIds, expected);
   for (const gate of expected) assert.match(deferred, new RegExp(`\\| ${gate.replace("-", "\\-")} \\|`));

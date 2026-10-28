@@ -59,9 +59,11 @@ shift custody; it does not create a bypass for new online mutations.
 - `pnpm contracts:typecheck`
 - `pnpm mobile:typecheck`
 
-Physical old-client, fresh-install, in-place-upgrade, and rollback campaigns
-remain required against the signed release candidates. Source tests are not a
-substitute for those campaigns.
+Physical old-client, fresh-install, in-place-upgrade, forced-upgrade, binary
+rollback, and provider-selector rollback campaigns were completed with the
+local development signing identity. Production signing, Play delivery, and
+policy activation remain separate gates; source tests are not substitutes for
+those external campaigns.
 
 ## Physical campaign preflight
 
@@ -74,15 +76,15 @@ inode. The built-in proof then verified the active Auth session, device
 enrollment, offline grant, unsynced event, receipt custody, sequence checkpoint,
 and SQLite schema `13` to `13`.
 
-The supported-old-client and versioned in-place-upgrade legs pass. The physical
-fresh-install, forced-upgrade-426, and provider-rollback legs remain open, so
-G4-01 is in progress rather than closed.
-
-The current physical device retains the G3-certified custody state. A G4 fresh
-install must use a disposable device/emulator or receive explicit approval to
-remove the exact `com.tindio.pos` application data on that device. The preflight
-does not uninstall, clear data, close the compatibility window, or change
-production.
+The isolated fresh-install and controlled forced-upgrade legs passed on
+2026-10-28 without clearing the Owner profile. The provider-selector campaign
+then installed same-signer versions `6` to `7` to `8`: a live isolated Neon
+session cold-restored as `NEON ACTIVE`, the original Supabase session resumed
+without credentials as `SUPABASE ACTIVE`, and the built-in verifier retained
+both provider sessions, enrollment, offline authorization, one unsynced event,
+its receipt, its sequence checkpoint, and SQLite schema `13`. G4-01 is now a
+physical pass. G4-02 supported-client enforcement and G4-03 production Neon
+Auth configuration remain owner-gated and no production selector changed.
 
 Run the reusable gate with explicit artifact paths:
 

@@ -1,7 +1,7 @@
 {
   "phase": "G4-01",
   "status": "PARTIAL_PASS_EXTERNAL_LEGS_OPEN",
-  "observedOn": "2026-10-27",
+  "observedOn": "2026-10-27_THROUGH_2026-10-28",
   "runtimeSourceCommit": "0618b02ea7697913722f12399b0e295a02a902a1",
   "deviceModel": "RMX2189",
   "artifact": {
@@ -56,6 +56,26 @@
     "appDataInodePreserved": true,
     "providerSelectorRollbackEvidence": false
   },
+  "freshInstall": {
+    "observedOn": "2026-10-28",
+    "isolation": "TEMPORARY_SECONDARY_ANDROID_USER",
+    "preexistingApplicationData": false,
+    "ownerProfileDataCleared": false,
+    "firstLaunchState": "PREPARATION_REQUIRED",
+    "inheritedOwnerSession": false,
+    "syntheticSignIn": "PASS",
+    "storeAndRegisterAssignment": "PASS",
+    "deviceEnrollment": "PASS",
+    "preparedOnlineState": "READY_OFFLINE_CONNECTED_TO_TINDIO",
+    "offlineColdStart": "PASS_READY_OFFLINE_USING_SAVED_STORE_DATA",
+    "cachedCatalogVisible": true,
+    "manualBarcodeAndSkuUiVisible": true,
+    "builtInCameraEntryUiVisible": true,
+    "financialTransactionCreated": false,
+    "temporaryUserRemoved": true,
+    "ownerProfileRestored": "PASS_SYNC_REVIEW",
+    "ownerAppDataInodePreserved": true
+  },
   "environment": {
     "apiOrigin": "http://127.0.0.1:3000",
     "transport": "ADB_REVERSE",
@@ -65,7 +85,8 @@
     "databaseTarget": "ISOLATED_NEON_STAGING_BRANCH"
   },
   "campaignLegs": {
-    "freshInstall": "NOT_RUN_PRESERVED_DEVICE_DATA",
+    "freshInstall": "PASS_ISOLATED_TEMPORARY_ANDROID_USER",
+    "preparedOfflineColdStart": "PASS",
     "supportedOldClient": "PASS_EXISTING_EVIDENCE",
     "sameSignerInPlaceUpgrade": "PASS_VERSION_3_TO_4",
     "binaryRollbackAndRestore": "PASS_VERSION_4_TO_3_TO_4",

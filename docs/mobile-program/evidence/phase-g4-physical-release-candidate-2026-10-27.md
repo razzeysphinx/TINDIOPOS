@@ -85,10 +85,40 @@ The exact validated version-code-4 APK was then reinstalled with
 binary rollback/re-upgrade rehearsal only; it is not the Phase G4 Auth-provider
 selector rollback campaign.
 
+## Isolated fresh-install campaign — 2026-10-28
+
+The physical phone supports secondary Android users. A temporary user was
+created to obtain a genuinely clean application-data sandbox without
+uninstalling, clearing, or modifying the Owner profile's TINDIO custody. The
+validated version-code-4 package was installed for that user and launched with
+no prior TINDIO state.
+
+The first launch truthfully reported `PREPARATION REQUIRED` and did not claim
+offline readiness. The synthetic certification account then authenticated
+through the isolated exact-runtime server. No Owner session or business context
+was inherited. The temporary installation selected the existing Certification
+Store and Certification Register and completed device enrollment against the
+branch-scoped Preview environment.
+
+After enrollment, the fresh installation reported `READY OFFLINE / Connected
+to TINDIO`. Removing only `adb reverse tcp:3000` and cold-starting the app then
+reported `READY OFFLINE / Using saved store data`. The prepared SQLite catalog,
+offline authorization, product search, manual barcode/SKU input, built-in camera
+entry, and the synthetic PHP 1.00 catalog item remained visible. No sale was
+created.
+
+This passes the fresh-install preparation leg and the prepared-terminal offline
+cold-start leg for this local development-signed APK. It does not certify an
+external HID scanner, printer, production-signed AAB, or Play distribution.
+
+After capture, the phone switched back to Owner, verified version code 4 and
+app-data inode `933936`, and removed only the temporary user. Owner cold-started
+back into `SYNC REVIEW` with the original review-required transaction still
+visible. The isolated server was stopped, its temporary Preview environment
+file was deleted, and the ADB reverse mapping was removed.
+
 ## Remaining boundaries
 
-- Fresh install is `NOT_RUN`: the only connected device holds preserved
-  certification custody, and no destructive reset was authorized.
 - Physical forced-upgrade HTTP 426 behavior is `NOT_RUN` for this APK pair.
 - Auth-provider selector rollback is `NOT_RUN` and remains separately gated.
 - External HID scanner and receipt-printer checks are `BLOCKED_NO_HARDWARE`.
